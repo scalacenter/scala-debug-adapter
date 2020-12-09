@@ -4,7 +4,7 @@ Implementation of the [Debug Adapter Protocol](https://microsoft.github.io/debug
 
 # Project Goals
 
-The library should be a depedency that [Bloop](https://github.com/scalacenter/bloop), [SBT](https://github.com/sbt/sbt), [Mill](https://github.com/lihaoyi/mill), or other [Build Server Protocol](https://github.com/build-server-protocol/build-server-protocol) can import and use to implement [debugSession/start](https://github.com/build-server-protocol/build-server-protocol/blob/master/bsp4s/src/main/scala/ch/epfl/scala/bsp/endpoints/Endpoints.scala#L72) in BSP.
+The library should be a depedency that [Bloop](https://github.com/scalacenter/bloop), [sbt](https://github.com/sbt/sbt), [Mill](https://github.com/lihaoyi/mill), or other [BSP](https://github.com/build-server-protocol/build-server-protocol) servers can import and use to implement [`debugSession/start`](https://github.com/build-server-protocol/build-server-protocol/blob/master/bsp4s/src/main/scala/ch/epfl/scala/bsp/endpoints/Endpoints.scala#L72) in BSP.
 
 # References
 
