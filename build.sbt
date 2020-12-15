@@ -19,6 +19,7 @@ lazy val core = project
       Dependencies.javaDebug,
       Dependencies.monix,
       Dependencies.sbtTestInterface,
+      Dependencies.scalameta,
       Dependencies.zinc,
     )
   )
