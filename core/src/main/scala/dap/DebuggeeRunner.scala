@@ -7,10 +7,12 @@ import xsbti.Logger
 import ch.epfl.scala.bsp.ScalaMainClass
 import xsbti.compile.analysis.SourceInfo
 import sbt.internal.inc.Analysis
+import scala.concurrent.Future
 
 sealed abstract class DebuggeeRunner {
   def logger: Logger
-  def run(logger: DebugSessionLogger): Task[ExitStatus]
+  def run(logger: DebugSessionLogger): Future[ExitStatus]
+
   def allAnalysis: Seq[Analysis]
 
   final def classFilesMappedTo(origin: Path, lines: Array[Int], columns: Array[Int]): List[Path] =
@@ -43,5 +45,5 @@ abstract class TestSuiteDebugAdapter(filters: List[String]) extends DebuggeeRunn
 }
 
 abstract class AttachRemoteDebugAdapter extends DebuggeeRunner {
-  override def run(logger: DebugSessionLogger): Task[ExitStatus] = Task(ExitStatus.Ok)
+  override def run(logger: DebugSessionLogger): Future[ExitStatus] = Future.successful(ExitStatus.Ok)
 }

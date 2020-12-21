@@ -15,7 +15,7 @@ inThisBuild(
   )
 )
 
-val bloopVersion = "1.4.6"
+val bloopVersion = "1.4.5" // "1.4.6-15-209c2a5c" // "1.4.6"
 
 lazy val core = project
   .enablePlugins(SbtJdiTools)
@@ -34,6 +34,7 @@ lazy val core = project
       Dependencies.sbtTestInterface,
       //Dependencies.scalameta,
       Dependencies.zinc,
+      "ch.epfl.scala" %% "bloop-frontend" % bloopVersion
     )
   )
 
@@ -49,12 +50,12 @@ lazy val sbtPlugin = project
   .dependsOn(core)
 
 
-//lazy val bloopDap = project
-//  .in(file("bloop-dap"))
-//  .settings(
-//    name := "bloop-scala-debug-adapter",
-//    libraryDependencies ++= List(
-//      "ch.epfl.scala" % "bloop-frontend" % bloopVersion
-//    )
-//  )
-//  .dependsOn(core)
+lazy val bloopDap = project
+  .in(file("bloop-dap"))
+  .settings(
+    name := "bloop-scala-debug-adapter",
+    libraryDependencies ++= List(
+      "ch.epfl.scala" %% "bloop-frontend" % bloopVersion
+    )
+  )
+  .dependsOn(core)
