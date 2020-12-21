@@ -19,7 +19,7 @@ object ServerHandle {
 //    def uri: URI = URI.create(s"local://${socketFile.syntax}")
 //    override def toString: String = s"local://${socketFile.syntax}"
 //  }
-//
+
   final case class Tcp(address: InetSocketAddress, backlog: Int) extends ServerHandle {
     val server: ServerSocket = new ServerSocket(address.getPort, backlog, address.getAddress)
     def uri: URI = URI.create(s"tcp://${address.getHostString}:${server.getLocalPort}")

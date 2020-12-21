@@ -3,7 +3,7 @@ package bloop.logging
 import ch.epfl.scala.bsp
 import bloop.reporter.Problem
 import java.io.File
-import scala.meta.io.AbsolutePath
+import bloop.io.AbsolutePath
 
 sealed abstract class CompilationEvent
 

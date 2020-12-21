@@ -5,9 +5,8 @@ import sbt.{Keys, Project, State}
 import sbt.internal.server.{ServerCallback, ServerHandler, ServerIntent}
 import com.google.gson.{Gson, GsonBuilder}
 import dap.DebuggeeRunner
-import io.circe.{Decoder, parser}
-import io.circe.syntax._
 import sbt.internal.protocol.JsonRpcRequestMessage
+import sjsonnew.support.scalajson.unsafe.Converter
 
 object SbtDebugAdapterPlugin extends sbt.AutoPlugin {
   private implicit val gson: Gson = new GsonBuilder().setPrettyPrinting().create()
@@ -21,41 +20,27 @@ object SbtDebugAdapterPlugin extends sbt.AutoPlugin {
     Keys.serverHandlers += ServerHandler { callback: ServerCallback =>
       import callback._
       //import sjsonnew.BasicJsonProtocol._
-      import sbt.internal.protocol.{JsonRpcRequestMessage}
+      import sbt.internal.protocol.JsonRpcRequestMessage
       ServerIntent.request {
         case r: JsonRpcRequestMessage if r.method == "debugSession/start" =>
-          val params: bsp.DebugSessionParams = ???
+          val params: bsp.DebugSessionParams = Converter.fromJson[bsp.DebugSessionParams](json(r)).get
+
           val projects: Seq[Project] = ???
           val state: State = ???
-
+//  BloopExtraBuildParams.decoder.decodeJson(json) match {
+  // sbt.internal.server.BspCompileTask
           val result: Either[ProtocolError, DebuggeeRunner] = params.dataKind match {
             case bsp.DebugSessionParamsDataKind.ScalaMainClass =>
-              convert[bsp.ScalaMainClass](params, r, main => SbtDebuggeeRunner.forMainClass(projects, main, state))
+              convert[bsp.ScalaMainClass](params, r, main => SbtDebuggeeRunner.forMainClass(projects, state, main))
             case bsp.DebugSessionParamsDataKind.ScalaTestSuites =>
-              convert[List[String]](params, r, filters => SbtDebuggeeRunner.forTestSuite(projects, filters, state))
+              convert[List[String]](params, r, filters => SbtDebuggeeRunner.forTestSuite(projects, state, filters))
             case bsp.DebugSessionParamsDataKind.ScalaAttachRemote =>
               Right(SbtDebuggeeRunner.forAttachRemote(state))
             case dataKind => Left(InvalidRequest(s"Unsupported data kind: $dataKind"))
           }
 
-
-          result match {
-            case Left(error) =>
-              import error._
-              jsonRpcRespondError(execId, code, message)
-            case Right(runner) =>
-              val debugAddress = bsp.DebugSessionAddress(uri = runner.)
-              jsonRpcRespond(debugAddress, Some(r.id))
-          }
-
-
-
-/*
-  def startDebugSession(
-      params: bsp.DebugSessionParams
-  ): BspEndpointResponse[bsp.DebugSessionAddress] = {
-
-    ifInitialized(None) { (state, logger) =>
+  /*
+      ifInitialized(None) { (state, logger) =>
       JavaRuntime.loadJavaDebugInterface match {
         case Failure(exception) =>
           val message = JavaRuntime.current match {
@@ -102,7 +87,16 @@ object SbtDebugAdapterPlugin extends sbt.AutoPlugin {
           }
       }
     }
- */
+   */
+          result match {
+            case Left(error) =>
+              import error._
+              jsonRpcRespondError(execId, code, message)
+            case Right(runner) =>
+              val debugAddress = bsp.DebugSessionAddress(uri = ???)
+              jsonRpcRespond(debugAddress, Some(r.id))
+          }
+
           ()
       }
     }

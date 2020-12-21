@@ -7,15 +7,71 @@ import sbt.internal.bsp.ScalaMainClass
 import sbt.internal.inc.Analysis
 import xsbti.compile.analysis.SourceInfo
 
+private trait SbtTestSuiteDebugAdapter {
+  def projects: Seq[Project]
+  def state: State
+  override def allAnalysis: Seq[Analysis] = ???
+}
+
+private final class SbtMainClassDebugAdapter(projects: Seq[Project], state: State, mainClass: ScalaMainClass) extends
+  MainClassDebugAdapter(mainClass: ScalaMainClass) with SbtTestSuiteDebugAdapter {
+
+  def run(debugLogger: DebugSessionLogger): Task[ExitStatus] = {
+    //    val workingDir = state.commonOptions.workingPath
+    //    val runState = Tasks.runJVM(
+    //      state.copy(logger = debugLogger),
+    //      project,
+    //      env,
+    //      workingDir,
+    //      mainClass.`class`,
+    //      (mainClass.arguments ++ mainClass.jvmOptions).toArray,
+    //      skipJargs = false,
+    //      mainClass.environmentVariables,
+    //      RunMode.Debug
+    //    )
+    //
+    //    runState.map(_.status)
+    ???
+  }
+}
+
+private final class SbtTestSuiteDebugAdapter(projects: Seq[Project], state: State, filters: List[String]) extends
+  TestSuiteDebugAdapter(filters) with SbtTestSuiteDebugAdapter {
+
+  override def run(debugLogger: DebugSessionLogger): Task[ExitStatus] = {
+    //    val debugState = state.copy(logger = debugLogger)
+    //
+    //    val filter = TestInternals.parseFilters(filters)
+    //    val handler = new LoggingEventHandler(debugState.logger)
+    //
+    //    val task = Tasks.test(
+    //      debugState,
+    //      projects.toList,
+    //      Nil,
+    //      filter,
+    //      handler,
+    //      runInParallel = false,
+    //      mode = RunMode.Debug
+    //    )
+    //
+    //    task.map(_.status)
+    ???
+  }
+}
+
+private final class SbtAttachRemoteDebugAdapter extends AttachRemoteDebugAdapter {
+
+}
+
 object SbtDebuggeeRunner {
   def forMainClass(
       projects: Seq[Project],
+      state: State,
       mainClass: ScalaMainClass,
-      state: State
   ): Either[String, DebuggeeRunner] = {
     projects match {
       case Seq() => Left(s"No projects specified for main class: [$mainClass]")
-      case Seq(project) => Right(new MainClassDebugAdapter(project, mainClass, state))
+      case Seq(project) => Right(new SbtMainClassDebugAdapter(project, state, mainClass))
       case projects => Left(s"Multiple projects specified for main class [$mainClass]: $projects")
     }
   }
@@ -27,29 +83,10 @@ object SbtDebuggeeRunner {
   ): Either[String, DebuggeeRunner] = {
     projects match {
       case Seq() => Left(s"No projects specified for the test suites: [${filters.sorted}]")
-      case projects => Right(new TestSuiteDebugAdapter(projects, filters, state))
+      case projects => Right(new SbtTestSuiteDebugAdapter(projects, state, filters))
     }
   }
 
   def forAttachRemote(state: State): DebuggeeRunner =
-    new AttachRemoteDebugAdapter(state)
-
-  def classFilesMappedTo(
-      origin: Path,
-      lines: Array[Int],
-      columns: Array[Int],
-      allAnalysis: Seq[Analysis]
-  ): List[Path] = {
-    def isInfoEmpty(info: SourceInfo) = info == sbt.internal.inc.SourceInfos.emptyInfo
-
-    val originFile = origin.toFile
-    val foundClassFiles = allAnalysis.collectFirst { analysis =>
-      analysis match {
-        case analysis if !isInfoEmpty(analysis.infos.get(originFile)) =>
-          analysis.relations.products(originFile).iterator.map(_.toPath).toList
-      }
-    }
-
-    foundClassFiles.toList.flatten
-  }
+    new SbtAttachRemoteDebugAdapter(state)
 }

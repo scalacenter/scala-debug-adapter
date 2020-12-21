@@ -1,3 +1,5 @@
+
+
 inThisBuild(
   List(
     onLoadMessage := s"Welcome to scala-debug-adapter ${version.value}",
@@ -16,6 +18,7 @@ inThisBuild(
 val bloopVersion = "1.4.6"
 
 lazy val core = project
+  .enablePlugins(SbtJdiTools)
   .in(file("core"))
   .settings(
     name := "scala-debug-adapter",
@@ -29,7 +32,7 @@ lazy val core = project
       Dependencies.javaDebug,
       Dependencies.monix,
       Dependencies.sbtTestInterface,
-      Dependencies.scalameta,
+      //Dependencies.scalameta,
       Dependencies.zinc,
     )
   )
@@ -44,6 +47,7 @@ lazy val sbtPlugin = project
     )
   )
   .dependsOn(core)
+
 
 //lazy val bloopDap = project
 //  .in(file("bloop-dap"))

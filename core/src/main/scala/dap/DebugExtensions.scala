@@ -35,8 +35,7 @@ import org.objectweb.asm.Opcodes
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Label
 import scala.collection.mutable
-import scala.util.control.NonFatal
-//import monix.execution.misc.NonFatal
+import monix.execution.misc.NonFatal
 
 object DebugExtensions {
   def newContext(runner: DebuggeeRunner): IProviderContext = {
