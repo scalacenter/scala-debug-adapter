@@ -1,11 +1,11 @@
 package dap
 
+import bloop.cli.ExitStatus
 import java.net.{InetSocketAddress, Socket}
 import java.util.concurrent.CancellationException
 import java.util.concurrent.TimeUnit
 import java.util.logging.{Handler, Level, LogRecord, Logger => JLogger}
 import bloop.logging.{DebugFilter, Logger}
-import bloop.cli.{ExitStatus => DebuggeeExitStatus}
 import com.microsoft.java.debug.core.adapter.{ProtocolServer => DapServer}
 import com.microsoft.java.debug.core.protocol.Messages.{Request, Response}
 import com.microsoft.java.debug.core.protocol.Requests._
@@ -20,7 +20,6 @@ import scala.concurrent.duration.FiniteDuration
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-
 import com.microsoft.java.debug.core.adapter.IProviderContext
 
 /**
@@ -88,7 +87,7 @@ final class DebugSession(
           }
         }
 
-        def cancelIfError(exitStatus: DebuggeeExitStatus): Unit = {
+        def cancelIfError(exitStatus: ExitStatus): Unit = {
           if (!exitStatus.isOk) {
             cancelPromises(new Exception(exitStatus.name))
           }

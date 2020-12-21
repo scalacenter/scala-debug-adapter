@@ -21,7 +21,15 @@ object ExitStatus {
   }
 
   // FORMAT: OFF
-  val Ok, UnexpectedError, ParseError, InvalidCommandLineOption, CompilationError, LinkingError, TestExecutionError, RunError, BuildDefinitionError: ExitStatus = generateExitStatus
+  val Ok,
+    UnexpectedError,
+    ParseError,
+    InvalidCommandLineOption,
+    CompilationError,
+    LinkingError,
+    TestExecutionError,
+    RunError,
+    BuildDefinitionError: ExitStatus = generateExitStatus
   // FORMAT: ON
 
   // The initialization of all must come after the invocations to `generateExitStatus`

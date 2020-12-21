@@ -1,9 +1,8 @@
 package dap
 
-import java.net.{ServerSocket, URI}
-
 import bloop.io.ServerHandle
 import bloop.logging.Logger
+import java.net.{InetAddress, InetSocketAddress, ServerSocket, URI}
 import com.microsoft.java.debug.core.DebugSettings
 import monix.eval.Task
 import monix.execution.Scheduler
