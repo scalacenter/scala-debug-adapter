@@ -23,17 +23,9 @@ lazy val core = project
   .settings(
     name := "scala-debug-adapter",
     libraryDependencies ++= List(
-      "org.scala-lang" % "scala-compiler" % scalaVersion.value,
-      "com.lihaoyi" %% "pprint" % "0.5.3",
       Dependencies.asm,
       Dependencies.asmUtil,
-      Dependencies.bsp4j,
-      Dependencies.bsp4s,
-      Dependencies.javaDebug,
-      Dependencies.monix,
-      Dependencies.sbtTestInterface,
-      //Dependencies.scalameta,
-      Dependencies.zinc,
+      Dependencies.javaDebug
     )
   )
 
@@ -41,10 +33,7 @@ lazy val sbtPlugin = project
   .in(file("sbt-dap-plugin"))
   .enablePlugins(SbtPlugin)
   .settings(
-    name := "sbt-dap-plugin",
-    libraryDependencies ++= List(
-
-    )
+    name := "sbt-dap-plugin"
   )
   .dependsOn(core)
 
