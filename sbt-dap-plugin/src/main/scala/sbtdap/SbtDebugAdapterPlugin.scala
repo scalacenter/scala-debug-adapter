@@ -32,21 +32,6 @@ object SbtDebugAdapterPlugin extends sbt.AutoPlugin {
               }
           }
 
-
-          parsedParams.map { params =>
-            SbtBspServerContext.startSessionDebug(logger, params)
-          } match  {
-            case Left(err: ProtocolError) =>
-              import err.error._
-              jsonRpcRespondError(Some(err.id.toString), code.value, message)
-            case Right(runner) =>
-              // TODO: the native JsonFormat objects just got merged into sbt: https://github.com/sbt/sbt/pull/6226
-              //val debugAddress = bsp.DebugSessionAddress(uri = ???)
-              // need JsonFormat[bsp.DebugSessionAddress]
-              //jsonRpcRespond(debugAddress, Some(r.id))
-
-          }
-
           ()
         }
       }

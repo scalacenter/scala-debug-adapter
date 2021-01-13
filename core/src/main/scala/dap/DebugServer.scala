@@ -1,15 +1,14 @@
 package dap
 
-import bloop.io.ServerHandle
-import bloop.logging.Logger
-import java.net.{InetAddress, InetSocketAddress, ServerSocket, URI}
+import java.net.{ServerSocket, URI}
 import com.microsoft.java.debug.core.DebugSettings
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicBoolean
-import monix.execution.cancelables.CompositeCancelable
 
 import scala.concurrent.Promise
+import scala.concurrent.ExecutionContext
+import java.util.concurrent.ConcurrentLinkedQueue
 
 final class StartedDebugServer(
     val address: Task[Option[URI]],
@@ -35,7 +34,7 @@ object DebugServer {
       runner: DebuggeeRunner,
       logger: Logger,
       ioScheduler: Scheduler
-  ): StartedDebugServer = {
+  )(implicit executionContext: ExecutionContext): StartedDebugServer = {
     /*
      * Set backlog to 1 to recommend the OS to process one connection at a time,
      * which can happen when a restart is request and the client immediately
@@ -45,14 +44,14 @@ object DebugServer {
 
     val closedServer = AtomicBoolean(false)
     val listeningPromise = Promise[Option[URI]]()
-    val ongoingSessions = CompositeCancelable()
+    val ongoingSessions = new ConcurrentLinkedQueue[Cancelable]()
 
     def listen(serverSocket: ServerSocket): Task[Unit] = {
       val session = Task {
         listeningPromise.trySuccess(Some(handle.uri))
         val socket = serverSocket.accept()
         val session = DebugSession(socket, runner, logger, ioScheduler)
-        ongoingSessions += session
+        ongoingSessions.add(session)
 
         session.startDebuggeeAndServer()
         session.exitStatus
@@ -67,7 +66,7 @@ object DebugServer {
       Task {
         if (closedServer.compareAndSet(false, true)) {
           listeningPromise.trySuccess(None)
-          ongoingSessions.cancel()
+          ongoingSessions.forEach(_.cancel())
           try {
             handle.server.close()
           } catch {

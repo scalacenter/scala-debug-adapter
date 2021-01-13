@@ -34,7 +34,6 @@ lazy val core = project
       Dependencies.sbtTestInterface,
       //Dependencies.scalameta,
       Dependencies.zinc,
-      "ch.epfl.scala" %% "bloop-frontend" % bloopVersion
     )
   )
 

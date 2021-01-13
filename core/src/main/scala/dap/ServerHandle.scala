@@ -1,4 +1,4 @@
-package bloop.io
+package dap
 
 import java.net.{InetAddress, InetSocketAddress, ServerSocket, URI}
 

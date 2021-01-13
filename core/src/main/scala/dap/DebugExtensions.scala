@@ -92,7 +92,7 @@ object DebugExtensions {
   object HotCodeReplaceProvider extends IHotCodeReplaceProvider {
     override def onClassRedefined(consumer: Consumer[util.List[String]]): Unit = ()
     override def redefineClasses(): CompletableFuture[util.List[String]] =
-      CompletableFuture.completedFuture(util.Collections.emptyList())
+      CompletableFuture.completedFuture(Collections.emptyList())
     override def getEventHub: Observable[HotCodeReplaceEvent] = Observable.empty()
   }
 
@@ -160,9 +160,8 @@ object DebugExtensions {
           }
         } catch {
           case NonFatal(t) =>
-            val logger = runner.logger
-            logger.error(s"Failed to parse debug line numbers in class file $classFile!")
-            logger.trace(t)
+            runner.logger.error(s"Failed to parse debug line numbers in class file $classFile!")
+            runner.logger.trace(t)
         }
       }
 

@@ -1,11 +1,9 @@
 package dap
 
-import bloop.cli.ExitStatus
 import java.net.{InetSocketAddress, Socket}
 import java.util.concurrent.CancellationException
 import java.util.concurrent.TimeUnit
 import java.util.logging.{Handler, Level, LogRecord, Logger => JLogger}
-import bloop.logging.{DebugFilter, Logger}
 import com.microsoft.java.debug.core.adapter.{ProtocolServer => DapServer}
 import com.microsoft.java.debug.core.protocol.Messages.{Request, Response}
 import com.microsoft.java.debug.core.protocol.Requests._
@@ -13,7 +11,7 @@ import com.microsoft.java.debug.core.protocol.{Events, JsonUtils}
 import com.microsoft.java.debug.core.{Configuration, LoggerFactory}
 import monix.eval.Task
 import monix.execution.atomic.Atomic
-import monix.execution.{Cancelable, Scheduler}
+import monix.execution.Scheduler
 import scala.collection.mutable
 import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
@@ -21,6 +19,9 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 import com.microsoft.java.debug.core.adapter.IProviderContext
+import scala.concurrent.Future
+import scala.concurrent.ExecutionContext
+import com.microsoft.java.debug.core.protocol.Events.OutputEvent
 
 /**
  *  This debug adapter maintains the lifecycle of the debuggee in separation from JDI.
@@ -36,7 +37,7 @@ final class DebugSession(
     initialLogger: Logger,
     ioScheduler: Scheduler,
     loggerAdapter: DebugSession.LoggerAdapter
-) extends DapServer(
+)(implicit executionContext: ExecutionContext) extends DapServer(
       socket.getInputStream,
       socket.getOutputStream,
       context,
@@ -80,31 +81,8 @@ final class DebugSession(
   def startDebuggeeAndServer(): Unit = {
     debugState.transform {
       case DebugSession.Ready(runner) =>
-        def terminateGracefully(result: Option[Throwable]): Task[Unit] = {
-          Task.fromFuture(endOfConnection.future).map { _ =>
-            sessionStatusPromise.trySuccess(DebugSession.Terminated)
-            socket.close()
-          }
-        }
-
-        def cancelIfError(exitStatus: ExitStatus): Unit = {
-          if (!exitStatus.isOk) {
-            cancelPromises(new Exception(exitStatus.name))
-          }
-        }
-
         Task(super.run()).runAsync(ioScheduler)
-
-        val logger = new DebugSessionLogger(this, addr => debugAddress.success(addr), initialLogger)
-
-        // all output events are sent before debuggee task gets finished
-        val debuggee = runner
-          .run(logger)
-          .transform(cancelIfError, cancelPromises)
-          .doOnFinish(terminateGracefully)
-          .doOnCancel(terminateGracefully(None))
-          .runAsync(ioScheduler)
-
+        val debuggee = runner.run(Callbacks)
         DebugSession.Started(debuggee)
 
       case otherState =>
@@ -203,8 +181,7 @@ final class DebugSession(
     } finally {
       expectedTerminalEvents.remove(event.`type`)
 
-      val isTerminated = expectedTerminalEvents.isEmpty
-      if (isTerminated) {
+      if (expectedTerminalEvents.isEmpty) {
         endOfConnection.trySuccess(()) // Might already be set when canceling
         () // Don't close socket, it terminates on its own
       }
@@ -268,6 +245,38 @@ final class DebugSession(
     attachedPromise.tryFailure(cause)
     ()
   }
+  private object Callbacks extends DebugSessionCallbacks {
+    def onListening(address: InetSocketAddress): Unit = debugAddress.success(address)
+
+    def onCancel(): Future[Unit] = terminateGracefully()
+
+    def onFinish(result: Try[ExitStatus]): Future[Unit] = result match {
+      case Success(exitStatus) =>
+          if (!exitStatus.isOk)
+            cancelPromises(new Exception(exitStatus.name))
+          terminateGracefully()
+      case Failure(t) =>
+        cancelPromises(t)
+        terminateGracefully()
+    }
+
+    def logError(msg: String): Unit = {
+      val event = new OutputEvent(OutputEvent.Category.stderr, msg + System.lineSeparator())
+      sendEvent(event)
+    }
+
+    def logInfo(msg: String): Unit = {
+      val event = new OutputEvent(OutputEvent.Category.stdout, msg + System.lineSeparator())
+      sendEvent(event)
+    }
+
+    private def terminateGracefully(): Future[Unit] = {
+      endOfConnection.future.map { _ =>
+        sessionStatusPromise.trySuccess(DebugSession.Terminated)
+        socket.close()
+      }
+    }
+  }
 }
 
 object DebugSession {
@@ -285,7 +294,7 @@ object DebugSession {
       runner: DebuggeeRunner,
       logger: Logger,
       ioScheduler: Scheduler
-  ): DebugSession = {
+  )(implicit executionContext: ExecutionContext): DebugSession = {
     val adapter = new LoggerAdapter(logger)
     val context = DebugExtensions.newContext(runner)
     val initialState = Ready(runner)
@@ -328,8 +337,6 @@ object DebugSession {
   }
 
   private[DebugSession] final class LoggerAdapter(logger: Logger) extends Handler {
-    private implicit val debugFilter: DebugFilter = DebugFilter.All
-
     /**
      * Debuggee tends to send a lot of SocketClosed exceptions when bloop is terminating the socket. This helps us filter those logs
      */
