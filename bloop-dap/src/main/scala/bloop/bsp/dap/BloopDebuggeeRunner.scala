@@ -10,7 +10,7 @@ import bloop.testing.{LoggingEventHandler, TestInternals}
 import monix.eval.Task
 import scala.concurrent.Future
 import monix.execution.Scheduler.Implicits.global
-import dap.Cancelable
+import dap.CancelableFuture
 import java.nio.file.Path
 import monix.execution.Scheduler
 import scala.util.Try
@@ -23,15 +23,7 @@ import bloop.data.Platform
 import sbt.internal.inc.Analysis
 import java.net.InetSocketAddress
 import dap.DebugSessionCallbacks
-
-
-class BloopDebugeeLogger(underlying: bloop.logging.Logger) extends dap.Logger {
-  override def debug(msg: => String): Unit = underlying.debug(() => msg)
-  override def info(msg: => String): Unit = underlying.info(() => msg)
-  override def warn(msg: => String): Unit = underlying.warn(() => msg)
-  override def error(msg: => String): Unit = underlying.error(() => msg)
-  override def trace(t: => Throwable): Unit = underlying.trace(() => t)
-}
+import scala.concurrent.Promise
 
 abstract class BloopDebuggeeRunner(initialState: State, ioScheduler: Scheduler) extends dap.DebuggeeRunner {
   private lazy val allAnalysis = initialState.results.allAnalysis
@@ -44,22 +36,22 @@ abstract class BloopDebuggeeRunner(initialState: State, ioScheduler: Scheduler) 
     override def trace(t: => Throwable): Unit = initialState.logger.trace(() => t)
   }
 
-  override def run(callbacks: DebugSessionCallbacks): Cancelable = {
+  override def run(callbacks: DebugSessionCallbacks): CancelableFuture[Unit] = {
     val debugSessionLogger = new DebugSessionLogger(callbacks, initialState.logger)
+    val promise = Promise[Unit]()
+    
     val task = start(initialState.copy(logger = debugSessionLogger))
       .map { status => 
-        new dap.ExitStatus {
-          def isOk: Boolean = status.isOk
-          def name: String = status.name
-        }
+        if(!status.isOk) throw(new Exception(s"debugee failed with ${status.name}"))
       }
-      .transform(
-        status => callbacks.onFinish(Success(status)),
-        t => callbacks.onFinish(Failure(t))
-      )
-      .doOnCancel(Task.fromFuture(callbacks.onCancel()))
+      .doOnFinish {
+        case None => Task(promise.success(()))
+        case Some(t) => Task(promise.failure(t))
+      }
+      .doOnCancel(Task(promise.success(())))
       .runAsync(ioScheduler)
-    new Cancelable {
+    new CancelableFuture[Unit] {
+      def future(): Future[Unit] = promise.future
       def cancel(): Unit = task.cancel()
     }
   }
