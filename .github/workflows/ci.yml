@@ -1,0 +1,22 @@
+name: Continuous Integration
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        jdk: [adopt@1.8, adopt@1.11]
+    name: Test on ${{ matrix.os }} -- ${{ matrix.jdk }}
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v2.3.4
+    - uses: olafurpg/setup-scala@v10
+      with:
+        java-version: ${{ matrix.jdk }}
+    - name: Test core project
+      run: sbt core/test
+      shell: bash
