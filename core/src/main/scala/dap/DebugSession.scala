@@ -1,23 +1,22 @@
 package dap
 
-import java.net.{InetSocketAddress, Socket}
-import java.util.concurrent.CancellationException
-import java.util.concurrent.TimeUnit
-import java.util.logging.{Handler, Level, LogRecord, Logger => JLogger}
-import com.microsoft.java.debug.core.adapter.{ProtocolServer => DapServer}
+import com.microsoft.java.debug.core.adapter.{IProviderContext, ProtocolServer => DapServer}
+import com.microsoft.java.debug.core.protocol.Events.OutputEvent
 import com.microsoft.java.debug.core.protocol.Messages.{Request, Response}
 import com.microsoft.java.debug.core.protocol.Requests._
 import com.microsoft.java.debug.core.protocol.{Events, JsonUtils}
 import com.microsoft.java.debug.core.{Configuration, LoggerFactory}
-import scala.collection.mutable
-import scala.concurrent.Promise
-import scala.concurrent.duration.FiniteDuration
-import scala.util.{Try, Failure, Success}
-import com.microsoft.java.debug.core.adapter.IProviderContext
-import scala.concurrent.{Future, ExecutionContext}
-import com.microsoft.java.debug.core.protocol.Events.OutputEvent
-import TimeoutScheduler._
+import dap.DebugSession.Started
+import dap.TimeoutScheduler._
+
+import java.net.{InetSocketAddress, Socket}
+import java.util.concurrent.{CancellationException, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.logging.{Handler, Level, LogRecord, Logger => JLogger}
+import scala.collection.mutable
+import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.{Await, ExecutionContext, Future, Promise}
+import scala.util.{Failure, Success, Try}
 
 /**
  *  This debug adapter maintains the lifecycle of the debuggee in separation from JDI.
@@ -33,12 +32,11 @@ final class DebugSession(
     initialLogger: Logger,
     loggerAdapter: DebugSession.LoggerAdapter
 )(implicit executionContext: ExecutionContext) extends DapServer(
-      socket.getInputStream,
-      socket.getOutputStream,
-      context,
-      DebugSession.loggerFactory(loggerAdapter)
-    )
- {
+  socket.getInputStream,
+  socket.getOutputStream,
+  context,
+  DebugSession.loggerFactory(loggerAdapter)
+) {
   private type LaunchId = Int
 
   // A set of all processed launched requests by the client
@@ -47,16 +45,13 @@ final class DebugSession(
   private val isDisconnected: AtomicBoolean = new AtomicBoolean(false)
   private val endOfConnection = Promise[Unit]()
   private val debugAddress = Promise[InetSocketAddress]()
+  
   private val sessionStatusPromise = Promise[DebugSession.ExitStatus]()
   private val attachedPromise = Promise[Unit]()
   private val debugState = new Synchronized(initialDebugState)
 
-  /*
-   * We reach an end of connection when all expected terminal events have been
-   * sent from the DAP client to the DAP server. The event types will be
-   * removed from the set as more requests are processed by the client.
-   */
-  private val expectedTerminalEvents = mutable.Set("terminated", "exited")
+  def currentState: DebugSession.State = debugState.value
+  def getDebugAddress: Future[InetSocketAddress] = debugAddress.future
 
   /**
    * Schedules the start of the debugging session.
@@ -65,11 +60,14 @@ final class DebugSession(
    * non-blocking way: the debuggee process is started in the background and
    * the DAP server starts listening to client requests in an IO thread.
    */
-  override def run(): Unit = {
+  def start(): Unit = {
     debugState.transform {
       case DebugSession.Ready(runner) =>
-        Future(super.run())
+        Future(run()) // start listening
         val debuggee = runner.run(Callbacks)
+        debuggee.future()
+          .failed
+          .foreach(cancelPromises)
         DebugSession.Started(debuggee)
 
       case otherState =>
@@ -110,26 +108,26 @@ final class DebugSession(
           }
 
       case "disconnect" =>
-        try {
-          if (DebugSession.shouldRestart(request)) {
-            sessionStatusPromise.trySuccess(DebugSession.Restarted)
-          }
-
-          val acknowledgement = new Response(request.seq, request.command, true)
-          sendResponse(acknowledgement)
-        } finally {
-          // Exited event should not be expected if debugger has already disconnected from the JVM
-          expectedTerminalEvents.remove("exited")
-
-          debugState.transform {
-            case DebugSession.Started(debuggee) =>
-              cancelPromises(new CancellationException("Client disconnected"))
-              cancelDebuggee(debuggee)
-              super.dispatchRequest(request)
-              DebugSession.Cancelled
-            case otherState => otherState
-          }
+        if (DebugSession.shouldRestart(request)) {
+          sessionStatusPromise.trySuccess(DebugSession.Restarted)
         }
+
+        val dispatchRequest = debugState.run {
+          case DebugSession.Started(debuggee) =>
+            cancelPromises(new CancellationException("Client disconnected"))
+            cancelDebuggee(debuggee)
+            (DebugSession.Cancelled, true)
+          case otherState => (otherState, false)
+        }
+        
+        if (dispatchRequest) {
+          super.dispatchRequest(request)
+        } else {
+          // TODO clarify why request is not dispatched
+          val ack = new Response(request.seq, request.command, true)
+          sendResponse(ack)
+        }
+      
       case _ => super.dispatchRequest(request)
     }
   }
@@ -159,16 +157,12 @@ final class DebugSession(
   }
 
   override def sendEvent(event: Events.DebugEvent): Unit = {
-    try {
-      super.sendEvent(event)
-
-      if (event.`type` == "exited") loggerAdapter.onDebuggeeFinished()
-    } finally {
-      expectedTerminalEvents.remove(event.`type`)
-
-      if (expectedTerminalEvents.isEmpty) {
-        endOfConnection.trySuccess(()) // Might already be set when canceling
-        () // Don't close socket, it terminates on its own
+    try { super.sendEvent(event) }
+    finally {
+      event.`type` match {
+        case "exited" => loggerAdapter.onDebuggeeFinished()
+        case "terminated" => endOfConnection.trySuccess(()) // Might already be set when canceling
+        case _ => ()
       }
     }
   }
@@ -188,32 +182,32 @@ final class DebugSession(
   /**
    * Cancels the background debuggee process, the DAP server and closes the socket.
    */
-  def cancel(): Unit = {
-    // Close connection after the timeout to prevent blocking if [[TerminalEvents]] are not sent
-    def scheduleForcedEndOfConnection(): Unit = {
-      val message = "Communication with DAP client is frozen, closing client forcefully..."
-      endOfConnection
-        .timeoutTo(FiniteDuration(5, TimeUnit.SECONDS), () => initialLogger.warn(message))
-        .future
-        .onComplete(_ => endOfConnection.trySuccess(()))
-    }
-
+  def cancel(gracePeriod: Duration): Unit = {
     debugState.transform {
-      case DebugSession.Ready(_) =>
+      case DebugSession.Ready(_) =>  
         socket.close()
         DebugSession.Cancelled
 
       case DebugSession.Started(debuggee) =>
         cancelPromises(new CancellationException("Debug session cancelled"))
         cancelDebuggee(debuggee)
-        scheduleForcedEndOfConnection()
+      
+        // Close connection after the grace period to prevent blocking if [[TerminalEvents]] are not sent
+        try Await.result(endOfConnection.future, gracePeriod)
+        catch {
+          case _: TimeoutException =>
+            val msg = "Communication with DAP client is frozen, closing client forcefully..."
+            initialLogger.warn(msg)
+        }
+        socket.close()
+
         DebugSession.Cancelled
 
-      case DebugSession.Cancelled => DebugSession.Cancelled
+      case state => state
     }
   }
 
-  private def cancelDebuggee(debuggee: Cancelable): Unit = {
+  private def cancelDebuggee(debuggee: CancelableFuture[Unit]): Unit = {
     loggerAdapter.onDebuggeeFinished()
     debuggee.cancel()
   }
@@ -223,36 +217,20 @@ final class DebugSession(
     attachedPromise.tryFailure(cause)
     ()
   }
+
   private object Callbacks extends DebugSessionCallbacks {
-    def onListening(address: InetSocketAddress): Unit = debugAddress.success(address)
-
-    def onCancel(): Future[Unit] = terminateGracefully()
-
-    def onFinish(result: Try[ExitStatus]): Future[Unit] = result match {
-      case Success(exitStatus) =>
-          if (!exitStatus.isOk)
-            cancelPromises(new Exception(exitStatus.name))
-          terminateGracefully()
-      case Failure(t) =>
-        cancelPromises(t)
-        terminateGracefully()
+    def onListening(address: InetSocketAddress): Unit = {
+      debugAddress.success(address)
     }
 
-    def logError(msg: String): Unit = {
-      val event = new OutputEvent(OutputEvent.Category.stderr, msg + System.lineSeparator())
-      sendEvent(event)
-    }
-
-    def logInfo(msg: String): Unit = {
+    def printOut(msg: String): Unit = {
       val event = new OutputEvent(OutputEvent.Category.stdout, msg + System.lineSeparator())
       sendEvent(event)
     }
 
-    private def terminateGracefully(): Future[Unit] = {
-      endOfConnection.future.map { _ =>
-        sessionStatusPromise.trySuccess(DebugSession.Terminated)
-        socket.close()
-      }
+    def printErr(msg: String): Unit = {
+      val event = new OutputEvent(OutputEvent.Category.stderr, msg + System.lineSeparator())
+      sendEvent(event)
     }
   }
 }
@@ -264,7 +242,7 @@ object DebugSession {
 
   sealed trait State
   final case class Ready(runner: DebuggeeRunner) extends State
-  final case class Started(debuggee: Cancelable) extends State
+  final case class Started(debuggee: CancelableFuture[Unit]) extends State
   final case object Cancelled extends State
 
   def apply(
@@ -289,14 +267,6 @@ object DebugSession {
 
   private def failed(request: Request, message: String): Response = {
     new Response(request.seq, request.command, false, message)
-  }
-
-  private def disconnectRequest(seq: Int): Request = {
-    val arguments = new DisconnectArguments
-    arguments.restart = false
-
-    val json = JsonUtils.toJsonTree(arguments, classOf[DisconnectArguments])
-    new Request(seq, Command.DISCONNECT.getName, json.getAsJsonObject)
   }
 
   private def shouldRestart(disconnectRequest: Request): Boolean = {

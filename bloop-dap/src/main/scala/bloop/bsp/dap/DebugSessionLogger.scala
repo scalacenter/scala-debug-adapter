@@ -29,7 +29,7 @@ class DebugSessionLogger(callbacks: DebugSessionCallbacks, underlying: Logger) e
 
   override def error(msg: String): Unit = {
     underlying.error(msg)
-    callbacks.logError(msg)
+    callbacks.printErr(msg)
   }
 
   override def info(msg: String): Unit = {
@@ -42,7 +42,7 @@ class DebugSessionLogger(callbacks: DebugSessionCallbacks, underlying: Logger) e
         callbacks.onListening(address)
       }
     } else {
-      callbacks.logInfo(msg)
+      callbacks.printOut(msg)
     }
   }
 }
