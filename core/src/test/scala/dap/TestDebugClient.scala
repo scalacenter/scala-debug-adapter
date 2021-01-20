@@ -138,10 +138,10 @@ class TestDebugClient(socket: Socket, logger: Logger, timeout: Duration)(implici
 }
 
 object TestDebugClient {
-  def connect(uri: URI, logger: Logger, timeout: Duration = 500 millis)(implicit ec: ExecutionContext): TestDebugClient = {
+  def connect(uri: URI, logger: Logger, timeout: Duration = 2000 millis)(implicit ec: ExecutionContext): TestDebugClient = {
     val socket = new Socket()
     val address = new InetSocketAddress(uri.getHost, uri.getPort)
-    socket.connect(address, 500)
+    socket.connect(address, timeout.toMillis.intValue)
     logger.info(s"client connected to $uri")
     val client = new TestDebugClient(socket, logger, timeout)
     val listening = new java.lang.Thread {
