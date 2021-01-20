@@ -13,6 +13,7 @@ import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 
 object DebugServerSpec extends TestSuite {
+  private val DefaultTimeoutMillis = 2000
   /** the server needs two threads:
     * - the first one for listening
     * - the second one for delayed responses of the launch and configurationDone requests
@@ -120,7 +121,7 @@ object DebugServerSpec extends TestSuite {
       val client = TestDebugClient.connect(server.uri, NoopLogger)
       try {
         val session = server.connect()
-        Await.result(session.getDebugAddress, 500 millis)
+        Await.result(session.getDebugAddress, DefaultTimeoutMillis millis)
       } finally {
         server.close()
         client.close()
@@ -171,7 +172,7 @@ object DebugServerSpec extends TestSuite {
         client.launch()
         client.configurationDone()
         // give some time for the debuggee to terminate gracefully
-        server.close(500 millis)
+        server.close(DefaultTimeoutMillis millis)
         client.terminated
       } finally { 
         server.close() // in case test fails
@@ -184,7 +185,7 @@ object DebugServerSpec extends TestSuite {
       val tempDir = IO.createTemporaryDirectory
       val runner = MainDebuggeeRunner.helloWorld(tempDir)
       val server = new DebugServer(runner, NoopLogger)
-      val client = TestDebugClient.connect(server.uri, NoopLogger, timeout = 800 millis)
+      val client = TestDebugClient.connect(server.uri, NoopLogger, timeout = DefaultTimeoutMillis millis)
       try {
         server.connect()
         client.initialize()
@@ -203,7 +204,7 @@ object DebugServerSpec extends TestSuite {
       val tempDir = IO.createTemporaryDirectory
       val runner = MainDebuggeeRunner.helloWorld(tempDir)
       val server = new DebugServer(runner, NoopLogger)
-      val client = TestDebugClient.connect(server.uri, NoopLogger, timeout = 800 millis)
+      val client = TestDebugClient.connect(server.uri, NoopLogger, timeout = DefaultTimeoutMillis millis)
       try {
         server.connect()
         client.initialize()
@@ -340,7 +341,7 @@ object DebugServerSpec extends TestSuite {
       val tempDir = IO.createTemporaryDirectory
       val runner = MainDebuggeeRunner.scalaBreakpointTest(tempDir)
       val server = new DebugServer(runner, NoopLogger)
-      val client = TestDebugClient.connect(server.uri, NoopLogger, timeout = 800 millis)
+      val client = TestDebugClient.connect(server.uri, NoopLogger, timeout = DefaultTimeoutMillis millis)
       try {
         server.connect()
         client.initialize()
@@ -385,7 +386,7 @@ object DebugServerSpec extends TestSuite {
         client.disconnect(restart = false)
         
         assert(session.currentState == DebugSession.Cancelled)
-        Await.result(runner.currentProcess.future(), 500 millis)
+        Await.result(runner.currentProcess.future(), DefaultTimeoutMillis millis)
       } finally {
         server.close()
         client.close()
