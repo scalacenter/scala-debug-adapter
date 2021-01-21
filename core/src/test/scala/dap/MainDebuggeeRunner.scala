@@ -19,6 +19,8 @@ import java.io.InputStream
 import java.util.concurrent.atomic.AtomicBoolean
 
 case class MainDebuggeeRunner(source: Path, classpath: String, allClasses: List[Path], mainClass: String, logger: Logger) extends DebuggeeRunner {
+  override def name: String = mainClass
+  
   override def run(callbacks: DebugSessionCallbacks): CancelableFuture[Unit] = {
     val command = Array("java", DebugInterface, "-cp", classpath, mainClass)
     val builder = new ProcessBuilder(command: _*)
@@ -135,10 +137,10 @@ object MainDebuggeeRunner {
         val address = new InetSocketAddress("127.0.0.1", port)
         callbacks.onListening(address)
       } else {
-        callbacks.printOut(line)
+        callbacks.printlnOut(line)
       }
     }
-    startCrawling(process.getErrorStream)(callbacks.printErr)
+    startCrawling(process.getErrorStream)(callbacks.printlnErr)
     
     private val thread = new Thread {
       override def run(): Unit = {

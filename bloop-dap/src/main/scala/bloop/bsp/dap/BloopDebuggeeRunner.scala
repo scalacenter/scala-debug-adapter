@@ -80,6 +80,8 @@ private final class MainClassDebugAdapter(
     initialState: State,
     ioScheduler: Scheduler
 ) extends BloopDebuggeeRunner(initialState, ioScheduler) {
+
+  def name: String = s"[MainClass ${mainClass.`class`} in ${project.name}]"
   def start(state: State): Task[ExitStatus] = {
     val workingDir = state.commonOptions.workingPath
     val runState = Tasks.runJVM(
@@ -104,6 +106,7 @@ private final class TestSuiteDebugAdapter(
     initialState: State,
     ioScheduler: Scheduler
 ) extends BloopDebuggeeRunner(initialState, ioScheduler) {
+  def name: String = projects.map(_.name).mkString("[TestSuites in ", ",", "]")
   def start(state: State): Task[ExitStatus] = {
     val filter = TestInternals.parseFilters(filters)
     val handler = new LoggingEventHandler(state.logger)
@@ -124,6 +127,7 @@ private final class TestSuiteDebugAdapter(
 
 private final class AttachRemoteDebugAdapter(initialState: State, ioScheduler: Scheduler
 ) extends BloopDebuggeeRunner(initialState, ioScheduler) {
+  override def name: String = "Remote"
   override def start(state: State): Task[ExitStatus] = Task(ExitStatus.Ok)
 }
 
