@@ -10,6 +10,7 @@ import scala.language.postfixOps
 class MockDebuggeeRunner() extends DebuggeeRunner {
   var currentProcess: MockCancelableFuture = _
 
+  override def name: String = "mock"
   override def logger: Logger = NoopLogger
 
   override def run(callbacks: DebugSessionCallbacks): CancelableFuture[Unit] = {

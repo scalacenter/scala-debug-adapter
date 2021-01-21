@@ -6,15 +6,13 @@ import com.microsoft.java.debug.core.protocol.Messages.{Request, Response}
 import com.microsoft.java.debug.core.protocol.Requests._
 import com.microsoft.java.debug.core.protocol.{Events, JsonUtils}
 import com.microsoft.java.debug.core.{Configuration, LoggerFactory}
-import dap.DebugSession.Started
 import dap.TimeoutScheduler._
 
 import java.net.{InetSocketAddress, Socket}
-import java.util.concurrent.{CancellationException, TimeUnit, TimeoutException}
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{CancellationException, TimeoutException}
 import java.util.logging.{Handler, Level, LogRecord, Logger => JLogger}
 import scala.collection.mutable
-import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.util.{Failure, Success, Try}
 
@@ -24,13 +22,18 @@ import scala.util.{Failure, Success, Try}
  *
  *  This approach makes it necessary to handle the "launch" requests as the "attach" ones.
  *  The JDI address of the debuggee is obtained through the [[DebugSessionCallbacks]]
+ * 
+ *  If autoCloseSession then the session is closed automatically after the debuggee has terminated
+ *  Otherwise a disconnect request should be received or the close method should be called manually
  */
-final class DebugSession(
+final class DebugSession private (
     socket: Socket,
-    initialDebugState: DebugSession.State,
+    runner: DebuggeeRunner,
     context: IProviderContext,
-    initialLogger: Logger,
-    loggerAdapter: DebugSession.LoggerAdapter
+    logger: Logger,
+    loggerAdapter: DebugSession.LoggerAdapter,
+    autoClose: Boolean,
+    gracePeriod: Duration
 )(implicit executionContext: ExecutionContext) extends DapServer(
   socket.getInputStream,
   socket.getOutputStream,
@@ -42,16 +45,15 @@ final class DebugSession(
   // A set of all processed launched requests by the client
   private val launchedRequests = mutable.Set.empty[LaunchId]
 
-  private val isDisconnected: AtomicBoolean = new AtomicBoolean(false)
-  private val endOfConnection = Promise[Unit]()
-  private val debugAddress = Promise[InetSocketAddress]()
+  private val terminatedEvent = Promise[Unit]()
+  private val debuggeeAddress = Promise[InetSocketAddress]()
+  private val attached = Promise[Unit]()
   
-  private val sessionStatusPromise = Promise[DebugSession.ExitStatus]()
-  private val attachedPromise = Promise[Unit]()
-  private val debugState = new Synchronized(initialDebugState)
+  private val exitStatusPromise = Promise[DebugSession.ExitStatus]()
+  private val debugState: Synchronized[DebugSession.State] = new Synchronized(DebugSession.Ready)
 
-  def currentState: DebugSession.State = debugState.value
-  def getDebugAddress: Future[InetSocketAddress] = debugAddress.future
+  private[dap] def currentState: DebugSession.State = debugState.value
+  private[dap] def getDebugeeAddress: Future[InetSocketAddress] = debuggeeAddress.future
 
   /**
    * Schedules the start of the debugging session.
@@ -60,14 +62,25 @@ final class DebugSession(
    * non-blocking way: the debuggee process is started in the background and
    * the DAP server starts listening to client requests in an IO thread.
    */
-  def start(): Unit = {
+  private[dap] def start(): Unit = {
     debugState.transform {
-      case DebugSession.Ready(runner) =>
+      case DebugSession.Ready =>
         Future(run()) // start listening
         val debuggee = runner.run(Callbacks)
-        debuggee.future()
-          .failed
-          .foreach(cancelPromises)
+        
+        debuggee.future
+          .onComplete { result =>
+            result.failed.foreach(cancelPromises)
+            // wait for the terminated event then close the session
+            terminatedEvent.future.map { _ =>
+              if (autoClose) {
+                exitStatusPromise.trySuccess(DebugSession.Terminated)
+                close()
+              }
+            }
+          }
+        
+        
         DebugSession.Started(debuggee)
 
       case otherState =>
@@ -75,23 +88,61 @@ final class DebugSession(
     }
   }
 
-  override def dispatchRequest(request: Request): Unit = {
+  /**
+   * Completed, once this session exit status can be determined.
+   * Those are: [[DebugSession.Terminated]], [[DebugSession.Restarted]] and [[DebugSession.Disconnected]].
+   * <p>Session gets the Terminated status when the communication stops before
+   * the client has requested a disconnection.</p>
+   * <p>Session becomes Restarted immediately when the disconnection request is received
+   * and restart is set to true.</p>
+   * <p>Session becomes Disconnected immediately when the disconnection request is received
+   * and restart is set to false.</p>
+   */
+  def exitStatus: Future[DebugSession.ExitStatus]  = exitStatusPromise.future
+
+  /**
+   * Cancel the debuggee process, stop the DAP server and close the socket.
+   */
+  def close(): Unit = {
+    super.stop()
+    loggerAdapter.onClosingSession()
+    debugState.transform {
+      case DebugSession.Started(debuggee) =>
+        cancelPromises(new CancellationException("Debug session closed"))
+        debuggee.cancel()
+      
+        // Wait for the debuggee to terminate gracefully
+        try Await.result(terminatedEvent.future, gracePeriod)
+        catch {
+          case _: TimeoutException =>
+            logger.warn(s"Communication with debuggee $name is frozen: missing terminated event.")
+        }
+        DebugSession.Stopped
+
+      case _ => DebugSession.Stopped
+    }
+    logger.debug(s"closing connection with debugger $name")
+    socket.close()
+    exitStatusPromise.trySuccess(DebugSession.Terminated)
+  }
+
+  protected override def dispatchRequest(request: Request): Unit = {
     val requestId = request.seq
     request.command match {
       case "launch" =>
         // launch request is implemented by spinning up a JVM
         // and sending an attach request to the java DapServer
         launchedRequests.add(requestId)
-        debugAddress
-          .timeout(FiniteDuration(15, TimeUnit.SECONDS))
+        debuggeeAddress
+          .timeout(gracePeriod)
           .future
           .onComplete {
             case Success(address) =>
               super.dispatchRequest(DebugSession.toAttachRequest(requestId, address))
             case Failure(exception) =>
-              val cause = s"Could not start debuggee due to: ${exception.getMessage}"
+              val cause = s"Could not start debuggee $name due to: ${exception.getMessage}"
               this.sendResponse(DebugSession.failed(request, cause))
-              attachedPromise.tryFailure(new IllegalStateException(cause))
+              attached.tryFailure(new IllegalStateException(cause))
               ()
           }
 
@@ -99,7 +150,7 @@ final class DebugSession(
         // Delay handling of this request until we attach to the debuggee.
         // Otherwise, a race condition may happen when we try to communicate
         // with the VM we are not connected to
-        attachedPromise.future
+        attached.future
           .onComplete {
             case Success(_) =>
               super.dispatchRequest(request)
@@ -108,16 +159,12 @@ final class DebugSession(
           }
 
       case "disconnect" =>
-        if (DebugSession.shouldRestart(request)) {
-          sessionStatusPromise.trySuccess(DebugSession.Restarted)
-        }
-
         val dispatchRequest = debugState.run {
           case DebugSession.Started(debuggee) =>
             cancelPromises(new CancellationException("Client disconnected"))
-            cancelDebuggee(debuggee)
-            (DebugSession.Cancelled, true)
-          case otherState => (otherState, false)
+            debuggee.cancel()
+            (DebugSession.Stopped, true)
+          case otherState => (DebugSession.Stopped, false)
         }
         
         if (dispatchRequest) {
@@ -127,108 +174,60 @@ final class DebugSession(
           val ack = new Response(request.seq, request.command, true)
           sendResponse(ack)
         }
+
+        exitStatusPromise.trySuccess {
+          if (DebugSession.shouldRestart(request)) DebugSession.Restarted
+          else DebugSession.Disconnected
+        }
       
       case _ => super.dispatchRequest(request)
     }
   }
 
-  override def sendResponse(response: Response): Unit = {
+  protected override def sendResponse(response: Response): Unit = {
     val requestId = response.request_seq
     response.command match {
       case "attach" if launchedRequests(requestId) =>
         // attach response from java DapServer is transformed into a launch response
-        // that is forwarded to the Bloop DAP client
+        // that is forwarded to the DAP client
         response.command = Command.LAUNCH.getName
-        attachedPromise.success(())
+        attached.success(())
         super.sendResponse(response)
       case "attach" =>
-        // a response to an actual attach request sent by a Bloop DAP client
-        attachedPromise.success(())
+        // a response to an actual attach request sent by a DAP client
+        attached.success(())
         super.sendResponse(response)
-      case "disconnect" =>
-        // we are sending a response manually but the actual handler is also sending one so let's ignore it
-        // because our disconnection must be successful as it is basically just cancelling the debuggee
-        if (isDisconnected.compareAndSet(false, true)) {
-          super.sendResponse(response)
-        }
       case _ =>
         super.sendResponse(response)
     }
   }
 
-  override def sendEvent(event: Events.DebugEvent): Unit = {
+  protected override def sendEvent(event: Events.DebugEvent): Unit = {
     try { super.sendEvent(event) }
     finally {
-      event.`type` match {
-        case "exited" => loggerAdapter.onDebuggeeFinished()
-        case "terminated" => endOfConnection.trySuccess(()) // Might already be set when canceling
-        case _ => ()
-      }
+      if (event.`type` == "terminated") terminatedEvent.trySuccess(())
     }
   }
 
-  /**
-   * Completed, once this session exit status can be determined.
-   * Those are: [[DebugSession.Terminated]] and [[DebugSession.Restarted]].
-   * <p>Session gets the Terminated status when the communication stops without
-   * the client ever requesting a restart.</p>
-   * <p>Session becomes Restarted immediately when the restart request is received.
-   * Note that the debuggee is still running and the communication with the client continues
-   * (i.e. sending terminated and exited events).</p>
-   */
-  def exitStatus: Future[DebugSession.ExitStatus] =
-    sessionStatusPromise.future
+  private def name = runner.name
 
-  /**
-   * Cancels the background debuggee process, the DAP server and closes the socket.
-   */
-  def cancel(gracePeriod: Duration): Unit = {
-    debugState.transform {
-      case DebugSession.Ready(_) =>  
-        socket.close()
-        DebugSession.Cancelled
-
-      case DebugSession.Started(debuggee) =>
-        cancelPromises(new CancellationException("Debug session cancelled"))
-        cancelDebuggee(debuggee)
-      
-        // Close connection after the grace period to prevent blocking if [[TerminalEvents]] are not sent
-        try Await.result(endOfConnection.future, gracePeriod)
-        catch {
-          case _: TimeoutException =>
-            val msg = "Communication with DAP client is frozen, closing client forcefully..."
-            initialLogger.warn(msg)
-        }
-        socket.close()
-
-        DebugSession.Cancelled
-
-      case state => state
-    }
-  }
-
-  private def cancelDebuggee(debuggee: CancelableFuture[Unit]): Unit = {
-    loggerAdapter.onDebuggeeFinished()
-    debuggee.cancel()
-  }
 
   private def cancelPromises(cause: Throwable): Unit = {
-    debugAddress.tryFailure(cause)
-    attachedPromise.tryFailure(cause)
-    ()
+    debuggeeAddress.tryFailure(cause)
+    attached.tryFailure(cause)
   }
 
   private object Callbacks extends DebugSessionCallbacks {
     def onListening(address: InetSocketAddress): Unit = {
-      debugAddress.success(address)
+      debuggeeAddress.success(address)
     }
 
-    def printOut(msg: String): Unit = {
+    def printlnOut(msg: String): Unit = {
       val event = new OutputEvent(OutputEvent.Category.stdout, msg + System.lineSeparator())
       sendEvent(event)
     }
 
-    def printErr(msg: String): Unit = {
+    def printlnErr(msg: String): Unit = {
       val event = new OutputEvent(OutputEvent.Category.stderr, msg + System.lineSeparator())
       sendEvent(event)
     }
@@ -237,23 +236,37 @@ final class DebugSession(
 
 object DebugSession {
   sealed trait ExitStatus
+  
+  /**
+    * The debugger has asked for a restart
+    */
   final case object Restarted extends ExitStatus
+  
+  /**
+    * The debugger has disconnected
+    */
+  final case object Disconnected extends ExitStatus 
+  
+  /**
+    * The debuggee has terminated
+    */
   final case object Terminated extends ExitStatus
 
   sealed trait State
-  final case class Ready(runner: DebuggeeRunner) extends State
+  final case object Ready extends State
   final case class Started(debuggee: CancelableFuture[Unit]) extends State
-  final case object Cancelled extends State
+  final case object Stopped extends State
 
   def apply(
       socket: Socket,
       runner: DebuggeeRunner,
-      logger: Logger
+      logger: Logger,
+      autoClose: Boolean,
+      gracePeriod: Duration
   )(implicit executionContext: ExecutionContext): DebugSession = {
     val adapter = new LoggerAdapter(logger)
     val context = DebugExtensions.newContext(runner)
-    val initialState = Ready(runner)
-    new DebugSession(socket, initialState, context, logger, adapter)
+    new DebugSession(socket, runner, context, logger, adapter, autoClose, gracePeriod)
   }
 
   private def toAttachRequest(seq: Int, address: InetSocketAddress): Request = {
@@ -285,9 +298,9 @@ object DebugSession {
 
   private final class LoggerAdapter(logger: Logger) extends Handler {
     /**
-     * Debuggee tends to send a lot of SocketClosed exceptions when bloop is terminating the socket. This helps us filter those logs
+     * DAP server tends to send a lot of SocketClosed exceptions when the Debuggee process has exited. This helps us filter those logs
      */
-    @volatile private var debuggeeFinished = false
+    @volatile private var closingSession = false
 
     override def publish(record: LogRecord): Unit = {
       val message = record.getMessage
@@ -306,7 +319,7 @@ object DebugSession {
 
     private final val socketClosed = "java.net.SocketException: Socket closed"
     private def isExpectedDuringCancellation(message: String): Boolean = {
-      message.endsWith(socketClosed) && debuggeeFinished
+      message.endsWith(socketClosed) && closingSession
     }
 
     private final val recordingWhenVmDisconnected =
@@ -315,8 +328,8 @@ object DebugSession {
       message.startsWith(recordingWhenVmDisconnected)
     }
 
-    def onDebuggeeFinished(): Unit = {
-      debuggeeFinished = true
+    def onClosingSession(): Unit = {
+      closingSession = true
     }
 
     override def flush(): Unit = ()
