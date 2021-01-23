@@ -1,0 +1,6 @@
+Scala Debug Adapter
+
+Links:
+
+ - [[https://scalacenter.github.io/scala-debug-adapter/ Homepage]]
+ - [[https://github.com/scalacenter/scala-debug-adapter/ GitHub repository]]

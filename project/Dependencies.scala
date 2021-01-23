@@ -1,3 +1,4 @@
+import sbt.Keys.{scalacOptions, version}
 import sbt._
 
 object Dependencies {
@@ -11,4 +12,10 @@ object Dependencies {
   val scalaCompiler = "org.scala-lang" % "scala-compiler" % scala212
   val io = "org.scala-sbt" %% "io" % "1.4.0"
   val bloopFrontend = "ch.epfl.scala" %% "bloop-frontend" % "1.4.5"
+
+
+  /** Used for publishing the microsite:
+   * [[https://github.com/47degrees/github4s]]
+   */
+  val gitHub4sVersion = "0.26.0"
 }
