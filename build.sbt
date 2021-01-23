@@ -41,9 +41,10 @@ lazy val core = project
 
 lazy val sbtPlugin = project
   .in(file("sbt-dap-plugin"))
-  .enablePlugins(SbtPlugin)
+  .enablePlugins(SbtPlugin, ContrabandPlugin, JsonCodecPlugin)
   .settings(
-    name := "sbt-dap-plugin"
+    name := "sbt-dap-plugin",
+    Compile / generateContrabands / contrabandFormatsForType := ContrabandConfig.getFormats,
   )
   .dependsOn(core)
 
