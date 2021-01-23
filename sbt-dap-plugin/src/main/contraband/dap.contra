@@ -1,0 +1,20 @@
+package dap
+@target(Scala)
+@codecPackage("dap.codec")
+@fullCodec("JsonProtocol")
+
+type DebugSessionAddress {
+  ## The target's Uri
+  uri: java.net.URI!
+}
+
+type DebugSessionParams {
+  ## A sequence of build targets affected by the debugging action.
+  targets: [sbt.internal.bsp.BuildTargetIdentifier]
+
+  ## The kind of data to expect in the `data` field.
+  dataKind: String
+
+  ## A language-agnostic JSON object interpreted by the server.
+  data: sjsonnew.shaded.scalajson.ast.unsafe.JValue
+}
