@@ -2,25 +2,25 @@ package dap
 
 import scala.concurrent.Future
 import scala.concurrent.Promise
-import scala.concurrent.ExecutionContext
-import java.io.InputStream
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import scala.util.control.NonFatal
-import java.net.InetSocketAddress
+//import scala.concurrent.ExecutionContext
+//import java.io.InputStream
+//import java.io.BufferedReader
+//import java.io.InputStreamReader
+//import scala.util.control.NonFatal
+//import java.net.InetSocketAddress
 import sbt.ForkOptions
-import sbt.Fork
+//import sbt.Fork
 import java.io.File
 import sbt.internal.util.Util
 import sbt.io.syntax._
-import java.lang.ProcessBuilder.Redirect
+//import java.lang.ProcessBuilder.Redirect
 import scala.sys.process.Process
-import sbt.OutputStrategy.StdoutOutput
-import sbt.OutputStrategy
-import sbt.OutputStrategy.BufferedOutput
-import sbt.OutputStrategy.LoggedOutput
-import sbt.OutputStrategy.CustomOutput
-import scala.sys.process.ProcessLogger
+//import sbt.OutputStrategy.StdoutOutput
+//import sbt.OutputStrategy
+//import sbt.OutputStrategy.BufferedOutput
+//import sbt.OutputStrategy.LoggedOutput
+//import sbt.OutputStrategy.CustomOutput
+//import scala.sys.process.ProcessLogger
 
 class DebuggeeProcess(process: Process) extends CancelableFuture[Unit] {
   import DebuggeeProcess._
@@ -38,6 +38,9 @@ class DebuggeeProcess(process: Process) extends CancelableFuture[Unit] {
 }
 
 object DebuggeeProcess {
+//  private val enableDebugInterface: String =
+//    "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,quiet=n"
+
   def start(
     forkOptions: ForkOptions,
     mainClass: Option[String],

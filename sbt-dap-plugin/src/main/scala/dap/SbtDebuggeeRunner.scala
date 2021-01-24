@@ -1,32 +1,17 @@
 package dap
 
 import java.nio.file.Path
-import sbt.{Project, State}
-import sbt.internal.bsp
-
-import scala.util.{Failure, Success}
-import sjsonnew.JsonFormat
-import sjsonnew.support.scalajson.unsafe.Converter
-import sjsonnew.shaded.scalajson.ast.unsafe.JValue
-
-import java.net.URI
-import scala.concurrent.Future
-import java.io.File
 import sbt.ForkOptions
 import sbt.internal.bsp.BuildTargetIdentifier
-import sbt.Run
 import scala.concurrent.ExecutionContext
-import sbt.Fork
-import sbt.OutputStrategy
-import xsbti.compile.CompileAnalysis
 import xsbti.FileConverter
-import xsbti.compile.CompileResult
 import sbt.internal.inc.Analysis
 import sbt.internal.inc.SourceInfos
 
-
 private abstract class SbtDebuggeeRunner(analyses: Array[Analysis], converter: FileConverter, sbtLog: sbt.Logger) extends DebuggeeRunner {
-  final override def logger = ???
+  import SbtLoggerAdapter._
+  final override def logger: Logger = sbtLog
+
   final override def classFilesMappedTo(origin: Path, lines: Array[Int], columns: Array[Int]): List[Path] = {
     val originRef = converter.toVirtualFile(origin)
     analyses.collectFirst {
@@ -56,7 +41,8 @@ private final class MainClassSbtDebuggeeRunner(
 private final class TestSuiteSbtDebuggeeRunner(
   analyses: Array[Analysis],
   converter: FileConverter,
-  sbtLogger: sbt.Logger
+  sbtLogger: sbt.Logger,
+  // TODO: will need a filter
 ) extends SbtDebuggeeRunner(analyses, converter, sbtLogger) {
 
   override def name: String = ???
