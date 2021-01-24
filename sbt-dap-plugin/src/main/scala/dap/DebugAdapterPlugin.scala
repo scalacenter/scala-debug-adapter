@@ -1,24 +1,22 @@
 package dap
 
 import sbt._
-import sbt.internal.server.{ServerCallback, ServerHandler, ServerIntent}
-import com.google.gson.{Gson, GsonBuilder}
+import sbt.internal.server.{ServerHandler, ServerIntent}
 import sbt.internal.bsp._
 import sbt.internal.protocol.JsonRpcRequestMessage
-import sbt.internal.langserver.ErrorCodes
 import sjsonnew.shaded.scalajson.ast.unsafe.JValue
-
 import scala.util.{Failure, Success}
+import sbt.internal.inc.Analysis
 import sbt.internal.util.complete.Parser
 import sbt.internal.util.complete.Parsers
-import scala.util.Try
-import sjsonnew.support.scalajson.unsafe.{ CompactPrinter, Converter, Parser => JsonParser }
+import sjsonnew.support.scalajson.unsafe.{CompactPrinter, Converter, Parser => JsonParser}
 import scala.concurrent.ExecutionContext
-import java.nio.file.Path
 import java.io.File
 import dap.{DebugSessionDataKind => DataKind}
 
+
 object DebugAdapterPlugin extends sbt.AutoPlugin {
+  import SbtLoggerAdapter._
   private final val DebugSessionStart: String = "debugSession/start"
 
   object autoImport {
@@ -58,8 +56,12 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val workingDirectory = Keys.baseDirectory.value
       val envVars = Keys.envVars.value
       val converter = Keys.fileConverter.value
-      val analyses = ??? // get all analysis transitively
+      val cp = (Compile / Keys.fullClasspath).value
+      val analyses = cp.flatMap(_.metadata get Keys.analysis) map {
+        case a0: Analysis => a0
+      } toArray
       val sbtLogger = Keys.streams.value.log
+
       val result = for {
         json <- jsonParser.parsed
         params <- Converter.fromJson[ScalaMainClass](json).toEither.left.map { cause =>
@@ -75,7 +77,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           connectInput = false,
           envVars = envVars
         )
-        val runner = new MainClassSbtDebuggeeRunner(
+
+        new MainClassSbtDebuggeeRunner(
           target,
           forkOptions,
           params.`class`,
@@ -85,17 +88,13 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           sbtLogger
         )
       }
-    
-      
-      val runner = ???
-      // new MainClassSbtDebuggeeRunner(
-      //   target,
-      //   Keys.javaHome.value,
-      //   Keys.forkOptions.value,
-      //   Keys.options,???
-      // )
-      val logger: Logger = ???
-      startServer(target, runner, logger)
+
+      result match {
+        case Left(error) =>
+          Keys.state.value.respondError(error.code, error.message)
+          StateTransform(identity(_))
+        case Right(runner) => startServer(target, runner, sbtLogger)
+      }
     }
   )
 
