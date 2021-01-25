@@ -7,7 +7,7 @@ class BreakpointTest {
   }
 
   public BreakpointTest() {
-    System.out.println("Breakpoin in constructor");
+    System.out.println("Breakpoint in constructor");
   }
 
   public void greet() {

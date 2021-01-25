@@ -45,6 +45,8 @@ lazy val sbtPlugin = project
   .settings(
     name := "sbt-dap-plugin",
     Compile / generateContrabands / contrabandFormatsForType := ContrabandConfig.getFormats,
+    scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
+    scriptedBufferLog := false,
   )
   .dependsOn(core)
 
