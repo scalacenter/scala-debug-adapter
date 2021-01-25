@@ -8,7 +8,7 @@ import xsbti.FileConverter
 import sbt.internal.inc.Analysis
 import sbt.internal.inc.SourceInfos
 
-private abstract class SbtDebuggeeRunner(analyses: Array[Analysis], converter: FileConverter, sbtLog: sbt.Logger) extends DebuggeeRunner {
+private abstract class SbtDebuggeeRunner(analyses: Seq[Analysis], converter: FileConverter, sbtLog: sbt.Logger) extends DebuggeeRunner {
   import SbtLoggerAdapter._
   final override def logger: Logger = sbtLog
 
@@ -26,7 +26,7 @@ private final class MainClassSbtDebuggeeRunner(
   forkOptions: ForkOptions,
   mainClass: String,
   args: Seq[String],
-  analyses: Array[Analysis],
+  analyses: Seq[Analysis],
   converter: FileConverter,
   sbtLogger: sbt.util.Logger
 )(implicit ec: ExecutionContext) extends SbtDebuggeeRunner(analyses, converter, sbtLogger) {
