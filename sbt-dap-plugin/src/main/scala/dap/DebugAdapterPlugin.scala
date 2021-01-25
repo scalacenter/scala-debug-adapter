@@ -13,24 +13,24 @@ import sjsonnew.support.scalajson.unsafe.{CompactPrinter, Converter, Parser => J
 import scala.concurrent.ExecutionContext
 import java.io.File
 import dap.{DebugSessionDataKind => DataKind}
-
-
+import dap.codec.JsonProtocol._
+import sbt.internal.bsp.codec.JsonProtocol._
+import scala.collection.mutable
 object DebugAdapterPlugin extends sbt.AutoPlugin {
   import SbtLoggerAdapter._
   private final val DebugSessionStart: String = "debugSession/start"
 
-  object autoImport {
-    val dapMainClassSession = inputKey[StateTransform]("Start a debug session for running a scala main class").withRank(KeyRanks.DTask)
-    val dapTestSuitesSession = inputKey[StateTransform]("Start a debug session for running test suites").withRank(KeyRanks.DTask)
-    val dapAttachRemoteSession = inputKey[StateTransform]("Start a debug session on a remote process").withRank(KeyRanks.DTask)
+  // each build target can only have one debug server
+  private val debugServers = mutable.Map[BuildTargetIdentifier, DebugServer]()
 
-    // attribute key for storing the instance of [[DebugServer]]
-    // each build target can have only one buildServer
-    val debugServers = AttributeKey[Map[BuildTargetIdentifier, DebugServer]]("debugServers")
+  object autoImport {
+    val startMainClassDebugSession = inputKey[URI]("Start a debug session for running a scala main class").withRank(KeyRanks.DTask)
+    val startTestSuitesDebugSession = inputKey[URI]("Start a debug session for running test suites").withRank(KeyRanks.DTask)
+    val startRemoteDebugSession = inputKey[URI]("Start a debug session on a remote process").withRank(KeyRanks.DTask)
+    
+    val stopDebugSession = taskKey[Unit]("Stop the current debug session").withRank(KeyRanks.DTask)
   }
   import autoImport._
-  import dap.codec.JsonProtocol._
-  import sbt.internal.bsp.codec.JsonProtocol._
 
   private val jsonParser: Parser[Result[JValue]] = (Parsers.any *)
     .map(_.mkString)
@@ -39,6 +39,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
 
   private implicit val executionContext =
     ExecutionContext.fromExecutor(DebugServerThreadPool.executor)
+
+  override def trigger = allRequirements
 
   override def buildSettings: Seq[Def.Setting[_]] = Seq(
     Keys.serverHandlers += {
@@ -49,52 +51,18 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           .map(c => ConfigKey(c.name) -> c)
           .toMap
       debugSessionStartHandler(Keys.bspWorkspace.value, configMap)
-    },
-    dapMainClassSession := {
+    }
+  )
+
+  override def projectSettings: Seq[Def.Setting[_]] =
+    inConfig(Compile)(configSettings)
+
+  private def configSettings: Seq[Def.Setting[_]] = Seq(
+    startMainClassDebugSession := startMainClassTask.evaluated,
+    stopDebugSession := {
       val target = Keys.bspTargetIdentifier.value
-      val javaHome = Keys.javaHome.value
-      val workingDirectory = Keys.baseDirectory.value
-      val envVars = Keys.envVars.value
-      val converter = Keys.fileConverter.value
-      val cp = (Compile / Keys.fullClasspath).value
-      val analyses = cp.flatMap(_.metadata get Keys.analysis) map {
-        case a0: Analysis => a0
-      } toArray
-      val sbtLogger = Keys.streams.value.log
-
-      val result = for {
-        json <- jsonParser.parsed
-        params <- Converter.fromJson[ScalaMainClass](json).toEither.left.map { cause =>
-          Error.invalidParams(s"expected data of kind ${DataKind.ScalaMainClass}: ${cause.getMessage}")
-        }
-      } yield {
-        val forkOptions = ForkOptions(
-          javaHome = javaHome,
-          outputStrategy = None,
-          bootJars = Vector.empty[File],
-          workingDirectory = Option(workingDirectory),
-          runJVMOptions = params.arguments,
-          connectInput = false,
-          envVars = envVars
-        )
-
-        new MainClassSbtDebuggeeRunner(
-          target,
-          forkOptions,
-          params.`class`,
-          params.arguments,
-          analyses,
-          converter,
-          sbtLogger
-        )
-      }
-
-      result match {
-        case Left(error) =>
-          Keys.state.value.respondError(error.code, error.message)
-          StateTransform(identity(_))
-        case Right(runner) => startServer(target, runner, sbtLogger)
-      }
+      debugServers.get(target).foreach(_.close())
+      val _ = debugServers.remove(target)
     }
   )
 
@@ -115,9 +83,9 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           )
         } yield {
           val task = dataKind match {
-            case DebugSessionDataKind.ScalaMainClass => dapMainClassSession.key
-            case DebugSessionDataKind.ScalaTestSuites => dapTestSuitesSession.key
-            case DebugSessionDataKind.ScalaAttachRemote => dapAttachRemoteSession.key
+            case DebugSessionDataKind.ScalaMainClass => startMainClassDebugSession.key
+            case DebugSessionDataKind.ScalaTestSuites => startTestSuitesDebugSession.key
+            case DebugSessionDataKind.ScalaAttachRemote => startRemoteDebugSession.key
           }
           val dataStr = CompactPrinter(params.data.get)
           val project = scope.project.toOption.get.asInstanceOf[ProjectRef].project
@@ -139,17 +107,67 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     }
   }
 
-  private def startServer(targetId: BuildTargetIdentifier, runner: DebuggeeRunner, logger: Logger): StateTransform = {
-    StateTransform { state =>
-      val allServers = state.get(debugServers).getOrElse(Map())
-      // if there is a server for this target then close it
-      allServers.get(targetId).foreach(_.close())
-      val server = DebugServer(runner, logger)
-      server.start()
-      // not sure if it's possible to respond in a state event
-      state.respondEvent(DebugSessionAddress(server.uri))
-      state.put(debugServers, allServers.updated(targetId, server))
+  private def startMainClassTask: Def.Initialize[InputTask[URI]] = Def.inputTask {
+    val target = Keys.bspTargetIdentifier.value
+    val javaHome = Keys.javaHome.value
+    val workingDirectory = Keys.baseDirectory.value
+    val envVars = Keys.envVars.value
+    val converter = Keys.fileConverter.value
+    val classpath = Keys.fullClasspath.value
+    val analyses = classpath
+      .flatMap(_.metadata.get(Keys.analysis))
+      .map { case a: Analysis => a }
+    val sbtLogger = Keys.streams.value.log
+    val state = Keys.state.value
+
+    val runner = for {
+      json <- jsonParser.parsed
+      params <- Converter.fromJson[ScalaMainClass](json).toEither.left.map { cause =>
+        Error.invalidParams(s"expected data of kind ${DataKind.ScalaMainClass}: ${cause.getMessage}")
+      }
+    } yield {
+      val classpathOption = Attributed.data(classpath).map(_.getAbsolutePath).mkString(File.pathSeparator)
+      val jvmOpts = Vector("-classpath", classpathOption) ++ 
+        Some("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,quiet=n") ++
+        params.jvmOptions
+      val forkOptions = ForkOptions(
+        javaHome = javaHome,
+        outputStrategy = None,
+        bootJars = Vector.empty[File],
+        workingDirectory = Option(workingDirectory),
+        runJVMOptions = jvmOpts,
+        connectInput = false,
+        envVars = envVars
+      )
+
+      new MainClassSbtDebuggeeRunner(
+        target,
+        forkOptions,
+        params.`class`,
+        params.arguments,
+        analyses,
+        converter,
+        sbtLogger
+      )
     }
+
+    runner match {
+      case Left(error) =>
+        Keys.state.value.respondError(error.code, error.message)
+        throw new MessageOnlyException(error.message)
+      case Right(runner) =>
+        startServer(state, target, runner, sbtLogger)
+    }
+  }
+
+  private def startServer(state: State, target: BuildTargetIdentifier, runner: DebuggeeRunner, logger: Logger): URI = {
+    // if there is a server for this target then close it
+    debugServers.get(target).foreach(_.close())
+    val server = DebugServer(runner, logger)
+    server.start()
+    debugServers.update(target, server)
+    state.respondEvent(DebugSessionAddress(server.uri))
+    server.uri
   }
 
   private def singleBuildTarget(params: DebugSessionParams): Result[BuildTargetIdentifier] = {
