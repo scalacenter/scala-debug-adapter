@@ -43,10 +43,13 @@ lazy val sbtPlugin = project
   .in(file("sbt-dap-plugin"))
   .enablePlugins(SbtPlugin, ContrabandPlugin, JsonCodecPlugin)
   .settings(
-    name := "sbt-dap-plugin",
+    name := "sbt-debug-adapter",
     Compile / generateContrabands / contrabandFormatsForType := ContrabandConfig.getFormats,
     scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
-    scriptedBufferLog := false,
+    scriptedDependencies := {
+      val r1 = publishLocal.value
+      val r2 = (core / publishLocal).value
+    }
   )
   .dependsOn(core)
 

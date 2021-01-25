@@ -1,0 +1,4 @@
+# pending test because `startTestSuitesDebugSession` is not yet implemented
+
+> 'Test / startTestSuitesDebugSession ["BreakpointSpec"]'
+> Test / stopDebugSession

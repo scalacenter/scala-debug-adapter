@@ -1,0 +1,4 @@
+# pending test because `startRemoteDebugSession` is not yet implemented
+
+> Compile / startRemoteDebugSession
+> Compile / stopDebugSession
