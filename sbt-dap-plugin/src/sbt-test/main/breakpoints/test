@@ -1,1 +1,2 @@
-> clean; compile
+> 'Compile / startMainClassDebugSession {"class":"BreakpointTest","arguments":[],"jvmOptions":[]}'
+> Compile / stopDebugSession

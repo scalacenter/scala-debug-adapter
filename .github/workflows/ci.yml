@@ -20,3 +20,6 @@ jobs:
     - name: Test core project
       run: sbt core/test
       shell: bash
+    - name: Test sbt plugin
+      run: sbt sbtPlugin/scripted
+      shell: bash
