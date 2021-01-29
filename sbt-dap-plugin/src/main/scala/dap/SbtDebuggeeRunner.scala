@@ -39,30 +39,26 @@ private final class MainClassSbtDebuggeeRunner(
 }
 
 private final class TestSuiteSbtDebuggeeRunner(
-  analyses: Array[Analysis],
-  converter: FileConverter,
-  sbtLogger: sbt.Logger,
-  // TODO: will need a filter
+    target: BuildTargetIdentifier,
+    forkOptions: ForkOptions,
+    analyses: Seq[Analysis],
+    converter: FileConverter,
+    sbtLogger: sbt.util.Logger
+    /// forkConfiguration,
+    /// testRuns
+    /// testGroup,
+    // testFramework
 ) extends SbtDebuggeeRunner(analyses, converter, sbtLogger) {
 
   override def name: String = ???
   override def run(callbacks: DebugSessionCallbacks): CancelableFuture[Unit] = {
-    //    val debugState = state.copy(logger = debugLogger)
-    //
-    //    val filter = TestInternals.parseFilters(filters)
-    //    val handler = new LoggingEventHandler(debugState.logger)
-    //
-    //    val task = Tasks.test(
-    //      debugState,
-    //      projects.toList,
-    //      Nil,
-    //      filter,
-    //      handler,
-    //      runInParallel = false,
-    //      mode = RunMode.Debug
-    //    )
-    //
-    //    task.map(_.status)
+    // create the server
+    // start the process, main is ForkMain and args is the port of the socket
+    // connect
+    // send the fork config then the frameworks and runs
+
+    // similar code can be found in
+    // https://github.com/sbt/sbt/blob/c4c88b75e448851720ccf8cfc54191a4d28f48a7/main-actions/src/main/scala/sbt/ForkTests.scala#L61-L178
     ???
   }
 }

@@ -16,6 +16,7 @@ import dap.{DebugSessionDataKind => DataKind}
 import dap.codec.JsonProtocol._
 import sbt.internal.bsp.codec.JsonProtocol._
 import scala.collection.mutable
+import sjsonnew.BasicJsonProtocol
 object DebugAdapterPlugin extends sbt.AutoPlugin {
   import SbtLoggerAdapter._
   private final val DebugSessionStart: String = "debugSession/start"
@@ -59,6 +60,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
 
   private def configSettings: Seq[Def.Setting[_]] = Seq(
     startMainClassDebugSession := startMainClassTask.evaluated,
+    startTestSuitesDebugSession := startTestSuitesTask.evaluated,
     stopDebugSession := {
       val target = Keys.bspTargetIdentifier.value
       debugServers.get(target).foreach(_.close())
@@ -160,7 +162,73 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     }
   }
 
-  private def startServer(state: State, target: BuildTargetIdentifier, runner: DebuggeeRunner, logger: Logger): URI = {
+  private def startTestSuitesTask: Def.Initialize[InputTask[URI]] = Def.inputTask {
+    val target = Keys.bspTargetIdentifier.value
+    val javaHome = Keys.javaHome.value
+    val workingDirectory = Keys.baseDirectory.value
+    val envVars = Keys.envVars.value
+    val converter = Keys.fileConverter.value
+    val classpath = Keys.fullClasspath.value
+    val analyses = classpath
+      .flatMap(_.metadata.get(Keys.analysis))
+      .map { case a: Analysis => a }
+    val sbtLogger = Keys.streams.value.log
+    val state = Keys.state.value
+
+    import BasicJsonProtocol._
+    val runner = for {
+      json <- jsonParser.parsed
+      params <- Converter.fromJson[Array[String]](json).toEither.left.map {
+        cause =>
+          Error.invalidParams(
+            s"expected data of kind ${DataKind.ScalaTestSuites}: ${cause.getMessage}"
+          )
+      }
+    } yield {
+      val classpathOption = Attributed
+        .data(classpath)
+        .map(_.getAbsolutePath)
+        .mkString(
+          File.pathSeparator
+        ) // add DebugAdapterPlugin classpath and frameworks
+      val jvmOpts = Vector("-classpath", classpathOption) ++
+        Some(
+          "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,quiet=n"
+        )
+      val forkOptions = ForkOptions(
+        javaHome = javaHome,
+        outputStrategy = None,
+        bootJars = Vector.empty[File],
+        workingDirectory = Option(workingDirectory),
+        runJVMOptions = jvmOpts,
+        connectInput = false,
+        envVars = envVars
+      )
+
+      new TestSuiteSbtDebuggeeRunner(
+        target,
+        forkOptions,
+        analyses,
+        converter,
+        sbtLogger
+      )
+    }
+
+    runner match {
+      case Left(error) =>
+        Keys.state.value.respondError(error.code, error.message)
+        throw new MessageOnlyException(error.message)
+      case Right(runner) =>
+        startServer(state, target, runner, sbtLogger)
+    }
+  }
+
+  private def startServer(
+      state: State,
+      target: BuildTargetIdentifier,
+      runner: DebuggeeRunner,
+      logger: Logger
+  ): URI = {
     // if there is a server for this target then close it
     debugServers.get(target).foreach(_.close())
     val server = DebugServer(runner, logger)
