@@ -14,7 +14,12 @@ import scala.concurrent.ExecutionContext
 import java.io.File
 import dap.{DebugSessionDataKind => DataKind}
 import dap.codec.JsonProtocol._
+import sbt.Defaults.createTestRunners
+import sbt.Keys.{parallelExecution, tags, testOptions}
 import sbt.internal.bsp.codec.JsonProtocol._
+import sbt.internal.util.Terminal
+import sbt.io.IO
+import sbt.testing.Framework
 import scala.collection.mutable
 import sjsonnew.BasicJsonProtocol
 object DebugAdapterPlugin extends sbt.AutoPlugin {
@@ -169,32 +174,45 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val envVars = Keys.envVars.value
     val converter = Keys.fileConverter.value
     val classpath = Keys.fullClasspath.value
+    val frameworks = Keys.loadedTestFrameworks.value
     val analyses = classpath
       .flatMap(_.metadata.get(Keys.analysis))
       .map { case a: Analysis => a }
     val sbtLogger = Keys.streams.value.log
+
+    val isAnsiSupported = true // Terminal.isAnsiSupported
+    val forkConfiguration = new ForkConfiguration(isAnsiSupported, Keys.testForkedParallel.value)
+
+
     val state = Keys.state.value
 
     import BasicJsonProtocol._
     val runner = for {
       json <- jsonParser.parsed
-      params <- Converter.fromJson[Array[String]](json).toEither.left.map {
+      fiters <- Converter.fromJson[Array[String]](json).toEither.left.map {
         cause =>
           Error.invalidParams(
             s"expected data of kind ${DataKind.ScalaTestSuites}: ${cause.getMessage}"
           )
       }
+//      testFramework: TestFramework <- Keys.testFrameworks.value match {
+//        case Seq(framework) => Right(framework)
+//        case Nil => Left(Error.invalidParams("No testFrameworks detected"))
+//        case _ => Left(Error.invalidParams("Multiple testFrameworks not supported"))
+//      }
     } yield {
-      val classpathOption = Attributed
-        .data(classpath)
-        .map(_.getAbsolutePath)
-        .mkString(
-          File.pathSeparator
-        ) // add DebugAdapterPlugin classpath and frameworks
-      val jvmOpts = Vector("-classpath", classpathOption) ++
-        Some(
-          "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,quiet=n"
-        )
+
+      val fullCp = classpath ++ Seq(
+        IO.classLocationPath[ForkMain].toFile,
+        IO.classLocationPath[Framework].toFile
+      )
+
+      val jvmOpts = Vector(
+        "-classpath",
+        fullCp mkString File.pathSeparator,
+        "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,quiet=n"
+      )
+
       val forkOptions = ForkOptions(
         javaHome = javaHome,
         outputStrategy = None,
@@ -205,12 +223,23 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         envVars = envVars
       )
 
+      val execConfig = Tests.Execution(
+        testOptions.value,
+        parallelExecution.value,
+        tags.value
+      )
+
+      val testRunners = createTestRunners(Keys.loadedTestFrameworks.value, Keys.testLoader.value, execConfig)
+
       new TestSuiteSbtDebuggeeRunner(
         target,
         forkOptions,
         analyses,
         converter,
-        sbtLogger
+        sbtLogger,
+        forkConfiguration,
+        testRunners,
+        fiters,
       )
     }
 
