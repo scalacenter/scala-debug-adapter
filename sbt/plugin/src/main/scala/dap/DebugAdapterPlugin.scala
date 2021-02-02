@@ -22,6 +22,12 @@ import sbt.io.IO
 import sbt.testing.Framework
 import scala.collection.mutable
 import sjsonnew.BasicJsonProtocol
+import sbt.Tests.InProcess
+import sbt.Tests.SubProcess
+import sbt.Tests.Setup
+import sbt.Tests.Cleanup
+import sbt.Tests.Argument
+
 object DebugAdapterPlugin extends sbt.AutoPlugin {
   import SbtLoggerAdapter._
   private final val DebugSessionStart: String = "debugSession/start"
@@ -60,17 +66,18 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     }
   )
 
-  override def projectSettings: Seq[Def.Setting[_]] =
-    inConfig(Compile)(configSettings)
+  override def projectSettings: Seq[Def.Setting[_]] = {
+    inConfig(Compile)(runSettings) ++ inConfig(Test)(testSettings)
+  }
 
-  private def configSettings: Seq[Def.Setting[_]] = Seq(
-    startMainClassDebugSession := startMainClassTask.evaluated,
-    startTestSuitesDebugSession := startTestSuitesTask.evaluated,
-    stopDebugSession := {
-      val target = Keys.bspTargetIdentifier.value
-      debugServers.get(target).foreach(_.close())
-      val _ = debugServers.remove(target)
-    }
+  def runSettings: Seq[Def.Setting[_]] = Seq(
+    startMainClassDebugSession := mainClassSessionTask.evaluated,
+    stopDebugSession := stopDebugSessionTask.value
+  )
+
+  def testSettings: Seq[Def.Setting[_]] = Seq(
+    startTestSuitesDebugSession := testSuitesSessionTask.evaluated,
+    stopDebugSession := stopDebugSessionTask.value
   )
 
   private def debugSessionStartHandler(
@@ -114,7 +121,13 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     }
   }
 
-  private def startMainClassTask: Def.Initialize[InputTask[URI]] = Def.inputTask {
+  private def stopDebugSessionTask: Def.Initialize[Task[Unit]] = Def.task {
+    val target = Keys.bspTargetIdentifier.value
+    debugServers.get(target).foreach(_.close())
+    val _ = debugServers.remove(target)
+  }
+
+  private def mainClassSessionTask: Def.Initialize[InputTask[URI]] = Def.inputTask {
     val target = Keys.bspTargetIdentifier.value
     val javaHome = Keys.javaHome.value
     val workingDirectory = Keys.baseDirectory.value
@@ -134,15 +147,12 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       }
     } yield {
       val classpathOption = Attributed.data(classpath).map(_.getAbsolutePath).mkString(File.pathSeparator)
-      val jvmOpts = Vector("-classpath", classpathOption) ++ 
-        Some("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,quiet=n") ++
-        params.jvmOptions
       val forkOptions = ForkOptions(
         javaHome = javaHome,
         outputStrategy = None,
         bootJars = Vector.empty[File],
         workingDirectory = Option(workingDirectory),
-        runJVMOptions = jvmOpts,
+        runJVMOptions = params.jvmOptions,
         connectInput = false,
         envVars = envVars
       )
@@ -150,6 +160,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       new MainClassSbtDebuggeeRunner(
         target,
         forkOptions,
+        classpath,
         params.`class`,
         params.arguments,
         analyses,
@@ -167,85 +178,80 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     }
   }
 
-  private def startTestSuitesTask: Def.Initialize[InputTask[URI]] = Def.inputTask {
+  private def testSuitesSessionTask: Def.Initialize[InputTask[URI]] = Def.inputTask {
     val target = Keys.bspTargetIdentifier.value
-    val javaHome = Keys.javaHome.value
-    val workingDirectory = Keys.baseDirectory.value
-    val envVars = Keys.envVars.value
-    val converter = Keys.fileConverter.value
-    val classpath = Keys.fullClasspath.value
+    
+    val testGrouping = (Keys.test / Keys.testGrouping).value
+    val defaultForkOpts = Keys.forkOptions.value
+    val classpath = (Keys.test / Keys.fullClasspath).value
     val frameworks = Keys.loadedTestFrameworks.value
+    val testLoader = Keys.testLoader.value
+    val testExec = (Keys.test / Keys.testExecution).value
+    val parallelExec = (Keys.test / Keys.testForkedParallel).value
+    val state = Keys.state.value
+
+    val converter = Keys.fileConverter.value
     val analyses = classpath
       .flatMap(_.metadata.get(Keys.analysis))
       .map { case a: Analysis => a }
     val sbtLogger = Keys.streams.value.log
 
-    val isAnsiSupported = true // Terminal.isAnsiSupported
-    val forkConfiguration = new ForkConfiguration(isAnsiSupported, Keys.testForkedParallel.value)
-
-
-    val state = Keys.state.value
-
     import BasicJsonProtocol._
     val runner = for {
       json <- jsonParser.parsed
-      fiters <- Converter.fromJson[Array[String]](json).toEither.left.map {
-        cause =>
-          Error.invalidParams(
-            s"expected data of kind ${DataKind.ScalaTestSuites}: ${cause.getMessage}"
-          )
+      testSuites <- Converter.fromJson[Array[String]](json).toEither.left.map { cause =>
+        Error.invalidParams(
+          s"expected data of kind ${DataKind.ScalaTestSuites}: ${cause.getMessage}"
+        )
       }
-//      testFramework: TestFramework <- Keys.testFrameworks.value match {
-//        case Seq(framework) => Right(framework)
-//        case Nil => Left(Error.invalidParams("No testFrameworks detected"))
-//        case _ => Left(Error.invalidParams("Multiple testFrameworks not supported"))
-//      }
+      testGroup <- testGrouping.filter { g =>
+        val testSet = g.tests.map(_.name).toSet
+        testSuites.forall(testSet.contains)
+      }.headOption.toRight {
+        Error.invalidParams("all tests are not in the same group")
+      }
     } yield {
 
-      val fullCp = classpath ++ Seq(
-        IO.classLocationPath[ForkMain].toFile,
-        IO.classLocationPath[Framework].toFile
-      )
+      val testDefinitions = testGroup.tests.filter(test => testSuites.contains(test.name))
+      val forkOptions = testGroup.runPolicy match {
+        case InProcess => defaultForkOpts
+        case SubProcess(forkOpts) => forkOpts
+      }
 
-      val jvmOpts = Vector(
-        "-classpath",
-        fullCp mkString File.pathSeparator,
-        "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,quiet=n"
-      )
+      val setups = testExec.options.collect { case setup @ Setup(_) => setup }
+      val cleanups = testExec.options.collect { case cleanup @ Cleanup(_) => cleanup }
+      val arguments = testExec.options.collect { case argument @ Argument(_, _) => argument }
+      val parallel = testExec.parallel && parallelExec
 
-      val forkOptions = ForkOptions(
-        javaHome = javaHome,
-        outputStrategy = None,
-        bootJars = Vector.empty[File],
-        workingDirectory = Option(workingDirectory),
-        runJVMOptions = jvmOpts,
-        connectInput = false,
-        envVars = envVars
-      )
-
-      val execConfig = Tests.Execution(
-        testOptions.value,
-        parallelExecution.value,
-        tags.value
-      )
-
-      val testRunners = createTestRunners(Keys.loadedTestFrameworks.value, Keys.testLoader.value, execConfig)
+      
+      val testRunners = frameworks.map {
+        case (name, framework) =>
+          val args = arguments.collect {
+            case Argument(None, args) => args
+            case Argument(Some(tf), args) if tf == name => args
+          }.flatten
+          val mainRunner = framework.runner(args.toArray, Array.empty[String], testLoader)
+          name -> mainRunner
+      }
 
       new TestSuiteSbtDebuggeeRunner(
         target,
         forkOptions,
+        classpath,
+        setups,
+        cleanups,
+        parallel,
+        testRunners,
+        testDefinitions,
         analyses,
         converter,
-        sbtLogger,
-        forkConfiguration,
-        testRunners,
-        fiters,
+        sbtLogger
       )
     }
 
     runner match {
       case Left(error) =>
-        Keys.state.value.respondError(error.code, error.message)
+        state.respondError(error.code, error.message)
         throw new MessageOnlyException(error.message)
       case Right(runner) =>
         startServer(state, target, runner, sbtLogger)

@@ -40,19 +40,29 @@ lazy val core = project
   )
 
 lazy val sbtPlugin = project
-  .in(file("sbt-dap-plugin"))
+  .in(file("sbt/plugin"))
   .enablePlugins(SbtPlugin, ContrabandPlugin, JsonCodecPlugin)
   .settings(
     name := "sbt-debug-adapter",
     Compile / generateContrabands / contrabandFormatsForType := ContrabandConfig.getFormats,
     scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
     scriptedDependencies := {
-      val r1 = publishLocal.value
-      val r2 = (core / publishLocal).value
+      publishLocal.value
+      (core / publishLocal).value
+      (testAgent / publishLocal).value 
     }
   )
-  .dependsOn(core)
+  .dependsOn(core, testAgent)
 
+// copy of https://github.com/sbt/sbt/tree/develop/testing/agent/src/main/java/sbt
+lazy val testAgent = project
+  .in(file("sbt/test-agent"))
+  .settings(
+    name := "debug-test-agent",
+    autoScalaLibrary := false,
+    crossPaths := false,
+    libraryDependencies += Dependencies.sbtTestInterface
+  )
 
 lazy val bloopDap = project
   .in(file("bloop-dap"))

@@ -1,21 +1,18 @@
 package dap
 
-import java.io.{File, ObjectInputStream, ObjectOutputStream, Serializable}
-import java.net.ServerSocket
-import java.nio.file.Path
-import sbt.{Fork, ForkConfiguration, ForkMain, ForkOptions, OutputStrategy, React, SuiteResult, TestDefinition, TestFramework, TestReportListener}
+import sbt.Def.Classpath
+import sbt.Tests.{Cleanup, Setup}
 import sbt.internal.bsp.BuildTargetIdentifier
-import scala.concurrent.ExecutionContext
+import sbt.internal.inc.{Analysis, SourceInfos}
+import sbt.io.IO
+import sbt.testing._
+import sbt.{ForkOptions, TestDefinition, TestFramework}
 import xsbti.FileConverter
-import sbt.internal.inc.Analysis
-import sbt.internal.inc.SourceInfos
-import java.lang.{ProcessBuilder => JProcessBuilder}
-import sbt.Tests.{ProcessedOptions, overall}
-import sbt.internal.util.Terminal
-import sbt.protocol.testing.TestResult
-import sbt.testing.{AnnotatedFingerprint, Fingerprint, Runner, SubclassFingerprint, TaskDef}
-import scala.collection.mutable
-import scala.sys.process.{Process, ProcessBuilder}
+
+import java.io.{ObjectOutputStream, Serializable}
+import java.net.{ServerSocket, Socket}
+import java.nio.file.Path
+import scala.concurrent.ExecutionContext
 import scala.util.control.NonFatal
 
 private abstract class SbtDebuggeeRunner(analyses: Seq[Analysis], converter: FileConverter, sbtLog: sbt.Logger) extends DebuggeeRunner {
@@ -34,6 +31,7 @@ private abstract class SbtDebuggeeRunner(analyses: Seq[Analysis], converter: Fil
 private final class MainClassSbtDebuggeeRunner(
   target: BuildTargetIdentifier,
   forkOptions: ForkOptions,
+  classpath: Classpath,
   mainClass: String,
   args: Seq[String],
   analyses: Seq[Analysis],
@@ -44,7 +42,7 @@ private final class MainClassSbtDebuggeeRunner(
 
   override def run(callbacks: DebugSessionCallbacks): CancelableFuture[Unit] = { 
     sbtLogger.info(s"running main class debuggee: $mainClass")
-    DebuggeeProcess.start(forkOptions, Some(mainClass), args, callbacks)
+    DebuggeeProcess.start(forkOptions, classpath.map(_.data), mainClass, args, callbacks)
   }
 }
 
@@ -60,45 +58,35 @@ private object TestSuiteSbtDebuggeeRunner {
 private final class TestSuiteSbtDebuggeeRunner(
     target: BuildTargetIdentifier,
     forkOptions: ForkOptions,
+    classpath: Classpath,
+    setups: Seq[Setup],
+    cleanups: Seq[Cleanup],
+    parallel: Boolean, 
+    runners: Map[TestFramework, Runner],
+    tests: Seq[TestDefinition],
     analyses: Seq[Analysis],
     converter: FileConverter,
-    sbtLogger: sbt.util.Logger,
-    forkConfiguration: ForkConfiguration,
-    /// testRuns
-    /// testGroup,
-    runners: Map[TestFramework, Runner],
-    filters: Array[String],
+    sbtLogger: sbt.util.Logger
 )(implicit executionContext: ExecutionContext) extends SbtDebuggeeRunner(analyses, converter, sbtLogger) {
   import TestSuiteSbtDebuggeeRunner.forkFingerprint
-  override def name: String = s"[Test $filters in ${target.uri}]"
+  override def name: String = s"[Test ${tests.mkString(", ")} in ${target.uri}]"
   override def run(callbacks: DebugSessionCallbacks): CancelableFuture[Unit] = {
-    val server = new ServerSocket(0)
-    val tests: Vector[TestDefinition] = ???
-    val setup: Vector[ClassLoader => Unit] = ???
-    val cleanup: Vector[ClassLoader => Unit] = ???
-    val testListeners: Vector[TestReportListener] = ???
+    object Acceptor extends Thread {
+      val server = new ServerSocket(0)
+      var socket: Socket = _
+      var os: ObjectOutputStream = _
 
-    object Acceptor extends Runnable {
-      def run(): Unit = {
-        val socket =
-          try {
-            server.accept()
-          } catch {
-            case e: java.net.SocketException =>
-              sbtLogger.error(
-                "Could not accept connection from test agent: " + e.getClass + ": " + e.getMessage
-              )
-              sbtLogger.trace(e)
-              server.close()
-              return
-          }
-        val os = new ObjectOutputStream(socket.getOutputStream)
-        // Must flush the header that the constructor writes, otherwise the ObjectInputStream on the other end may block indefinitely
-        os.flush()
-        val is = new ObjectInputStream(socket.getInputStream)
+      override def run(): Unit = {
+        try { 
+          socket = server.accept()
+          os = new ObjectOutputStream(socket.getOutputStream)
+          
+          // Must flush the header that the constructor writes
+          // otherwise the ObjectInputStream on the other end may block indefinitely
+          os.flush()
 
-        try {
-          os.writeObject(forkConfiguration)
+          val config = new ForkConfiguration(true, parallel)
+          os.writeObject(config)
 
           val taskdefs = tests.map { t =>
             new TaskDef(
@@ -117,30 +105,37 @@ private final class TestSuiteSbtDebuggeeRunner(
             os.writeObject(mainRunner.remoteArgs)
           }
           os.flush()
-
-          //new React(is, os, log, opts.testListeners, resultsAcc).react()
         } catch {
-          case NonFatal(e) =>
-            def throwableToString(t: Throwable) = {
-              import java.io._; val sw = new StringWriter; t.printStackTrace(new PrintWriter(sw));
-              sw.toString
-            }
-            //resultsAcc("Forked test harness failed: " + throwableToString(e)) = SuiteResult.Error
-        } finally {
-          is.close(); os.close(); socket.close()
+          case NonFatal(cause) => close()
         }
+      }
+
+      def close(): Unit = {
+        if (os != null) os.close()
+        if (socket != null) socket.close()
+        server.close()
       }
     }
 
-    val acceptorThread = new Thread(Acceptor)
-    acceptorThread.start()
+    Acceptor.start()
 
     val mainClass = classOf[ForkMain].getCanonicalName
-    val args = Seq(server.getLocalPort.toString)
+    val args = Seq(Acceptor.server.getLocalPort.toString)
 
-    sbtLogger.info(s"running test class debuggee: $filters")
-    val process = DebuggeeProcess.start(forkOptions, Some(mainClass), args, callbacks)
-    process.future.onComplete(_ => server.close())
+    val fullClasspath = classpath.map(_.data) ++ Seq(
+      IO.classLocationPath[ForkMain].toFile, // debug-test-agent
+      IO.classLocationPath[Framework].toFile // test-interface
+    )
+
+    // can't provide the loader for test classes, which is in another jvm
+    val dummyLoader = this.getClass().getClassLoader()
+
+    setups.foreach(_.setup(dummyLoader))
+    val process = DebuggeeProcess.start(forkOptions, fullClasspath, mainClass, args, callbacks)
+    process.future.onComplete { _=>
+      Acceptor.close()
+      cleanups.foreach(_.cleanup(dummyLoader))
+    }
 
     process
   }

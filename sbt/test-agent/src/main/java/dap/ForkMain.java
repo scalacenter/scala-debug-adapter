@@ -5,7 +5,7 @@
  * Licensed under Apache License 2.0 (see LICENSE)
  */
 
-package sbt;
+package dap;
 
 import sbt.testing.*;
 
@@ -104,8 +104,8 @@ public final class ForkMain {
       System.err.println(message);
     }
 
-    private Logger remoteLogger(final boolean ansiCodesSupported) {
-      return new Logger() {
+    private sbt.testing.Logger remoteLogger(final boolean ansiCodesSupported) {
+      return new sbt.testing.Logger() {
         public boolean ansiCodesSupported() {
           return ansiCodesSupported;
         }
@@ -153,7 +153,7 @@ public final class ForkMain {
       final ExecutorService executor = executorService(config);
       final TaskDef[] tests = (TaskDef[]) is.readObject();
       final int nFrameworks = is.readInt();
-      final Logger[] loggers = {remoteLogger(config.isAnsiCodesSupported())};
+      final sbt.testing.Logger[] loggers = {remoteLogger(config.isAnsiCodesSupported())};
 
       for (int i = 0; i < nFrameworks; i++) {
         final String[] implClassNames = (String[]) is.readObject();
@@ -214,7 +214,7 @@ public final class ForkMain {
     private void runTestTasks(
         final ExecutorService executor,
         final sbt.testing.Task[] tasks,
-        final Logger[] loggers) {
+        final sbt.testing.Logger[] loggers) {
       if (tasks.length > 0) {
         final List<Future<sbt.testing.Task[]>> futureNestedTasks = new ArrayList<>();
         for (final sbt.testing.Task task : tasks) {
@@ -239,7 +239,7 @@ public final class ForkMain {
     private Future<sbt.testing.Task[]> runTest(
         final ExecutorService executor,
         final sbt.testing.Task task,
-        final Logger[] loggers) {
+        final sbt.testing.Logger[] loggers) {
       return executor.submit(
           () -> {
             sbt.testing.Task[] nestedTasks;
