@@ -11,4 +11,5 @@ object Dependencies {
   val scalaCompiler = "org.scala-lang" % "scala-compiler" % scala212
   val io = "org.scala-sbt" %% "io" % "1.4.0"
   val bloopFrontend = "ch.epfl.scala" %% "bloop-frontend" % "1.4.5"
+  val sbtTestInterface = "org.scala-sbt" % "test-interface" % "1.0"
 }
