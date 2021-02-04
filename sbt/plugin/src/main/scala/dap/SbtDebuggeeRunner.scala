@@ -14,12 +14,17 @@ import java.net.{ServerSocket, Socket}
 import java.nio.file.Path
 import scala.concurrent.ExecutionContext
 import scala.util.control.NonFatal
+import sbt.Keys
+import scala.concurrent.Future
 
-private abstract class SbtDebuggeeRunner(analyses: Seq[Analysis], converter: FileConverter, sbtLog: sbt.Logger) extends DebuggeeRunner {
-  import SbtLoggerAdapter._
-  final override def logger: Logger = sbtLog
+private abstract class SbtDebuggeeRunner(classpath: Classpath, converter: FileConverter, sbtLogger: sbt.Logger) extends DebuggeeRunner {
+  private val analyses = classpath
+    .flatMap(_.metadata.get(Keys.analysis))
+    .map { case a: Analysis => a }
+  
+  override def logger: Logger = new LoggerAdapter(sbtLogger)
 
-  final override def classFilesMappedTo(origin: Path, lines: Array[Int], columns: Array[Int]): List[Path] = {
+  override def classFilesMappedTo(origin: Path, lines: Array[Int], columns: Array[Int]): List[Path] = {
     val originRef = converter.toVirtualFile(origin)
     analyses.collectFirst {
       case analysis if analysis.infos.get(originRef) != SourceInfos.emptyInfo =>
@@ -28,17 +33,16 @@ private abstract class SbtDebuggeeRunner(analyses: Seq[Analysis], converter: Fil
   }
 }
 
-private final class MainClassSbtDebuggeeRunner(
+private final class MainClassRunner(
   target: BuildTargetIdentifier,
   forkOptions: ForkOptions,
   classpath: Classpath,
   mainClass: String,
   args: Seq[String],
-  analyses: Seq[Analysis],
   converter: FileConverter,
   sbtLogger: sbt.util.Logger
-)(implicit ec: ExecutionContext) extends SbtDebuggeeRunner(analyses, converter, sbtLogger) {
-  override def name: String = s"[Main class $mainClass in ${target.uri}]"
+)(implicit ec: ExecutionContext) extends SbtDebuggeeRunner(classpath, converter, sbtLogger) {
+  override def name: String = s"MainClassRunner(${target.uri}, $mainClass)"
 
   override def run(callbacks: DebugSessionCallbacks): CancelableFuture[Unit] = { 
     sbtLogger.info(s"running main class debuggee: $mainClass")
@@ -46,16 +50,7 @@ private final class MainClassSbtDebuggeeRunner(
   }
 }
 
-private object TestSuiteSbtDebuggeeRunner {
-  private def forkFingerprint(f: Fingerprint): Fingerprint with Serializable =
-    f match {
-      case s: SubclassFingerprint  => new SubclassFingerscan(s)
-      case a: AnnotatedFingerprint => new AnnotatedFingerscan(a)
-      case _                       => sys.error("Unknown fingerprint type: " + f.getClass)
-    }
-}
-
-private final class TestSuiteSbtDebuggeeRunner(
+private final class TestSuitesRunner(
     target: BuildTargetIdentifier,
     forkOptions: ForkOptions,
     classpath: Classpath,
@@ -64,12 +59,10 @@ private final class TestSuiteSbtDebuggeeRunner(
     parallel: Boolean, 
     runners: Map[TestFramework, Runner],
     tests: Seq[TestDefinition],
-    analyses: Seq[Analysis],
     converter: FileConverter,
     sbtLogger: sbt.util.Logger
-)(implicit executionContext: ExecutionContext) extends SbtDebuggeeRunner(analyses, converter, sbtLogger) {
-  import TestSuiteSbtDebuggeeRunner.forkFingerprint
-  override def name: String = s"[Test ${tests.mkString(", ")} in ${target.uri}]"
+)(implicit executionContext: ExecutionContext) extends SbtDebuggeeRunner(classpath, converter, sbtLogger) {
+  override def name: String = s"TestSuitesRunner(${target.uri}, ${tests.mkString(", ")})"
   override def run(callbacks: DebugSessionCallbacks): CancelableFuture[Unit] = {
     object Acceptor extends Thread {
       val server = new ServerSocket(0)
@@ -89,9 +82,14 @@ private final class TestSuiteSbtDebuggeeRunner(
           os.writeObject(config)
 
           val taskdefs = tests.map { t =>
+            val forkFingerprint = t.fingerprint match {
+              case s: SubclassFingerprint  => new SubclassFingerscan(s)
+              case a: AnnotatedFingerprint => new AnnotatedFingerscan(a)
+              case f                       => sys.error("Unknown fingerprint type: " + f.getClass)
+            }
             new TaskDef(
               t.name,
-              forkFingerprint(t.fingerprint),
+              forkFingerprint,
               t.explicitlySpecified,
               t.selectors
             )
@@ -141,11 +139,15 @@ private final class TestSuiteSbtDebuggeeRunner(
   }
 }
 
-private final case class AttachRemoteSbtDebuggeeRunner(
-  analyses: Array[Analysis],
+private final case class AttachRemoteRunner(
+  target: BuildTargetIdentifier,
+  classpath: Classpath,
   converter: FileConverter,
   sbtLogger: sbt.Logger
-) extends SbtDebuggeeRunner(analyses, converter, sbtLogger) {
-  override def name: String = ???
-  override def run(callbacks: DebugSessionCallbacks): CancelableFuture[Unit] = ???
+) extends SbtDebuggeeRunner(classpath, converter, sbtLogger) {
+  override def name: String = s"AttachRemoteRunner(${target.uri})"
+  override def run(callbacks: DebugSessionCallbacks): CancelableFuture[Unit] = new CancelableFuture[Unit] {
+    override def future: Future[Unit] = Future.successful(())
+    override def cancel(): Unit = ()
+  }
 }
