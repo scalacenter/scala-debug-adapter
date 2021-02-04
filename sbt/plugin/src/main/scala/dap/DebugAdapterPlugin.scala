@@ -81,6 +81,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
    * project
    *   .configs(IntegrationTest)
    *   .settings(
+   *     Defaults.itSettings,
    *     inConfig(IntegrationTest)(DebugAdapterPlugin.testSettings)
    *   )
    * }}}
@@ -212,7 +213,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         val testSet = g.tests.map(_.name).toSet
         testSuites.forall(testSet.contains)
       }.headOption.toRight {
-        Error.invalidParams("all tests are not in the same group")
+        Error.invalidParams("no matching test group")
       }
     } yield {
 
