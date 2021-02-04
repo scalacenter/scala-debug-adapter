@@ -29,7 +29,6 @@ import sbt.Tests.Cleanup
 import sbt.Tests.Argument
 
 object DebugAdapterPlugin extends sbt.AutoPlugin {
-  import SbtLoggerAdapter._
   private final val DebugSessionStart: String = "debugSession/start"
 
   // each build target can only have one debug server
@@ -72,12 +71,24 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
 
   def runSettings: Seq[Def.Setting[_]] = Seq(
     startMainClassDebugSession := mainClassSessionTask.evaluated,
-    stopDebugSession := stopDebugSessionTask.value
+    startRemoteDebugSession := remoteSessionTask.value,
+    stopDebugSession := stopSessionTask.value
   )
 
+  /**
+   * Can be used to add debugSession/start support in the IntegrationTest config
+   * {{{
+   * project
+   *   .configs(IntegrationTest)
+   *   .settings(
+   *     inConfig(IntegrationTest)(DebugAdapterPlugin.testSettings)
+   *   )
+   * }}}
+   */
   def testSettings: Seq[Def.Setting[_]] = Seq(
     startTestSuitesDebugSession := testSuitesSessionTask.evaluated,
-    stopDebugSession := stopDebugSessionTask.value
+    startRemoteDebugSession := remoteSessionTask.value,
+    stopDebugSession := stopSessionTask.value
   )
 
   private def debugSessionStartHandler(
@@ -101,14 +112,14 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             case DebugSessionDataKind.ScalaTestSuites => startTestSuitesDebugSession.key
             case DebugSessionDataKind.ScalaAttachRemote => startRemoteDebugSession.key
           }
-          val dataStr = CompactPrinter(params.data.get)
+          val data = params.data.map(CompactPrinter.apply).getOrElse("")
           val project = scope.project.toOption.get.asInstanceOf[ProjectRef].project
           val config = configMap(scope.config.toOption.get).id
 
           // the project and config that correspond to the target identifier
           // the task that will create the debugee and start the debugServer
           // the data containing the debuggee parameters
-          s"$project / $config / $task $dataStr"
+          s"$project / $config / $task $data"
         }
 
         commandLine match {
@@ -121,7 +132,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     }
   }
 
-  private def stopDebugSessionTask: Def.Initialize[Task[Unit]] = Def.task {
+  private def stopSessionTask: Def.Initialize[Task[Unit]] = Def.task {
     val target = Keys.bspTargetIdentifier.value
     debugServers.get(target).foreach(_.close())
     val _ = debugServers.remove(target)
@@ -134,9 +145,6 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val envVars = Keys.envVars.value
     val converter = Keys.fileConverter.value
     val classpath = Keys.fullClasspath.value
-    val analyses = classpath
-      .flatMap(_.metadata.get(Keys.analysis))
-      .map { case a: Analysis => a }
     val sbtLogger = Keys.streams.value.log
     val state = Keys.state.value
 
@@ -157,13 +165,12 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         envVars = envVars
       )
 
-      new MainClassSbtDebuggeeRunner(
+      new MainClassRunner(
         target,
         forkOptions,
         classpath,
         params.`class`,
         params.arguments,
-        analyses,
         converter,
         sbtLogger
       )
@@ -191,9 +198,6 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val state = Keys.state.value
 
     val converter = Keys.fileConverter.value
-    val analyses = classpath
-      .flatMap(_.metadata.get(Keys.analysis))
-      .map { case a: Analysis => a }
     val sbtLogger = Keys.streams.value.log
 
     import BasicJsonProtocol._
@@ -234,7 +238,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           name -> mainRunner
       }
 
-      new TestSuiteSbtDebuggeeRunner(
+      new TestSuitesRunner(
         target,
         forkOptions,
         classpath,
@@ -243,7 +247,6 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         parallel,
         testRunners,
         testDefinitions,
-        analyses,
         converter,
         sbtLogger
       )
@@ -258,15 +261,28 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     }
   }
 
+  private def remoteSessionTask: Def.Initialize[Task[URI]] = Def.task {
+    val target = Keys.bspTargetIdentifier.value
+    
+    val classpath = (Keys.test / Keys.fullClasspath).value
+    val state = Keys.state.value
+
+    val converter = Keys.fileConverter.value
+    val logger = Keys.streams.value.log
+
+    val runner = new AttachRemoteRunner(target, classpath, converter, logger)
+    startServer(state, target, runner, logger)
+  }
+
   private def startServer(
       state: State,
       target: BuildTargetIdentifier,
       runner: DebuggeeRunner,
-      logger: Logger
+      logger: sbt.util.Logger
   ): URI = {
     // if there is a server for this target then close it
     debugServers.get(target).foreach(_.close())
-    val server = DebugServer(runner, logger)
+    val server = DebugServer(runner, new LoggerAdapter(logger))
     server.start()
     debugServers.update(target, server)
     state.respondEvent(DebugSessionAddress(server.uri))
