@@ -1,2 +1,2 @@
-> 'Compile / startMainClassDebugSession {"class":"BreakpointTest","arguments":[],"jvmOptions":[]}'
-> Compile / stopDebugSession
+> 'checkDebugSession {"class":"BreakpointTest","arguments":[],"jvmOptions":[]}'
+> stopDebugSession

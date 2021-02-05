@@ -1,4 +1,4 @@
-package ch.epfl.scala.debug
+package ch.epfl.scala.debug.testing
 
 import com.google.gson.JsonObject
 import com.google.gson.internal.LinkedTreeMap
@@ -19,8 +19,8 @@ import scala.concurrent.duration._
 import scala.reflect._
 import scala.util.control.NonFatal
 
-class TestDebugClient(socket: Socket, logger: Logger, timeout: Duration)(implicit ec: ExecutionContext)
-  extends AbstractDebugClient(socket.getInputStream, socket.getOutputStream, logger) {
+class TestDebugClient(socket: Socket, timeout: Duration)(implicit ec: ExecutionContext)
+  extends AbstractDebugClient(socket.getInputStream, socket.getOutputStream) {
   override def close(): Unit = {
     super.close()
     socket.close()
@@ -138,12 +138,11 @@ class TestDebugClient(socket: Socket, logger: Logger, timeout: Duration)(implici
 }
 
 object TestDebugClient {
-  def connect(uri: URI, logger: Logger, timeout: Duration = 2000 millis)(implicit ec: ExecutionContext): TestDebugClient = {
+  def connect(uri: URI, timeout: Duration = 2000 millis)(implicit ec: ExecutionContext): TestDebugClient = {
     val socket = new Socket()
     val address = new InetSocketAddress(uri.getHost, uri.getPort)
     socket.connect(address, timeout.toMillis.intValue)
-    logger.info(s"client connected to $uri")
-    val client = new TestDebugClient(socket, logger, timeout)
+    val client = new TestDebugClient(socket, timeout)
     val listening = new java.lang.Thread {
       override def run(): Unit = client.run()
     }
@@ -152,7 +151,7 @@ object TestDebugClient {
   }
 }
 
-class AbstractDebugClient(input: InputStream, output: OutputStream, logger: Logger) {
+class AbstractDebugClient(input: InputStream, output: OutputStream) {
   private final val BufferSize = 4096
   private final val TwoCRLF = "\r\n\r\n"
   private val ContentLengthMatcher = "Content-Length: (\\d+)".r
@@ -226,8 +225,6 @@ class AbstractDebugClient(input: InputStream, output: OutputStream, logger: Logg
       try {
         val message = JsonUtils.fromJson(raw, classOf[Messages.ProtocolMessage])
 
-        logger.debug(s"\n[Received ${message.`type`}]\n$raw")
-
         if (message.`type`.equals("response")) {
           val response = JsonUtils.fromJson(raw, classOf[Messages.Response])
           responsePromise.success(response)
@@ -237,9 +234,7 @@ class AbstractDebugClient(input: InputStream, output: OutputStream, logger: Logg
         }
       } catch {
         case NonFatal(e) =>
-        logger.error(raw)
-        logger.error(s"Error parsing message: ${e.getMessage}")
-        logger.trace(e)
+          System.err.println(s"Error parsing message: ${e.getMessage}")
       }
     }
     remaining
@@ -272,13 +267,11 @@ class AbstractDebugClient(input: InputStream, output: OutputStream, logger: Logg
     val data = new String(headerBytes ++ jsonBytes, ProtocolEncoding)
 
     try {
-      logger.debug(s"\n[Sending request]\n$jsonMessage")
       this.writer.write(data)
       this.writer.flush()
     } catch {
       case NonFatal(e) =>
-        logger.error(s"Write data to io exception: ${e.getMessage}")
-        logger.trace(e)
+        System.err.println(s"Write data to io exception: ${e.getMessage}")
     }
   }
 }
