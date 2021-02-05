@@ -38,6 +38,18 @@ lazy val core = project
       }
     )
   )
+  .dependsOn(testClient % Test)
+
+lazy val testClient = project
+  .in(file("test-client"))
+  .settings(
+    name := "scala-debug-adapter-test-client",
+    libraryDependencies ++= List(
+      Dependencies.asm,
+      Dependencies.asmUtil,
+      Dependencies.javaDebug
+    )
+  )
 
 lazy val sbtPlugin = project
   .in(file("sbt/plugin"))
@@ -46,10 +58,12 @@ lazy val sbtPlugin = project
     name := "sbt-debug-adapter",
     Compile / generateContrabands / contrabandFormatsForType := ContrabandConfig.getFormats,
     scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
+    scriptedBufferLog := false,
     scriptedDependencies := {
       publishLocal.value
       (core / publishLocal).value
-      (testAgent / publishLocal).value 
+      (testClient / publishLocal).value
+      (testAgent / publishLocal).value
     }
   )
   .dependsOn(core, testAgent)
