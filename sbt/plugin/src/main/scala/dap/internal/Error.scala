@@ -1,10 +1,10 @@
-package dap
+package dap.internal
 
 import sbt.internal.langserver.ErrorCodes
 
-final case class Error(code: Long, message: String)
+private[dap] final case class Error(code: Long, message: String)
 
-object Error {
+private[dap] object Error {
   def paramsMissing(method: String): Error =
     Error(ErrorCodes.InvalidParams, s"param is expected on '$method' method.")
   def invalidParams(msg: String): Error = Error(ErrorCodes.InvalidParams, msg)

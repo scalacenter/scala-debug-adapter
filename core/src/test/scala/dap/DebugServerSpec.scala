@@ -9,6 +9,8 @@ import java.util.concurrent.{Executors, TimeUnit, TimeoutException}
 import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
 
+import dap.internal.DebugSession
+
 object DebugServerSpec extends TestSuite {
   private val DefaultTimeout = Duration(2, TimeUnit.SECONDS)
   /** the server needs two threads:

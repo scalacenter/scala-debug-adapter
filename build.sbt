@@ -63,11 +63,3 @@ lazy val testAgent = project
     crossPaths := false,
     libraryDependencies += Dependencies.sbtTestInterface
   )
-
-lazy val bloopDap = project
-  .in(file("bloop-dap"))
-  .settings(
-    name := "bloop-scala-debug-adapter",
-    libraryDependencies ++= Seq(Dependencies.bloopFrontend)
-  )
-  .dependsOn(core)

@@ -1,7 +1,6 @@
 package dap
 
-import com.microsoft.java.debug.core.DebugSettings
-import dap.DebugSession.Restarted
+import dap.internal.DebugSession
 
 import java.net.{InetSocketAddress, ServerSocket, URI}
 import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit}
@@ -15,19 +14,6 @@ final class DebugServer private (
   autoCloseSession: Boolean,
   gracePeriod: Duration
 )(implicit ec: ExecutionContext) {
-
-  /**
-   * Disable evaluation of variable's `toString` methods
-   * since code evaluation is not supported.
-   *
-   * Debug adapter, when asked for variables, tries to present them in a readable way,
-   * hence it evaluates the `toString` method for each object providing it.
-   * The adapter is not checking if evaluation is supported, so the whole request
-   * fails if there is at least one variable with custom `toString` in scope.
-   *
-   * See usages of [[com.microsoft.java.debug.core.adapter.variables.VariableDetailUtils.formatDetailsValue()]]
-   */
-  DebugSettings.getCurrent.showToString = false
 
   private val address = new InetSocketAddress(0)
   private var closedServer = false
@@ -45,15 +31,15 @@ final class DebugServer private (
 
   /**
     * Wait for a connection then start a session
-    * If the session returns [[DebugSession.Restarted]], wait for a new connection and start a new session
-    * Until the session returns [[DebugSession.Terminated]] or [[DebugSession.Disconnected]]
+    * If the session returns `DebugSession.Restarted`, wait for a new connection and start a new session
+    * Until the session returns `DebugSession.Terminated` or `DebugSession.Disconnected`
     */
   def start(): Future[Unit] = {
     for {
       session <- Future(connect())
       exitStatus <- session.exitStatus
       restarted <- exitStatus match {
-        case Restarted => start()
+        case DebugSession.Restarted => start()
         case _ => Future.successful(())
       }
     } yield restarted
@@ -63,7 +49,7 @@ final class DebugServer private (
     * Connect once and return a running session
     * In case of race condition with the [[close]] method, the session can be closed before returned
     */
-  def connect(): DebugSession = {
+  private[dap] def connect(): DebugSession = {
     val socket = serverSocket.accept()
     val session = DebugSession(socket, runner, logger, autoCloseSession, gracePeriod)
     lock.synchronized {

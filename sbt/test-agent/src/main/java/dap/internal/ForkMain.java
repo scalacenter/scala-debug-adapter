@@ -5,7 +5,7 @@
  * Licensed under Apache License 2.0 (see LICENSE)
  */
 
-package dap;
+package dap.internal;
 
 import sbt.testing.*;
 

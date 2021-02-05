@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 case class MainDebuggeeRunner(source: Path, classpath: String, allClasses: List[Path], mainClass: String, logger: Logger) extends DebuggeeRunner {
   override def name: String = mainClass
   
-  override def run(callbacks: DebugSessionCallbacks): CancelableFuture[Unit] = {
+  override def run(callbacks: DebuggeeLogger): CancelableFuture[Unit] = {
     val command = Array("java", DebugInterface, "-cp", classpath, mainClass)
     val builder = new ProcessBuilder(command: _*)
     val process = builder.start()
@@ -126,7 +126,7 @@ object MainDebuggeeRunner {
 
   private class MainProcess(
     process: Process,
-    callbacks: DebugSessionCallbacks,
+    callbacks: DebuggeeLogger,
     logger: Logger
   ) extends CancelableFuture[Unit] {
     private val exited = Promise[Unit]()
@@ -137,10 +137,10 @@ object MainDebuggeeRunner {
         val address = new InetSocketAddress("127.0.0.1", port)
         callbacks.onListening(address)
       } else {
-        callbacks.printlnOut(line)
+        callbacks.out(line)
       }
     }
-    startCrawling(process.getErrorStream)(callbacks.printlnErr)
+    startCrawling(process.getErrorStream)(callbacks.err)
     
     private val thread = new Thread {
       override def run(): Unit = {
