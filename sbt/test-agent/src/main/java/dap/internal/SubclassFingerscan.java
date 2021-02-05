@@ -1,4 +1,4 @@
-package dap;
+package dap.internal;
 
 import sbt.testing.SubclassFingerprint;
 

@@ -2,8 +2,8 @@ package dap
 
 import java.net.InetSocketAddress
 
-trait DebugSessionCallbacks {
+trait DebuggeeLogger {
   def onListening(address: InetSocketAddress): Unit
-  def printlnOut(msg: String): Unit
-  def printlnErr(msg: String): Unit
+  def out(line: String): Unit
+  def err(line: String): Unit
 }

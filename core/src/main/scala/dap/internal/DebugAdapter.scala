@@ -1,4 +1,6 @@
-package dap
+package dap.internal
+
+import dap.{DebuggeeRunner, Logger}
 
 import com.microsoft.java.debug.core.IEvaluatableBreakpoint
 import com.microsoft.java.debug.core.adapter._
@@ -15,13 +17,27 @@ import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 import scala.collection.mutable
 import scala.util.control.NonFatal
+import com.microsoft.java.debug.core.DebugSettings
 
-object DebugExtensions {
-  def newContext(runner: DebuggeeRunner): IProviderContext = {
+private[dap] object DebugAdapter {
+  /**
+   * Disable evaluation of variable's `toString` methods
+   * since code evaluation is not supported.
+   *
+   * Debug adapter, when asked for variables, tries to present them in a readable way,
+   * hence it evaluates the `toString` method for each object providing it.
+   * The adapter is not checking if evaluation is supported, so the whole request
+   * fails if there is at least one variable with custom `toString` in scope.
+   *
+   * See usages of [[com.microsoft.java.debug.core.adapter.variables.VariableDetailUtils.formatDetailsValue()]]
+   */
+  DebugSettings.getCurrent.showToString = false
+
+  def context(runner: DebuggeeRunner, logger: Logger): IProviderContext = {
     val context = new ProviderContext
     context.registerProvider(classOf[IHotCodeReplaceProvider], HotCodeReplaceProvider)
     context.registerProvider(classOf[IVirtualMachineManagerProvider], VirtualMachineManagerProvider)
-    context.registerProvider(classOf[ISourceLookUpProvider], new SourceLookUpProvider(runner))
+    context.registerProvider(classOf[ISourceLookUpProvider], new SourceLookUpProvider(runner, logger))
     context.registerProvider(classOf[IEvaluationProvider], EvaluationProvider)
     context.registerProvider(classOf[ICompletionsProvider], CompletionsProvider)
     context
@@ -75,7 +91,7 @@ object DebugExtensions {
     override def getEventHub: Observable[HotCodeReplaceEvent] = Observable.empty()
   }
 
-  final class SourceLookUpProvider(runner: DebuggeeRunner) extends ISourceLookUpProvider {
+  final class SourceLookUpProvider(runner: DebuggeeRunner, logger: Logger) extends ISourceLookUpProvider {
     override def supportsRealtimeBreakpointVerification(): Boolean = true
     override def getSourceFileURI(fqn: String, path: String): String = path
     override def getSourceContents(uri: String): String = ""
@@ -137,8 +153,8 @@ object DebugExtensions {
           }
         } catch {
           case NonFatal(t) =>
-            runner.logger.error(s"Failed to parse debug line numbers in class file $classFile!")
-            runner.logger.trace(t)
+            logger.error(s"Failed to parse debug line numbers in class file $classFile!")
+            logger.trace(t)
         }
       }
 

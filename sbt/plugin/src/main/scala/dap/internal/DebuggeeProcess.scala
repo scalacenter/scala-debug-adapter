@@ -1,4 +1,4 @@
-package dap
+package dap.internal
 
 import sbt.ForkOptions
 import sbt.io.syntax._
@@ -7,11 +7,13 @@ import java.io.File
 import scala.concurrent.{Future, Promise}
 import scala.sys.process.Process
 
-class DebuggeeProcess(process: Process) extends CancelableFuture[Unit] {
-  import DebuggeeProcess._
+import dap.CancelableFuture
+import dap.DebuggeeLogger
+
+private class DebuggeeProcess(process: Process) extends CancelableFuture[Unit] {
   private val exited = Promise[Unit]()
 
-  fork { () =>
+  DebuggeeProcess.fork { () =>
     val exitCode = process.exitValue()
     if (exitCode != 0)
       exited.failure(new Exception(s"""Nonzero exit code returned: $exitCode""".stripMargin))
@@ -22,7 +24,7 @@ class DebuggeeProcess(process: Process) extends CancelableFuture[Unit] {
   override def cancel(): Unit = process.destroy()
 }
 
-object DebuggeeProcess {
+private object DebuggeeProcess {
   private final val debugInterface: String = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,quiet=n"
 
   def start(
@@ -30,7 +32,7 @@ object DebuggeeProcess {
     classpath: Seq[java.io.File],
     mainClass: String,
     arguments: Seq[String],
-    callbacks: DebugSessionCallbacks
+    logger: DebuggeeLogger
   ): DebuggeeProcess = {
     val javaHome = forkOptions.javaHome.getOrElse(new File(System.getProperty("java.home")))
     val javaBin = (javaHome / "bin" / "java").getAbsolutePath
@@ -44,7 +46,7 @@ object DebuggeeProcess {
       arguments
     
     val builder = Process(command, forkOptions.workingDirectory, envVars.toSeq: _*)
-    val processLogger = new DebuggeeProcessLogger(callbacks)
+    val processLogger = new DebuggeeProcessLogger(logger)
     val process = builder.run(processLogger)
 
     new DebuggeeProcess(process)

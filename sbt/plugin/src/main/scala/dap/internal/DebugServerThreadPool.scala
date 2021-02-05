@@ -1,6 +1,6 @@
-package dap
+package dap.internal
 
-object DebugServerThreadPool {
+private[dap] object DebugServerThreadPool {
   private val nextThreadId = new java.util.concurrent.atomic.AtomicInteger(1)
   private val threadGroup = Thread.currentThread.getThreadGroup()
 
@@ -16,9 +16,9 @@ object DebugServerThreadPool {
     }
   }
 
-  private[dap] val executor = new java.util.concurrent.ThreadPoolExecutor(
-    0, /* corePoolSize */
-    12, /* maxPoolSize */
+  val executor = new java.util.concurrent.ThreadPoolExecutor(
+    1, /* corePoolSize */
+    2, /* maxPoolSize */
     2, java.util.concurrent.TimeUnit.SECONDS, // keep alive 2 seconds
     new java.util.concurrent.SynchronousQueue[Runnable](),
     threadFactory

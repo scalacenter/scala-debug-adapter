@@ -1,9 +1,8 @@
-package dap
+package dap.internal
 
-import sbt.internal.util.ManagedLogger
+import dap.Logger
 
-
-class LoggerAdapter(underlying: sbt.Logger) extends Logger {
+private[dap] class LoggerAdapter(underlying: sbt.Logger) extends Logger {
   override def debug(msg: => String): Unit = underlying.debug(msg)
   override def info(msg: => String): Unit = underlying.info(msg)
   override def warn(msg: => String): Unit = underlying.warn(msg)

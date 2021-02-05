@@ -1,4 +1,4 @@
-package dap
+package dap.internal
 
 import sbt.Def.Classpath
 import sbt.Tests.{Cleanup, Setup}
@@ -16,13 +16,12 @@ import scala.concurrent.ExecutionContext
 import scala.util.control.NonFatal
 import sbt.Keys
 import scala.concurrent.Future
+import dap._
 
-private abstract class SbtDebuggeeRunner(classpath: Classpath, converter: FileConverter, sbtLogger: sbt.Logger) extends DebuggeeRunner {
+private[dap] abstract class SbtDebuggeeRunner(classpath: Classpath, converter: FileConverter) extends DebuggeeRunner {
   private val analyses = classpath
     .flatMap(_.metadata.get(Keys.analysis))
     .map { case a: Analysis => a }
-  
-  override def logger: Logger = new LoggerAdapter(sbtLogger)
 
   override def classFilesMappedTo(origin: Path, lines: Array[Int], columns: Array[Int]): List[Path] = {
     val originRef = converter.toVirtualFile(origin)
@@ -33,24 +32,22 @@ private abstract class SbtDebuggeeRunner(classpath: Classpath, converter: FileCo
   }
 }
 
-private final class MainClassRunner(
+private[dap] final class MainClassRunner(
   target: BuildTargetIdentifier,
   forkOptions: ForkOptions,
   classpath: Classpath,
   mainClass: String,
   args: Seq[String],
-  converter: FileConverter,
-  sbtLogger: sbt.util.Logger
-)(implicit ec: ExecutionContext) extends SbtDebuggeeRunner(classpath, converter, sbtLogger) {
-  override def name: String = s"MainClassRunner(${target.uri}, $mainClass)"
+  converter: FileConverter
+)(implicit ec: ExecutionContext) extends SbtDebuggeeRunner(classpath, converter) {
+  override def name: String = s"${getClass.getSimpleName}(${target.uri}, $mainClass)"
 
-  override def run(callbacks: DebugSessionCallbacks): CancelableFuture[Unit] = { 
-    sbtLogger.info(s"running main class debuggee: $mainClass")
-    DebuggeeProcess.start(forkOptions, classpath.map(_.data), mainClass, args, callbacks)
+  override def run(logger: DebuggeeLogger): CancelableFuture[Unit] = {
+    DebuggeeProcess.start(forkOptions, classpath.map(_.data), mainClass, args, logger)
   }
 }
 
-private final class TestSuitesRunner(
+private[dap] final class TestSuitesRunner(
     target: BuildTargetIdentifier,
     forkOptions: ForkOptions,
     classpath: Classpath,
@@ -59,11 +56,10 @@ private final class TestSuitesRunner(
     parallel: Boolean, 
     runners: Map[TestFramework, Runner],
     tests: Seq[TestDefinition],
-    converter: FileConverter,
-    sbtLogger: sbt.util.Logger
-)(implicit executionContext: ExecutionContext) extends SbtDebuggeeRunner(classpath, converter, sbtLogger) {
-  override def name: String = s"TestSuitesRunner(${target.uri}, ${tests.mkString(", ")})"
-  override def run(callbacks: DebugSessionCallbacks): CancelableFuture[Unit] = {
+    converter: FileConverter
+)(implicit executionContext: ExecutionContext) extends SbtDebuggeeRunner(classpath, converter) {
+  override def name: String = s"${getClass.getSimpleName}(${target.uri}, [${tests.mkString(", ")}])"
+  override def run(logger: DebuggeeLogger): CancelableFuture[Unit] = {
     object Acceptor extends Thread {
       val server = new ServerSocket(0)
       var socket: Socket = _
@@ -129,7 +125,7 @@ private final class TestSuitesRunner(
     val dummyLoader = this.getClass().getClassLoader()
 
     setups.foreach(_.setup(dummyLoader))
-    val process = DebuggeeProcess.start(forkOptions, fullClasspath, mainClass, args, callbacks)
+    val process = DebuggeeProcess.start(forkOptions, fullClasspath, mainClass, args, logger)
     process.future.onComplete { _=>
       Acceptor.close()
       cleanups.foreach(_.cleanup(dummyLoader))
@@ -139,14 +135,13 @@ private final class TestSuitesRunner(
   }
 }
 
-private final case class AttachRemoteRunner(
+private[dap] final case class AttachRemoteRunner(
   target: BuildTargetIdentifier,
   classpath: Classpath,
-  converter: FileConverter,
-  sbtLogger: sbt.Logger
-) extends SbtDebuggeeRunner(classpath, converter, sbtLogger) {
-  override def name: String = s"AttachRemoteRunner(${target.uri})"
-  override def run(callbacks: DebugSessionCallbacks): CancelableFuture[Unit] = new CancelableFuture[Unit] {
+  converter: FileConverter
+) extends SbtDebuggeeRunner(classpath, converter) {
+  override def name: String = s"${getClass.getSimpleName}(${target.uri})"
+  override def run(logger: DebuggeeLogger): CancelableFuture[Unit] = new CancelableFuture[Unit] {
     override def future: Future[Unit] = Future.successful(())
     override def cancel(): Unit = ()
   }

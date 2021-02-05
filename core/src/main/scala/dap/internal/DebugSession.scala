@@ -1,4 +1,6 @@
-package dap
+package dap.internal
+
+import dap._
 
 import com.microsoft.java.debug.core.adapter.{IProviderContext, ProtocolServer => DapServer}
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent
@@ -6,7 +8,6 @@ import com.microsoft.java.debug.core.protocol.Messages.{Request, Response}
 import com.microsoft.java.debug.core.protocol.Requests._
 import com.microsoft.java.debug.core.protocol.{Events, JsonUtils}
 import com.microsoft.java.debug.core.{Configuration, LoggerFactory}
-import dap.TimeoutScheduler._
 
 import java.net.{InetSocketAddress, Socket}
 import java.util.concurrent.{CancellationException, TimeoutException}
@@ -26,19 +27,19 @@ import scala.util.{Failure, Success, Try}
  *  If autoCloseSession then the session is closed automatically after the debuggee has terminated
  *  Otherwise a disconnect request should be received or the close method should be called manually
  */
-final class DebugSession private (
+private[dap] final class DebugSession private (
     socket: Socket,
     runner: DebuggeeRunner,
     context: IProviderContext,
     logger: Logger,
-    loggerAdapter: DebugSession.LoggerAdapter,
+    loggingAdapter: LoggingAdapter,
     autoClose: Boolean,
     gracePeriod: Duration
 )(implicit executionContext: ExecutionContext) extends DapServer(
   socket.getInputStream,
   socket.getOutputStream,
   context,
-  DebugSession.loggerFactory(loggerAdapter)
+  loggingAdapter.factory,
 ) {
   private type LaunchId = Int
 
@@ -105,7 +106,7 @@ final class DebugSession private (
    */
   def close(): Unit = {
     super.stop()
-    loggerAdapter.onClosingSession()
+    loggingAdapter.onClosingSession()
     debugState.transform {
       case DebugSession.Started(debuggee) =>
         cancelPromises(new CancellationException("Debug session closed"))
@@ -133,8 +134,7 @@ final class DebugSession private (
         // launch request is implemented by spinning up a JVM
         // and sending an attach request to the java DapServer
         launchedRequests.add(requestId)
-        debuggeeAddress
-          .timeout(gracePeriod)
+        Scheduler.timeout(debuggeeAddress, gracePeriod)
           .future
           .onComplete {
             case Success(address) =>
@@ -217,24 +217,24 @@ final class DebugSession private (
     attached.tryFailure(cause)
   }
 
-  private object Callbacks extends DebugSessionCallbacks {
+  private object Callbacks extends DebuggeeLogger {
     def onListening(address: InetSocketAddress): Unit = {
       debuggeeAddress.success(address)
     }
 
-    def printlnOut(msg: String): Unit = {
-      val event = new OutputEvent(OutputEvent.Category.stdout, msg + System.lineSeparator())
+    def out(line: String): Unit = {
+      val event = new OutputEvent(OutputEvent.Category.stdout, line + System.lineSeparator())
       sendEvent(event)
     }
 
-    def printlnErr(msg: String): Unit = {
-      val event = new OutputEvent(OutputEvent.Category.stderr, msg + System.lineSeparator())
+    def err(line: String): Unit = {
+      val event = new OutputEvent(OutputEvent.Category.stderr, line + System.lineSeparator())
       sendEvent(event)
     }
   }
 }
 
-object DebugSession {
+private[dap] object DebugSession {
   sealed trait ExitStatus
   
   /**
@@ -264,9 +264,9 @@ object DebugSession {
       autoClose: Boolean,
       gracePeriod: Duration
   )(implicit executionContext: ExecutionContext): DebugSession = {
-    val adapter = new LoggerAdapter(logger)
-    val context = DebugExtensions.newContext(runner)
-    new DebugSession(socket, runner, context, logger, adapter, autoClose, gracePeriod)
+    val context = DebugAdapter.context(runner, logger)
+    val loggingHandler = new LoggingAdapter(logger)
+    new DebugSession(socket, runner, context, logger, loggingHandler, autoClose, gracePeriod)
   }
 
   private def toAttachRequest(seq: Int, address: InetSocketAddress): Request = {
@@ -286,53 +286,5 @@ object DebugSession {
     Try(JsonUtils.fromJson(disconnectRequest.arguments, classOf[DisconnectArguments]))
       .map(_.restart)
       .getOrElse(false)
-  }
-
-  private def loggerFactory(handler: LoggerAdapter): LoggerFactory = { name =>
-    val logger = JLogger.getLogger(name)
-    logger.getHandlers.foreach(logger.removeHandler)
-    logger.setUseParentHandlers(false)
-    if (name == Configuration.LOGGER_NAME) logger.addHandler(handler)
-    logger
-  }
-
-  private final class LoggerAdapter(logger: Logger) extends Handler {
-    /**
-     * DAP server tends to send a lot of SocketClosed exceptions when the Debuggee process has exited. This helps us filter those logs
-     */
-    @volatile private var closingSession = false
-
-    override def publish(record: LogRecord): Unit = {
-      val message = record.getMessage
-      record.getLevel match {
-        case Level.INFO | Level.CONFIG => logger.info(message)
-        case Level.WARNING => logger.warn(message)
-        case Level.SEVERE =>
-          if (isExpectedDuringCancellation(message) || isIgnoredError(message)) {
-            logger.debug(message)
-          } else {
-            logger.error(message)
-          }
-        case _ => logger.debug(message)
-      }
-    }
-
-    private final val socketClosed = "java.net.SocketException: Socket closed"
-    private def isExpectedDuringCancellation(message: String): Boolean = {
-      message.endsWith(socketClosed) && closingSession
-    }
-
-    private final val recordingWhenVmDisconnected =
-      "Exception on recording event: com.sun.jdi.VMDisconnectedException"
-    private def isIgnoredError(message: String): Boolean = {
-      message.startsWith(recordingWhenVmDisconnected)
-    }
-
-    def onClosingSession(): Unit = {
-      closingSession = true
-    }
-
-    override def flush(): Unit = ()
-    override def close(): Unit = ()
   }
 }

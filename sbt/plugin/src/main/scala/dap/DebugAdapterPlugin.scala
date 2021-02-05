@@ -1,5 +1,7 @@
 package dap
 
+import dap.internal._
+
 import sbt._
 import sbt.internal.server.{ServerHandler, ServerIntent}
 import sbt.internal.bsp._
@@ -12,7 +14,6 @@ import sbt.internal.util.complete.Parsers
 import sjsonnew.support.scalajson.unsafe.{CompactPrinter, Converter, Parser => JsonParser}
 import scala.concurrent.ExecutionContext
 import java.io.File
-import dap.{DebugSessionDataKind => DataKind}
 import dap.codec.JsonProtocol._
 import sbt.Defaults.createTestRunners
 import sbt.Keys.{parallelExecution, tags, testOptions}
@@ -30,9 +31,24 @@ import sbt.Tests.Argument
 
 object DebugAdapterPlugin extends sbt.AutoPlugin {
   private final val DebugSessionStart: String = "debugSession/start"
+  private type Result[A] = Either[Error, A]
+  
+  private object DataKind {
+    final val ScalaMainClass: String = "scala-main-class"
+    final val ScalaTestSuites: String = "scala-test-suites"
+    final val ScalaAttachRemote: String = "scala-attach-remote"
+  }
 
   // each build target can only have one debug server
   private val debugServers = mutable.Map[BuildTargetIdentifier, DebugServer]()
+
+  private val jsonParser: Parser[Result[JValue]] = (Parsers.any *)
+    .map(_.mkString)
+    .map(JsonParser.parseFromString)
+    .map(_.toEither.left.map(Error.parseError))
+
+  private implicit val executionContext =
+    ExecutionContext.fromExecutor(DebugServerThreadPool.executor)
 
   object autoImport {
     val startMainClassDebugSession = inputKey[URI]("Start a debug session for running a scala main class").withRank(KeyRanks.DTask)
@@ -42,14 +58,6 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val stopDebugSession = taskKey[Unit]("Stop the current debug session").withRank(KeyRanks.DTask)
   }
   import autoImport._
-
-  private val jsonParser: Parser[Result[JValue]] = (Parsers.any *)
-    .map(_.mkString)
-    .map(JsonParser.parseFromString)
-    .map(_.toEither.left.map(Error.parseError))
-
-  private implicit val executionContext =
-    ExecutionContext.fromExecutor(DebugServerThreadPool.executor)
 
   override def trigger = allRequirements
 
@@ -109,9 +117,9 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           )
         } yield {
           val task = dataKind match {
-            case DebugSessionDataKind.ScalaMainClass => startMainClassDebugSession.key
-            case DebugSessionDataKind.ScalaTestSuites => startTestSuitesDebugSession.key
-            case DebugSessionDataKind.ScalaAttachRemote => startRemoteDebugSession.key
+            case DataKind.ScalaMainClass => startMainClassDebugSession.key
+            case DataKind.ScalaTestSuites => startTestSuitesDebugSession.key
+            case DataKind.ScalaAttachRemote => startRemoteDebugSession.key
           }
           val data = params.data.map(CompactPrinter.apply).getOrElse("")
           val project = scope.project.toOption.get.asInstanceOf[ProjectRef].project
@@ -146,7 +154,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val envVars = Keys.envVars.value
     val converter = Keys.fileConverter.value
     val classpath = Keys.fullClasspath.value
-    val sbtLogger = Keys.streams.value.log
+    val logger = Keys.streams.value.log
     val state = Keys.state.value
 
     val runner = for {
@@ -172,8 +180,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         classpath,
         params.`class`,
         params.arguments,
-        converter,
-        sbtLogger
+        converter
       )
     }
 
@@ -182,7 +189,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         Keys.state.value.respondError(error.code, error.message)
         throw new MessageOnlyException(error.message)
       case Right(runner) =>
-        startServer(state, target, runner, sbtLogger)
+        startServer(state, target, runner, logger)
     }
   }
 
@@ -199,7 +206,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val state = Keys.state.value
 
     val converter = Keys.fileConverter.value
-    val sbtLogger = Keys.streams.value.log
+    val logger = Keys.streams.value.log
 
     import BasicJsonProtocol._
     val runner = for {
@@ -228,7 +235,6 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val arguments = testExec.options.collect { case argument @ Argument(_, _) => argument }
       val parallel = testExec.parallel && parallelExec
 
-      
       val testRunners = frameworks.map {
         case (name, framework) =>
           val args = arguments.collect {
@@ -248,8 +254,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         parallel,
         testRunners,
         testDefinitions,
-        converter,
-        sbtLogger
+        converter
       )
     }
 
@@ -258,7 +263,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         state.respondError(error.code, error.message)
         throw new MessageOnlyException(error.message)
       case Right(runner) =>
-        startServer(state, target, runner, sbtLogger)
+        startServer(state, target, runner, logger)
     }
   }
 
@@ -271,7 +276,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val converter = Keys.fileConverter.value
     val logger = Keys.streams.value.log
 
-    val runner = new AttachRemoteRunner(target, classpath, converter, logger)
+    val runner = new AttachRemoteRunner(target, classpath, converter)
     startServer(state, target, runner, logger)
   }
 
@@ -308,9 +313,5 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           case Failure(err) => Left(Error.invalidParams(err.getMessage))
         }
     }
-  }
-
-  private implicit class FilterableEither[E, T](val x: Either[E, T]) extends AnyVal {
-    def withFilter(p: T => Boolean): Either[E, T] = x
   }
 }

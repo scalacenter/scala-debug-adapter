@@ -1,6 +1,6 @@
-package dap
+package dap.internal
 
-final class Synchronized[A](var value: A) {
+private[dap] final class Synchronized[A](var value: A) {
   def transform(f: A => A): Unit =
     synchronized {
       value = f(value)
