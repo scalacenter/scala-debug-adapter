@@ -1,4 +1,4 @@
-package dap
+package ch.epfl.scala.debug
 
 object NoopLogger extends Logger {
   override def debug(msg: => String): Unit = ()

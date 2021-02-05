@@ -1,24 +1,22 @@
-package dap.internal
+package ch.epfl.scala.debug.internal
 
+import ch.epfl.scala.debug._
 import sbt.Def.Classpath
 import sbt.Tests.{Cleanup, Setup}
 import sbt.internal.bsp.BuildTargetIdentifier
 import sbt.internal.inc.{Analysis, SourceInfos}
 import sbt.io.IO
 import sbt.testing._
-import sbt.{ForkOptions, TestDefinition, TestFramework}
+import sbt.{ForkOptions, Keys, TestDefinition, TestFramework}
 import xsbti.FileConverter
 
-import java.io.{ObjectOutputStream, Serializable}
+import java.io.ObjectOutputStream
 import java.net.{ServerSocket, Socket}
 import java.nio.file.Path
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
-import sbt.Keys
-import scala.concurrent.Future
-import dap._
 
-private[dap] abstract class SbtDebuggeeRunner(classpath: Classpath, converter: FileConverter) extends DebuggeeRunner {
+private[debug] abstract class SbtDebuggeeRunner(classpath: Classpath, converter: FileConverter) extends DebuggeeRunner {
   private val analyses = classpath
     .flatMap(_.metadata.get(Keys.analysis))
     .map { case a: Analysis => a }
@@ -32,7 +30,7 @@ private[dap] abstract class SbtDebuggeeRunner(classpath: Classpath, converter: F
   }
 }
 
-private[dap] final class MainClassRunner(
+private[debug] final class MainClassRunner(
   target: BuildTargetIdentifier,
   forkOptions: ForkOptions,
   classpath: Classpath,
@@ -42,12 +40,12 @@ private[dap] final class MainClassRunner(
 )(implicit ec: ExecutionContext) extends SbtDebuggeeRunner(classpath, converter) {
   override def name: String = s"${getClass.getSimpleName}(${target.uri}, $mainClass)"
 
-  override def run(logger: DebuggeeLogger): CancelableFuture[Unit] = {
-    DebuggeeProcess.start(forkOptions, classpath.map(_.data), mainClass, args, logger)
+  override def run(listener: DebuggeeListener): CancelableFuture[Unit] = {
+    DebuggeeProcess.start(forkOptions, classpath.map(_.data), mainClass, args, listener)
   }
 }
 
-private[dap] final class TestSuitesRunner(
+private[debug] final class TestSuitesRunner(
     target: BuildTargetIdentifier,
     forkOptions: ForkOptions,
     classpath: Classpath,
@@ -59,7 +57,7 @@ private[dap] final class TestSuitesRunner(
     converter: FileConverter
 )(implicit executionContext: ExecutionContext) extends SbtDebuggeeRunner(classpath, converter) {
   override def name: String = s"${getClass.getSimpleName}(${target.uri}, [${tests.mkString(", ")}])"
-  override def run(logger: DebuggeeLogger): CancelableFuture[Unit] = {
+  override def run(listener: DebuggeeListener): CancelableFuture[Unit] = {
     object Acceptor extends Thread {
       val server = new ServerSocket(0)
       var socket: Socket = _
@@ -100,7 +98,7 @@ private[dap] final class TestSuitesRunner(
           }
           os.flush()
         } catch {
-          case NonFatal(cause) => close()
+          case NonFatal(_) => close()
         }
       }
 
@@ -122,10 +120,10 @@ private[dap] final class TestSuitesRunner(
     )
 
     // can't provide the loader for test classes, which is in another jvm
-    val dummyLoader = this.getClass().getClassLoader()
+    val dummyLoader = getClass.getClassLoader
 
     setups.foreach(_.setup(dummyLoader))
-    val process = DebuggeeProcess.start(forkOptions, fullClasspath, mainClass, args, logger)
+    val process = DebuggeeProcess.start(forkOptions, fullClasspath, mainClass, args, listener)
     process.future.onComplete { _=>
       Acceptor.close()
       cleanups.foreach(_.cleanup(dummyLoader))
@@ -135,13 +133,13 @@ private[dap] final class TestSuitesRunner(
   }
 }
 
-private[dap] final case class AttachRemoteRunner(
+private[debug] final class AttachRemoteRunner(
   target: BuildTargetIdentifier,
   classpath: Classpath,
   converter: FileConverter
 ) extends SbtDebuggeeRunner(classpath, converter) {
   override def name: String = s"${getClass.getSimpleName}(${target.uri})"
-  override def run(logger: DebuggeeLogger): CancelableFuture[Unit] = new CancelableFuture[Unit] {
+  override def run(listener: DebuggeeListener): CancelableFuture[Unit] = new CancelableFuture[Unit] {
     override def future: Future[Unit] = Future.successful(())
     override def cancel(): Unit = ()
   }

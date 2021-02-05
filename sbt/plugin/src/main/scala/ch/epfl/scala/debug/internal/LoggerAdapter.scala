@@ -1,8 +1,8 @@
-package dap.internal
+package ch.epfl.scala.debug.internal
 
-import dap.Logger
+import ch.epfl.scala.debug.Logger
 
-private[dap] class LoggerAdapter(underlying: sbt.Logger) extends Logger {
+private[debug] class LoggerAdapter(underlying: sbt.Logger) extends Logger {
   override def debug(msg: => String): Unit = underlying.debug(msg)
   override def info(msg: => String): Unit = underlying.info(msg)
   override def warn(msg: => String): Unit = underlying.warn(msg)

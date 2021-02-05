@@ -1,6 +1,6 @@
-package dap
+package ch.epfl.scala.debug
 
-import dap.internal.DebugSession
+import ch.epfl.scala.debug.internal.DebugSession
 
 import java.net.{InetSocketAddress, ServerSocket, URI}
 import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit}
@@ -49,7 +49,7 @@ final class DebugServer private (
     * Connect once and return a running session
     * In case of race condition with the [[close]] method, the session can be closed before returned
     */
-  private[dap] def connect(): DebugSession = {
+  private[debug] def connect(): DebugSession = {
     val socket = serverSocket.accept()
     val session = DebugSession(socket, runner, logger, autoCloseSession, gracePeriod)
     lock.synchronized {

@@ -1,10 +1,10 @@
-package dap.internal
+package ch.epfl.scala.debug.internal
 
 import sbt.internal.langserver.ErrorCodes
 
-private[dap] final case class Error(code: Long, message: String)
+private[debug] final case class Error(code: Long, message: String)
 
-private[dap] object Error {
+private[debug] object Error {
   def paramsMissing(method: String): Error =
     Error(ErrorCodes.InvalidParams, s"param is expected on '$method' method.")
   def invalidParams(msg: String): Error = Error(ErrorCodes.InvalidParams, msg)

@@ -1,4 +1,4 @@
-package dap
+package ch.epfl.scala.debug
 
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
 import sbt.io.IO
@@ -9,7 +9,7 @@ import java.util.concurrent.{Executors, TimeUnit, TimeoutException}
 import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
 
-import dap.internal.DebugSession
+import ch.epfl.scala.debug.internal.DebugSession
 
 object DebugServerSpec extends TestSuite {
   private val DefaultTimeout = Duration(2, TimeUnit.SECONDS)
@@ -108,7 +108,7 @@ object DebugServerSpec extends TestSuite {
 
     "should set debug address when debuggee starts the jvm" - {
       val tempDir = IO.temporaryDirectory
-      val runner = MainDebuggeeRunner.sleep(tempDir, NoopLogger)
+      val runner = MainDebuggeeRunner.sleep(tempDir)
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri, NoopLogger)
       try {
@@ -379,7 +379,7 @@ object DebugServerSpec extends TestSuite {
         client.disconnect(restart = false)
         
         assert(session.currentState == DebugSession.Stopped)
-        Await.result(runner.currentProcess.future(), DefaultTimeout)
+        Await.result(runner.currentProcess.future, DefaultTimeout)
       } finally {
         server.close()
         client.close()

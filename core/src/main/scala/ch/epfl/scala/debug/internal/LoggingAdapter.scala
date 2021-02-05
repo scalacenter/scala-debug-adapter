@@ -1,10 +1,10 @@
-package dap.internal
+package ch.epfl.scala.debug.internal
+
+import com.microsoft.java.debug.core.{Configuration, LoggerFactory}
 
 import java.util.logging.{Logger => JLogger, _}
-import com.microsoft.java.debug.core.LoggerFactory
-import com.microsoft.java.debug.core.Configuration
 
-private[dap] class LoggingAdapter(logger: dap.Logger) extends Handler {
+private[debug] class LoggingAdapter(logger: ch.epfl.scala.debug.Logger) extends Handler {
   /**
    * DAP server tends to send a lot of SocketClosed exceptions when the Debuggee process has exited. This helps us filter those logs
    */

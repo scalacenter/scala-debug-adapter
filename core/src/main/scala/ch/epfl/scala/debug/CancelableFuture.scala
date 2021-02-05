@@ -1,4 +1,4 @@
-package dap
+package ch.epfl.scala.debug
 
 import scala.concurrent.Future
 

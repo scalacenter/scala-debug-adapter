@@ -1,8 +1,8 @@
-package dap.internal
+package ch.epfl.scala.debug.internal
 
-private[dap] object DebugServerThreadPool {
+private[debug] object DebugServerThreadPool {
   private val nextThreadId = new java.util.concurrent.atomic.AtomicInteger(1)
-  private val threadGroup = Thread.currentThread.getThreadGroup()
+  private val threadGroup = Thread.currentThread.getThreadGroup
 
   private val threadFactory = new java.util.concurrent.ThreadFactory() {
     override def newThread(runnable: Runnable): Thread = {

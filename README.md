@@ -12,15 +12,15 @@ The library should be a depedency that [Bloop](https://github.com/scalacenter/bl
 
 # Development
 
-* [TestDebugClient](./core/src/test/scala/dap/TestDebugClient.scala) is a minimal debug client that is used to communicate with the real server via socket.
-* [MainDebuggeeRunner](core/src/test/scala/dap/MainDebuggeeRunner.scala) starts a real java process with debugging enabled so that the server can connect to it.
+* [TestDebugClient](./core/src/test/scala/ch.epfl.scala.debug/TestDebugClient.scala) is a minimal debug client that is used to communicate with the real server via socket.
+* [MainDebuggeeRunner](core/src/test/scala/ch.epfl.scala.debug/MainDebuggeeRunner.scala) starts a real java process with debugging enabled so that the server can connect to it.
 
 # References
 
 - [Bloop Debuggig Referece](scalacenter.github.io/bloop/docs/debugging-reference)
 - [Microsoft DAP for Java](https://github.com/microsoft/vscode-java-debug)
 - [DebugAdapterProvider](https://github.com/build-server-protocol/build-server-protocol/issues/145)
-- [Bloop's DAP](https://github.com/scalacenter/bloop/tree/master/frontend/src/main/scala/bloop/dap) &  [Bloop's DAP  Tests](https://github.com/scalacenter/bloop/tree/master/frontend/src/test/scala/bloop/dap)
+- [Bloop's DAP](https://github.com/scalacenter/bloop/tree/master/frontend/src/main/scala/bloop/ch.epfl.scala.debug) &  [Bloop's DAP  Tests](https://github.com/scalacenter/bloop/tree/master/frontend/src/test/scala/bloop/ch.epfl.scala.debug)
 
 # History
 

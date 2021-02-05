@@ -1,11 +1,11 @@
-package dap.internal
+package ch.epfl.scala.debug.internal
 
-import java.util.{Timer, TimerTask}
 import java.util.concurrent.TimeoutException
+import java.util.{Timer, TimerTask}
 import scala.concurrent.Promise
 import scala.concurrent.duration.Duration
 
-private[dap] object Scheduler {
+private[debug] object Scheduler {
   private val timer = new Timer("DAP Timeout Scheduler", true)
 
   def timeout[T](promise: Promise[T], duration: Duration): Promise[T] = {
