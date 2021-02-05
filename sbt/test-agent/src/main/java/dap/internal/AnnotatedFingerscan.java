@@ -1,4 +1,4 @@
-package dap.internal;
+package ch.epfl.scala.debug.internal;
 
 import sbt.testing.AnnotatedFingerprint;
 

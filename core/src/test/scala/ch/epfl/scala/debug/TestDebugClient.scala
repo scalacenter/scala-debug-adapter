@@ -1,4 +1,4 @@
-package dap
+package ch.epfl.scala.debug
 
 import com.google.gson.JsonObject
 import com.google.gson.internal.LinkedTreeMap

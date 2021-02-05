@@ -1,6 +1,6 @@
-package dap
+package ch.epfl.scala.debug.internal
 @target(Scala)
-@codecPackage("dap.codec")
+@codecPackage("ch.epfl.scala.debug.internal.codec")
 @fullCodec("JsonProtocol")
 
 type DebugSessionAddress {

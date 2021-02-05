@@ -1,17 +1,14 @@
-package dap.internal
+package ch.epfl.scala.debug.internal
 
-import dap._
-
+import ch.epfl.scala.debug._
 import com.microsoft.java.debug.core.adapter.{IProviderContext, ProtocolServer => DapServer}
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent
 import com.microsoft.java.debug.core.protocol.Messages.{Request, Response}
 import com.microsoft.java.debug.core.protocol.Requests._
 import com.microsoft.java.debug.core.protocol.{Events, JsonUtils}
-import com.microsoft.java.debug.core.{Configuration, LoggerFactory}
 
 import java.net.{InetSocketAddress, Socket}
 import java.util.concurrent.{CancellationException, TimeoutException}
-import java.util.logging.{Handler, Level, LogRecord, Logger => JLogger}
 import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
@@ -22,12 +19,12 @@ import scala.util.{Failure, Success, Try}
  *  The debuggee is started/closed together with the session.
  *
  *  This approach makes it necessary to handle the "launch" requests as the "attach" ones.
- *  The JDI address of the debuggee is obtained through the [[DebugSessionCallbacks]]
+ *  The JDI address of the debuggee is obtained through the [[DebuggeeListener]]
  * 
  *  If autoCloseSession then the session is closed automatically after the debuggee has terminated
  *  Otherwise a disconnect request should be received or the close method should be called manually
  */
-private[dap] final class DebugSession private (
+private[debug] final class DebugSession private (
     socket: Socket,
     runner: DebuggeeRunner,
     context: IProviderContext,
@@ -53,8 +50,8 @@ private[dap] final class DebugSession private (
   private val exitStatusPromise = Promise[DebugSession.ExitStatus]()
   private val debugState: Synchronized[DebugSession.State] = new Synchronized(DebugSession.Ready)
 
-  private[dap] def currentState: DebugSession.State = debugState.value
-  private[dap] def getDebugeeAddress: Future[InetSocketAddress] = debuggeeAddress.future
+  private[debug] def currentState: DebugSession.State = debugState.value
+  private[debug] def getDebugeeAddress: Future[InetSocketAddress] = debuggeeAddress.future
 
   /**
    * Schedules the start of the debugging session.
@@ -63,11 +60,11 @@ private[dap] final class DebugSession private (
    * non-blocking way: the debuggee process is started in the background and
    * the DAP server starts listening to client requests in an IO thread.
    */
-  private[dap] def start(): Unit = {
+  private[debug] def start(): Unit = {
     debugState.transform {
       case DebugSession.Ready =>
         Future(run()) // start listening
-        val debuggee = runner.run(Callbacks)
+        val debuggee = runner.run(Listener)
         
         debuggee.future
           .onComplete { result =>
@@ -164,7 +161,7 @@ private[dap] final class DebugSession private (
             cancelPromises(new CancellationException("Client disconnected"))
             debuggee.cancel()
             (DebugSession.Stopped, true)
-          case otherState => (DebugSession.Stopped, false)
+          case _ => (DebugSession.Stopped, false)
         }
         
         if (dispatchRequest) {
@@ -217,7 +214,7 @@ private[dap] final class DebugSession private (
     attached.tryFailure(cause)
   }
 
-  private object Callbacks extends DebuggeeLogger {
+  private object Listener extends DebuggeeListener {
     def onListening(address: InetSocketAddress): Unit = {
       debuggeeAddress.success(address)
     }
@@ -234,7 +231,7 @@ private[dap] final class DebugSession private (
   }
 }
 
-private[dap] object DebugSession {
+private[debug] object DebugSession {
   sealed trait ExitStatus
   
   /**

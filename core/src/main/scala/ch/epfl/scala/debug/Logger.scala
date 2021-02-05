@@ -1,4 +1,4 @@
-package dap
+package ch.epfl.scala.debug
 
 trait Logger {
   def debug(msg: => String): Unit

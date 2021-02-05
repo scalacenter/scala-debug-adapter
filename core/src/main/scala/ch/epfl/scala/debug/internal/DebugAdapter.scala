@@ -1,8 +1,7 @@
-package dap.internal
+package ch.epfl.scala.debug.internal
 
-import dap.{DebuggeeRunner, Logger}
-
-import com.microsoft.java.debug.core.IEvaluatableBreakpoint
+import ch.epfl.scala.debug.{DebuggeeRunner, Logger}
+import com.microsoft.java.debug.core.{DebugSettings, IEvaluatableBreakpoint}
 import com.microsoft.java.debug.core.adapter._
 import com.microsoft.java.debug.core.protocol.Types
 import com.sun.jdi._
@@ -17,9 +16,8 @@ import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 import scala.collection.mutable
 import scala.util.control.NonFatal
-import com.microsoft.java.debug.core.DebugSettings
 
-private[dap] object DebugAdapter {
+private[debug] object DebugAdapter {
   /**
    * Disable evaluation of variable's `toString` methods
    * since code evaluation is not supported.
@@ -102,7 +100,7 @@ private[dap] object DebugAdapter {
         columns: Array[Int]
     ): Array[String] = {
       val uri = URI.create(uriRepr)
-      if (uri.getScheme == "dap-fqcn") {
+      if (uri.getScheme == "ch.epfl.scala.debug-fqcn") {
         val resolvedName = uri.getSchemeSpecificPart
         lines.map(_ => resolvedName)
       } else {

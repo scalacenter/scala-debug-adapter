@@ -1,23 +1,24 @@
-package dap.internal
+package ch.epfl.scala.debug.internal
 
-import scala.sys.process.ProcessLogger
+import ch.epfl.scala.debug.DebuggeeListener
+
 import java.net.InetSocketAddress
-import dap.DebuggeeLogger
+import scala.sys.process.ProcessLogger
 
-private class DebuggeeProcessLogger(callbacks: DebuggeeLogger) extends ProcessLogger {
+private class DebuggeeProcessLogger(listener: DebuggeeListener) extends ProcessLogger {
   private final val JDINotificationPrefix = "Listening for transport dt_socket at address: "
 
   override def out(line: => String): Unit = {
     if (line.startsWith(JDINotificationPrefix)) {
       val port = Integer.parseInt(line.drop(JDINotificationPrefix.length))
       val address = new InetSocketAddress("127.0.0.1", port)
-      callbacks.onListening(address)
+      listener.onListening(address)
     } else {
-      callbacks.out(line)
+      listener.out(line)
     }
   }
   override def err(line: => String): Unit = {
-    callbacks.err(line)
+    listener.err(line)
   }
   override def buffer[T](f: => T): T = f
 }

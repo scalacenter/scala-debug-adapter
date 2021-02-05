@@ -1,33 +1,22 @@
-package dap
+package ch.epfl.scala.debug
 
-import dap.internal._
-
+import ch.epfl.scala.debug.internal._
+import ch.epfl.scala.debug.internal.codec.JsonProtocol._
+import sbt.Tests._
 import sbt._
-import sbt.internal.server.{ServerHandler, ServerIntent}
 import sbt.internal.bsp._
-import sbt.internal.protocol.JsonRpcRequestMessage
-import sjsonnew.shaded.scalajson.ast.unsafe.JValue
-import scala.util.{Failure, Success}
-import sbt.internal.inc.Analysis
-import sbt.internal.util.complete.Parser
-import sbt.internal.util.complete.Parsers
-import sjsonnew.support.scalajson.unsafe.{CompactPrinter, Converter, Parser => JsonParser}
-import scala.concurrent.ExecutionContext
-import java.io.File
-import dap.codec.JsonProtocol._
-import sbt.Defaults.createTestRunners
-import sbt.Keys.{parallelExecution, tags, testOptions}
 import sbt.internal.bsp.codec.JsonProtocol._
-import sbt.internal.util.Terminal
-import sbt.io.IO
-import sbt.testing.Framework
-import scala.collection.mutable
+import sbt.internal.protocol.JsonRpcRequestMessage
+import sbt.internal.server.{ServerHandler, ServerIntent}
+import sbt.internal.util.complete.{Parser, Parsers}
 import sjsonnew.BasicJsonProtocol
-import sbt.Tests.InProcess
-import sbt.Tests.SubProcess
-import sbt.Tests.Setup
-import sbt.Tests.Cleanup
-import sbt.Tests.Argument
+import sjsonnew.shaded.scalajson.ast.unsafe.JValue
+import sjsonnew.support.scalajson.unsafe.{CompactPrinter, Converter, Parser => JsonParser}
+
+import java.io.File
+import scala.collection.mutable
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
+import scala.util.{Failure, Success}
 
 object DebugAdapterPlugin extends sbt.AutoPlugin {
   private final val DebugSessionStart: String = "debugSession/start"
@@ -42,12 +31,12 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   // each build target can only have one debug server
   private val debugServers = mutable.Map[BuildTargetIdentifier, DebugServer]()
 
-  private val jsonParser: Parser[Result[JValue]] = (Parsers.any *)
+  private val jsonParser: Parser[Result[JValue]] = Parsers.any.*
     .map(_.mkString)
     .map(JsonParser.parseFromString)
     .map(_.toEither.left.map(Error.parseError))
 
-  private implicit val executionContext =
+  private implicit val executionContext: ExecutionContextExecutor =
     ExecutionContext.fromExecutor(DebugServerThreadPool.executor)
 
   object autoImport {
@@ -216,10 +205,10 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           s"expected data of kind ${DataKind.ScalaTestSuites}: ${cause.getMessage}"
         )
       }
-      testGroup <- testGrouping.filter { g =>
+      testGroup <- testGrouping.find { g =>
         val testSet = g.tests.map(_.name).toSet
         testSuites.forall(testSet.contains)
-      }.headOption.toRight {
+      }.toRight {
         Error.invalidParams("no matching test group")
       }
     } yield {
@@ -307,7 +296,6 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     r.params match {
       case None => Left(Error.paramsMissing(r.method))
       case Some(value: JValue) =>
-        import dap.codec.JsonProtocol._
         Converter.fromJson[DebugSessionParams](value) match {
           case Success(params: DebugSessionParams) => Right(params)
           case Failure(err) => Left(Error.invalidParams(err.getMessage))

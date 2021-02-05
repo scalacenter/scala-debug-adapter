@@ -5,7 +5,7 @@
  * Licensed under Apache License 2.0 (see LICENSE)
  */
 
-package dap.internal;
+package ch.epfl.scala.debug.internal;
 
 import java.io.Serializable;
 

@@ -1,14 +1,12 @@
-package dap.internal
+package ch.epfl.scala.debug.internal
 
+import ch.epfl.scala.debug.{CancelableFuture, DebuggeeListener}
 import sbt.ForkOptions
 import sbt.io.syntax._
 
 import java.io.File
 import scala.concurrent.{Future, Promise}
 import scala.sys.process.Process
-
-import dap.CancelableFuture
-import dap.DebuggeeLogger
 
 private class DebuggeeProcess(process: Process) extends CancelableFuture[Unit] {
   private val exited = Promise[Unit]()
@@ -32,7 +30,7 @@ private object DebuggeeProcess {
     classpath: Seq[java.io.File],
     mainClass: String,
     arguments: Seq[String],
-    logger: DebuggeeLogger
+    listener: DebuggeeListener
   ): DebuggeeProcess = {
     val javaHome = forkOptions.javaHome.getOrElse(new File(System.getProperty("java.home")))
     val javaBin = (javaHome / "bin" / "java").getAbsolutePath
@@ -46,7 +44,7 @@ private object DebuggeeProcess {
       arguments
     
     val builder = Process(command, forkOptions.workingDirectory, envVars.toSeq: _*)
-    val processLogger = new DebuggeeProcessLogger(logger)
+    val processLogger = new DebuggeeProcessLogger(listener)
     val process = builder.run(processLogger)
 
     new DebuggeeProcess(process)
