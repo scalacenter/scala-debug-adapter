@@ -12,12 +12,9 @@ import scala.concurrent.duration._
 import ch.epfl.scala.debug.internal.DebugSession
 
 object DebugServerSpec extends TestSuite {
-  private val DefaultTimeout = Duration(2, TimeUnit.SECONDS)
-  /** the server needs two threads:
-    * - the first one for listening
-    * - the second one for delayed responses of the launch and configurationDone requests
-    */
-  val executorService  = Executors.newFixedThreadPool(2)
+  val DefaultTimeout = Duration(2, TimeUnit.SECONDS)
+  // the server needs only one thread for delayed responses of the launch and configurationDone requests
+  val executorService  = Executors.newFixedThreadPool(1)
   implicit val ec = ExecutionContext.fromExecutorService(executorService)
 
   def tests: Tests = Tests {

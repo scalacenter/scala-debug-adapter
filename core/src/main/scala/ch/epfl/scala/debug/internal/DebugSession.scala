@@ -63,7 +63,7 @@ private[debug] final class DebugSession private (
   private[debug] def start(): Unit = {
     debugState.transform {
       case DebugSession.Ready =>
-        Future(run()) // start listening
+        DebugSession.fork(run)
         val debuggee = runner.run(Listener)
         
         debuggee.future
@@ -264,6 +264,13 @@ private[debug] object DebugSession {
     val context = DebugAdapter.context(runner, logger)
     val loggingHandler = new LoggingAdapter(logger)
     new DebugSession(socket, runner, context, logger, loggingHandler, autoClose, gracePeriod)
+  }
+
+  private def fork(f: () => Unit): Unit = {
+    val thread = new Thread {
+      override def run(): Unit = f()
+    }
+    thread.start()
   }
 
   private def toAttachRequest(seq: Int, address: InetSocketAddress): Request = {
