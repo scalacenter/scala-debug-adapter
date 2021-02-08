@@ -58,7 +58,7 @@ lazy val sbtPlugin = project
     name := "sbt-debug-adapter",
     Compile / generateContrabands / contrabandFormatsForType := ContrabandConfig.getFormats,
     scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
-    scriptedBufferLog := false,
+    // scriptedBufferLog := false,
     scriptedDependencies := {
       publishLocal.value
       (core / publishLocal).value
