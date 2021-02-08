@@ -1,5 +1,4 @@
 import scala.concurrent.ExecutionContext
-import scala.util.control.NonFatal
 import ch.epfl.scala.debug.testing.TestDebugClient
 
 val checkDebugSession = inputKey[Unit]("Check the main class debug session")
@@ -22,7 +21,6 @@ checkDebugSession := {
     client.configurationDone()
     val stopped1 = client.stopped
     val threadId = stopped1.threadId
-    assert(stopped1.reason == "breakpoint")
     
     client.continue(threadId)
     val stopped2 = client.stopped
