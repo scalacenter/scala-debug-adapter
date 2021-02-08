@@ -156,25 +156,20 @@ private[debug] final class DebugSession private (
           }
 
       case "disconnect" =>
-        val dispatchRequest = debugState.run {
+        debugState.transform {
           case DebugSession.Started(debuggee) =>
             cancelPromises(new CancellationException("Client disconnected"))
+            exitStatusPromise.trySuccess {
+              if (DebugSession.shouldRestart(request)) DebugSession.Restarted
+              else DebugSession.Disconnected
+            }
+            super.dispatchRequest(request)
             debuggee.cancel()
-            (DebugSession.Stopped, true)
-          case _ => (DebugSession.Stopped, false)
-        }
-        
-        if (dispatchRequest) {
-          super.dispatchRequest(request)
-        } else {
-          // TODO clarify why request is not dispatched
-          val ack = new Response(request.seq, request.command, true)
-          sendResponse(ack)
-        }
-
-        exitStatusPromise.trySuccess {
-          if (DebugSession.shouldRestart(request)) DebugSession.Restarted
-          else DebugSession.Disconnected
+            DebugSession.Stopped
+          case _ =>
+            val ack = new Response(request.seq, request.command, true)
+            sendResponse(ack)
+            DebugSession.Stopped
         }
       
       case _ => super.dispatchRequest(request)
