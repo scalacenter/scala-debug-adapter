@@ -1,4 +1,2 @@
-> Compile / startRemoteDebugSession
-> Compile / stopDebugSession
-> Test / startRemoteDebugSession
-> Test / stopDebugSession
+> checkDebugSession
+> stopDebugSession

@@ -39,6 +39,14 @@ class TestDebugClient(socket: Socket, timeout: Duration)(implicit ec: ExecutionC
     sendRequest(request, timeout)
   }
 
+  def attach(hostName: String, port: Int): Messages.Response = {
+    val arguments = new AttachArguments()
+    arguments.hostName = hostName
+    arguments.port = port
+    val request = createRequest(Command.ATTACH, arguments)
+    sendRequest(request, timeout)
+  }
+
   def configurationDone(): Messages.Response = {
     val request = createRequest(Command.CONFIGURATIONDONE, new ConfigurationDoneArguments())
     sendRequest(request, timeout)
