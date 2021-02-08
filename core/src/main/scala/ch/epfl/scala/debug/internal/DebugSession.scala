@@ -200,7 +200,9 @@ private[debug] final class DebugSession private (
   }
 
   protected override def sendEvent(event: Events.DebugEvent): Unit = {
-    try { super.sendEvent(event) }
+    try {
+      super.sendEvent(event)
+    }
     finally {
       if (event.`type` == "terminated") terminatedEvent.trySuccess(())
     }
