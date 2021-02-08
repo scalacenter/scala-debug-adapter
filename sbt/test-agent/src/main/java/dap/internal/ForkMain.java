@@ -37,10 +37,6 @@ public final class ForkMain {
   public static void main(final String[] args, ClassLoader classLoader) throws Exception {
     final Socket socket = new Socket(InetAddress.getByName(null), Integer.valueOf(args[0]));
     final ObjectInputStream is = new ObjectInputStream(socket.getInputStream());
-    // os = new ObjectOutputStream(socket.getOutputStream());
-    // Must flush the header that the constructor writes, otherwise the ObjectInputStream on the
-    // other end may block indefinitely
-    // os.flush();
     try {
       new Run().run(is, classLoader);
     } finally {
@@ -208,7 +204,6 @@ public final class ForkMain {
 
         Runtime.getRuntime().removeShutdownHook(callDoneOnShutdown);
       }
-      is.readObject();
     }
 
     private void runTestTasks(

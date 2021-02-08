@@ -1,2 +1,0 @@
-> 'IntegrationTest / startTestSuitesDebugSession ["BreakpointSpec"]'
-> IntegrationTest / stopDebugSession

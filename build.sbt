@@ -25,7 +25,7 @@ lazy val core = project
       Dependencies.javaDebug,
       Dependencies.utest % Test,
       Dependencies.scalaCompiler % Test,
-      Dependencies.io % Test
+      Dependencies.sbtIo % Test
     ),
     testFrameworks += new TestFramework("utest.runner.Framework"),
     // Test / javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=1044",
@@ -58,7 +58,7 @@ lazy val sbtPlugin = project
     name := "sbt-debug-adapter",
     Compile / generateContrabands / contrabandFormatsForType := ContrabandConfig.getFormats,
     scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
-    // scriptedBufferLog := false,
+    scriptedBufferLog := false,
     scriptedDependencies := {
       publishLocal.value
       (core / publishLocal).value
