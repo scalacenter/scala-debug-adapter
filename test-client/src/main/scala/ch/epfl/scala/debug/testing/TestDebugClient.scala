@@ -68,6 +68,19 @@ class TestDebugClient(socket: Socket, timeout: Duration)(implicit ec: ExecutionC
     getBody[SetBreakpointsResponseBody](response).breakpoints
   }
 
+  def setBreakpoints(className: String, lines: Array[Int]): Array[Breakpoint] = {
+    val args = new SetBreakpointArguments()
+    val source = new Types.Source()
+    source.name = className
+    source.path  = "dap-fqcn:" + className
+    source.sourceReference = 0
+    args.source = source
+    args.breakpoints = lines.map(l => new SourceBreakpoint(l, null, null))
+    val request = createRequest(Command.SETBREAKPOINTS, args)
+    val response = sendRequest(request, timeout)
+    getBody[SetBreakpointsResponseBody](response).breakpoints
+  }
+
   def stackTrace(threadId: Long): StackTraceResponseBody = {
     val args = new StackTraceArguments()
     args.threadId = threadId

@@ -12,6 +12,7 @@ import scala.concurrent.duration._
 
 import ch.epfl.scala.debug.testing.TestDebugClient
 import ch.epfl.scala.debug.internal.DebugSession
+import java.nio.file.Paths
 
 object DebugServerSpec extends TestSuite {
   val DefaultTimeout = Duration(2, TimeUnit.SECONDS)
@@ -239,7 +240,7 @@ object DebugServerSpec extends TestSuite {
       }
     }
 
-    "should support scala breakpoints" - {
+    "should support breakpoints in scala sources" - {
       val tempDir = IO.createTemporaryDirectory
       val runner = MainDebuggeeRunner.scalaBreakpointTest(tempDir)
       val server = DebugServer(runner, NoopLogger)
@@ -250,6 +251,7 @@ object DebugServerSpec extends TestSuite {
         client.launch()
         
         val breakpoints = client.setBreakpoints(runner.source, Array(3, 11, 18, 12, 7))
+        assert(breakpoints.size == 5)
         assert(breakpoints.forall(_.verified))
         
         client.configurationDone()
@@ -287,7 +289,41 @@ object DebugServerSpec extends TestSuite {
       }
     }
 
-    "should support java breakpoints" - {
+    "should support breakpoints in fully qualified classes" - {
+      val tempDir = IO.createTemporaryDirectory
+      val runner = MainDebuggeeRunner.scalaBreakpointTest(tempDir)
+      val server = DebugServer(runner, NoopLogger)
+      val client = TestDebugClient.connect(server.uri)
+      try {
+        server.connect()
+        client.initialize()
+        client.launch()
+        
+        val breakpoints = client.setBreakpoints(runner.mainClass, Array(3, 7))
+        assert(breakpoints.size == 2)
+        assert(breakpoints.forall(_.verified))
+        
+        client.configurationDone()
+        val stopped1 = client.stopped
+        val threadId = stopped1.threadId
+        assert(stopped1.reason == "breakpoint")
+        
+        client.continue(threadId)
+        val stopped2 = client.stopped
+        assert(stopped2.reason == "breakpoint")
+        assert(stopped2.threadId == threadId)
+        
+        client.continue(threadId)
+        client.exited
+        client.terminated
+      } finally {
+        server.close()
+        client.close()
+        IO.delete(tempDir)
+      }
+    }
+
+    "should support breakpoints in java classes" - {
       val tempDir = IO.createTemporaryDirectory
       val runner = MainDebuggeeRunner.javaBreakpointTest(tempDir)
       val server = DebugServer(runner, NoopLogger)
@@ -297,6 +333,7 @@ object DebugServerSpec extends TestSuite {
         client.initialize()
         client.launch()
         val breakpoints = client.setBreakpoints(runner.source, Array(3, 9, 14, 6))
+        assert(breakpoints.size == 4)
         assert(breakpoints.forall(_.verified))
         
         client.configurationDone()

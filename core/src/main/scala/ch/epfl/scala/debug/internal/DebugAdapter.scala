@@ -100,7 +100,7 @@ private[debug] object DebugAdapter {
         columns: Array[Int]
     ): Array[String] = {
       val uri = URI.create(uriRepr)
-      if (uri.getScheme == "ch.epfl.scala.debug-fqcn") {
+      if (uri.getScheme == "dap-fqcn") {
         val resolvedName = uri.getSchemeSpecificPart
         lines.map(_ => resolvedName)
       } else {

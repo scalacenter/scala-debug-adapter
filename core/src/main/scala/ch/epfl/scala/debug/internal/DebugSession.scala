@@ -213,7 +213,7 @@ private[debug] final class DebugSession private (
 
   private object Listener extends DebuggeeListener {
     def onListening(address: InetSocketAddress): Unit = {
-      debuggeeAddress.success(address)
+      debuggeeAddress.trySuccess(address)
     }
 
     def out(line: String): Unit = {
