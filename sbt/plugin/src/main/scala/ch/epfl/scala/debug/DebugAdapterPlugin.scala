@@ -14,9 +14,9 @@ import sjsonnew.shaded.scalajson.ast.unsafe.JValue
 import sjsonnew.support.scalajson.unsafe.{CompactPrinter, Converter, Parser => JsonParser}
 
 import java.io.File
-import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 import scala.util.{Failure, Success}
+import scala.collection.concurrent.TrieMap
 
 object DebugAdapterPlugin extends sbt.AutoPlugin {
   private final val DebugSessionStart: String = "debugSession/start"
@@ -29,7 +29,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   }
 
   // each build target can only have one debug server
-  private val debugServers = mutable.Map[BuildTargetIdentifier, DebugServer]()
+  private val debugServers = TrieMap[BuildTargetIdentifier, DebugServer]()
 
   private val jsonParser: Parser[Result[JValue]] = Parsers.any.*
     .map(_.mkString)
