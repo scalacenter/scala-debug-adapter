@@ -6,6 +6,14 @@
 
 Implementation of the [Debug Adapter Protocol](https://microsoft.github.io/debug-adapter-protocol/) for Scala
 
+# SBT Plugin
+
+As a global plugin use `~/.sbt/1.0/plugins/plugins.sbt`, otherwise add to your local project (e.g. `project/plugins.sbt`):
+
+```scala
+addSbtPlugin("ch.epfl.scala" % "sbt-debug-adapter" % "1.0.0-SNAPSHOT")
+```
+
 # Project Goals
 
 The library should be a depedency that [Bloop](https://github.com/scalacenter/bloop), [sbt](https://github.com/sbt/sbt), [Mill](https://github.com/lihaoyi/mill), or other [BSP](https://github.com/build-server-protocol/build-server-protocol) servers can import and use to implement [`debugSession/start`](https://github.com/build-server-protocol/build-server-protocol/blob/master/bsp4s/src/main/scala/ch/epfl/scala/bsp/endpoints/Endpoints.scala#L72) in BSP.
