@@ -39,8 +39,6 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   private implicit val executionContext: ExecutionContextExecutor =
     ExecutionContext.fromExecutor(DebugServerThreadPool.executor)
 
-  private val debugSessionAssertion = settingKey[Boolean]("Ensure that JDI tools are loaded").withRank(KeyRanks.Invisible)
-
   object autoImport {
     val startMainClassDebugSession = inputKey[URI]("Start a debug session for running a scala main class").withRank(KeyRanks.DTask)
     val startTestSuitesDebugSession = inputKey[URI]("Start a debug session for running test suites").withRank(KeyRanks.DTask)
@@ -53,7 +51,10 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   override def trigger = allRequirements
 
   override def buildSettings: Seq[Def.Setting[_]] = Seq(
-    debugSessionAssertion := assertJDITools(Keys.sLog.value),
+    Keys.initialize := {
+      val _ = Keys.initialize.value
+      assertJDITools(Keys.sLog.value)
+    },
     Keys.serverHandlers += {
       val loadedBuild = Keys.loadedBuild.value
       val configMap = loadedBuild.allProjectRefs
@@ -92,11 +93,10 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     stopDebugSession := stopSessionTask.value
   )
 
-  private def assertJDITools(logger: sbt.util.Logger): Boolean = {
+  private def assertJDITools(logger: sbt.util.Logger): Unit = {
     val loader = getClass().getClassLoader()
     try {
       loader.loadClass("com.sun.jdi.Value")
-      true
     } catch {
       case c: ClassNotFoundException =>
         logger.warn("The sbt-debug-adapter cannot work because the JDI tools are not loaded.")
@@ -107,7 +107,6 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
              |
              |""".stripMargin
         )
-        false
     }
   }
 
