@@ -1,5 +1,5 @@
 import scala.concurrent.ExecutionContext
-import ch.epfl.scala.debug.testing.TestDebugClient
+import ch.epfl.scala.debugadapter.testing.TestDebugClient
 
 val checkDebugSession = inputKey[Unit]("Check the main class debug session")
 

@@ -12,8 +12,8 @@ The library should be a depedency that [Bloop](https://github.com/scalacenter/bl
 
 # Development
 
-* [TestDebugClient](./core/src/test/scala/ch/epfl/scala/debug/TestDebugClient.scala) is a minimal debug client that is used to communicate with the real server via socket.
-* [MainDebuggeeRunner](core/src/test/scala/ch/epfl/scala/debug/MainDebuggeeRunner.scala) starts a real java process with debugging enabled so that the server can connect to it.
+* [TestDebugClient](./test-client/src/main/scala/ch/epfl/scala/debugadapter/testing/TestDebugClient.scala) is a minimal debug client that is used to communicate with the real server via socket.
+* [MainDebuggeeRunner](core/src/test/scala/ch/epfl/scala/debugadapter/MainDebuggeeRunner.scala) starts a real java process with debugging enabled so that the server can connect to it.
 
 # References
 

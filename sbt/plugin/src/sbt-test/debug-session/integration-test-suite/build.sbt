@@ -1,6 +1,6 @@
-import ch.epfl.scala.debug.DebugAdapterPlugin
+import ch.epfl.scala.debugadapter.sbtplugin.DebugAdapterPlugin
 import scala.concurrent.ExecutionContext
-import ch.epfl.scala.debug.testing.TestDebugClient
+import ch.epfl.scala.debugadapter.testing.TestDebugClient
 
 val checkDebugSession = inputKey[Unit]("Check the integration test suite debug session")
 
