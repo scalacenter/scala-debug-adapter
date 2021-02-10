@@ -8,4 +8,4 @@ val pluginVersion = sys.props.get("plugin.version")
   }
 
 addSbtPlugin("ch.epfl.scala" % "sbt-debug-adapter" % pluginVersion)
-libraryDependencies += "ch.epfl.scala" %% "scala-debug-adapter-test-client" % pluginVersion
+libraryDependencies += "ch.epfl.scala" %% "debug-adapter-test-client" % pluginVersion
