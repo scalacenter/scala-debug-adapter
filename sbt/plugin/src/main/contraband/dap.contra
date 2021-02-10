@@ -1,6 +1,6 @@
-package ch.epfl.scala.debug.internal
+package ch.epfl.scala.debugadapter.sbtplugin.internal
 @target(Scala)
-@codecPackage("ch.epfl.scala.debug.internal.codec")
+@codecPackage("ch.epfl.scala.debugadapter.sbtplugin.internal")
 @fullCodec("JsonProtocol")
 
 type DebugSessionAddress {
