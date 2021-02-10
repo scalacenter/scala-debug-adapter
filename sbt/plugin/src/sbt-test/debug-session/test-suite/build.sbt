@@ -18,8 +18,11 @@ checkDebugSession := {
     client.initialize()
     client.launch()
     
-    client.setBreakpoints(mainSource, Array(3))
-    client.setBreakpoints(specSource, Array(6, 8))
+    val breakpoints = client.setBreakpoints(mainSource, Array(3)) ++
+      client.setBreakpoints(specSource, Array(6, 8))
+    assert(breakpoints.size == 3)
+    assert(breakpoints.forall(_.verified))
+
     client.configurationDone()
 
     val threadId = client.stopped.threadId
