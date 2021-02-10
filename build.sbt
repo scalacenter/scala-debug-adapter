@@ -43,7 +43,7 @@ lazy val core = project
 lazy val testClient = project
   .in(file("test-client"))
   .settings(
-    name := "scala-debug-adapter-test-client",
+    name := "debug-adapter-test-client",
     libraryDependencies ++= List(
       Dependencies.asm,
       Dependencies.asmUtil,
