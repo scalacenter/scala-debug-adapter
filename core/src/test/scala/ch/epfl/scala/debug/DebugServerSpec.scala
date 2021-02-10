@@ -377,7 +377,6 @@ object DebugServerSpec extends TestSuite {
         client.initialize()
         client.disconnect(restart = false)
         
-        assert(session.currentState == DebugSession.Stopped)
         Await.result(runner.currentProcess.future, DefaultTimeout)
       } finally {
         server.close()
@@ -424,6 +423,9 @@ object DebugServerSpec extends TestSuite {
           case _: TimeoutException => ()
           case _: ConnectException => ()
           case _: SocketTimeoutException => ()
+          case e: SocketException =>
+            val msg = e.getMessage
+            assert(msg.endsWith("(Connection refused)") || msg.endsWith("(Connection Failed)"))
         } finally {
           if (client2 != null) client2.close()
         }
