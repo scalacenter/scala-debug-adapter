@@ -71,7 +71,7 @@ lazy val sbtPlugin = project
       (testAgent / publishLocal).value
     }
   )
-  .dependsOn(core, testAgent)
+  .dependsOn(core, testAgent % Test)
 
 // copy of https://github.com/sbt/sbt/tree/develop/testing/agent/src/main/java/sbt
 lazy val testAgent = project
