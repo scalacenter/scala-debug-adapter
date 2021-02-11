@@ -13,7 +13,7 @@ inThisBuild(
 
 lazy val root = project
   .in(file("."))
-  .aggregate(core, sbtPlugin)
+  .aggregate(core, sbtPlugin, testAgent)
   .settings(
     PgpKeys.publishSigned := {},
     publishLocal := {}
@@ -71,13 +71,13 @@ lazy val sbtPlugin = project
       (testAgent / publishLocal).value
     }
   )
-  .dependsOn(core, testAgent % Test)
+  .dependsOn(core, testAgent)
 
 // copy of https://github.com/sbt/sbt/tree/develop/testing/agent/src/main/java/sbt
 lazy val testAgent = project
   .in(file("sbt/test-agent"))
   .settings(
-    name := "debug-test-agent",
+    name := "sbt-debug-test-agent",
     autoScalaLibrary := false,
     crossPaths := false,
     libraryDependencies += Dependencies.sbtTestInterface
