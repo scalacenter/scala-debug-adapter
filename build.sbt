@@ -1,22 +1,27 @@
-
-
 import java.io.File
 
 inThisBuild(
   Seq(
     organization := "ch.epfl.scala",
-    version := "1.0.0-SNAPSHOT",
+    homepage := Some(url("https://github.com/scalacenter/scala-debug-adapter")),
     onLoadMessage := s"Welcome to scala-debug-adapter ${version.value}",
-    scalaVersion := Dependencies.scala212,
-    // resolvers ++= Seq(
-    //   Resolver.bintrayRepo("scalacenter", "releases")
-    // )
+    licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
+    developers := Developers.list,
+    scalaVersion := Dependencies.scala212
   )
 )
 
+lazy val root = project
+  .in(file("."))
+  .aggregate(core, sbtPlugin)
+  .settings(
+    PgpKeys.publishSigned := {},
+    publishLocal := {}
+  )
+
 lazy val core = project
-  .enablePlugins(SbtJdiTools, BuildInfoPlugin)
   .in(file("core"))
+  .enablePlugins(SbtJdiTools, BuildInfoPlugin)
   .settings(
     name := "scala-debug-adapter",
     libraryDependencies ++= List(
