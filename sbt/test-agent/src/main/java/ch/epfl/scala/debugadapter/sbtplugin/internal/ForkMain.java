@@ -85,24 +85,28 @@ public final class ForkMain {
     }
 
     private void logDebug(final String message) {
-      System.out.println(message);
+      // TODO: use sbt log level to activate debug logging
+      // System.out.println("[DEBUG] " + message);
     }
 
     private void logInfo(final String message) {
-      System.out.println(message);
+      System.out.println("[INFO] " + message);
     }
 
     private void logWarn(final String message) {
-      System.out.println(message);
+      System.out.println("[WARN] " + message);
     }
 
     private void logError(final String message) {
-      System.err.println(message);
+      System.err.println("[ERROR] " + message);
     }
 
-    private sbt.testing.Logger remoteLogger(final boolean ansiCodesSupported) {
+    private sbt.testing.Logger logger(final boolean ansiCodesSupported) {
       return new sbt.testing.Logger() {
         public boolean ansiCodesSupported() {
+          // TODO: ansiCodesSupported comes from sbt logger config
+          // which has nothing to do with DAP communication
+          // maybe this should be configured separately (or always true)
           return ansiCodesSupported;
         }
 
@@ -149,7 +153,7 @@ public final class ForkMain {
       final ExecutorService executor = executorService(config);
       final TaskDef[] tests = (TaskDef[]) is.readObject();
       final int nFrameworks = is.readInt();
-      final sbt.testing.Logger[] loggers = {remoteLogger(config.isAnsiCodesSupported())};
+      final sbt.testing.Logger[] loggers = {logger(config.isAnsiCodesSupported())};
 
       for (int i = 0; i < nFrameworks; i++) {
         final String[] implClassNames = (String[]) is.readObject();
