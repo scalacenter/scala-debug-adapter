@@ -7,7 +7,8 @@ inThisBuild(
     onLoadMessage := s"Welcome to scala-debug-adapter ${version.value}",
     licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
     developers := Developers.list,
-    scalaVersion := Dependencies.scala212
+    scalaVersion := Dependencies.scala212,
+    version := "1.1.0-SNAPSHOT"
   )
 )
 
@@ -28,6 +29,7 @@ lazy val core = project
       Dependencies.asm,
       Dependencies.asmUtil,
       Dependencies.javaDebug,
+      Dependencies.scalaMeta,
       Dependencies.utest % Test,
       Dependencies.scalaCompiler % Test,
       Dependencies.sbtIo % Test

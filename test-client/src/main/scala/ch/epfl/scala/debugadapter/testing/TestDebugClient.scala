@@ -105,6 +105,16 @@ class TestDebugClient(socket: Socket, timeout: Duration)(implicit ec: ExecutionC
     getBody[VariablesResponseBody](response).variables
   }
 
+  def evaluate(expression: String, frameId: Int): String = {
+    val args = new EvaluateArguments()
+    args.expression = expression
+    args.frameId = frameId
+    args.context = "repl"
+    val request = createRequest(Command.EVALUATE, args)
+    val response = sendRequest(request, timeout)
+    getBody[EvaluateResponseBody](response).result
+  }
+
   def disconnect(restart: Boolean): Messages.Response = {
     val args = new DisconnectArguments()
     args.restart = restart

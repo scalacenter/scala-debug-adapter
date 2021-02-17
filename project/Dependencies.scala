@@ -7,6 +7,7 @@ object Dependencies {
   val asm = "org.ow2.asm" % "asm" % asmVersion
   val asmUtil = "org.ow2.asm" % "asm-util" % asmVersion
   val javaDebug = "ch.epfl.scala" % "com-microsoft-java-debug-core" % "0.21.0+1-7f1080f1"
+  val scalaMeta = "org.scalameta" %% "scalameta" % "4.4.8"
   val utest = "com.lihaoyi" %% "utest" % "0.6.6"
   val scalaCompiler = "org.scala-lang" % "scala-compiler" % scala212
   val sbtIo = "org.scala-sbt" %% "io" % "1.4.0"

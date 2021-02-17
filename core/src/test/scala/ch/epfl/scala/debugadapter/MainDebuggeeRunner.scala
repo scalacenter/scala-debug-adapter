@@ -60,6 +60,11 @@ object MainDebuggeeRunner {
     compileJava(src, "BreakpointTest", dest)
   }
 
+  def evaluateTest(dest: File): MainDebuggeeRunner = {
+    val src = getResource("/EvaluateTest.scala")
+    compileScala(src, "EvaluateTest", dest)
+  }
+
   private def getResource(name: String): Path =
     Paths.get(getClass.getResource(name).toURI)
 

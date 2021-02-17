@@ -1,17 +1,15 @@
 package ch.epfl.scala.debugadapter
 
+import ch.epfl.scala.debugadapter.internal.DebugSession
+import ch.epfl.scala.debugadapter.testing.TestDebugClient
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
 import sbt.io.IO
 import utest._
-
 
 import java.net.{ConnectException, SocketException, SocketTimeoutException}
 import java.util.concurrent.{Executors, TimeUnit, TimeoutException}
 import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
-
-import ch.epfl.scala.debugadapter.testing.TestDebugClient
-import ch.epfl.scala.debugadapter.internal.DebugSession
 
 object DebugServerSpec extends TestSuite {
   val DefaultTimeout = Duration(2, TimeUnit.SECONDS)
@@ -20,11 +18,61 @@ object DebugServerSpec extends TestSuite {
   implicit val ec = ExecutionContext.fromExecutorService(executorService)
 
   def tests: Tests = Tests {
+    "should evaluate scala expression" - {
+      val tempDir = IO.createTemporaryDirectory
+      val runner = MainDebuggeeRunner.evaluateTest(tempDir)
+      val server = DebugServer(runner, NoopLogger)
+      val client = TestDebugClient.connect(server.uri)
+      try {
+        server.connect()
+        client.initialize()
+        client.launch()
+
+        val breakpoints = client.setBreakpoints(runner.source, Array(12))
+        assert(breakpoints.length == 1)
+        assert(breakpoints.forall(_.verified))
+        client.configurationDone()
+
+        val stopped = client.stopped
+        val threadId = stopped.threadId
+        assert(stopped.reason == "breakpoint")
+
+        val stackTrace = client.stackTrace(threadId)
+        val topFrame = stackTrace.stackFrames.head
+
+        assert(client.evaluate("2 + 2 * 2", topFrame.id) == "6")
+        assert(client.evaluate("(2 + 2) * 2", topFrame.id) == "8")
+        assert(client.evaluate("3.2 + 4.0", topFrame.id).toDouble == 7.2)
+        assert(client.evaluate("1/2", topFrame.id) == "0")
+        assert(client.evaluate("1/2.0", topFrame.id).toDouble == 0.5)
+        assert(client.evaluate("a + b", topFrame.id) == "3")
+        assert(client.evaluate("e + f", topFrame.id) == "7")
+        assert(client.evaluate("x + y", topFrame.id) == "\"`x` doesn't exist\"")
+        assert(client.evaluate("c.value", topFrame.id) == "9")
+        assert(client.evaluate("c.value()", topFrame.id) == "9")
+        assert(client.evaluate("c.toString", topFrame.id) == "\"Num(9)\"")
+        assert(client.evaluate("c.toString()", topFrame.id) == "\"Num(9)\"")
+        assert(client.evaluate("c.add(d).value", topFrame.id) == "14")
+        assert(client.evaluate("c.add(d).toString", topFrame.id) == "\"Num(14)\"")
+        assert(client.evaluate("add(e, f)", topFrame.id) == "7")
+        assert(client.evaluate("add(3.2, 4.0)", topFrame.id).toDouble == 7.2)
+        assert(client.evaluate("add(c, d)", topFrame.id) == "14")
+
+        client.continue(threadId)
+        client.exited
+        client.terminated
+      } finally {
+        server.close()
+        client.close()
+        IO.delete(tempDir)
+      }
+    }
+
     "should prevent connection when closed" - {
       val runner = new MockDebuggeeRunner()
       val server = DebugServer(runner, NoopLogger, gracePeriod = Duration.Zero)
       server.close()
-      try  { 
+      try  {
         TestDebugClient.connect(server.uri)
         assert(false) // connect was supposed to fail
       } catch {
@@ -72,7 +120,7 @@ object DebugServerSpec extends TestSuite {
       try {
         server.connect()
         client1.initialize()
-        
+
         var client2: TestDebugClient = null
         try {
           client2 = TestDebugClient.connect(server.uri)
@@ -129,7 +177,7 @@ object DebugServerSpec extends TestSuite {
         runner.currentProcess.stopped.failure(new Exception())
         client.initialize()
         assert(!client.launch().success)
-      } finally {  
+      } finally {
         server.close()
         client.close()
       }
@@ -146,7 +194,7 @@ object DebugServerSpec extends TestSuite {
         assert(client.launch().success)
         client.initialized
         client.configurationDone()
-      } finally {  
+      } finally {
         server.close()
         client.close()
         IO.delete(tempDir)
@@ -166,7 +214,7 @@ object DebugServerSpec extends TestSuite {
         // give some time for the debuggee to terminate gracefully
         server.close()
         client.terminated
-      } finally { 
+      } finally {
         server.close() // in case test fails
         client.close()
         IO.delete(tempDir)
@@ -248,31 +296,31 @@ object DebugServerSpec extends TestSuite {
         server.connect()
         client.initialize()
         client.launch()
-        
+
         val breakpoints = client.setBreakpoints(runner.source, Array(3, 11, 18, 12, 7))
         assert(breakpoints.size == 5)
         assert(breakpoints.forall(_.verified))
-        
+
         client.configurationDone()
         val stopped1 = client.stopped
         val threadId = stopped1.threadId
         assert(stopped1.reason == "breakpoint")
-        
+
         client.continue(threadId)
         val stopped2 = client.stopped
         assert(stopped2.reason == "breakpoint")
         assert(stopped2.threadId == threadId)
-        
+
         client.continue(threadId)
         val stopped3 = client.stopped
         assert(stopped3.reason == "breakpoint")
         assert(stopped3.threadId == threadId)
-        
+
         client.continue(threadId)
         val stopped4 = client.stopped
         assert(stopped4.reason == "breakpoint")
         assert(stopped4.threadId == threadId)
-        
+
         client.continue(threadId)
         val stopped5 = client.stopped
         assert(stopped5.reason == "breakpoint")
@@ -297,21 +345,21 @@ object DebugServerSpec extends TestSuite {
         server.connect()
         client.initialize()
         client.launch()
-        
+
         val breakpoints = client.setBreakpoints(runner.mainClass, Array(3, 7))
         assert(breakpoints.size == 2)
         assert(breakpoints.forall(_.verified))
-        
+
         client.configurationDone()
         val stopped1 = client.stopped
         val threadId = stopped1.threadId
         assert(stopped1.reason == "breakpoint")
-        
+
         client.continue(threadId)
         val stopped2 = client.stopped
         assert(stopped2.reason == "breakpoint")
         assert(stopped2.threadId == threadId)
-        
+
         client.continue(threadId)
         client.exited
         client.terminated
@@ -334,12 +382,12 @@ object DebugServerSpec extends TestSuite {
         val breakpoints = client.setBreakpoints(runner.source, Array(3, 9, 14, 6))
         assert(breakpoints.size == 4)
         assert(breakpoints.forall(_.verified))
-        
+
         client.configurationDone()
         val stopped1 = client.stopped
         val threadId = stopped1.threadId
         assert(stopped1.reason == "breakpoint")
-        
+
         client.continue(threadId)
         val stopped2 = client.stopped
         assert(stopped2.reason == "breakpoint")
@@ -349,12 +397,12 @@ object DebugServerSpec extends TestSuite {
         val stopped3 = client.stopped
         assert(stopped3.reason == "breakpoint")
         assert(stopped3.threadId == threadId)
-        
+
         client.continue(threadId)
         val stopped4 = client.stopped
         assert(stopped4.reason == "breakpoint")
         assert(stopped4.threadId == threadId)
-        
+
         client.continue(threadId)
         client.exited
         client.terminated
@@ -380,7 +428,7 @@ object DebugServerSpec extends TestSuite {
         val stopped = client.stopped
         val stackTrace = client.stackTrace(stopped.threadId)
         assert(stackTrace.totalFrames == 2)
-        
+
         val topFrame = stackTrace.stackFrames.head
         val scopes = client.scopes(topFrame.id)
         assert(scopes.length == 1)
@@ -407,12 +455,12 @@ object DebugServerSpec extends TestSuite {
       val runner = new MockDebuggeeRunner()
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
-      
+
       try {
         val session = server.connect()
         client.initialize()
         client.disconnect(restart = false)
-        
+
         Await.result(runner.currentProcess.future, DefaultTimeout)
       } finally {
         server.close()
@@ -424,11 +472,11 @@ object DebugServerSpec extends TestSuite {
       val runner = new MockDebuggeeRunner()
       val handler = DebugServer.start(runner, NoopLogger, gracePeriod = Duration.Zero)
       val client1 = TestDebugClient.connect(handler.uri)
-      
+
       try {
         client1.initialize()
         client1.disconnect(restart = true)
-        
+
         val client2 = TestDebugClient.connect(handler.uri)
         try {
           client2.initialize()
@@ -445,11 +493,11 @@ object DebugServerSpec extends TestSuite {
       val runner =  new MockDebuggeeRunner()
       val handler = DebugServer.start(runner, NoopLogger, gracePeriod = Duration.Zero)
       val client1 = TestDebugClient.connect(handler.uri)
-      
+
       try {
         client1.initialize()
         client1.disconnect(restart = false)
-        
+
         var client2: TestDebugClient = null
         try {
           client2 = TestDebugClient.connect(handler.uri)
@@ -465,7 +513,7 @@ object DebugServerSpec extends TestSuite {
         } finally {
           if (client2 != null) client2.close()
         }
-        
+
       } finally {
         client1.close()
       }
