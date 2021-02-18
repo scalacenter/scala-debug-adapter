@@ -1,5 +1,6 @@
 # scala-debug-adapter
 [![build-badge][]][build]
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/ch.epfl.scala/sbt-debug-adapter/badge.svg)](https://maven-badges.herokuapp.com/maven-central/ch.epfl.scala/sbt-debug-adapter)
 
 [build]:       https://github.com/scalacenter/scala-debug-adapter/actions?query=branch%3Amain+workflow%3A%22Continuous+Integration%22
 [build-badge]: https://github.com/scalacenter/scala-debug-adapter/workflows/Continuous%20Integration/badge.svg?branch=main
