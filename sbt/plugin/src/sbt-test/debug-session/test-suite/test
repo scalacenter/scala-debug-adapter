@@ -1,2 +1,11 @@
+> ++ 2.12.13
+> 'checkDebugSession ["BreakpointSpec"]'
+> stopDebugSession
+
+> ++ 2.13.4
+> 'checkDebugSession ["BreakpointSpec"]'
+> stopDebugSession
+
+> ++ 3.0.0-RC1
 > 'checkDebugSession ["BreakpointSpec"]'
 > stopDebugSession

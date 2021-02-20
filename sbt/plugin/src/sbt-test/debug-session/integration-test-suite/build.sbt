@@ -4,10 +4,17 @@ import ch.epfl.scala.debugadapter.testing.TestDebugClient
 
 val checkDebugSession = inputKey[Unit]("Check the integration test suite debug session")
 
+val scala3   = "3.0.0-RC1"
+val scala213 = "2.13.4"
+val scala212 = "2.12.13"
+val scala211 = "2.11.12"
+val supportedScalaVersions = List(scala3, scala213, scala212, scala211)
+
 val root = project.in(file("."))
   .configs(IntegrationTest)
   .settings(
-    scalaVersion := "2.12.12",
+    scalaVersion := scala212,
+    crossScalaVersions := supportedScalaVersions,
     libraryDependencies += "com.lihaoyi" %% "utest" % "0.6.6" % IntegrationTest,
     testFrameworks += new TestFramework("utest.runner.Framework"),
     Defaults.itSettings,
