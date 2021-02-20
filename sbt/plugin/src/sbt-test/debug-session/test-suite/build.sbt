@@ -11,7 +11,7 @@ val supportedScalaVersions = List(scala3, scala213, scala212, scala211)
 
 scalaVersion := scala212
 crossScalaVersions := supportedScalaVersions
-libraryDependencies += "com.lihaoyi" %% "utest" % "0.6.6" % Test
+libraryDependencies += "com.lihaoyi" %% "utest" % "0.7.7" % Test
 testFrameworks += new TestFramework("utest.runner.Framework")
 checkDebugSession := {
   implicit val ec: ExecutionContext = ExecutionContext.global
