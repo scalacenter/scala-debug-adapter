@@ -18,3 +18,17 @@ type DebugSessionParams {
   ## A language-agnostic JSON object interpreted by the server.
   data: sjsonnew.shaded.scalajson.ast.unsafe.JValue
 }
+
+type ScalaMainClass {
+  ## The main class to run.
+  class: String!
+
+  ## The user arguments to the main entrypoint.
+  arguments: [String]
+
+  ## The jvm options for the application.
+  jvmOptions: [String]
+
+  ## Additional environment variables for the application.
+  environmentVariables: [String]
+}
