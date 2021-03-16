@@ -7,8 +7,7 @@ import ch.epfl.scala.debugadapter.DebuggeeRunner
 
 import sbt.Tests._
 import sbt._
-import sbt.internal.bsp._
-import sbt.internal.bsp.codec.JsonProtocol._
+import sbt.internal.bsp.{ScalaMainClass => _, _}
 import sbt.internal.protocol.JsonRpcRequestMessage
 import sbt.internal.server.{ServerHandler, ServerIntent}
 import sbt.internal.util.complete.{Parser, Parsers}
@@ -185,7 +184,12 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         workingDirectory = Option(workingDirectory),
         runJVMOptions = params.jvmOptions,
         connectInput = false,
-        envVars = envVars
+        envVars = envVars ++ params.environmentVariables
+          .flatMap(_.split("=", 2).toList match {
+            case key :: value :: Nil => Some(key -> value)
+            case _                   => None
+          })
+          .toMap
       )
 
       new MainClassRunner(
