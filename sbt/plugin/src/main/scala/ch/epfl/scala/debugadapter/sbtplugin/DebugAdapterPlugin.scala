@@ -7,7 +7,7 @@ import ch.epfl.scala.debugadapter.DebuggeeRunner
 
 import sbt.Tests._
 import sbt._
-import sbt.internal.bsp.{ScalaMainClass => _, _}
+import sbt.internal.bsp.BuildTargetIdentifier
 import sbt.internal.protocol.JsonRpcRequestMessage
 import sbt.internal.server.{ServerHandler, ServerIntent}
 import sbt.internal.util.complete.{Parser, Parsers}
