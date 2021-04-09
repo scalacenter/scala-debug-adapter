@@ -1,0 +1,3 @@
+> 'root / Test / startTestSuitesDebugSession ["example.HelloSpec"]'
+> 'root / Test / startMainClassDebugSession {"class":"example.Hello","arguments":[],"jvmOptions":[]}'
+> root / Test / stopDebugSession

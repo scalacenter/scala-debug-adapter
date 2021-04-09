@@ -69,9 +69,14 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     }
   )
 
-  override def projectSettings: Seq[Def.Setting[_]] = {
-    inConfig(Compile)(runSettings) ++ inConfig(Test)(testSettings)
-  }
+  override def projectSettings: Seq[Def.Setting[_]] = Def.settings(
+    inConfig(Compile)(runSettings),
+    inConfig(Test)(testSettings),
+    startMainClassDebugSession / Keys.aggregate := false,
+    startTestSuitesDebugSession / Keys.aggregate := false,
+    startRemoteDebugSession / Keys.aggregate := false,
+    stopDebugSession / Keys.aggregate := false
+  )
 
   def runSettings: Seq[Def.Setting[_]] = Seq(
     startMainClassDebugSession := mainClassSessionTask.evaluated,
