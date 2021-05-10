@@ -18,6 +18,41 @@ object DebugServerSpec extends TestSuite {
   implicit val ec = ExecutionContext.fromExecutorService(executorService)
 
   def tests: Tests = Tests {
+    "should evaluate scala expression" - {
+      val tempDir = IO.createTemporaryDirectory
+      val runner = MainDebuggeeRunner.evaluateTest(tempDir)
+      val server = DebugServer(runner, NoopLogger)
+      val client = TestDebugClient.connect(server.uri)
+      try {
+        server.connect()
+        client.initialize()
+        client.launch()
+
+        val breakpoints = client.setBreakpoints(runner.source, Array(12))
+        assert(breakpoints.length == 1)
+        assert(breakpoints.forall(_.verified))
+        client.configurationDone()
+
+        val stopped = client.stopped
+        val threadId = stopped.threadId
+        assert(stopped.reason == "breakpoint")
+
+        val stackTrace = client.stackTrace(threadId)
+        val topFrame = stackTrace.stackFrames.head
+
+        assert(client.evaluate("1 + 2", topFrame.id) == "3")
+
+        client.continue(threadId)
+        client.exited
+        client.terminated
+      } finally {
+        server.close()
+        client.close()
+        IO.delete(tempDir)
+      }
+    }
+
+    /*
     "should prevent connection when closed" - {
       val runner = new MockDebuggeeRunner()
       val server = DebugServer(runner, NoopLogger, gracePeriod = Duration.Zero)
@@ -347,5 +382,6 @@ object DebugServerSpec extends TestSuite {
         client1.close()
       }
     }
+     */
   }
 }

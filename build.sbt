@@ -37,6 +37,7 @@ lazy val core = project
       Dependencies.asm,
       Dependencies.asmUtil,
       Dependencies.javaDebug,
+      Dependencies.scalaCompiler,
       Dependencies.utest % Test,
       Dependencies.sbtIo % Test,
       Dependencies.coursier % Test,
