@@ -63,8 +63,7 @@ private[debugadapter] object DebugAdapter {
         depth: Int
     ): CompletableFuture[Value] = {
       val frame = thread.frames().get(depth)
-      val objRef = frame.thisObject()
-      Evaluator.evaluate(expression, objRef, thread)
+      Evaluator.evaluate(expression, thread, frame)
     }
 
     override def evaluate(

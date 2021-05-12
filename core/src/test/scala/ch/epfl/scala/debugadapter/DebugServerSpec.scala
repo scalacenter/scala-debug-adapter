@@ -28,7 +28,7 @@ object DebugServerSpec extends TestSuite {
         client.initialize()
         client.launch()
 
-        val breakpoints = client.setBreakpoints(runner.source, Array(12))
+        val breakpoints = client.setBreakpoints(runner.source, Array(6))
         assert(breakpoints.length == 1)
         assert(breakpoints.forall(_.verified))
         client.configurationDone()
@@ -40,7 +40,7 @@ object DebugServerSpec extends TestSuite {
         val stackTrace = client.stackTrace(threadId)
         val topFrame = stackTrace.stackFrames.head
 
-        assert(client.evaluate("1 + 2", topFrame.id) == "3")
+        assert(client.evaluate("(a + b) * 3", topFrame.id) == "9")
 
         client.continue(threadId)
         client.exited
