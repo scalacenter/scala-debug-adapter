@@ -1,6 +1,6 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import com.sun.jdi.{ClassLoaderReference,StackFrame, ThreadReference, Value}
+import com.sun.jdi._
 
 import java.util.concurrent.CompletableFuture
 import scala.collection.JavaConverters._
@@ -13,7 +13,7 @@ object Evaluator {
     val result = for {
       classLoader <- classLoader(thisObject).flatMap(JdiClassLoader(_, thread))
       names <- Some(frame.visibleVariables().asScala.map(_.name()).map(vm.mirrorOf).toList)
-      values <- Some(frame.visibleVariables().asScala.map(frame.getValue).toList)
+      values <- Some(frame.visibleVariables().asScala.map(frame.getValue).flatMap(value => boxIfNeeded(value, classLoader, thread)).toList)
       systemClass <- classLoader.loadClass("java.lang.System")
       classPath <- systemClass
         .invokeStatic("getProperty", List(vm.mirrorOf("java.class.path")))
@@ -35,7 +35,7 @@ object Evaluator {
       expressionClass <- urlClassLoader.loadClass("Expression")
       expression <- expressionClass.newInstance(List())
       namesArray <- JdiArray("java.lang.String", names.size, classLoader, thread)
-      valuesArray <- JdiArray("java.lang.Object", values.size, classLoader, thread)
+      valuesArray <- JdiArray("java.lang.Object", values.size, classLoader, thread) // add boxing
       _ <- Some(namesArray.setValues(names))
       _ <- Some(valuesArray.setValues(values))
       result <- expression.invoke("evaluate", List(namesArray.reference, valuesArray.reference))
@@ -43,5 +43,10 @@ object Evaluator {
 
     // Handle error
     CompletableFuture.completedFuture(result.get)
+  }
+
+  private def boxIfNeeded(value: Value, classLoader: JdiClassLoader, thread: ThreadReference): Option[Value] = value match {
+    case value: IntegerValue => JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
+    case value => Some(value)
   }
 }

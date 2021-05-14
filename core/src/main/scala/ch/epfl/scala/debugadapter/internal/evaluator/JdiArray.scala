@@ -18,26 +18,12 @@ object JdiArray {
         .map(_.asInstanceOf[ObjectReference])
         .map(new JdiObject(_, thread))
       arrayTypeClass <- classLoader.loadClass(arrayType)
-      integerValue <- newInteger(arraySize, classLoader, thread)
+      integerValue <- JdiPrimitive.boxed(arraySize, classLoader, thread)
       array <- newInstanceMethod
         .invoke("invoke", List(arrayClass.reference, arrayTypeClass.reference, integerValue.reference))
         .map(_.asInstanceOf[ArrayReference])
         .map(new JdiArray(_, thread))
     } yield array
-  }
-
-  private def newInteger(value: Int, classLoader: JdiClassLoader, thread: ThreadReference) = {
-    val vm = thread.virtualMachine()
-    val jdiValue = vm.mirrorOf(value.toString)
-    val parameterType = jdiValue.`type`().asInstanceOf[ReferenceType].classObject()
-    for {
-      integerClass <- classLoader.loadClass("java.lang.Integer")
-      constructor <- integerClass.invoke("getConstructor", List(parameterType))
-        .map(_.asInstanceOf[ObjectReference])
-        .map(new JdiObject(_, thread))
-      instance <- constructor.invoke("newInstance", List(jdiValue))
-      jdiObject <- Try(instance.asInstanceOf[ObjectReference]).toOption.map(new JdiObject(_, thread))
-    } yield jdiObject
   }
 }
 
