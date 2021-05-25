@@ -15,7 +15,10 @@ package object evaluator {
   private[evaluator] def invokeMethod(objRef: ObjectReference, method: Method, args: List[Value], thread: ThreadReference) =
     Try(objRef.invokeMethod(thread, method, args.asJava, ObjectReference.INVOKE_SINGLE_THREADED)) match {
       case Failure(error: InvocationException) =>
-        println(error.exception())
+        println(s"InvocationException: ${error.exception()}")
+        None
+      case Failure(exception) =>
+        println(s"${exception.getClass.getSimpleName}: ${exception.getMessage}")
         None
       case Success(result) => Some(result)
     }

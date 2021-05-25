@@ -1,5 +1,6 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
+import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 import com.sun.jdi._
 
 import java.util.concurrent.CompletableFuture
@@ -7,9 +8,18 @@ import scala.collection.JavaConverters._
 import scala.tools.nsc.ExpressionCompiler
 
 object Evaluator {
-  def evaluate(expression: String, thread: ThreadReference, frame: StackFrame): CompletableFuture[Value] = {
+  def evaluate(expression: String, thread: ThreadReference, frame: StackFrame)(sourceLookUpProvider: ISourceLookUpProvider): CompletableFuture[Value] = {
     val vm = thread.virtualMachine()
     val thisObject = frame.thisObject()
+
+
+    val location = frame.location()
+    val sourcePath = location.sourcePath()
+    val lineNumber = location.lineNumber()
+
+    val uri = sourceLookUpProvider.getSourceFileURI("", sourcePath)
+    val content = sourceLookUpProvider.getSourceContents(uri)
+
     val result = for {
       classLoader <- classLoader(thisObject).flatMap(JdiClassLoader(_, thread))
       names <- Some(frame.visibleVariables().asScala.map(_.name()).map(vm.mirrorOf).toList)
@@ -19,9 +29,9 @@ object Evaluator {
         .invokeStatic("getProperty", List(vm.mirrorOf("java.class.path")))
         .map(_.toString)
         .map(_.drop(1).dropRight(1)) // remove quotation marks
-      expressionCompiler <- Some(ExpressionCompiler(classPath))
+      expressionCompiler <- Some(ExpressionCompiler(classPath, lineNumber))
       expressionClassPath = s"file://${expressionCompiler.dir.toString}/"
-      _ <- Some(expressionCompiler.compile(expression))
+      _ <- Some(expressionCompiler.compile(content, expression))
       url <- classLoader
         .loadClass("java.net.URL")
         .flatMap(_.newInstance(List(vm.mirrorOf(expressionClassPath))))
@@ -46,7 +56,20 @@ object Evaluator {
   }
 
   private def boxIfNeeded(value: Value, classLoader: JdiClassLoader, thread: ThreadReference): Option[Value] = value match {
-    case value: IntegerValue => JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
+    case value: BooleanValue =>
+      JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
+    case value: CharValue =>
+      JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
+    case value: DoubleValue =>
+      JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
+    case value: FloatValue =>
+      JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
+    case value: IntegerValue =>
+      JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
+    case value: LongValue =>
+      JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
+    case value: ShortValue =>
+      JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
     case value => Some(value)
   }
 }
