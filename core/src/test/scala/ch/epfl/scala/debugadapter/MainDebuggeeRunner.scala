@@ -1,11 +1,9 @@
 package ch.epfl.scala.debugadapter
 
 import java.nio.file.Path
-import scala.tools.nsc.Main
 import java.io.File
 import sbt.io.syntax._
 import sbt.io.IO
-import buildinfo.BuildInfo
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import scala.concurrent.Future
@@ -17,6 +15,7 @@ import java.nio.file.Paths
 import scala.util.control.NonFatal
 import java.io.InputStream
 import java.util.concurrent.atomic.AtomicBoolean
+import coursier._
 
 case class MainDebuggeeRunner(source: Path, classpath: String, allClasses: List[Path], mainClass: String) extends DebuggeeRunner {
   override def name: String = mainClass
@@ -37,22 +36,22 @@ object MainDebuggeeRunner {
   
   def sleep(dest: File): MainDebuggeeRunner = {
     val src = getResource("/Sleep.scala")
-    compileScala(src, "Sleep", dest)
+    compileScala(src, "Sleep", dest, ScalaVersion.`2.12`)
   }
 
   def helloWorld(dest: File): MainDebuggeeRunner = {
     val src = getResource("/HelloWorld.scala")
-    compileScala(src, "HelloWorld", dest)
+    compileScala(src, "HelloWorld", dest, ScalaVersion.`2.12`)
   }
 
   def sysExit(dest: File): MainDebuggeeRunner = {
     val src = getResource("/SysExit.scala")
-    compileScala(src, "SysExit", dest)
+    compileScala(src, "SysExit", dest, ScalaVersion.`2.12`)
   }
 
-  def scalaBreakpointTest(dest: File): MainDebuggeeRunner = {
+  def scalaBreakpointTest(dest: File, scalaVersion: ScalaVersion): MainDebuggeeRunner = {
     val src = getResource("/BreakpointTest.scala")
-    compileScala(src, "BreakpointTest", dest)
+    compileScala(src, "BreakpointTest", dest, scalaVersion)
   }
 
   def javaBreakpointTest(dest: File): MainDebuggeeRunner = {
@@ -63,19 +62,37 @@ object MainDebuggeeRunner {
   private def getResource(name: String): Path =
     Paths.get(getClass.getResource(name).toURI)
 
-  private def compileScala(src: Path, mainClass: String, dest: File): MainDebuggeeRunner = {
+  private def compileScala(src: Path, mainClass: String, dest: File, scalaVersion: ScalaVersion): MainDebuggeeRunner = {
     val classDir = dest / "classes"
     IO.createDirectory(classDir)
-    val args = Array(
+    val compilerClasspath = fetch(scalaVersion.compiler).map(_.getAbsolutePath).mkString(File.pathSeparator)
+    val libraryClasspath = fetch(scalaVersion.library).map(_.getAbsolutePath).mkString(File.pathSeparator)
+    
+    val command = Array(
+      "java",
+      "-classpath", compilerClasspath,
+      scalaVersion.compilerMain,
       "-d", classDir.getAbsolutePath,
-      "-classpath", BuildInfo.scalaLibraries,
+      "-classpath", libraryClasspath,
       src.toAbsolutePath.toString
     )
-    val success = Main.process(args)
-    if (!success) throw new IllegalArgumentException(s"cannot compile $src")
-    val allClasses = IO.listFiles(classDir).map(_.toPath).toList
-    val classPath = classDir.getAbsolutePath + File.pathSeparator + BuildInfo.scalaLibraries
+    val builder = new ProcessBuilder(command: _*)
+    val process = builder.start()
+    startCrawling(process.getInputStream)(System.out.println)
+    startCrawling(process.getErrorStream)(System.err.println)
+
+    val exitValue = process.waitFor()
+    if (exitValue != 0) throw new IllegalArgumentException(s"cannot compile $src")
+    
+    val allClasses = IO.listFiles(classDir).filter(_.name.endsWith(".class")).map(_.toPath).toList
+    val classPath = classDir.getAbsolutePath + File.pathSeparator + libraryClasspath
     MainDebuggeeRunner(src, classPath, allClasses, mainClass)
+  }
+
+  private def fetch(artifact: Dependency): Seq[File] = {
+    coursier.Fetch()
+      .addDependencies(artifact)
+      .run()
   }
 
   private def compileJava(src: Path, mainClass: String, dest: File): MainDebuggeeRunner = {
@@ -84,7 +101,6 @@ object MainDebuggeeRunner {
     val command = Array(
       "javac",
       "-d", classDir.getAbsolutePath,
-      "-classpath", BuildInfo.scalaLibraries,
       src.toAbsolutePath.toString
     )
     val builder = new ProcessBuilder(command: _*)
@@ -97,7 +113,7 @@ object MainDebuggeeRunner {
     if (exitValue != 0) throw new IllegalArgumentException(s"cannot compile $src")
     
     val allClasses = IO.listFiles(classDir).map(_.toPath).toList
-    val classPath = classDir.getAbsolutePath + File.pathSeparator + BuildInfo.scalaLibraries
+    val classPath = classDir.getAbsolutePath + File.pathSeparator
     new MainDebuggeeRunner(src, classPath, allClasses, mainClass)
   }
 
