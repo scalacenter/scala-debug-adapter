@@ -239,89 +239,6 @@ object DebugServerSpec extends TestSuite {
       }
     }
 
-    "should support breakpoints in scala sources" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.scalaBreakpointTest(tempDir)
-      val server = DebugServer(runner, NoopLogger)
-      val client = TestDebugClient.connect(server.uri)
-      try {
-        server.connect()
-        client.initialize()
-        client.launch()
-        
-        val breakpoints = client.setBreakpoints(runner.source, Array(3, 11, 18, 12, 7))
-        assert(breakpoints.size == 5)
-        assert(breakpoints.forall(_.verified))
-        
-        client.configurationDone()
-        val stopped1 = client.stopped
-        val threadId = stopped1.threadId
-        assert(stopped1.reason == "breakpoint")
-        
-        client.continue(threadId)
-        val stopped2 = client.stopped
-        assert(stopped2.reason == "breakpoint")
-        assert(stopped2.threadId == threadId)
-        
-        client.continue(threadId)
-        val stopped3 = client.stopped
-        assert(stopped3.reason == "breakpoint")
-        assert(stopped3.threadId == threadId)
-        
-        client.continue(threadId)
-        val stopped4 = client.stopped
-        assert(stopped4.reason == "breakpoint")
-        assert(stopped4.threadId == threadId)
-        
-        client.continue(threadId)
-        val stopped5 = client.stopped
-        assert(stopped5.reason == "breakpoint")
-        assert(stopped5.threadId == threadId)
-
-        client.continue(threadId)
-        client.exited
-        client.terminated
-      } finally {
-        server.close()
-        client.close()
-        IO.delete(tempDir)
-      }
-    }
-
-    "should support breakpoints in fully qualified classes" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.scalaBreakpointTest(tempDir)
-      val server = DebugServer(runner, NoopLogger)
-      val client = TestDebugClient.connect(server.uri)
-      try {
-        server.connect()
-        client.initialize()
-        client.launch()
-        
-        val breakpoints = client.setBreakpoints(runner.mainClass, Array(3, 7))
-        assert(breakpoints.size == 2)
-        assert(breakpoints.forall(_.verified))
-        
-        client.configurationDone()
-        val stopped1 = client.stopped
-        val threadId = stopped1.threadId
-        assert(stopped1.reason == "breakpoint")
-        
-        client.continue(threadId)
-        val stopped2 = client.stopped
-        assert(stopped2.reason == "breakpoint")
-        assert(stopped2.threadId == threadId)
-        
-        client.continue(threadId)
-        client.exited
-        client.terminated
-      } finally {
-        server.close()
-        client.close()
-        IO.delete(tempDir)
-      }
-    }
-
     "should support breakpoints in java classes" - {
       val tempDir = IO.createTemporaryDirectory
       val runner = MainDebuggeeRunner.javaBreakpointTest(tempDir)
@@ -356,44 +273,6 @@ object DebugServerSpec extends TestSuite {
         assert(stopped4.threadId == threadId)
         
         client.continue(threadId)
-        client.exited
-        client.terminated
-      } finally {
-        server.close()
-        client.close()
-        IO.delete(tempDir)
-      }
-    }
-
-    "should return stacktrace, scopes and variables when stopped by a breakpoint" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.scalaBreakpointTest(tempDir)
-      val server = DebugServer(runner, NoopLogger)
-      val client = TestDebugClient.connect(server.uri, DefaultTimeout)
-      try {
-        server.connect()
-        client.initialize()
-        client.launch()
-        client.setBreakpoints(runner.source, Array(7))
-        client.configurationDone()
-
-        val stopped = client.stopped
-        val stackTrace = client.stackTrace(stopped.threadId)
-        assert(stackTrace.totalFrames == 2)
-        
-        val topFrame = stackTrace.stackFrames.head
-        val scopes = client.scopes(topFrame.id)
-        assert(scopes.length == 1)
-
-        val localScope = scopes.head
-        assert(localScope.name == "Local")
-
-        val localVars = client.variables(localScope.variablesReference)
-        assertMatch(localVars.map(_.name)) {
-          case Array("args", "h", "this") => ()
-        }
-
-        client.continue(stopped.threadId)
         client.exited
         client.terminated
       } finally {

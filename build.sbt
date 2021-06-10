@@ -21,7 +21,7 @@ lazy val root = project
 
 lazy val core = project
   .in(file("core"))
-  .enablePlugins(SbtJdiTools, BuildInfoPlugin)
+  .enablePlugins(SbtJdiTools)
   .settings(
     name := "scala-debug-adapter",
     libraryDependencies ++= List(
@@ -29,19 +29,12 @@ lazy val core = project
       Dependencies.asmUtil,
       Dependencies.javaDebug,
       Dependencies.utest % Test,
-      Dependencies.scalaCompiler % Test,
-      Dependencies.sbtIo % Test
+      Dependencies.sbtIo % Test,
+      Dependencies.coursier % Test
     ),
     testFrameworks += new TestFramework("utest.runner.Framework"),
     // Test / javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=1044",
-    Test / fork := true,
-    // build info is used to locate the library dependencies from the tests
-    addBuildInfoToConfig(Test),
-    buildInfoKeys := Seq[BuildInfoKey](
-      BuildInfoKey.map(scalaInstance) { case (_, scalaInstance) => 
-        "scalaLibraries" -> scalaInstance.libraryJars.mkString(File.pathSeparator)
-      }
-    )
+    Test / fork := true
   )
   .dependsOn(testClient % Test)
 
