@@ -1,5 +1,7 @@
 import java.io.File
 
+def isCI() = System.getenv("CI") != null
+
 inThisBuild(
   Seq(
     organization := "ch.epfl.scala",
@@ -7,7 +9,11 @@ inThisBuild(
     onLoadMessage := s"Welcome to scala-debug-adapter ${version.value}",
     licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
     developers := Developers.list,
-    scalaVersion := Dependencies.scala212
+    scalaVersion := Dependencies.scala212,
+    version ~= { dynVer =>
+      if (isCI()) dynVer
+      else "1.2.0-SNAPSHOT" // only for local publishing
+    }
   )
 )
 
