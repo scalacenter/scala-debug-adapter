@@ -18,8 +18,8 @@ jobs:
       with:
         java-version: ${{ matrix.jdk }}
     - name: Test core project
-      run: sbt core/test
+      run: sbt --client core/test
       shell: bash
     - name: Test sbt plugin
-      run: sbt sbtPlugin/scripted
+      run: sbt --client sbtPlugin/scripted
       shell: bash
