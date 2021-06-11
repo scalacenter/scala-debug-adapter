@@ -31,6 +31,12 @@ private[debugadapter] object DebugAdapter {
    */
   DebugSettings.getCurrent.showToString = false
 
+    /**
+    * Since Scala 2.13, object fields are represented by static fields in JVM byte code.
+    * See https://github.com/scala/scala/pull/7270
+    */
+  DebugSettings.getCurrent.showStaticVariables = true
+
   def context(runner: DebuggeeRunner, logger: Logger): IProviderContext = {
     val context = new ProviderContext
     context.registerProvider(classOf[IHotCodeReplaceProvider], HotCodeReplaceProvider)
