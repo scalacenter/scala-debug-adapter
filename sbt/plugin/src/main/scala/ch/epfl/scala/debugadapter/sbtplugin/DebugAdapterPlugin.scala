@@ -48,7 +48,17 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val startRemoteDebugSession = taskKey[URI]("Start a debug session on a remote process").withRank(KeyRanks.DTask)
     
     val stopDebugSession = taskKey[Unit]("Stop the current debug session").withRank(KeyRanks.DTask)
+
+    {
+      val v = VersionNumber(sys.props("java.specification.version"))
+
+      // If JDK 8 or lower
+      if (v._1.exists(_ == 1) && v._2.exists(_ < 9)) {
+        addSbtPlugin("org.scala-debugger" % "sbt-jdi-tools" % "1.1.1")
+      }
+    }
   }
+
   import autoImport._
 
   override def trigger = allRequirements
