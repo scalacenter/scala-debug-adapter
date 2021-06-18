@@ -1,3 +1,5 @@
+package scaladebug.test;
+
 class BreakpointTest {
   public static void main(String[] args) {
     System.out.println("Breakpoint in main method");

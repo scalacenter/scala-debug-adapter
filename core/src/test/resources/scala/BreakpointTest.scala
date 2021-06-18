@@ -1,3 +1,5 @@
+package scaladebug.test
+
 object BreakpointTest {
   def main(args: Array[String]): Unit = {
     println("Breakpoint in main method")

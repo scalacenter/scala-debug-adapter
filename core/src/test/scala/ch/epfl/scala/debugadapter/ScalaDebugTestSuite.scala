@@ -29,7 +29,7 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         client.initialize()
         client.launch()
         
-        val breakpoints = client.setBreakpoints(runner.source, Array(3, 11, 18, 12, 7))
+        val breakpoints = client.setBreakpoints(runner.source, Array(5, 13, 20, 14, 9))
         assert(breakpoints.size == 5)
         assert(breakpoints.forall(_.verified))
         
@@ -78,7 +78,7 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         client.initialize()
         client.launch()
         
-        val breakpoints = client.setBreakpoints(runner.mainClass, Array(3, 7))
+        val breakpoints = client.setBreakpoints(runner.mainClass, Array(5, 9))
         assert(breakpoints.size == 2)
         assert(breakpoints.forall(_.verified))
         

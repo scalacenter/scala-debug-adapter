@@ -18,7 +18,7 @@ object MoreScala3DebugTest extends TestSuite {
     "should support breakpoints in scala 3 with brace-less syntax" - {
       val tempDir = IO.createTemporaryDirectory
       val runner = MainDebuggeeRunner.scala3Braceless(tempDir)
-      val server = DebugServer(runner, PrintLogger)
+      val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -52,7 +52,7 @@ object MoreScala3DebugTest extends TestSuite {
     "should support breakpoints in scala 3 with @main" - {
       val tempDir = IO.createTemporaryDirectory
       val runner = MainDebuggeeRunner.scala3MainAnnotation(tempDir)
-      val server = DebugServer(runner, PrintLogger)
+      val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
