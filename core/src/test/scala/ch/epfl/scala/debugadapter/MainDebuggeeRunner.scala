@@ -34,37 +34,37 @@ object MainDebuggeeRunner {
   
   def sleep(dest: File): MainDebuggeeRunner = {
     val src = getResource("/scala/Sleep.scala")
-    compileScala(src, "Sleep", dest, ScalaVersion.`2.12`)
+    compileScala(src, "scaladebug.test.Sleep", dest, ScalaVersion.`2.12`)
   }
 
   def helloWorld(dest: File): MainDebuggeeRunner = {
     val src = getResource("/scala/HelloWorld.scala")
-    compileScala(src, "HelloWorld", dest, ScalaVersion.`2.12`)
+    compileScala(src, "scaladebug.test.HelloWorld", dest, ScalaVersion.`2.12`)
   }
 
   def sysExit(dest: File): MainDebuggeeRunner = {
     val src = getResource("/scala/SysExit.scala")
-    compileScala(src, "SysExit", dest, ScalaVersion.`2.12`)
+    compileScala(src, "scaladebug.test.SysExit", dest, ScalaVersion.`2.12`)
   }
 
   def scalaBreakpointTest(dest: File, scalaVersion: ScalaVersion): MainDebuggeeRunner = {
     val src = getResource("/scala/BreakpointTest.scala")
-    compileScala(src, "BreakpointTest", dest, scalaVersion)
+    compileScala(src, "scaladebug.test.BreakpointTest", dest, scalaVersion)
   }
 
   def javaBreakpointTest(dest: File): MainDebuggeeRunner = {
     val src = getResource("/java/BreakpointTest.java")
-    compileJava(src, "BreakpointTest", dest)
+    compileJava(src, "scaladebug.test.BreakpointTest", dest)
   }
 
   def scala3Braceless(dest: File): MainDebuggeeRunner = {
     val src = getResource("/scala3/braceless.scala")
-    compileScala(src, "example.Example", dest, ScalaVersion.`3`)
+    compileScala(src, "scaladebug.test.Example", dest, ScalaVersion.`3`)
   }
 
   def scala3MainAnnotation(dest: File): MainDebuggeeRunner = {
     val src = getResource("/scala3/main-annotation.scala")
-    compileScala(src, "example.app", dest, ScalaVersion.`3`)
+    compileScala(src, "scaladebug.test.app", dest, ScalaVersion.`3`)
   }
 
   private def getResource(name: String): Path =
@@ -122,7 +122,9 @@ object MainDebuggeeRunner {
     val exitValue = process.waitFor()
     if (exitValue != 0) throw new IllegalArgumentException(s"cannot compile $src")
     
-    val allClasses = IO.listFiles(classDir).map(_.toPath).toList
+    val allClasses = FileTreeView.default
+      .list(classDir.toPath.toGlob / ** / "*.class")
+      .map { case (path, _) => path}
     val classPath = classDir.getAbsolutePath + File.pathSeparator
     new MainDebuggeeRunner(src, classPath, allClasses, mainClass)
   }

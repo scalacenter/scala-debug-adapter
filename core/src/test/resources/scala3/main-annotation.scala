@@ -1,4 +1,4 @@
-package example
+package scaladebug.test
 
 @main def app: Unit =
   println("Breakpoint in main method")

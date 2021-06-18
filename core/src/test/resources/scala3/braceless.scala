@@ -1,4 +1,4 @@
-package example
+package scaladebug.test
 
 object Example:
   def main(args: Array[String]): Unit =
