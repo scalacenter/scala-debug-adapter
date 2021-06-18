@@ -19,8 +19,8 @@ import scala.concurrent.duration._
 import scala.reflect._
 import scala.util.control.NonFatal
 
-class TestDebugClient(socket: Socket, timeout: Duration)(implicit ec: ExecutionContext)
-  extends AbstractDebugClient(socket.getInputStream, socket.getOutputStream) {
+class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(implicit ec: ExecutionContext)
+  extends AbstractDebugClient(socket.getInputStream, socket.getOutputStream, debug) {
   override def close(): Unit = {
     super.close()
     socket.close()
@@ -159,11 +159,11 @@ class TestDebugClient(socket: Socket, timeout: Duration)(implicit ec: ExecutionC
 }
 
 object TestDebugClient {
-  def connect(uri: URI, timeout: Duration = 2000 millis)(implicit ec: ExecutionContext): TestDebugClient = {
+  def connect(uri: URI, timeout: Duration = 2000 millis, debug: String => Unit = _ => ())(implicit ec: ExecutionContext): TestDebugClient = {
     val socket = new Socket()
     val address = new InetSocketAddress(uri.getHost, uri.getPort)
     socket.connect(address, timeout.toMillis.intValue)
-    val client = new TestDebugClient(socket, timeout)
+    val client = new TestDebugClient(socket, timeout, debug)
     val listening = new java.lang.Thread {
       override def run(): Unit = client.run()
     }
@@ -172,7 +172,7 @@ object TestDebugClient {
   }
 }
 
-class AbstractDebugClient(input: InputStream, output: OutputStream) {
+class AbstractDebugClient(input: InputStream, output: OutputStream, debug: String => Unit) {
   private final val BufferSize = 4096
   private final val TwoCRLF = "\r\n\r\n"
   private val ContentLengthMatcher = "Content-Length: (\\d+)".r
@@ -244,6 +244,7 @@ class AbstractDebugClient(input: InputStream, output: OutputStream) {
       .flatten
     rawMessages.foreach { raw =>
       try {
+        debug(s"Received $raw")
         val message = JsonUtils.fromJson(raw, classOf[Messages.ProtocolMessage])
 
         if (message.`type`.equals("response")) {
@@ -290,6 +291,7 @@ class AbstractDebugClient(input: InputStream, output: OutputStream) {
     try {
       this.writer.write(data)
       this.writer.flush()
+      debug(s"Sent $jsonMessage")
     } catch {
       case NonFatal(e) =>
         System.err.println(s"Write data to io exception: ${e.getMessage}")
