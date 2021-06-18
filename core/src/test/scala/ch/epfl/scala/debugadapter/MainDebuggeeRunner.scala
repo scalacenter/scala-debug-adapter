@@ -1,23 +1,20 @@
 package ch.epfl.scala.debugadapter
 
-import java.nio.file.Path
-import java.io.File
-import sbt.io.syntax._
-import sbt.io.IO
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import scala.concurrent.Future
-import scala.concurrent.Promise
-import java.net.InetSocketAddress
-import scala.concurrent.ExecutionContext
-import MainDebuggeeRunner._
-import java.nio.file.Paths
-import scala.util.control.NonFatal
-import java.io.InputStream
-import java.util.concurrent.atomic.AtomicBoolean
 import coursier._
+import sbt.io.IO
+import sbt.io.syntax._
+import sbt.nio.file.{**, FileTreeView}
+import sbt.nio.file.syntax._
 
-case class MainDebuggeeRunner(source: Path, classpath: String, allClasses: List[Path], mainClass: String) extends DebuggeeRunner {
+import java.io.{BufferedReader, File, InputStream, InputStreamReader}
+import java.net.InetSocketAddress
+import java.nio.file.{Path, Paths}
+import scala.concurrent.{Future, Promise}
+import scala.util.control.NonFatal
+
+import MainDebuggeeRunner._
+
+case class MainDebuggeeRunner(source: Path, classpath: String, allClasses: Seq[Path], mainClass: String) extends DebuggeeRunner {
   override def name: String = mainClass
   
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] = {
@@ -27,7 +24,8 @@ case class MainDebuggeeRunner(source: Path, classpath: String, allClasses: List[
     new MainProcess(process, listener)
   }
 
-  override def classFilesMappedTo(origin: Path, lines: Array[Int], columns: Array[Int]): List[Path] = allClasses
+  override def classFilesMappedTo(origin: Path, lines: Array[Int], columns: Array[Int]): List[Path] =
+    allClasses.toList
 }
 
 object MainDebuggeeRunner {
@@ -35,28 +33,38 @@ object MainDebuggeeRunner {
   private final val JDINotificationPrefix = "Listening for transport dt_socket at address: "
   
   def sleep(dest: File): MainDebuggeeRunner = {
-    val src = getResource("/Sleep.scala")
+    val src = getResource("/scala/Sleep.scala")
     compileScala(src, "Sleep", dest, ScalaVersion.`2.12`)
   }
 
   def helloWorld(dest: File): MainDebuggeeRunner = {
-    val src = getResource("/HelloWorld.scala")
+    val src = getResource("/scala/HelloWorld.scala")
     compileScala(src, "HelloWorld", dest, ScalaVersion.`2.12`)
   }
 
   def sysExit(dest: File): MainDebuggeeRunner = {
-    val src = getResource("/SysExit.scala")
+    val src = getResource("/scala/SysExit.scala")
     compileScala(src, "SysExit", dest, ScalaVersion.`2.12`)
   }
 
   def scalaBreakpointTest(dest: File, scalaVersion: ScalaVersion): MainDebuggeeRunner = {
-    val src = getResource("/BreakpointTest.scala")
+    val src = getResource("/scala/BreakpointTest.scala")
     compileScala(src, "BreakpointTest", dest, scalaVersion)
   }
 
   def javaBreakpointTest(dest: File): MainDebuggeeRunner = {
-    val src = getResource("/BreakpointTest.java")
+    val src = getResource("/java/BreakpointTest.java")
     compileJava(src, "BreakpointTest", dest)
+  }
+
+  def scala3Braceless(dest: File): MainDebuggeeRunner = {
+    val src = getResource("/scala3/braceless.scala")
+    compileScala(src, "example.Example", dest, ScalaVersion.`3`)
+  }
+
+  def scala3MainAnnotation(dest: File): MainDebuggeeRunner = {
+    val src = getResource("/scala3/main-annotation.scala")
+    compileScala(src, "example.app", dest, ScalaVersion.`3`)
   }
 
   private def getResource(name: String): Path =
@@ -84,7 +92,9 @@ object MainDebuggeeRunner {
     val exitValue = process.waitFor()
     if (exitValue != 0) throw new IllegalArgumentException(s"cannot compile $src")
     
-    val allClasses = IO.listFiles(classDir).filter(_.name.endsWith(".class")).map(_.toPath).toList
+    val allClasses = FileTreeView.default
+      .list(classDir.toPath.toGlob / ** / "*.class")
+      .map { case (path, _) => path}
     val classPath = classDir.getAbsolutePath + File.pathSeparator + libraryClasspath
     MainDebuggeeRunner(src, classPath, allClasses, mainClass)
   }
