@@ -5,13 +5,13 @@ import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.reporters.StoreReporter
 
 object ExpressionCompiler {
-  def apply(classPath: String, line: Int): ExpressionCompiler = {
+  def apply(classPath: String, line: Int, valOrDefDefNames: Set[String]): ExpressionCompiler = {
     val dir = Files.createTempDirectory("expr-eval")
     val settings = new Settings
     settings.classpath.value = classPath
     settings.outputDirs.setSingleOutput(dir.toString)
     val reporter = new StoreReporter
-    val global = new EvalGlobal(settings, reporter, line)
+    val global = new EvalGlobal(settings, reporter, line, valOrDefDefNames)
     new ExpressionCompiler(global, reporter, dir)
   }
 }

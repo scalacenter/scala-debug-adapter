@@ -7,7 +7,7 @@ import java.net.{URL, URLClassLoader}
 object ExpressionCompilerTest extends TestSuite {
   def tests: Tests = Tests {
     "compile" - {
-      val expressionCompiler = ExpressionCompiler(System.getProperty("java.class.path"), 5)
+      val expressionCompiler = ExpressionCompiler(System.getProperty("java.class.path"), 5, Set("a", "b", "args"))
       val source =
         """object EvaluateTest {
           |  def main(args: Array[String]): Unit = {
@@ -26,7 +26,7 @@ object ExpressionCompilerTest extends TestSuite {
       val expressionClass = urlClassLoader.loadClass("Expression")
       val expression = expressionClass.newInstance()
       val method = expressionClass.getMethods.find(_.getName == "evaluate").get
-      val result = method.invoke(expression, Array[Any]("a", "b"), Array[Any]("a", "b"))
+      val result = method.invoke(expression, Array[Any]("a", "b", "args"), Array[Any]("a", "b", Array("a", "b", "c")))
       println("result = " + result)
     }
   }

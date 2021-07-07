@@ -12,7 +12,6 @@ object Evaluator {
     val vm = thread.virtualMachine()
     val thisObject = frame.thisObject()
 
-
     val location = frame.location()
     val sourcePath = location.sourcePath()
     val lineNumber = location.lineNumber()
@@ -22,14 +21,20 @@ object Evaluator {
 
     val result = for {
       classLoader <- classLoader(thisObject).flatMap(JdiClassLoader(_, thread))
-      names <- Some(frame.visibleVariables().asScala.map(_.name()).map(vm.mirrorOf).toList)
-      values <- Some(frame.visibleVariables().asScala.map(frame.getValue).flatMap(value => boxIfNeeded(value, classLoader, thread)).toList)
+      variables = frame.visibleVariables().asScala
+      variableNames <- Some(variables.map(_.name()).map(vm.mirrorOf).toList)
+      variableValues <- Some(variables.map(frame.getValue).flatMap(value => boxIfNeeded(value, classLoader, thread)).toList)
+      fields = thisObject.referenceType().fields().asScala
+      fieldNames <- Some(fields.map(_.name()).map(vm.mirrorOf).toList)
+      fieldValues <- Some(fields.map(thisObject.getValue).flatMap(value => boxIfNeeded(value, classLoader, thread)).toList)
+      names <- Some(variableNames ++ fieldNames)
+      values <- Some(variableValues ++ fieldValues)
       systemClass <- classLoader.loadClass("java.lang.System")
       classPath <- systemClass
         .invokeStatic("getProperty", List(vm.mirrorOf("java.class.path")))
         .map(_.toString)
         .map(_.drop(1).dropRight(1)) // remove quotation marks
-      expressionCompiler <- Some(ExpressionCompiler(classPath, lineNumber))
+      expressionCompiler <- Some(ExpressionCompiler(classPath, lineNumber, names.map(_.value()).toSet))
       expressionClassPath = s"file://${expressionCompiler.dir.toString}/"
       _ <- Some(expressionCompiler.compile(content, expression))
       url <- classLoader
