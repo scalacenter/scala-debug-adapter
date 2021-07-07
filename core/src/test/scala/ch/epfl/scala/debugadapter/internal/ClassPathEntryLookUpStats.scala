@@ -145,12 +145,9 @@ object ClassPathEntryLookupStats extends TestSuite {
     val (duration, lookup) = Stats.timed(ClassPathEntryLookUp(classPathEntry))
     val classFileCount = lookup.fullyQualifiedNames.size
     val orphanClassFileCount = lookup.orphanClassFiles.size
-    val orphanClassFileWithDebugLineNumbersCount = lookup.orphanClassFiles.count(_.lineNumbers.nonEmpty)
     println(s"${classPathEntry.name}:")
     println(s"  - $classFileCount classes loaded in $duration")
     if (orphanClassFileCount > 0)
       println(s"  - $orphanClassFileCount orphan class files")
-    if (orphanClassFileWithDebugLineNumbersCount > 0)
-      println(s"  - $orphanClassFileWithDebugLineNumbersCount orphan class files containing line numbers")
   }
 }

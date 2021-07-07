@@ -9,10 +9,11 @@ import java.util
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import java.io.InputStream
+import ClassPathEntryLookUp.withinJarFile
 
 private case class SourceLine(uri: URI, lineNumber: Int)
 
-private case class ClassFile(fullyQualifiedName: String, sourceName: String, lineNumbers: Seq[Int]) {
+private case class ClassFile(fullyQualifiedName: String, sourceName: String, relativePath: String) {
   def className: String = fullyQualifiedName.split('.').last
   def fullPackage: String = fullyQualifiedName.stripSuffix(className).stripSuffix(".")
 }
@@ -26,28 +27,69 @@ private case class SourceFile(entry: SourceEntry, relativePath: String, uri: URI
 
 private class ClassPathEntryLookUp(
   val entry: ClassPathEntry,
-  uriToSourceFile: Map[URI, SourceFile],
+  sourceUriToSourceFile: Map[URI, SourceFile],
+  sourceUriToClassFiles: Map[URI, Seq[ClassFile]],
   classNameToSourceFile: Map[String, SourceFile],
-  sourceLineToClassFile: Map[SourceLine, Seq[ClassFile]],
   val orphanClassFiles: Seq[ClassFile]
 ) {
-  def sources: Iterable[URI] = uriToSourceFile.keys
+  private val cachedSourceLines = mutable.Map[SourceLine, Seq[ClassFile]]()
+
+  def sources: Iterable[URI] = sourceUriToSourceFile.keys
   def fullyQualifiedNames: Iterable[String] = classNameToSourceFile.keys
 
   def getFullyQualifiedClassName(sourceUri: URI, lineNumber: Int): Option[String] = {
-    val line = SourceLine(sourceUri, lineNumber)    
-    for (classFiles <- sourceLineToClassFile.get(line)) yield {
-      // The same breakpoint can stop in different classes
-      // We choose the one with the smallest name
-      classFiles.map(_.fullyQualifiedName).minBy(_.length)
+    val line = SourceLine(sourceUri, lineNumber)
+  
+    if (!cachedSourceLines.contains(line)) {
+      // read and cache line numbers from class files
+      for (classFiles <- sourceUriToClassFiles.get(sourceUri)) {
+        if (entry.isJar) withinJarFile(entry.absolutePath)(loadLineNumbers(_, classFiles, sourceUri))
+        else loadLineNumbers(FileSystems.getDefault, classFiles, sourceUri)
+      }
+    }
+
+    cachedSourceLines.get(line)
+      .map { classFiles =>
+        // The same breakpoint can stop in different classes
+        // We choose the one with the smallest name
+        classFiles.map(_.fullyQualifiedName).minBy(_.length)
+      }
+  }
+
+  private def loadLineNumbers(fileSystem: FileSystem, classFiles: Seq[ClassFile], sourceUri: URI): Unit = {
+    for (classFile <- classFiles) {
+      val path = fileSystem.getPath(classFile.relativePath)
+      val inputStream = Files.newInputStream(path)
+      val reader = new ClassReader(inputStream)
+
+      val lineNumbers = mutable.Buffer[Int]()
+    
+      val visitor = new ClassVisitor(Opcodes.ASM7) {
+        override def visitMethod(access: Int, name: String, desc: String, signature: String, exceptions: Array[String]): MethodVisitor = {
+          new MethodVisitor(Opcodes.ASM7) {
+            override def visitLineNumber(line: Int, start: Label): Unit = {
+              lineNumbers.append(line)
+            }
+          }
+        }
+      }
+      reader.accept(visitor, 0)
+      
+      for (n <- lineNumbers) {
+        val line = SourceLine(sourceUri, n)
+        cachedSourceLines.update(
+          line,
+          cachedSourceLines.getOrElse(line, Seq.empty) :+ classFile
+        )
+      }
     }
   }
 
   def getSourceContent(sourceUri: URI): Option[String] = {
-    uriToSourceFile.get(sourceUri).map { sourceFile =>
+    sourceUriToSourceFile.get(sourceUri).map { sourceFile =>
       sourceFile.entry match {
         case SourceJar(jar) =>
-          ClassPathEntryLookUp.withinJarFile(jar) { fileSystem =>
+          withinJarFile(jar) { fileSystem =>
             val filePath = fileSystem.getPath(sourceFile.relativePath)
             new String(Files.readAllBytes(filePath))
           }
@@ -70,11 +112,11 @@ private object ClassPathEntryLookUp {
     if (sourceFiles.isEmpty) ClassPathEntryLookUp.empty(entry)
     else {
       val classFiles = readAllClassFiles(entry)
-      val uriToSourceFile = sourceFiles.map(f => (f.uri, f)).toMap
+      val sourceUriToSourceFile = sourceFiles.map(f => (f.uri, f)).toMap
       val sourceNameToSourceFile = sourceFiles.groupBy(f => f.name)
       
       val classNameToSourceFile = mutable.Map[String, SourceFile]()
-      val sourceLineToClassFile = mutable.Map[SourceLine, Seq[ClassFile]]()
+      val sourceUriToClassFiles = mutable.Map[URI, Seq[ClassFile]]()
       val orphanClassFiles = mutable.Buffer[ClassFile]()
 
       for (classFile <- classFiles) {      
@@ -95,19 +137,18 @@ private object ClassPathEntryLookUp {
             case None => orphanClassFiles.append(classFile)
             case Some(sourceFile) => 
               classNameToSourceFile.put(classFile.fullyQualifiedName, sourceFile)
-              classFile.lineNumbers.foreach { lineNumber =>
-                val line = SourceLine(sourceFile.uri, lineNumber)
-                val classes = sourceLineToClassFile.getOrElse(line, Seq.empty) :+ classFile
-                sourceLineToClassFile.put(line, classes)
-              }
+              sourceUriToClassFiles.update(
+                sourceFile.uri,
+                sourceUriToClassFiles.getOrElse(sourceFile.uri, Seq.empty) :+ classFile
+              )
           }
       }
 
       new ClassPathEntryLookUp(
         entry,
-        uriToSourceFile,
+        sourceUriToSourceFile,
+        sourceUriToClassFiles.toMap,
         classNameToSourceFile.toMap,
-        sourceLineToClassFile.toMap,
         orphanClassFiles
       )
     }
@@ -138,7 +179,7 @@ private object ClassPathEntryLookUp {
   }
 
   private def readAllClassFiles(entry: ClassPathEntry): Seq[ClassFile] = {
-    if (entry.absolutePath.toString.endsWith(".jar"))
+    if (entry.isJar)
       withinJarFile(entry.absolutePath) { fileSystem =>
         readAllClassFiles(fileSystem, fileSystem.getPath("/")).toVector
       }
@@ -151,34 +192,24 @@ private object ClassPathEntryLookUp {
     Files.walk(root)
       .filter(classMatcher.matches)
       .iterator.asScala
-      .map(Files.newInputStream(_))
       .flatMap(readClassFile)
   }
 
-  private def readClassFile(classBytes: InputStream): Option[ClassFile] = {
-    val reader = new ClassReader(classBytes)
+  private def readClassFile(path: Path): Option[ClassFile] = {
+    val inputStream = Files.newInputStream(path)
+    val reader = new ClassReader(inputStream)
     val fullyQualifiedName = reader.getClassName.replace('/', '.')
     
     var sourceName = Option.empty[String]
-    val lineNumbers = mutable.Buffer[Int]()
     
     val visitor = new ClassVisitor(Opcodes.ASM7) {
-      override def visitSource(source: String, debug: String): Unit =
-        sourceName = Option(source)
-
-      override def visitMethod(access: Int, name: String, desc: String, signature: String, exceptions: Array[String]): MethodVisitor = {
-        new MethodVisitor(Opcodes.ASM7) {
-          override def visitLineNumber(line: Int, start: Label): Unit = {
-            lineNumbers.append(line)
-          }
-        }
-      }
+      override def visitSource(source: String, debug: String): Unit = sourceName = Option(source)
     }
     reader.accept(visitor, 0)
     
     // we ignore the class file if it has no corresponding source file
     sourceName.map { sourceName =>
-      ClassFile(fullyQualifiedName, sourceName, lineNumbers.toSeq)
+      ClassFile(fullyQualifiedName, sourceName, path.toString)
     }
   }
 
