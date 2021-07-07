@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter
 import coursier._
 
 sealed trait ScalaVersion {
+  def organization: Organization = Organization("org.scala-lang")
   def version: String
   def compiler: Dependency
   def library: Dependency
@@ -10,15 +11,15 @@ sealed trait ScalaVersion {
 }
 
 final case class Scala2(version: String) extends ScalaVersion {
-  val compiler: Dependency = Dependency(mod"org.scala-lang:scala-compiler", version)
-  val library: Dependency = Dependency(mod"org.scala-lang:scala-library", version)
-  val compilerMain: String = "scala.tools.nsc.Main"
+  def compiler: Dependency = Dependency(Module(organization, name"scala-compiler"), version)
+  def library: Dependency = Dependency(Module(organization, name"scala-library"), version)
+  def compilerMain: String = "scala.tools.nsc.Main"
 }
 
 final case class Scala3(version: String) extends ScalaVersion {
-  val compiler: Dependency = Dependency(mod"org.scala-lang:scala3-compiler_3", version)
-  val library: Dependency = Dependency(mod"org.scala-lang:scala3-library_3", version)
-  val compilerMain: String = "dotty.tools.dotc.Main"
+  def compiler: Dependency = Dependency(Module(organization, name"scala3-compiler_3"), version)
+  def library: Dependency = Dependency(Module(organization, name"scala3-library_3"), version)
+  def compilerMain: String = "dotty.tools.dotc.Main"
 }
 
 object ScalaVersion {

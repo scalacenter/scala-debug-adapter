@@ -5,5 +5,6 @@ import java.nio.file.Path
 trait DebuggeeRunner {
   def name: String
   def run(listener: DebuggeeListener): CancelableFuture[Unit]
-  def classFilesMappedTo(origin: Path, lines: Array[Int], columns: Array[Int]): List[Path]
+  def classPathEntries: Seq[ClassPathEntry]
+  def classPath: Seq[Path] = classPathEntries.map(_.absolutePath)
 }

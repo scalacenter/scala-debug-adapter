@@ -1,17 +1,15 @@
 package ch.epfl.scala.debugadapter
 
+import ch.epfl.scala.debugadapter.internal.DebugSession
+import ch.epfl.scala.debugadapter.testing.TestDebugClient
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
 import sbt.io.IO
 import utest._
 
-
 import java.net.{ConnectException, SocketException, SocketTimeoutException}
 import java.util.concurrent.{Executors, TimeUnit, TimeoutException}
-import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
-
-import ch.epfl.scala.debugadapter.testing.TestDebugClient
-import ch.epfl.scala.debugadapter.internal.DebugSession
+import scala.concurrent.{Await, ExecutionContext}
 
 object DebugServerSpec extends TestSuite {
   val DefaultTimeout = Duration(2, TimeUnit.SECONDS)

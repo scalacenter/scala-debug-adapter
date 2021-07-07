@@ -1,10 +1,8 @@
 package ch.epfl.scala.debugadapter
 
-import coursier._
+import ch.epfl.scala.debugadapter.MainDebuggeeRunner._
 import sbt.io.IO
 import sbt.io.syntax._
-import sbt.nio.file.{**, FileTreeView}
-import sbt.nio.file.syntax._
 
 import java.io.{BufferedReader, File, InputStream, InputStreamReader}
 import java.net.InetSocketAddress
@@ -12,20 +10,15 @@ import java.nio.file.{Path, Paths}
 import scala.concurrent.{Future, Promise}
 import scala.util.control.NonFatal
 
-import MainDebuggeeRunner._
-
-case class MainDebuggeeRunner(source: Path, classpath: String, allClasses: Seq[Path], mainClass: String) extends DebuggeeRunner {
+case class MainDebuggeeRunner(source: Path, classPathEntries: Seq[ClassPathEntry], mainClass: String) extends DebuggeeRunner {
   override def name: String = mainClass
   
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] = {
-    val command = Array("java", DebugInterface, "-cp", classpath, mainClass)
-    val builder = new ProcessBuilder(command: _*)
+    val cmd = Seq("java", DebugInterface, "-cp", classPath.mkString(File.pathSeparator), mainClass)
+    val builder = new ProcessBuilder(cmd: _*)
     val process = builder.start()
     new MainProcess(process, listener)
   }
-
-  override def classFilesMappedTo(origin: Path, lines: Array[Int], columns: Array[Int]): List[Path] =
-    allClasses.toList
 }
 
 object MainDebuggeeRunner {
@@ -73,15 +66,17 @@ object MainDebuggeeRunner {
   private def compileScala(src: Path, mainClass: String, dest: File, scalaVersion: ScalaVersion): MainDebuggeeRunner = {
     val classDir = dest / "classes"
     IO.createDirectory(classDir)
-    val compilerClasspath = fetch(scalaVersion.compiler).map(_.getAbsolutePath).mkString(File.pathSeparator)
-    val libraryClasspath = fetch(scalaVersion.library).map(_.getAbsolutePath).mkString(File.pathSeparator)
+    val compilerClassPath = Coursier.fetch(scalaVersion.compiler)
+    val libraryClassPath = Coursier.fetch(scalaVersion.library)
     
     val command = Array(
       "java",
-      "-classpath", compilerClasspath,
+      "-classpath",
+      compilerClassPath.map(_.absolutePath).mkString(File.pathSeparator),
       scalaVersion.compilerMain,
       "-d", classDir.getAbsolutePath,
-      "-classpath", libraryClasspath,
+      "-classpath",
+      libraryClassPath.map(_.absolutePath).mkString(File.pathSeparator),
       src.toAbsolutePath.toString
     )
     val builder = new ProcessBuilder(command: _*)
@@ -92,17 +87,9 @@ object MainDebuggeeRunner {
     val exitValue = process.waitFor()
     if (exitValue != 0) throw new IllegalArgumentException(s"cannot compile $src")
     
-    val allClasses = FileTreeView.default
-      .list(classDir.toPath.toGlob / ** / "*.class")
-      .map { case (path, _) => path}
-    val classPath = classDir.getAbsolutePath + File.pathSeparator + libraryClasspath
-    MainDebuggeeRunner(src, classPath, allClasses, mainClass)
-  }
-
-  private def fetch(artifact: Dependency): Seq[File] = {
-    coursier.Fetch()
-      .addDependencies(artifact)
-      .run()
+    val sourceEntry = StandaloneSourceFile(src, src.getParent.relativize(src).toString)
+    val mainClassPathEntry = ClassPathEntry(classDir.toPath, Seq(sourceEntry))
+    MainDebuggeeRunner(src, libraryClassPath :+ mainClassPathEntry, mainClass)
   }
 
   private def compileJava(src: Path, mainClass: String, dest: File): MainDebuggeeRunner = {
@@ -121,12 +108,10 @@ object MainDebuggeeRunner {
 
     val exitValue = process.waitFor()
     if (exitValue != 0) throw new IllegalArgumentException(s"cannot compile $src")
-    
-    val allClasses = FileTreeView.default
-      .list(classDir.toPath.toGlob / ** / "*.class")
-      .map { case (path, _) => path}
-    val classPath = classDir.getAbsolutePath + File.pathSeparator
-    new MainDebuggeeRunner(src, classPath, allClasses, mainClass)
+
+    val sourceEntry = StandaloneSourceFile(src, src.getParent.relativize(src).toString)
+    val mainClassPathEntry = ClassPathEntry(classDir.toPath, Seq(sourceEntry))
+    new MainDebuggeeRunner(src, Seq(mainClassPathEntry), mainClass)
   }
 
   private def startCrawling(input: InputStream)(f: String => Unit): Unit = {
