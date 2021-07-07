@@ -45,7 +45,7 @@ private[debugadapter] final class SourceLookUpProvider(
 
 private[debugadapter] object SourceLookUpProvider {
   def apply(classPath: Seq[ClassPathEntry], logger: Logger): SourceLookUpProvider = {
-    val lookups = classPath.map(ClassPathEntryLookUp.apply)
+    val lookups = classPath.par.map(ClassPathEntryLookUp.apply).seq
     val sourceUriToClassPathEntry = lookups
       .flatMap(lookup => lookup.sources.map(uri => (uri, lookup)))
       .toMap
