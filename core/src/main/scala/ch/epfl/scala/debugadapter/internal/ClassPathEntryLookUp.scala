@@ -218,7 +218,7 @@ private object ClassPathEntryLookUp {
   }
 
   private def withinJarFile[T](absolutePath: Path)(f: FileSystem => T): T = {
-    val uri = URI.create(s"jar:file:$absolutePath")
+    val uri = URI.create(s"jar:${absolutePath.toUri}")
     val fileSystem = FileSystems.newFileSystem(uri, new util.HashMap[String, Any])
     try f(fileSystem)
     finally fileSystem.close()
