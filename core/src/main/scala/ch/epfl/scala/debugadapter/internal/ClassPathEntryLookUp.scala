@@ -157,7 +157,7 @@ private object ClassPathEntryLookUp {
   private def getAllSourceFiles(entry: SourceEntry): Seq[SourceFile] = {
     entry match {
       case SourceJar(jar) => 
-        withinJarFile(jar) { fileSystem => 
+        withinJarFile(jar) { fileSystem =>
           getAllSourceFiles(entry, fileSystem, fileSystem.getPath("/")).toVector
         }
       case SourceDirectory(directory) =>
@@ -168,14 +168,16 @@ private object ClassPathEntryLookUp {
   }
 
   private def getAllSourceFiles(entry: SourceEntry, fileSystem: FileSystem, root: Path): Iterator[SourceFile] = {
-    val sourceMatcher = fileSystem.getPathMatcher("glob:**.{scala,java}")
-    Files.walk(root: Path)
-      .filter(sourceMatcher.matches)
-      .iterator.asScala
-      .map { path => 
-        val relativePath = root.relativize(path).toString
-        SourceFile(entry, relativePath, path.toUri)
-      }
+    if (Files.exists(root)) {
+      val sourceMatcher = fileSystem.getPathMatcher("glob:**.{scala,java}")
+      Files.walk(root: Path)
+        .filter(sourceMatcher.matches)
+        .iterator.asScala
+        .map { path =>
+          val relativePath = root.relativize(path).toString
+          SourceFile(entry, relativePath, path.toUri)
+        }
+    } else Iterator.empty
   }
 
   private def readAllClassFiles(entry: ClassPathEntry): Seq[ClassFile] = {
@@ -188,11 +190,13 @@ private object ClassPathEntryLookUp {
   }
 
   private def readAllClassFiles(fileSystem: FileSystem, root: Path): Iterator[ClassFile] = {
-    val classMatcher = fileSystem.getPathMatcher("glob:**.class")
-    Files.walk(root)
-      .filter(classMatcher.matches)
-      .iterator.asScala
-      .flatMap(readClassFile)
+    if (Files.exists(root)) {
+      val classMatcher = fileSystem.getPathMatcher("glob:**.class")
+      Files.walk(root)
+        .filter(classMatcher.matches)
+        .iterator.asScala
+        .flatMap(readClassFile)
+    } else Iterator.empty
   }
 
   private def readClassFile(path: Path): Option[ClassFile] = {

@@ -4,11 +4,9 @@ import ch.epfl.scala.debugadapter._
 import sbt.Def.Classpath
 import sbt.Tests.{Cleanup, Setup}
 import sbt.internal.bsp.BuildTargetIdentifier
-import sbt.internal.inc.{Analysis, SourceInfos}
 import sbt.io.IO
 import sbt.testing._
-import sbt.{ForkOptions, Keys, TestDefinition, TestFramework}
-import xsbti.FileConverter
+import sbt.{ForkOptions, TestDefinition, TestFramework}
 
 import java.io.ObjectOutputStream
 import java.net.{ServerSocket, Socket}
@@ -16,46 +14,30 @@ import java.nio.file.Path
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
 
-private[debugadapter] abstract class SbtDebuggeeRunner(classpath: Classpath, converter: FileConverter) extends DebuggeeRunner {
-  private val analyses = classpath
-    .flatMap(_.metadata.get(Keys.analysis))
-    .map { case a: Analysis => a }
-
-  override def classFilesMappedTo(origin: Path, lines: Array[Int], columns: Array[Int]): List[Path] = {
-    val originRef = converter.toVirtualFile(origin)
-    analyses.collectFirst {
-      case analysis if analysis.infos.get(originRef) != SourceInfos.emptyInfo =>
-        analysis.relations.products(originRef).iterator.map(converter.toPath).toList
-    }.getOrElse(List.empty)
-  }
-}
-
 private[debugadapter] final class MainClassRunner(
   target: BuildTargetIdentifier,
   forkOptions: ForkOptions,
-  classpath: Classpath,
+  val classPathEntries: Seq[ClassPathEntry],
   mainClass: String,
-  args: Seq[String],
-  converter: FileConverter
-)(implicit ec: ExecutionContext) extends SbtDebuggeeRunner(classpath, converter) {
+  args: Seq[String]
+)(implicit ec: ExecutionContext) extends DebuggeeRunner {
   override def name: String = s"${getClass.getSimpleName}(${target.uri}, $mainClass)"
 
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] = {
-    DebuggeeProcess.start(forkOptions, classpath.map(_.data), mainClass, args, listener)
+    DebuggeeProcess.start(forkOptions, classPath, mainClass, args, listener)
   }
 }
 
 private[debugadapter] final class TestSuitesRunner(
     target: BuildTargetIdentifier,
     forkOptions: ForkOptions,
-    classpath: Classpath,
+    val classPathEntries: Seq[ClassPathEntry],
     setups: Seq[Setup],
     cleanups: Seq[Cleanup],
     parallel: Boolean, 
     runners: Map[TestFramework, Runner],
-    tests: Seq[TestDefinition],
-    converter: FileConverter
-)(implicit executionContext: ExecutionContext) extends SbtDebuggeeRunner(classpath, converter) {
+    tests: Seq[TestDefinition]
+)(implicit executionContext: ExecutionContext) extends DebuggeeRunner {
   override def name: String = s"${getClass.getSimpleName}(${target.uri}, [${tests.mkString(", ")}])"
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] = {
     object Acceptor extends Thread {
@@ -114,9 +96,9 @@ private[debugadapter] final class TestSuitesRunner(
     val mainClass = classOf[ForkMain].getCanonicalName
     val args = Seq(Acceptor.server.getLocalPort.toString)
 
-    val fullClasspath = classpath.map(_.data) ++ Seq(
-      IO.classLocationPath[ForkMain].toFile, // debug-test-agent
-      IO.classLocationPath[Framework].toFile // test-interface
+    val fullClasspath = classPath ++ Seq(
+      IO.classLocationPath[ForkMain], // debug-test-agent
+      IO.classLocationPath[Framework] // test-interface
     )
 
     // can't provide the loader for test classes, which is in another jvm
@@ -135,9 +117,8 @@ private[debugadapter] final class TestSuitesRunner(
 
 private[debugadapter] final class AttachRemoteRunner(
   target: BuildTargetIdentifier,
-  classpath: Classpath,
-  converter: FileConverter
-) extends SbtDebuggeeRunner(classpath, converter) {
+  val classPathEntries: Seq[ClassPathEntry]
+) extends DebuggeeRunner {
   override def name: String = s"${getClass.getSimpleName}(${target.uri})"
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] = new CancelableFuture[Unit] {
     override def future: Future[Unit] = Future.successful(())

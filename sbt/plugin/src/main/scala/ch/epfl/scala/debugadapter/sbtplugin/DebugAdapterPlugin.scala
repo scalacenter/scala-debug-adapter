@@ -2,8 +2,7 @@ package ch.epfl.scala.debugadapter.sbtplugin
 
 import ch.epfl.scala.debugadapter.sbtplugin.internal._
 import ch.epfl.scala.debugadapter.sbtplugin.internal.JsonProtocol._
-import ch.epfl.scala.debugadapter.DebugServer
-import ch.epfl.scala.debugadapter.DebuggeeRunner
+import ch.epfl.scala.debugadapter._
 
 import sbt.Tests._
 import sbt._
@@ -19,7 +18,6 @@ import java.io.File
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 import scala.util.{Failure, Success}
 import scala.collection.concurrent.TrieMap
-
 
 object DebugAdapterPlugin extends sbt.AutoPlugin {
   private final val DebugSessionStart: String = "debugSession/start"
@@ -169,9 +167,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val target = Keys.bspTargetIdentifier.value
     val javaHome = Keys.javaHome.value
     val workingDirectory = Keys.baseDirectory.value
+    val classPathEntries = InternalTasks.classPathEntries.value
     val envVars = Keys.envVars.value
-    val converter = Keys.fileConverter.value
-    val classpath = Keys.fullClasspath.value
     val logger = Keys.streams.value.log
     val state = Keys.state.value
 
@@ -181,7 +178,6 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         Error.invalidParams(s"expected data of kind ${DataKind.ScalaMainClass}: ${cause.getMessage}")
       }
     } yield {
-      val classpathOption = Attributed.data(classpath).map(_.getAbsolutePath).mkString(File.pathSeparator)
       val forkOptions = ForkOptions(
         javaHome = javaHome,
         outputStrategy = None,
@@ -200,10 +196,9 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       new MainClassRunner(
         target,
         forkOptions,
-        classpath,
+        classPathEntries,
         params.`class`,
-        params.arguments,
-        converter
+        params.arguments
       )
     }
 
@@ -218,17 +213,14 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
 
   private def testSuitesSessionTask: Def.Initialize[InputTask[URI]] = Def.inputTask {
     val target = Keys.bspTargetIdentifier.value
-    
     val testGrouping = (Keys.test / Keys.testGrouping).value
     val defaultForkOpts = Keys.forkOptions.value
-    val classpath = (Keys.test / Keys.fullClasspath).value
+    val classPathEntries = InternalTasks.classPathEntries.value
     val frameworks = Keys.loadedTestFrameworks.value
     val testLoader = Keys.testLoader.value
     val testExec = (Keys.test / Keys.testExecution).value
     val parallelExec = (Keys.test / Keys.testForkedParallel).value
     val state = Keys.state.value
-
-    val converter = Keys.fileConverter.value
     val logger = Keys.streams.value.log
 
     import BasicJsonProtocol._
@@ -246,7 +238,6 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         Error.invalidParams("no matching test group")
       }
     } yield {
-
       val testDefinitions = testGroup.tests.filter(test => testSuites.contains(test.name))
       val forkOptions = testGroup.runPolicy match {
         case InProcess => defaultForkOpts
@@ -271,13 +262,12 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       new TestSuitesRunner(
         target,
         forkOptions,
-        classpath,
+        classPathEntries,
         setups,
         cleanups,
         parallel,
         testRunners,
-        testDefinitions,
-        converter
+        testDefinitions
       )
     }
 
@@ -293,13 +283,11 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   private def remoteSessionTask: Def.Initialize[Task[URI]] = Def.task {
     val target = Keys.bspTargetIdentifier.value
     
-    val classpath = (Keys.test / Keys.fullClasspath).value
+    val classPathEntries = InternalTasks.classPathEntries.value
     val state = Keys.state.value
-
-    val converter = Keys.fileConverter.value
     val logger = Keys.streams.value.log
 
-    val runner = new AttachRemoteRunner(target, classpath, converter)
+    val runner = new AttachRemoteRunner(target, classPathEntries)
     startServer(state, target, runner, logger)
   }
 
