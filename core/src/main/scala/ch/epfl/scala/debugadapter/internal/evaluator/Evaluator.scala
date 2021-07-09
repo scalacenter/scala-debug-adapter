@@ -15,8 +15,9 @@ object Evaluator {
     val location = frame.location()
     val sourcePath = location.sourcePath()
     val lineNumber = location.lineNumber()
+    val fqcn = location.declaringType().name()
 
-    val uri = sourceLookUpProvider.getSourceFileURI("", sourcePath)
+    val uri = sourceLookUpProvider.getSourceFileURI(fqcn, sourcePath)
     val content = sourceLookUpProvider.getSourceContents(uri)
 
     val result = for {
