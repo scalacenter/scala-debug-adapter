@@ -69,8 +69,8 @@ object MainDebuggeeRunner {
   }
 
   def evaluateTest(dest: File): MainDebuggeeRunner = {
-    val src = getResource("/EvaluateTest.scala")
-    compileScala(src, "EvaluateTest", dest)
+    val src = getResource("/scala/EvaluateTest.scala")
+    compileScala(src, "EvaluateTest", dest, ScalaVersion.`2.12`)
   }
 
   private def getResource(name: String): Path =
