@@ -22,7 +22,7 @@ private case class SourceFile(entry: SourceEntry, relativePath: String, uri: URI
   def extension: String = relativePath.split('.').last
   def baseName: String = name.stripSuffix(extension)
   def name: String = relativePath.split('/').last
-  def folderAsPackage: String = relativePath.stripSuffix(name).stripSuffix(".").replace('/', '.')
+  def folderAsPackage: String = relativePath.stripSuffix(name).stripSuffix("/").replace('/', '.')
 }
 
 private class ClassPathEntryLookUp(
