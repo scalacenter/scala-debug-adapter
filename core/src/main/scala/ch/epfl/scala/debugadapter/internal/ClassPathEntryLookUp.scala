@@ -13,7 +13,7 @@ import ClassPathEntryLookUp.withinJarFile
 
 private case class SourceLine(uri: URI, lineNumber: Int)
 
-private case class ClassFile(fullyQualifiedName: String, sourceName: String, relativePath: String) {
+private case class ClassFile(fullyQualifiedName: String, sourceName: Option[String], relativePath: String) {
   def className: String = fullyQualifiedName.split('.').last
   def fullPackage: String = fullyQualifiedName.stripSuffix(className).stripSuffix(".")
 }
@@ -30,12 +30,17 @@ private class ClassPathEntryLookUp(
   sourceUriToSourceFile: Map[URI, SourceFile],
   sourceUriToClassFiles: Map[URI, Seq[ClassFile]],
   classNameToSourceFile: Map[String, SourceFile],
-  val orphanClassFiles: Seq[ClassFile]
+  missingSourceFileClassFiles: Seq[ClassFile],
+  private[internal] val orphanClassFiles: Seq[ClassFile]
 ) {
   private val cachedSourceLines = mutable.Map[SourceLine, Seq[ClassFile]]()
 
   def sources: Iterable[URI] = sourceUriToSourceFile.keys
-  def fullyQualifiedNames: Iterable[String] = classNameToSourceFile.keys
+  def fullyQualifiedNames: Iterable[String] = {
+    classNameToSourceFile.keys ++ 
+      orphanClassFiles.map(_.fullyQualifiedName) ++ 
+      missingSourceFileClassFiles.map(_.fullyQualifiedName)
+  }
 
   def getFullyQualifiedClassName(sourceUri: URI, lineNumber: Int): Option[String] = {
     val line = SourceLine(sourceUri, lineNumber)
@@ -105,7 +110,7 @@ private class ClassPathEntryLookUp(
 
 private object ClassPathEntryLookUp {
   def empty(entry: ClassPathEntry): ClassPathEntryLookUp =
-    new ClassPathEntryLookUp(entry, Map.empty, Map.empty, Map.empty, Seq.empty)
+    new ClassPathEntryLookUp(entry, Map.empty, Map.empty, Map.empty, Seq.empty, Seq.empty)
 
   def apply(entry: ClassPathEntry): ClassPathEntryLookUp = {
     val sourceFiles = entry.sourceEntries.flatMap(getAllSourceFiles)
@@ -118,29 +123,34 @@ private object ClassPathEntryLookUp {
       val classNameToSourceFile = mutable.Map[String, SourceFile]()
       val sourceUriToClassFiles = mutable.Map[URI, Seq[ClassFile]]()
       val orphanClassFiles = mutable.Buffer[ClassFile]()
+      val missingSourceFileClassFiles = mutable.Buffer[ClassFile]()
 
-      for (classFile <- classFiles) {      
+      for (classFile <- classFiles) {
+        def recordSourceFile(sourceFile: SourceFile): Unit = {
+          classNameToSourceFile.put(classFile.fullyQualifiedName, sourceFile)
+          sourceUriToClassFiles.update(
+            sourceFile.uri,
+            sourceUriToClassFiles.getOrElse(sourceFile.uri, Seq.empty) :+ classFile
+          )
+        }
+
         val sourceFile = 
-          sourceNameToSourceFile.getOrElse(classFile.sourceName, Seq.empty).toList match {
-            case Nil => None
+          classFile.sourceName.flatMap(sourceNameToSourceFile.get).getOrElse(Seq.empty).toList match {
+            case Nil => 
+              // the source name is missing from the class file
+              // or the source file is missing from the source entr
+              missingSourceFileClassFiles.append(classFile)
             case sourceFile:: Nil =>
               // there is only one file with that name, it must be the right one
               // even if its relative path does not match the class package
-              Some(sourceFile)
+              recordSourceFile(sourceFile)
             case manySourceFiles =>
               // there are several files with the same name
               // we find the one whose relative path matches the class package
-              manySourceFiles.find(f => f.folderAsPackage == classFile.fullPackage)
-          }
-
-          sourceFile match {
-            case None => orphanClassFiles.append(classFile)
-            case Some(sourceFile) => 
-              classNameToSourceFile.put(classFile.fullyQualifiedName, sourceFile)
-              sourceUriToClassFiles.update(
-                sourceFile.uri,
-                sourceUriToClassFiles.getOrElse(sourceFile.uri, Seq.empty) :+ classFile
-              )
+              manySourceFiles.find(f => f.folderAsPackage == classFile.fullPackage) match {
+                case Some(sourceFile) => recordSourceFile(sourceFile)
+                case None => orphanClassFiles.append(classFile)
+              }
           }
       }
 
@@ -149,6 +159,7 @@ private object ClassPathEntryLookUp {
         sourceUriToSourceFile,
         sourceUriToClassFiles.toMap,
         classNameToSourceFile.toMap,
+        missingSourceFileClassFiles,
         orphanClassFiles
       )
     }
@@ -195,11 +206,11 @@ private object ClassPathEntryLookUp {
       Files.walk(root)
         .filter(classMatcher.matches)
         .iterator.asScala
-        .flatMap(readClassFile)
+        .map(readClassFile)
     } else Iterator.empty
   }
 
-  private def readClassFile(path: Path): Option[ClassFile] = {
+  private def readClassFile(path: Path): ClassFile = {
     val inputStream = Files.newInputStream(path)
     val reader = new ClassReader(inputStream)
     val fullyQualifiedName = reader.getClassName.replace('/', '.')
@@ -211,10 +222,7 @@ private object ClassPathEntryLookUp {
     }
     reader.accept(visitor, 0)
     
-    // we ignore the class file if it has no corresponding source file
-    sourceName.map { sourceName =>
-      ClassFile(fullyQualifiedName, sourceName, path.toString)
-    }
+    ClassFile(fullyQualifiedName, sourceName, path.toString)
   }
 
   private def withinJarFile[T](absolutePath: Path)(f: FileSystem => T): T = {

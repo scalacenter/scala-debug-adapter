@@ -147,7 +147,9 @@ object ClassPathEntryLookupStats extends TestSuite {
     val orphanClassFileCount = lookup.orphanClassFiles.size
     println(s"${classPathEntry.name}:")
     println(s"  - $classFileCount classes loaded in $duration")
-    if (orphanClassFileCount > 0)
-      println(s"  - $orphanClassFileCount orphan class files")
+    if (orphanClassFileCount > 0) {
+      val orphanClassFilePercent = orphanClassFileCount * 100 / classFileCount
+      println(s"  - $orphanClassFileCount orphan class files ($orphanClassFilePercent%)")
+    }
   }
 }
