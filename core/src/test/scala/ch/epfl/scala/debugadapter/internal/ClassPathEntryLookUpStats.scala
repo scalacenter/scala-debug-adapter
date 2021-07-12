@@ -10,7 +10,7 @@ import ch.epfl.scala.debugadapter.Coursier
 /** This is not a test class.
  *  This class prints some stats about loading the lookup of some libraries
 */
-object ClassPathEntryLookupStats extends TestSuite {
+object ClassPathEntryLookUpStats extends TestSuite {
   def tests = Tests {
     "scala-lang" - {
       val org = "org.scala-lang"
