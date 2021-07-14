@@ -17,7 +17,7 @@ You can add the `scala-debug-adapter` as a dependency in your `build.sbt`:
 ```scala
 // build.sbt
 scalaVersion := "2.12.4",
-libraryDependencies += "ch.epfl.scala" %% "scala-debug-adpater" % "1.0.0"
+libraryDependencies += "ch.epfl.scala" %% "scala-debug-adapter" % "1.1.2"
 ```
 
 The `scala-debug-adapter` expects the Java Debug Interface to be class loaded.
