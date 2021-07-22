@@ -1,6 +1,8 @@
 import java.io.File
 
-def isCI() = System.getenv("CI") != null
+def isRelease() =
+  System.getenv("GITHUB_REPOSITORY") == "scalacenter/scala-debug-adapter" && 
+    System.getenv("GITHUB_WORKFLOW") == "Release"
 
 inThisBuild(
   Seq(
@@ -11,7 +13,7 @@ inThisBuild(
     developers := Developers.list,
     scalaVersion := Dependencies.scala212,
     version ~= { dynVer =>
-      if (isCI()) dynVer
+      if (isRelease) dynVer
       else "2.0.0-SNAPSHOT" // only for local publishing
     },
     // resolvers += Resolver.mavenLocal
