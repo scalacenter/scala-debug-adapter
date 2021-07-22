@@ -7,149 +7,99 @@ import scala.concurrent.duration.Duration
 import java.util.concurrent.TimeUnit
 
 import ch.epfl.scala.debugadapter.Coursier
-/** This is not a test class.
- *  This class prints some stats about loading the lookup of some libraries
+/** 
+ * This is a test class that also
+ * prints some stats about loading the look-up of some libraries
 */
 object ClassPathEntryLookUpStats extends TestSuite {
   def tests = Tests {
     "scala-lang" - {
       val org = "org.scala-lang"
-      printStats(org, "scala-library", "2.13.6")
-      printStats(org, "scala-compiler", "2.13.6")
-      printStats(org, "scala3-library_3", "3.0.0")
-      printStats(org, "scala3-compiler_3", "3.0.0")
+      printAndCheck(org, "scala-library", "2.13.6")(2870, 0)
+      printAndCheck(org, "scala-compiler", "2.13.6")(3399, 3)
+      printAndCheck(org, "scala3-library_3", "3.0.0")(487, 0)
+      printAndCheck(org, "scala3-compiler_3", "3.0.0")(3565, 0)
     }
 
     "scalatest" - {
       val org = "org.scalatest"
       val version = "3.2.9"
-      printStats(org, "scalatest-core_3", version)
-      // printStats("org.scalactic", "scalactic_3", version)
-      // printStats(org, "scalatest-matchers-core_3", version)
+      printAndCheck(org, "scalatest-core_3", version)(1282, 0)
     }
 
     "typelevel" - {
       val org = "org.typelevel"
-      printStats(org, "cats-core_3", "2.6.1")
-      printStats(org, "cats-kernel_3", "2.6.1")
-      
-      // val catsEffectVersion = "3.1.1"
-      // printStats(org, "cats-effect-kernel_3", catsEffectVersion)
-      // printStats(org, "cats-effect-std_3", catsEffectVersion)
-      // printStats(org, "cats-effect_3", catsEffectVersion)
+      printAndCheck(org, "cats-core_3", "2.6.1")(2330, 0)
+      printAndCheck(org, "cats-kernel_3", "2.6.1")(1020, 0)
       
       val shapelessOrg = "com.chuusai"
-      printStats(shapelessOrg, "shapeless_2.13", "2.3.7")
-      // printStats(org, "shapeless3-deriving_3", "3.0.1")
-      // printStats(org, "shapeless3-typeable_3", "3.0.1")
-
-      // val fs2Org = "co.fs2"
-      // val fs2Version = "3.0.6"
-      // printStats(fs2Org, "fs2-core_3", fs2Version)
-      // printStats(fs2Org, "fs2-io_3", fs2Version)
-      // printStats(fs2Org, "fs2-reactive-streams_3", fs2Version)
-
-      // val doobieOrg = "org.tpolecat"
-      // val doobieVersion = "0.13.4"
-      // printStats(doobieOrg, "doobie-core_3", doobieVersion)
-      // printStats(doobieOrg, "doobie-h2_3", doobieVersion)
-      // printStats(doobieOrg, "doobie-postgres_3", doobieVersion)
-
-      //printStats("org.scalacheck", "scalacheck_3", "1.15.4")
-
-      // val monixOrg = "io.monix"
-      // val monixVersion = "3.4.0"
-      // printStats(monixOrg, "monix-catnap_3", monixVersion)
-      // printStats(monixOrg, "monix-eval_3", monixVersion)
-      // printStats(monixOrg, "monix-execution_3", monixVersion)
-      // printStats(monixOrg, "monix-java_3", monixVersion)
-      // printStats(monixOrg, "monix-reactive_3", monixVersion)
-      // printStats(monixOrg, "monix-tail_3", monixVersion)
+      printAndCheck(shapelessOrg, "shapeless_2.13", "2.3.7")(2228, 0)
     }
 
     "sbt" - {
       val org = "org.scala-sbt"
       val version = "1.5.4"
-      printStats(org, "main_2.12", version)
-      printStats("io.get-coursier", "lm-coursier-shaded_2.12", "2.0.8") // shaded jars create lot of orphan class files
-      // printStats(org, "io_2.12", "1.5.1")
-      // printStats(org, "librarymanagement-core_2.12", "1.5.2")
-      // printStats(org, "librarymanagement-ivy_2.12", "1.5.2")
-      // printStats(org, "main-settings_2.12", version)
-      // printStats(org, "run_2.12", version)
-      // printStats(org, "scripted-plugin_2.12", version)
-      // printStats(org, "zinc-compile_2.12", "1.5.5")
-      // printStats(org, "zinc-lm-integration_2.12", version)
+      printAndCheck(org, "main_2.12", version)(911, 0)
+      printAndCheck("io.get-coursier", "lm-coursier-shaded_2.12", "2.0.8")(3972, 0)
     }
 
     "spark" - {
       val org = "org.apache.spark"
       val version = "3.1.2" 
-      printStats(org, "spark-core_2.12", version)
-      // printStats(org, "spark-avro_2.12", version)
-      printStats(org, "spark-catalyst_2.12", version)
-      // printStats(org, "spark-streaming_2.12", version)
-      printStats(org, "spark-sql_2.12", version)
-      printStats(org, "spark-mllib_2.12", version)
+      printAndCheck(org, "spark-core_2.12", version)(3764, 1)
+      printAndCheck(org, "spark-catalyst_2.12", version)(3654, 0)
+      printAndCheck(org, "spark-sql_2.12", version)(2306, 0)
+      printAndCheck(org, "spark-mllib_2.12", version)(2302, 2)
     }
 
     "akka" - {
       val org = "com.typesafe.akka"
       val version = "2.6.14"
-      printStats(org, "akka-actor_2.13", version)
-      // printStats(org, "akka-cluster_2.13", version)
-      printStats(org, "akka-stream_2.13", version)
-      // printStats(org, "akka-persistence_2.13", version)
+      printAndCheck(org, "akka-actor_2.13", version)(1793, 0)
+      printAndCheck(org, "akka-stream_2.13", version)(2535, 0)
 
       val httpVersion = "10.2.4"
-      printStats(org, "akka-http-core_2.13", httpVersion)
-      // printStats(org, "akka-parsing_2.13", httpVersion)
-      // printStats(org, "akka-http_2.13", httpVersion)
+      printAndCheck(org, "akka-http-core_2.13", httpVersion)(2084, 0)
     }
 
     "zio" - {
       val org = "dev.zio"
       val version = "1.0.9"
-      printStats(org, "zio_3", version)
-      printStats(org, "zio-streams_3", version)
+      printAndCheck(org, "zio_3", version)(810, 0)
+      printAndCheck(org, "zio-streams_3", version)(183, 0)
     }
 
-    "guava" - printStats("com.google.guava", "guava", "30.1.1-jre")
+    "guava" - printAndCheck("com.google.guava", "guava", "30.1.1-jre")(2030, 0)
 
     "play" - {
       val org = "com.typesafe.play"
       val version = "2.8.8"
-      printStats(org, "play_2.13", version)
-      // printStats(org, "play-streams_2.13", version)
-      // printStats(org, "play-java_2.13", version)
-      // printStats(org, "play-cache_2.13", version)
-      // printStats(org, "play-jdbc_2.13", version)
+      printAndCheck(org, "play_2.13", version)(1383, 2)
     }
 
     "scalaz" - {
       val org = "org.scalaz"
       val version = "7.3.3"
-      printStats(org, "scalaz-core_2.13", version)
-      // printStats(org, "scalaz-effect_2.13", version)
+      printAndCheck(org, "scalaz-core_2.13", version)(3507, 0)
     }
 
     "scalameta" - {
       val org = "org.scalameta"
-      printStats(org, "semanticdb-scalac_2.13.6", "4.4.23") // this one is empty because the source jar is empty
-      printStats(org, "semanticdb-scalac-core_2.13.6", "4.4.23")
+      printAndCheck(org, "semanticdb-scalac-core_2.13.6", "4.4.23")(113, 0)
     }
   }
 
-  private def printStats(org: String, name: String, version: String): Unit = {
+  private def printAndCheck(org: String, name: String, version: String)(expectedClasses: Int, expectedOrphans: Int): Unit = {
     val classPathEntry = Coursier.fetchOnly(org, name, version)
     val (duration, lookup) = Stats.timed(ClassPathEntryLookUp(classPathEntry))
-    val classFileCount = lookup.fullyQualifiedNames.size
-    val orphanClassFileCount = lookup.orphanClassFiles.size
+    val classCount = lookup.fullyQualifiedNames.size
+    val orphanClassCount = lookup.orphanClassFiles.size
     println(s"${classPathEntry.name}:")
-    println(s"  - $classFileCount classes loaded in $duration")
-    if (orphanClassFileCount > 0) {
-      val orphanClassFilePercent = orphanClassFileCount * 100 / classFileCount
-      println(s"  - $orphanClassFileCount orphan class files ($orphanClassFilePercent%)")
+    println(s"  - $classCount classes loaded in $duration")
+    if (orphanClassCount > 0) {
+      val orphanClassFilePercent = (orphanClassCount * 10000 / classCount).toFloat / 100
+      println(s"  - $orphanClassCount orphan class files ($orphanClassFilePercent%)")
     }
+    assert(classCount == expectedClasses, orphanClassCount == expectedOrphans)
   }
 }

@@ -8,7 +8,7 @@ import ch.epfl.scala.debugadapter.NoopLogger
 
 object SourceLookUpProviderStats extends TestSuite {
   def tests = Tests {
-    "scaladex" - printStats("scaladex (Test)")(
+    "scaladex" - printAndCheck("scaladex (Test)")(
       dep"ch.qos.logback:logback-classic:1.1.7",
       dep"com.typesafe.scala-logging:scala-logging_2.13:3.9.2",
       dep"com.getsentry.raven:raven-logback:8.0.3",
@@ -41,13 +41,23 @@ object SourceLookUpProviderStats extends TestSuite {
       dep"com.typesafe.play:play-ahc-ws_2.13:2.8.2",
       dep"org.apache.ivy:ivy:2.4.0",
       dep"de.heikoseeberger:akka-http-json4s_2.13:1.29.1"
-    )
+    )(32037, 4)
   }
 
-  private def printStats(project: String)(deps: Dependency*): Unit = {
+  private def printAndCheck(project: String)(deps: Dependency*)(expectedClasses: Int, expectedOrphans: Int): Unit = {
     val classPath = Coursier.fetch(deps)
-    val (duration, lookup) = Stats.timed(SourceLookUpProvider(classPath, NoopLogger))
+    val (duration, lookUp) = Stats.timed(SourceLookUpProvider(classPath, NoopLogger))
+    val entriesCount = lookUp.classPathEntries.size
+    val classCount = lookUp.allClassNames.size
+    val orphanClassCount = lookUp.allOrphanClasses.size
     println(s"$project:")
-    println(s"  - loaded in $duration")
+    println(s"  - $entriesCount class path entries loaded in $duration")
+    println(s"  - $classCount classes")
+    if (orphanClassCount != 0) {
+      val orphanClassPercent = (orphanClassCount * 100000 / classCount).toFloat / 1000
+      println(s"  - $orphanClassCount orphan classes ($orphanClassPercent%)")
+    }
+    assert(classCount == expectedClasses, orphanClassCount == expectedOrphans)
+
   }
 }

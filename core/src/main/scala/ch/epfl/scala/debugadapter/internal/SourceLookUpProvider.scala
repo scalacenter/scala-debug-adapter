@@ -5,7 +5,8 @@ import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 
 import java.net.URI
 
-private[debugadapter] final class SourceLookUpProvider( 
+private[debugadapter] final class SourceLookUpProvider(
+  private[internal] val classPathEntries: Seq[ClassPathEntryLookUp],
   sourceUriToClassPathEntry: Map[URI, ClassPathEntryLookUp],
   fqcnToClassPathEntry: Map[String, ClassPathEntryLookUp],
   logger: Logger
@@ -13,18 +14,17 @@ private[debugadapter] final class SourceLookUpProvider(
   override def supportsRealtimeBreakpointVerification(): Boolean = true
 
   override def getSourceFileURI(fqcn: String, path: String): String = {
-    fqcnToClassPathEntry.get(fqcn) match {
-      case None => null
-      case Some(entry) => entry.getSourceFile(fqcn).map(_.toString).orNull
-    }
+    fqcnToClassPathEntry.get(fqcn)
+      .flatMap(_.getSourceFile(fqcn))
+      .map(_.toString)
+      .orNull
   }
   
   override def getSourceContents(uri: String): String = {
     val sourceUri = URI.create(uri)
-    sourceUriToClassPathEntry.get(sourceUri) match {
-      case None => null
-      case Some(entry) => entry.getSourceContent(sourceUri).orNull
-    }
+    sourceUriToClassPathEntry.get(sourceUri)
+      .flatMap(_.getSourceContent(sourceUri))
+      .orNull
   }
 
   override def getFullyQualifiedName(uriRepr: String, lines: Array[Int], columns: Array[Int]): Array[String] = {
@@ -41,17 +41,20 @@ private[debugadapter] final class SourceLookUpProvider(
         }
     }
   }
+
+  private[internal] def allClassNames: Iterable[String] = classPathEntries.flatMap(_.fullyQualifiedNames)
+  private[internal] def allOrphanClasses: Iterable[ClassFile] = classPathEntries.flatMap(_.orphanClassFiles)  
 }
 
 private[debugadapter] object SourceLookUpProvider {
   def apply(classPath: Seq[ClassPathEntry], logger: Logger): SourceLookUpProvider = {
-    val lookups = classPath.par.map(ClassPathEntryLookUp.apply).seq
-    val sourceUriToClassPathEntry = lookups
+    val classPathEntries = classPath.par.map(ClassPathEntryLookUp.apply).seq
+    val sourceUriToClassPathEntry = classPathEntries
       .flatMap(lookup => lookup.sources.map(uri => (uri, lookup)))
       .toMap
-    val fqcnToClassPathEntry = lookups
+    val fqcnToClassPathEntry = classPathEntries
       .flatMap(lookup => lookup.fullyQualifiedNames.map(fqcn => (fqcn, lookup)))
       .toMap
-    new SourceLookUpProvider(sourceUriToClassPathEntry, fqcnToClassPathEntry, logger)
+    new SourceLookUpProvider(classPathEntries, sourceUriToClassPathEntry, fqcnToClassPathEntry, logger)
   }
 }

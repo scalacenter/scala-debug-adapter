@@ -10,9 +10,9 @@ import java.nio.file.{Path, Paths}
 import scala.concurrent.{Future, Promise}
 import scala.util.control.NonFatal
 
-case class MainDebuggeeRunner(source: Path, classPathEntries: Seq[ClassPathEntry], mainClass: String) extends DebuggeeRunner {
+case class MainDebuggeeRunner(source: Path, projectEntry: ClassPathEntry, dependencies: Seq[ClassPathEntry], mainClass: String) extends DebuggeeRunner {
   override def name: String = mainClass
-  
+  override def classPathEntries: Seq[ClassPathEntry] = projectEntry +: dependencies
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] = {
     val cmd = Seq("java", DebugInterface, "-cp", classPath.mkString(File.pathSeparator), mainClass)
     val builder = new ProcessBuilder(cmd: _*)
@@ -89,7 +89,7 @@ object MainDebuggeeRunner {
     
     val sourceEntry = StandaloneSourceFile(src, src.getParent.relativize(src).toString)
     val mainClassPathEntry = ClassPathEntry(classDir.toPath, Seq(sourceEntry))
-    MainDebuggeeRunner(src, libraryClassPath :+ mainClassPathEntry, mainClass)
+    MainDebuggeeRunner(src, mainClassPathEntry, libraryClassPath, mainClass)
   }
 
   private def compileJava(src: Path, mainClass: String, dest: File): MainDebuggeeRunner = {
@@ -111,7 +111,7 @@ object MainDebuggeeRunner {
 
     val sourceEntry = StandaloneSourceFile(src, src.getParent.relativize(src).toString)
     val mainClassPathEntry = ClassPathEntry(classDir.toPath, Seq(sourceEntry))
-    new MainDebuggeeRunner(src, Seq(mainClassPathEntry), mainClass)
+    new MainDebuggeeRunner(src, mainClassPathEntry, Seq.empty, mainClass)
   }
 
   private def startCrawling(input: InputStream)(f: String => Unit): Unit = {

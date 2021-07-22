@@ -240,16 +240,17 @@ private object ClassPathEntryLookUp {
   }
 
   private def readSourceContent(sourceFile: SourceFile): String = {
-    withinSourceEntry(sourceFile.entry) { fs => 
-      val sourcePath = fs.getPath(sourceFile.relativePath)
+    withinSourceEntry(sourceFile.entry) { root => 
+      val sourcePath = root.resolve(sourceFile.relativePath)
       new String(Files.readAllBytes(sourcePath))
     }
   }
 
-  private def withinSourceEntry[T](sourceEntry: SourceEntry)(f: FileSystem => T): T = {
+  private def withinSourceEntry[T](sourceEntry: SourceEntry)(f: Path => T): T = {
     sourceEntry match {
-      case SourceJar(jar) => withinJarFile(jar)(f)
-      case _ => f(FileSystems.getDefault)
+      case SourceJar(jar) => withinJarFile(jar)(fs => f(fs.getPath("/")))
+      case SourceDirectory(dir) => f(dir)
+      case StandaloneSourceFile(absolutePath, _) => f(absolutePath.getParent)
     }
   }
 
