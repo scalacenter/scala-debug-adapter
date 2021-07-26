@@ -25,6 +25,12 @@ object MainDebuggeeRunner {
   private final val DebugInterface = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,quiet=n"
   private final val JDINotificationPrefix = "Listening for transport dt_socket at address: "
   
+  def fromSource(source: String, scalaVersion: ScalaVersion, dest: File): MainDebuggeeRunner = {
+    val srcFile = dest / "src" / "Main.scala"
+    IO.write(srcFile, source.getBytes)
+    compileScala(srcFile.toPath, "", dest, scalaVersion)
+  }
+
   def sleep(dest: File): MainDebuggeeRunner = {
     val src = getResource("/scala/Sleep.scala")
     compileScala(src, "scaladebug.test.Sleep", dest, ScalaVersion.`2.12`)
