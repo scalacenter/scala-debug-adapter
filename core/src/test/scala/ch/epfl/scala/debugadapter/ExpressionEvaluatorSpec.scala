@@ -4,9 +4,8 @@ import ch.epfl.scala.debugadapter.testing.TestDebugClient
 import sbt.io.IO
 import utest._
 
-import java.util.concurrent.{Executors, TimeUnit}
+import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 
 object ExpressionEvaluatorSpec extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests

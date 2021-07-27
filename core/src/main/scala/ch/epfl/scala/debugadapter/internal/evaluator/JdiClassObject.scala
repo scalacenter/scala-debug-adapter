@@ -5,9 +5,9 @@ import com.sun.jdi._
 import scala.util.Try
 
 class JdiClassObject(
-    override val reference: ClassObjectReference,
-    classLoader: JdiClassLoader,
-    thread: ThreadReference
+  override val reference: ClassObjectReference,
+  classLoader: JdiClassLoader,
+  thread: ThreadReference
 ) extends JdiObject(reference, thread) {
   private val vm = thread.virtualMachine()
 

@@ -8,7 +8,6 @@ import com.microsoft.java.debug.core.{DebugSettings, IEvaluatableBreakpoint}
 import com.sun.jdi._
 import io.reactivex.Observable
 
-import java.nio.file.Path
 import java.util
 import java.util.Collections
 import java.util.concurrent.CompletableFuture
@@ -28,10 +27,10 @@ private[debugadapter] object DebugAdapter {
    */
   DebugSettings.getCurrent.showToString = false
 
-    /**
-    * Since Scala 2.13, object fields are represented by static fields in JVM byte code.
-    * See https://github.com/scala/scala/pull/7270
-    */
+  /**
+   * Since Scala 2.13, object fields are represented by static fields in JVM byte code.
+   * See https://github.com/scala/scala/pull/7270
+   */
   DebugSettings.getCurrent.showStaticVariables = true
 
   def context(runner: DebuggeeRunner, logger: Logger): IProviderContext = {
@@ -67,24 +66,24 @@ private[debugadapter] object DebugAdapter {
     }
 
     override def evaluate(
-                           expression: String,
-                           thisContext: ObjectReference,
-                           thread: ThreadReference
-                         ): CompletableFuture[Value] = ???
+      expression: String,
+      thisContext: ObjectReference,
+      thread: ThreadReference
+    ): CompletableFuture[Value] = ???
 
     override def evaluateForBreakpoint(
-                                        breakpoint: IEvaluatableBreakpoint,
-                                        thread: ThreadReference
-                                      ): CompletableFuture[Value] = ???
+      breakpoint: IEvaluatableBreakpoint,
+      thread: ThreadReference
+    ): CompletableFuture[Value] = ???
 
     override def invokeMethod(
-                               thisContext: ObjectReference,
-                               methodName: String,
-                               methodSignature: String,
-                               args: Array[Value],
-                               thread: ThreadReference,
-                               invokeSuper: Boolean
-                             ): CompletableFuture[Value] = ???
+      thisContext: ObjectReference,
+      methodName: String,
+      methodSignature: String,
+      args: Array[Value],
+      thread: ThreadReference,
+      invokeSuper: Boolean
+    ): CompletableFuture[Value] = ???
 
     override def clearState(thread: ThreadReference): Unit = {}
   }

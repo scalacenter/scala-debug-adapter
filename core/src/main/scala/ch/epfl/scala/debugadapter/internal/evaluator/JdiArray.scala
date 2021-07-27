@@ -1,9 +1,9 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import com.sun.jdi.{ArrayReference, ObjectReference, ReferenceType, ThreadReference, Value}
+import com.sun.jdi.{ArrayReference, ObjectReference, ThreadReference, Value}
 
-import scala.util.Try
 import scala.collection.JavaConverters._
+import scala.util.Try
 
 object JdiArray {
   def apply(arrayType: String, arraySize: Int, classLoader: JdiClassLoader, thread: ThreadReference): Option[JdiArray] = {
