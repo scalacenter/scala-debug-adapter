@@ -38,15 +38,18 @@ private[debugadapter] class LoggingAdapter(logger: ch.epfl.scala.debugadapter.Lo
   }
 
   override def flush(): Unit = ()
+
   override def close(): Unit = ()
 
   private final val socketClosed = "java.net.SocketException: Socket closed"
+
   private def isExpectedDuringCancellation(message: String): Boolean = {
     message.endsWith(socketClosed) && closingSession
   }
 
   private final val recordingWhenVmDisconnected =
     "Exception on recording event: com.sun.jdi.VMDisconnectedException"
+
   private def isIgnoredError(message: String): Boolean = {
     message.startsWith(recordingWhenVmDisconnected)
   }

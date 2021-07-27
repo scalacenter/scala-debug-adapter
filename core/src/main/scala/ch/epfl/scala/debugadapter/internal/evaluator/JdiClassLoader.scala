@@ -1,6 +1,6 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import com.sun.jdi.{ClassLoaderReference, ClassObjectReference, ClassType, Method, ObjectReference, ReferenceType, ThreadReference}
+import com.sun.jdi._
 
 import scala.util.Try
 
@@ -16,9 +16,10 @@ private[evaluator] object JdiClassLoader {
 }
 
 private[evaluator] class JdiClassLoader(
-    classLoaderRef: ClassLoaderReference,
-    loadClassMethod: Method,
-    thread: ThreadReference) {
+  classLoaderRef: ClassLoaderReference,
+  loadClassMethod: Method,
+  thread: ThreadReference
+) {
   private val vm = thread.virtualMachine()
 
   def loadClass(name: String): Option[JdiClassObject] =

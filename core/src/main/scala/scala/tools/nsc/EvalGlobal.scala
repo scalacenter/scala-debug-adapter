@@ -5,11 +5,11 @@ import scala.tools.nsc.reporters.Reporter
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
 
 private[nsc] class EvalGlobal(
-                               settings: Settings,
-                               reporter: Reporter,
-                               val line: Int,
-                               valOrDefDefNames: Set[String]
-                             ) extends Global(settings, reporter) {
+  settings: Settings,
+  reporter: Reporter,
+  val line: Int,
+  valOrDefDefNames: Set[String]
+) extends Global(settings, reporter) {
   private var valOrDefDefs: Map[TermName, ValOrDefDef] = Map()
   private var expression: Tree = _
 

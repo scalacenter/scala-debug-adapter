@@ -22,7 +22,7 @@ private[debugadapter] final class SourceLookUpProvider(
       .map(_.toString)
       .orNull
   }
-  
+
   override def getSourceContents(uri: String): String = {
     val sourceUri = URI.create(uri)
     sourceUriToClassPathEntry.get(sourceUri)
