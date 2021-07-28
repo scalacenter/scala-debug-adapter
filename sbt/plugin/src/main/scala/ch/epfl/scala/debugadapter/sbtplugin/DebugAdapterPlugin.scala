@@ -311,7 +311,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   ): URI = {
     // if there is a server for this target then close it
     debugServers.get(target).foreach(_.close())
-    val server = DebugServer(runner, new LoggerAdapter(logger))
+    val server = DebugServer(runner, new LoggerAdapter(logger), autoCloseSession = true)
     server.start()
     debugServers.update(target, server)
     state.respondEvent(DebugSessionAddress(server.uri))
