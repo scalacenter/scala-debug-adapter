@@ -16,19 +16,26 @@ private[nsc] class EvalGlobal(
   override protected def computeInternalPhases(): Unit = {
     super.computeInternalPhases()
 
-    addToPhasesSet(new Extract, "extract")
-    addToPhasesSet(new GenExpr, "generate expression")
+    addToPhasesSet(new ExprEval, "expreval")
   }
 
-  class Extract extends Transform {
+  class ExprEval extends Transform with TypingTransformers {
     override val global: EvalGlobal.this.type = EvalGlobal.this
-    override val phaseName: String = "extract"
+    override val phaseName: String = "expreval"
     override val runsAfter: List[String] = List("delambdafy")
     override val runsRightAfter: Option[String] = None
 
     override protected def newTransformer(unit: CompilationUnit): Transformer = {
-      if (unit.source.file.name == "<source>") new ExtractDefsTransformer
+      if (unit.source.file.name == "<source>") new ExprEvalTransformer(unit)
       else noopTransformer
+    }
+
+    class ExprEvalTransformer(unit: CompilationUnit) extends Transformer {
+      override def transform(tree: Tree): Tree = tree match {
+        case _ =>
+          new ExtractDefsTransformer().transform(tree)
+          new GenExprTransformer(unit).transform(tree)
+      }
     }
 
     class ExtractDefsTransformer extends Transformer {
@@ -48,51 +55,6 @@ private[nsc] class EvalGlobal(
           tree
         case _ =>
           super.transform(tree)
-      }
-    }
-  }
-
-  class GenExpr extends Transform with TypingTransformers {
-    override val global: EvalGlobal.this.type = EvalGlobal.this
-    override val phaseName: String = "genexpr"
-    override val runsAfter: List[String] = List()
-    override val runsRightAfter: Option[String] = Some("extract")
-
-    override protected def newTransformer(unit: CompilationUnit): Transformer = new GenExprTransformer(unit)
-
-    class ExpressionTransformer(symbolsByName: Map[Name, Symbol]) extends Transformer {
-      override def transform(tree: Tree): Tree = tree match {
-        case tree: Ident =>
-          val name = tree.name
-          if (symbolsByName.contains(tree.name)) ident(name)
-          else super.transform(tree)
-        case tree: Apply if tree.fun.symbol.isGetter =>
-          val name = tree.fun.asInstanceOf[Select].name
-          if (symbolsByName.contains(name)) ident(name)
-          else super.transform(tree)
-        case _ =>
-          super.transform(tree)
-      }
-
-      private def ident(name: Name) = {
-        val symbol = symbolsByName(name)
-        Ident(name)
-          .setSymbol(symbol)
-          .setType(symbol.tpe)
-          .setPos(symbol.pos)
-      }
-    }
-
-    class DefFinder extends Traverser {
-      val symbolsByName: mutable.Map[Name, Symbol] = mutable.Map()
-
-      override def traverse(tree: Tree): Unit = {
-        tree match {
-          case tree: ValDef =>
-            symbolsByName += (tree.name -> tree.symbol)
-          case _ =>
-            traverseTrees(tree.children)
-        }
       }
     }
 
@@ -172,6 +134,42 @@ private[nsc] class EvalGlobal(
         val sym = owner.symbol.newValue(name.toTermName, pos).setInfo(tpt.tpe)
         val newValDef = ValDef(Modifiers(), TermName(name.decode), tpt, rhs).setSymbol(sym)
         name -> newValDef
+      }
+    }
+
+    class ExpressionTransformer(symbolsByName: Map[Name, Symbol]) extends Transformer {
+      override def transform(tree: Tree): Tree = tree match {
+        case tree: Ident =>
+          val name = tree.name
+          if (symbolsByName.contains(tree.name)) ident(name)
+          else super.transform(tree)
+        case tree: Apply if tree.fun.symbol.isGetter =>
+          val name = tree.fun.asInstanceOf[Select].name
+          if (symbolsByName.contains(name)) ident(name)
+          else super.transform(tree)
+        case _ =>
+          super.transform(tree)
+      }
+
+      private def ident(name: Name) = {
+        val symbol = symbolsByName(name)
+        Ident(name)
+          .setSymbol(symbol)
+          .setType(symbol.tpe)
+          .setPos(symbol.pos)
+      }
+    }
+
+    class DefFinder extends Traverser {
+      val symbolsByName: mutable.Map[Name, Symbol] = mutable.Map()
+
+      override def traverse(tree: Tree): Unit = {
+        tree match {
+          case tree: ValDef =>
+            symbolsByName += (tree.name -> tree.symbol)
+          case _ =>
+            traverseTrees(tree.children)
+        }
       }
     }
   }
