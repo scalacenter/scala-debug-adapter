@@ -53,7 +53,6 @@ private[nsc] class EvalGlobal(
   }
 
   class GenExpr extends Transform with TypingTransformers {
-
     override val global: EvalGlobal.this.type = EvalGlobal.this
     override val phaseName: String = "genexpr"
     override val runsAfter: List[String] = List()

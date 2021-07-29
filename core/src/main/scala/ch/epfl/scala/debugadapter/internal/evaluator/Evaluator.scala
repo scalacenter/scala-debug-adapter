@@ -48,7 +48,7 @@ object Evaluator {
         .flatMap(_.newInstance(List(urls.reference)))
         .map(_.reference.asInstanceOf[ClassLoaderReference])
         .flatMap(JdiClassLoader(_, thread))
-      expressionClass <- urlClassLoader.loadClass("Expression")
+      expressionClass <- urlClassLoader.loadClass(ExpressionCompiler.ExpressionClassName)
       expression <- expressionClass.newInstance(List())
       namesArray <- JdiArray("java.lang.String", names.size, classLoader, thread)
       valuesArray <- JdiArray("java.lang.Object", values.size, classLoader, thread) // add boxing

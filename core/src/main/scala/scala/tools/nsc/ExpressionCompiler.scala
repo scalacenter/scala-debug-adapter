@@ -5,6 +5,9 @@ import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.reporters.StoreReporter
 
 object ExpressionCompiler {
+  // TODO: make unique
+  val ExpressionClassName = "Expression"
+
   def apply(classPath: String, line: Int, valOrDefDefNames: Set[String]): ExpressionCompiler = {
     val dir = Files.createTempDirectory("expr-eval")
     val settings = new Settings
@@ -18,8 +21,8 @@ object ExpressionCompiler {
 
 class ExpressionCompiler(val global: EvalGlobal, val reporter: StoreReporter, val dir: Path) {
   private val expressionSource =
-    """
-      |class Expression {
+    s"""
+      |class ${ExpressionCompiler.ExpressionClassName} {
       |  def evaluate(names: Array[Any], values: Array[Any]) = {
       |    val valuesByName = names.map(_.asInstanceOf[String]).zip(values).toMap
       |    valuesByName
@@ -28,12 +31,7 @@ class ExpressionCompiler(val global: EvalGlobal, val reporter: StoreReporter, va
       |}
       |""".stripMargin
 
-  private val compilerRun = new global.Run() {
-    override protected def stopPhase(name: String): Boolean = {
-      println(s"[phase] $name")
-      super.stopPhase(name)
-    }
-  }
+  private val compilerRun = new global.Run()
 
   def compile(code: String, expression: String): Unit = {
     val codeWithExpression = code + "\n" + expressionSource
@@ -44,6 +42,8 @@ class ExpressionCompiler(val global: EvalGlobal, val reporter: StoreReporter, va
       newCode
     )
     compilerRun.compileSources(List(source))
-    reporter.infos.foreach(println)
+    // TODO: return error
+    val errorMsg = reporter.infos.find(_.severity == reporter.ERROR).map(_.msg)
+    println("error: " + errorMsg)
   }
 }
