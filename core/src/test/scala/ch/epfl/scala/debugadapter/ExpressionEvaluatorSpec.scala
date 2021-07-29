@@ -6,6 +6,7 @@ import utest._
 
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
 object ExpressionEvaluatorSpec extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
@@ -13,43 +14,79 @@ object ExpressionEvaluatorSpec extends TestSuite {
   implicit val ec = ExecutionContext.fromExecutorService(executorService)
 
   def tests: Tests = Tests {
-    "should evaluate scala expression" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.evaluateTest(tempDir)
-      val server = DebugServer(runner, NoopLogger)
-      val client = TestDebugClient.connect(server.uri)
-      try {
-        server.connect()
-        client.initialize()
-        client.launch()
+    "should evaluate expression with primitives" - {
+      assertEvaluation(163, "1 + 2", _.toInt == 3)
+    }
 
-        val breakpoints = client.setBreakpoints(runner.source, Array(15))
-        assert(breakpoints.length == 1)
-        assert(breakpoints.forall(_.verified))
-        client.configurationDone()
+    "should evaluate expression with local variables" - {
+      assertEvaluation(165, "a + b", _.toDouble == 3.3)
+    }
 
-        val stopped = client.stopped
-        val threadId = stopped.threadId
-        assert(stopped.reason == "breakpoint")
+    "should evaluate expression with object's public fields" - {
+      assertEvaluation(88, "x1 + x2", _.toInt == 43)
+    }
 
-        val stackTrace = client.stackTrace(threadId)
-        val topFrame = stackTrace.stackFrames.head
+    "should evaluate expression with object's private fields" - {
+      assertEvaluation(88, "y1 + y2", _.toInt == 47)
+    }
 
-        println(client.evaluate("a", topFrame.id))
-        println(client.evaluate("b", topFrame.id))
-        println(client.evaluate("c", topFrame.id))
-        println(client.evaluate("args", topFrame.id))
-        println(client.evaluate("y", topFrame.id))
-        println(client.evaluate("z", topFrame.id))
+    "should evaluate expression with class's public fields" - {
+      assertEvaluation(8, "x1 + x2", _.toInt == 3)
+    }
 
-        client.continue(threadId)
-        client.exited
-        client.terminated
-      } finally {
-        server.close()
-        client.close()
-        IO.delete(tempDir)
-      }
+    "should evaluate expression with class's private fields" - {
+      assertEvaluation(8, "y2", _ == "\"foo\"")
+    }
+
+    "should evaluate expression with inner class's public fields" - {
+      assertEvaluation(23, "2 * z1", _.toInt == 12)
+    }
+
+    "should evaluate expression with inner class's private fields" - {
+      assertEvaluation(23, "y1 + y2", _.toInt == 15)
+    }
+
+    "should evaluate expression with outer class's public fields" - {
+      assertEvaluation(23, "2 * x2", _.toInt == 4)
+    }
+
+    "should evaluate expression with inner class's overridden fields" - {
+      assertEvaluation(23, "x1", _ == "\"foo\"")
+    }
+  }
+
+  private def assertEvaluation(line: Int, expression: String, assertion: String => Boolean): Unit = {
+    val tempDir = IO.createTemporaryDirectory
+    val runner = MainDebuggeeRunner.evaluateTest(tempDir)
+    val server = DebugServer(runner, NoopLogger)
+    val client = TestDebugClient.connect(server.uri, 10.seconds)
+    try {
+      server.connect()
+      client.initialize()
+      client.launch()
+
+      val breakpoints = client.setBreakpoints(runner.source, Array(line))
+      assert(breakpoints.length == 1)
+      assert(breakpoints.forall(_.verified))
+      client.configurationDone()
+
+      val stopped = client.stopped
+      val threadId = stopped.threadId
+      assert(stopped.reason == "breakpoint")
+
+      val stackTrace = client.stackTrace(threadId)
+      val topFrame = stackTrace.stackFrames.head
+
+      val result = client.evaluate(expression, topFrame.id)
+      assert(assertion(result))
+
+      client.continue(threadId)
+      client.exited
+      client.terminated
+    } finally {
+      server.close()
+      client.close()
+      IO.delete(tempDir)
     }
   }
 }
