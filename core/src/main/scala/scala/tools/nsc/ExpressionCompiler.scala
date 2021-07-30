@@ -5,8 +5,7 @@ import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.reporters.StoreReporter
 
 object ExpressionCompiler {
-  // TODO: make unique
-  val ExpressionClassName = "Expression"
+  val ExpressionClassName: String = s"Expression${java.util.UUID.randomUUID.toString.replace("-", "")}"
 
   def apply(classPath: String, line: Int, valOrDefDefNames: Set[String]): ExpressionCompiler = {
     val dir = Files.createTempDirectory("expr-eval")
