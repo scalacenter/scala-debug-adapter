@@ -12,6 +12,7 @@ private[nsc] class EvalGlobal(
 ) extends Global(settings, reporter) {
   private var valOrDefDefs: Map[TermName, ValOrDefDef] = Map()
   private var expression: Tree = _
+  private var expressionOwners: Set[Symbol] = _
 
   override protected def computeInternalPhases(): Unit = {
     super.computeInternalPhases()
@@ -33,28 +34,34 @@ private[nsc] class EvalGlobal(
     class ExprEvalTransformer(unit: CompilationUnit) extends Transformer {
       override def transform(tree: Tree): Tree = tree match {
         case _ =>
-          new ExtractDefsTransformer().transform(tree)
+          new ExpressionExtractor().traverse(tree)
+          new DefExtractor().traverse(tree)
           new GenExprTransformer(unit).transform(tree)
       }
     }
 
-    class ExtractDefsTransformer extends Transformer {
-      override def transform(tree: Tree): Tree = tree match {
+    class ExpressionExtractor extends Traverser {
+      override def traverse(tree: Tree): Unit = tree match {
+        case _ if tree.pos.line == line =>
+          expressionOwners = currentOwner.ownerChain.toSet
+          expression = tree
+        case _ =>
+          super.traverse(tree)
+      }
+    }
+
+    class DefExtractor extends Traverser {
+      override def traverse(tree: Tree): Unit = tree match {
         case tree: ClassDef =>
           // Don't extract defs from the `Expression` class
-          if (tree.name == TypeName("Expression")) tree
-          else super.transform(tree)
-        case tree: ValDef if valOrDefDefNames.contains(tree.name.decode) =>
+          if (tree.name != TypeName("Expression")) super.traverse(tree)
+        case tree: ValDef if expressionOwners.contains(tree.symbol.owner) && valOrDefDefNames.contains(tree.name.decode) =>
           valOrDefDefs += (tree.name -> tree)
-          super.transform(tree)
-        case tree: DefDef if tree.symbol.isGetter && valOrDefDefNames.contains(tree.name.decode) =>
+          super.traverse(tree)
+        case tree: DefDef if expressionOwners.contains(tree.symbol.owner) && tree.symbol.isGetter && valOrDefDefNames.contains(tree.name.decode) =>
           valOrDefDefs += (tree.name -> tree)
-          super.transform(tree)
-        case _ if tree.pos.line == line =>
-          expression = tree
-          tree
-        case _ =>
-          super.transform(tree)
+          super.traverse(tree)
+        case _ => super.traverse(tree)
       }
     }
 
