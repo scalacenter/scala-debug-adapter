@@ -20,6 +20,7 @@ object Evaluator {
     val uri = sourceLookUpProvider.getSourceFileURI(fqcn, sourcePath)
     val content = sourceLookUpProvider.getSourceContents(uri)
 
+    var error: Option[String] = None
     val result = for {
       classLoader <- classLoader(thisObject).flatMap(JdiClassLoader(_, thread))
       variables = frame.visibleVariables().asScala
@@ -37,7 +38,7 @@ object Evaluator {
         .map(_.drop(1).dropRight(1)) // remove quotation marks
       expressionCompiler <- Some(ExpressionCompiler(classPath, lineNumber, names.map(_.value()).toSet))
       expressionClassPath = s"file://${expressionCompiler.dir.toString}/"
-      _ <- Some(expressionCompiler.compile(content, expression))
+      _ <- expressionCompiler.compile(content, expression, errorMessage => error = Some(errorMessage))
       url <- classLoader
         .loadClass("java.net.URL")
         .flatMap(_.newInstance(List(vm.mirrorOf(expressionClassPath))))
@@ -57,8 +58,16 @@ object Evaluator {
       result <- expression.invoke("evaluate", List(namesArray.reference, valuesArray.reference))
     } yield result
 
-    // Handle error
-    CompletableFuture.completedFuture(result.get)
+    result match {
+      case Some(value) =>
+        CompletableFuture.completedFuture(value)
+      case None => error match {
+        case Some(message) =>
+          throw new Exception(message)
+        case None =>
+          throw new Exception("Unable to evaluate the expression")
+      }
+    }
   }
 
   private def boxIfNeeded(value: Value, classLoader: JdiClassLoader, thread: ThreadReference): Option[Value] = value match {
