@@ -33,7 +33,7 @@ class ExpressionCompiler(val global: EvalGlobal, val reporter: StoreReporter, va
 
   private val compilerRun = new global.Run()
 
-  def compile(code: String, expression: String): Unit = {
+  def compile(code: String, expression: String, report: String => Unit): Option[Unit] = {
     val codeWithExpression = code + "\n" + expressionSource
     val lines = codeWithExpression.split("\n")
     val newCode = (lines.take(global.line - 1) ++ Seq(expression) ++ lines.drop(global.line - 1)).mkString("\n")
@@ -42,8 +42,9 @@ class ExpressionCompiler(val global: EvalGlobal, val reporter: StoreReporter, va
       newCode
     )
     compilerRun.compileSources(List(source))
-    // TODO: return error
-    val errorMsg = reporter.infos.find(_.severity == reporter.ERROR).map(_.msg)
-    println("error: " + errorMsg)
+    val error = reporter.infos.find(_.severity == reporter.ERROR).map(_.msg)
+    error.foreach(report)
+    if (error.isDefined) None
+    else Some(())
   }
 }

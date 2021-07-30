@@ -53,6 +53,10 @@ object ExpressionEvaluatorSpec extends TestSuite {
     "should evaluate expression with inner class's overridden fields" - {
       assertEvaluation(23, "x1", _ == "\"foo\"")
     }
+
+    "should return null when expression is invalid" - {
+      assertEvaluation(163, "1 ++ 2", _ == null)
+    }
   }
 
   private def assertEvaluation(line: Int, expression: String, assertion: String => Boolean): Unit = {
