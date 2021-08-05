@@ -14,7 +14,7 @@ object Evaluator {
 
     val location = frame.location()
     val sourcePath = location.sourcePath()
-    val lineNumber = location.lineNumber()
+    val line = location.lineNumber()
     val fqcn = location.declaringType().name()
 
     val uri = sourceLookUpProvider.getSourceFileURI(fqcn, sourcePath)
@@ -29,16 +29,17 @@ object Evaluator {
       fields = thisObject.referenceType().fields().asScala
       fieldNames <- Some(fields.map(_.name()).map(vm.mirrorOf).toList)
       fieldValues <- Some(fields.map(thisObject.getValue).flatMap(value => boxIfNeeded(value, classLoader, thread)).toList)
-      names <- Some(variableNames ++ fieldNames)
-      values <- Some(variableValues ++ fieldValues)
+      names <- Some(variableNames ++ fieldNames ++ Seq(vm.mirrorOf("$this")))
+      values <- Some(variableValues ++ fieldValues ++ Seq(thisObject))
       systemClass <- classLoader.loadClass("java.lang.System")
       classPath <- systemClass
         .invokeStatic("getProperty", List(vm.mirrorOf("java.class.path")))
         .map(_.toString)
         .map(_.drop(1).dropRight(1)) // remove quotation marks
-      expressionCompiler <- Some(ExpressionCompiler(classPath, lineNumber, names.map(_.value()).toSet))
+      expressionCompiler <- Some(ExpressionCompiler(classPath, line, expression, names.map(_.value()).toSet))
+      _ <- Some(println(expressionCompiler.dir))
       expressionClassPath = s"file://${expressionCompiler.dir.toString}/"
-      _ <- expressionCompiler.compile(content, expression, errorMessage => error = Some(errorMessage))
+      _ <- expressionCompiler.compile(content, errorMessage => error = Some(errorMessage))
       url <- classLoader
         .loadClass("java.net.URL")
         .flatMap(_.newInstance(List(vm.mirrorOf(expressionClassPath))))
@@ -49,7 +50,7 @@ object Evaluator {
         .flatMap(_.newInstance(List(urls.reference)))
         .map(_.reference.asInstanceOf[ClassLoaderReference])
         .flatMap(JdiClassLoader(_, thread))
-      expressionClass <- urlClassLoader.loadClass(ExpressionCompiler.ExpressionClassName)
+      expressionClass <- urlClassLoader.loadClass(ExpressionCompiler.expressionClassFqcn(fqcn))
       expression <- expressionClass.newInstance(List())
       namesArray <- JdiArray("java.lang.String", names.size, classLoader, thread)
       valuesArray <- JdiArray("java.lang.Object", values.size, classLoader, thread) // add boxing
