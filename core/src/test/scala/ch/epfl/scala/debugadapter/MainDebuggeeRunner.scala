@@ -6,7 +6,7 @@ import sbt.io.syntax._
 
 import java.io.{BufferedReader, File, InputStream, InputStreamReader}
 import java.net.InetSocketAddress
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import scala.concurrent.{Future, Promise}
 import scala.util.control.NonFatal
 import scala.util.Properties
@@ -68,9 +68,10 @@ object MainDebuggeeRunner {
     compileScala(src, "scaladebug.test.app", dest, ScalaVersion.`3`)
   }
 
-  def evaluateTest(dest: File): MainDebuggeeRunner = {
-    val src = getResource("/scala/EvaluateTest.scala")
-    compileScala(src, "EvaluateTest", dest, ScalaVersion.`2.12`)
+  def fromSource(srcDir: File, filename: String, source: String, mainClass: String, outDir: File): MainDebuggeeRunner = {
+    val path = new File(srcDir, filename).toPath
+    Files.write(path, source.getBytes())
+    compileScala(path, mainClass, outDir, ScalaVersion.`2.12`)
   }
 
   private def getResource(name: String): Path =
