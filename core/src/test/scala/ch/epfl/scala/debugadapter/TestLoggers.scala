@@ -9,8 +9,7 @@ object NoopLogger extends Logger {
 }
 
 /**
-  * When used in TestDebugClient it prints all the events and responses
-  * Usefull for debugging
+  * Can be used in DebugServer for debugging
   */
 object PrintLogger extends Logger {
   override def debug(msg: => String): Unit = println(s"[DEBUG] $msg")

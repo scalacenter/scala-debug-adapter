@@ -1,9 +1,9 @@
 package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter.{DebuggeeRunner, Logger}
-import com.microsoft.java.debug.core.{DebugSettings, IEvaluatableBreakpoint}
 import com.microsoft.java.debug.core.adapter._
 import com.microsoft.java.debug.core.protocol.Types
+import com.microsoft.java.debug.core.{DebugSettings, IEvaluatableBreakpoint}
 import com.sun.jdi._
 import io.reactivex.Observable
 
@@ -36,7 +36,7 @@ private[debugadapter] object DebugAdapter {
     val context = new ProviderContext
     context.registerProvider(classOf[IHotCodeReplaceProvider], HotCodeReplaceProvider)
     context.registerProvider(classOf[IVirtualMachineManagerProvider], VirtualMachineManagerProvider)
-    context.registerProvider(classOf[ISourceLookUpProvider], new SourceLookUpProvider(runner, logger))
+    context.registerProvider(classOf[ISourceLookUpProvider], SourceLookUpProvider(runner.classPathEntries, logger))
     context.registerProvider(classOf[IEvaluationProvider], EvaluationProvider)
     context.registerProvider(classOf[ICompletionsProvider], CompletionsProvider)
     context

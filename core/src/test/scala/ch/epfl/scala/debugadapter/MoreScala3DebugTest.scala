@@ -1,13 +1,11 @@
 package ch.epfl.scala.debugadapter
 
+import ch.epfl.scala.debugadapter.testing.TestDebugClient
 import sbt.io.IO
 import utest._
 
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
-
-import ch.epfl.scala.debugadapter.testing.TestDebugClient
-import ch.epfl.scala.debugadapter.internal.DebugSession
 
 object MoreScala3DebugTest extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests

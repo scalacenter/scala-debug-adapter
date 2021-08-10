@@ -4,9 +4,10 @@ import ch.epfl.scala.debugadapter.{CancelableFuture, DebuggeeListener}
 import sbt.ForkOptions
 import sbt.io.syntax._
 
-import java.io.File
 import scala.concurrent.{Future, Promise}
 import scala.sys.process.Process
+import java.nio.file.Path
+import java.io.File
 
 private class DebuggeeProcess(process: Process) extends CancelableFuture[Unit] {
   private val exited = Promise[Unit]()
@@ -27,7 +28,7 @@ private object DebuggeeProcess {
 
   def start(
     forkOptions: ForkOptions,
-    classpath: Seq[java.io.File],
+    classpath: Seq[Path],
     mainClass: String,
     arguments: Seq[String],
     listener: DebuggeeListener
@@ -35,7 +36,7 @@ private object DebuggeeProcess {
     val javaHome = forkOptions.javaHome.getOrElse(new File(System.getProperty("java.home")))
     val javaBin = (javaHome / "bin" / "java").getAbsolutePath
     
-    val classpathOption = classpath.map(_.getAbsolutePath).mkString(File.pathSeparator)
+    val classpathOption = classpath.mkString(File.pathSeparator)
     val envVars = forkOptions.envVars + ("CLASSPATH" -> classpathOption)
 
     val command = Seq(javaBin, debugInterface) ++

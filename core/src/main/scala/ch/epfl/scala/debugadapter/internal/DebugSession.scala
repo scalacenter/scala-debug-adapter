@@ -13,6 +13,7 @@ import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.util.{Failure, Success, Try}
+import scala.util.control.NonFatal
 
 /**
  *  This debug adapter maintains the lifecycle of the debuggee in separation from JDI.
@@ -258,9 +259,16 @@ private[debugadapter] object DebugSession {
       autoClose: Boolean,
       gracePeriod: Duration
   )(implicit executionContext: ExecutionContext): DebugSession = {
-    val context = DebugAdapter.context(runner, logger)
-    val loggingHandler = new LoggingAdapter(logger)
-    new DebugSession(socket, runner, context, logger, loggingHandler, autoClose, gracePeriod)
+    try {
+      val context = DebugAdapter.context(runner, logger)
+      val loggingHandler = new LoggingAdapter(logger)
+      new DebugSession(socket, runner, context, logger, loggingHandler, autoClose, gracePeriod)
+    } catch {
+      case NonFatal(cause) =>
+        logger.error(cause.toString())
+        logger.trace(cause)
+        throw cause
+    }
   }
 
   private def fork(f: () => Unit): Unit = {

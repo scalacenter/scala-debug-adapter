@@ -1,8 +1,7 @@
 package ch.epfl.scala.debugadapter
 
-import java.nio.file.Path
-import scala.concurrent.{Await, Future, Promise}
 import scala.concurrent.duration._
+import scala.concurrent.{Await, Future, Promise}
 import scala.language.postfixOps
 
 class MockDebuggeeRunner() extends DebuggeeRunner {
@@ -18,8 +17,8 @@ class MockDebuggeeRunner() extends DebuggeeRunner {
     currentProcess = new MockCancelableFuture()
     currentProcess
   }
-  
-  override def classFilesMappedTo(origin: Path, lines: Array[Int], columns: Array[Int]): List[Path] = List.empty
+
+  override def classPathEntries: Seq[ClassPathEntry] = Seq.empty
 }
 
 class MockCancelableFuture() extends CancelableFuture[Unit] {
