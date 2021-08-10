@@ -69,12 +69,18 @@ private[debugadapter] object DebugAdapter {
       expression: String,
       thisContext: ObjectReference,
       thread: ThreadReference
-    ): CompletableFuture[Value] = ???
+    ): CompletableFuture[Value] = {
+      println("here")
+      ???
+    }
 
     override def evaluateForBreakpoint(
       breakpoint: IEvaluatableBreakpoint,
       thread: ThreadReference
-    ): CompletableFuture[Value] = ???
+    ): CompletableFuture[Value] = {
+      println("here 2")
+      ???
+    }
 
     override def invokeMethod(
       thisContext: ObjectReference,
@@ -83,7 +89,9 @@ private[debugadapter] object DebugAdapter {
       args: Array[Value],
       thread: ThreadReference,
       invokeSuper: Boolean
-    ): CompletableFuture[Value] = ???
+    ): CompletableFuture[Value] = {
+      Evaluator.invokeMethod(thisContext, methodName, methodSignature, args, thread, invokeSuper)
+    }
 
     override def clearState(thread: ThreadReference): Unit = {}
   }

@@ -242,6 +242,17 @@ object ExpressionEvaluatorSpec extends TestSuite {
       assertEvaluation(source, "debug.EvaluateTest", 4, "1 + 2", _.toInt == 3)
     }
 
+    "should evaluate expression with Java util code" - {
+      val source =
+        """object EvaluateTest {
+          |  def main(args: Array[String]): Unit = {
+          |    println("Hello, World!")
+          |  }
+          |}
+          |""".stripMargin
+      assertEvaluation(source, "EvaluateTest", 3, "new java.util.ArrayList[String]().toString", _ == "\"[]\"")
+    }
+
     "should return null when expression is invalid" - {
       val source =
         """object EvaluateTest {
