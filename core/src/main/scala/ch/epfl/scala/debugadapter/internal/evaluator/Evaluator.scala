@@ -6,9 +6,14 @@ import com.sun.jdi._
 import java.util.concurrent.CompletableFuture
 import scala.collection.JavaConverters._
 import scala.tools.nsc.ExpressionCompiler
+import scala.util.Try
 
 object Evaluator {
-  def evaluate(expression: String, thread: ThreadReference, frame: StackFrame)(sourceLookUpProvider: ISourceLookUpProvider): CompletableFuture[Value] = {
+  def evaluate(
+    expression: String,
+    thread: ThreadReference,
+    frame: StackFrame
+  )(sourceLookUpProvider: ISourceLookUpProvider): CompletableFuture[Value] = {
     val vm = thread.virtualMachine()
     val thisObject = frame.thisObject()
 
@@ -87,5 +92,26 @@ object Evaluator {
     case value: ShortValue =>
       JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
     case value => Some(value)
+  }
+
+  def invokeMethod(
+    thisContext: ObjectReference,
+    methodName: String,
+    signature: String,
+    args: Array[Value],
+    thread: ThreadReference,
+    invokeSuper: Boolean
+  ): CompletableFuture[Value] = {
+    val result = for {
+      obj <- Try(new JdiObject(thisContext, thread)).toOption
+      result <- obj.invoke(methodName, signature, if (args == null) List() else args.toList)
+    } yield result
+
+    result match {
+      case Some(value) =>
+        CompletableFuture.completedFuture(value)
+      case None =>
+        throw new Exception("Unable to evaluate the expression")
+    }
   }
 }
