@@ -15,7 +15,7 @@ object Evaluator {
     frame: StackFrame
   )(sourceLookUpProvider: ISourceLookUpProvider): CompletableFuture[Value] = {
     val vm = thread.virtualMachine()
-    val thisObject = frame.thisObject()
+    val thisObject = Option(frame.thisObject())
 
     val location = frame.location()
     val sourcePath = location.sourcePath()
@@ -27,15 +27,16 @@ object Evaluator {
 
     var error: Option[String] = None
     val result = for {
-      classLoader <- classLoader(thisObject).flatMap(JdiClassLoader(_, thread))
+      classLoader <- vm.allClasses().asScala.find(_.classLoader() != null).map(_.classLoader()).flatMap(JdiClassLoader(_, thread))
       variables = frame.visibleVariables().asScala
       variableNames <- Some(variables.map(_.name()).map(vm.mirrorOf).toList)
       variableValues <- Some(variables.map(frame.getValue).flatMap(value => boxIfNeeded(value, classLoader, thread)).toList)
-      fields = thisObject.referenceType().fields().asScala
-      fieldNames <- Some(fields.map(_.name()).map(vm.mirrorOf).toList)
-      fieldValues <- Some(fields.map(thisObject.getValue).flatMap(value => boxIfNeeded(value, classLoader, thread)).toList)
-      names <- Some(variableNames ++ fieldNames ++ Seq(vm.mirrorOf("$this")))
-      values <- Some(variableValues ++ fieldValues ++ Seq(thisObject))
+      fields = thisObject.map(_.referenceType().fields().asScala).getOrElse(List())
+      fieldNames = fields.map(_.name()).map(vm.mirrorOf).toList
+      fieldValues = thisObject.map(thiz => fields.map(field => thiz.getValue(field)).flatMap(value => boxIfNeeded(value, classLoader, thread))).getOrElse(List())
+      thisObjectName = thisObject.map(_ => vm.mirrorOf("$this"))
+      names = variableNames ++ fieldNames ++ thisObjectName.map(Seq(_)).getOrElse(Seq())
+      values <- Some(variableValues ++ fieldValues ++ thisObject.map(Seq(_)).getOrElse(Seq()))
       systemClass <- classLoader.loadClass("java.lang.System")
       classPath <- systemClass
         .invokeStatic("getProperty", List(vm.mirrorOf("java.class.path")))
