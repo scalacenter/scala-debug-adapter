@@ -263,6 +263,56 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |""".stripMargin
       assertEvaluation(source, "EvaluateTest", 3, "1 ++ 2", _ == null)
     }
+
+    "should evaluate expression inside of a lambda" - {
+      val source =
+        """object EvaluateTest {
+          |  def main(args: Array[String]): Unit = {
+          |    List(1).foreach(n => {
+          |      println(n)
+          |    })
+          |  }
+          |}
+          |""".stripMargin
+      assertEvaluation(source, "EvaluateTest", 4, "n", _.toInt == 1)
+    }
+
+    "should evaluate expression a object's method call inside of a lambda" - {
+      val source =
+        """object EvaluateTest {
+          |  def main(args: Array[String]): Unit = {
+          |    List(1).foreach(n => {
+          |      println(n)
+          |    })
+          |  }
+          |
+          |  def m1(): Int = 9
+          |}
+          |""".stripMargin
+      assertEvaluation(source, "EvaluateTest", 4, "m1()", _.toInt == 9)
+    }
+
+    "should evaluate expression a class's method call inside of a lambda" - {
+      val source =
+        """class A {
+          |  def m1(): Unit = {
+          |    List(1).foreach(n => {
+          |      println(n)
+          |      println(m2())
+          |    })
+          |  }
+          |
+          |  def m2(): Int = 10
+          |}
+          |
+          |object EvaluateTest {
+          |  def main(args: Array[String]): Unit = {
+          |    new A().m1()
+          |  }
+          |}
+          |""".stripMargin
+      assertEvaluation(source, "EvaluateTest", 4, "m2()", _.toInt == 10)
+    }
   }
 
   private def assertEvaluation(source: String, mainClass: String, line: Int, expression: String, assertion: String => Boolean): Unit = {

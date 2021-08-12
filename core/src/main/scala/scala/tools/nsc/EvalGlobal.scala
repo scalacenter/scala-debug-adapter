@@ -111,7 +111,7 @@ private[nsc] class EvalGlobal(
       override def traverse(tree: Tree): Unit = tree match {
         // Don't extract expression from the Expression class
         case tree: ClassDef if tree.name.decode == ExpressionCompiler.ExpressionClassName =>
-          // ignore
+        // ignore
         case tree: Block if tree.pos.line == line =>
           expressionOwners = currentOwner.ownerChain
           extractedExpression = tree.stats.head
@@ -159,12 +159,13 @@ private[nsc] class EvalGlobal(
             val block = rhs.asInstanceOf[Block]
 
             val thisSymbol = expressionOwners.find(_.isClass).map(_.asInstanceOf[ClassSymbol]).get
-            val (thisName, thisValDef) = newValDefForThis(tree, thisSymbol)
-
+            val thisValDef = newThisValDef(tree, thisSymbol)
+              .map { case (thisName, thisValDef) => Seq(thisName -> thisValDef) }
+              .getOrElse(Seq())
             // replace original valDefs with synthesized valDefs with values that will be sent via JDI
             val newValOrDefDefs = valOrDefDefs.map { case (_, valOrDefDef) =>
               newValDef(tree, valOrDefDef)
-            } + (thisName -> thisValDef)
+            } ++ thisValDef
 
             val symbolsByName: Map[Name, Symbol] = newValOrDefDefs.mapValues(_.symbol)
 
@@ -190,15 +191,19 @@ private[nsc] class EvalGlobal(
           super.transform(tree)
       }
 
-      private def newValDefForThis(owner: DefDef, thisSymbol: ClassSymbol): (Name, ValDef) = {
-        val name = TermName("$this")
-        val app = Apply(valuesByNameIdent, List(Literal(Constant(name.decode))))
-        val tpt = TypeTree().setType(thisSymbol.tpe)
-        val casted = mkCast(app, tpt)
+      private def newThisValDef(owner: DefDef, thisSymbol: ClassSymbol): Option[(Name, ValDef)] = {
+        if (!valOrDefDefNames.contains("$this")) {
+          None
+        } else {
+          val name = TermName("$this")
+          val app = Apply(valuesByNameIdent, List(Literal(Constant(name.decode))))
+          val tpt = TypeTree().setType(thisSymbol.tpe)
+          val casted = mkCast(app, tpt)
 
-        val sym = owner.symbol.newValue(name).setInfo(tpt.tpe)
-        val newValDef = ValDef(Modifiers(), TermName(name.decode), tpt, casted).setSymbol(sym)
-        name -> newValDef
+          val sym = owner.symbol.newValue(name).setInfo(tpt.tpe)
+          val newValDef = ValDef(Modifiers(), TermName(name.decode), tpt, casted).setSymbol(sym)
+          Some(name -> newValDef)
+        }
       }
 
       private def newValDef(owner: DefDef, valOrDefDef: ValOrDefDef): (Name, ValDef) = {
