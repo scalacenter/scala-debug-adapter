@@ -7,12 +7,28 @@ import scala.concurrent.duration.Duration
 import java.util.concurrent.TimeUnit
 
 import ch.epfl.scala.debugadapter.Coursier
+import ch.epfl.scala.debugadapter.ClassPathEntry
+import scala.util.Properties
 /** 
  * This is a test class that also
  * prints some stats about loading the look-up of some libraries
 */
 object ClassPathEntryLookUpStats extends TestSuite {
   def tests = Tests {
+    "java runtime" - {
+      val javaVersion = Properties.javaVersion
+      if (javaVersion.startsWith("1.")) {
+        println(s"Java version is: $javaVersion")
+        val javaRuntime = ClassPathEntry.javaRuntime(Properties.jdkHome).get
+        printAndCheck(javaRuntime)(
+          classCount => classCount > 0,
+          orphanClassCount => orphanClassCount == 0
+        )
+      } else {
+        println(s"Skipping test for java version: $javaVersion")
+      }
+    }
+
     "scala-lang" - {
       val org = "org.scala-lang"
       printAndCheck(org, "scala-library", "2.13.6")(2870, 0)
@@ -90,16 +106,20 @@ object ClassPathEntryLookUpStats extends TestSuite {
   }
 
   private def printAndCheck(org: String, name: String, version: String)(expectedClasses: Int, expectedOrphans: Int): Unit = {
-    val classPathEntry = Coursier.fetchOnly(org, name, version)
-    val (duration, lookup) = Stats.timed(ClassPathEntryLookUp(classPathEntry))
+    val entry = Coursier.fetchOnly(org, name, version)
+    printAndCheck(entry)(_ == expectedClasses, _ == expectedOrphans)
+  }
+
+  private def printAndCheck(entry: ClassPathEntry)(classCountAssertion: Int => Boolean, orphanAssertion: Int => Boolean): Unit = {
+    val (duration, lookup) = Stats.timed(ClassPathEntryLookUp(entry))
     val classCount = lookup.fullyQualifiedNames.size
     val orphanClassCount = lookup.orphanClassFiles.size
-    println(s"${classPathEntry.name}:")
+    println(s"${entry.name}:")
     println(s"  - $classCount classes loaded in $duration")
     if (orphanClassCount > 0) {
       val orphanClassFilePercent = (orphanClassCount * 10000 / classCount).toFloat / 100
       println(s"  - $orphanClassCount orphan class files ($orphanClassFilePercent%)")
     }
-    assert(classCount == expectedClasses, orphanClassCount == expectedOrphans)
+    assert(classCountAssertion(classCount), orphanAssertion(orphanClassCount))
   }
 }

@@ -36,7 +36,7 @@ private[debugadapter] object DebugAdapter {
     val context = new ProviderContext
     context.registerProvider(classOf[IHotCodeReplaceProvider], HotCodeReplaceProvider)
     context.registerProvider(classOf[IVirtualMachineManagerProvider], VirtualMachineManagerProvider)
-    context.registerProvider(classOf[ISourceLookUpProvider], SourceLookUpProvider(runner.classPathEntries, logger))
+    context.registerProvider(classOf[ISourceLookUpProvider], SourceLookUpProvider(runner.allEntries, logger))
     context.registerProvider(classOf[IEvaluationProvider], EvaluationProvider)
     context.registerProvider(classOf[ICompletionsProvider], CompletionsProvider)
     context

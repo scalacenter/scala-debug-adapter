@@ -129,7 +129,7 @@ private object ClassPathEntryLookUp {
         classFile.sourceName.flatMap(sourceNameToSourceFile.get).getOrElse(Seq.empty).toList match {
           case Nil =>
             // the source name is missing from the class file
-            // or the source file is missing from the source entr
+            // or the source file is missing from the source entry
             missingSourceFileClassFiles.append(classFile)
           case sourceFile:: Nil =>
             // there is only one file with that name, it must be the right one

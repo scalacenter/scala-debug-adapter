@@ -2,11 +2,20 @@ package ch.epfl.scala.debugadapter.sbtplugin.internal
 
 import sbt._
 import ch.epfl.scala.debugadapter._
+import scala.util.Properties
+import java.nio.file.Files
 
 private[sbtplugin] object InternalTasks {
   def classPathEntries: Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.task {
     val _ = Keys.compile.value // compile to fill the class directories
     externalClassPathEntries.value ++ internalClassPathEntries.value
+  }
+
+  def javaRuntime: Def.Initialize[Task[Option[ClassPathEntry]]] = Def.task {
+    for { 
+      jdkHome <- Keys.javaHome.value.map(_.toString).orElse(Option(Properties.jdkHome))
+      javaRuntime <- ClassPathEntry.javaRuntime(jdkHome)
+    } yield javaRuntime
   }
 
   private def externalClassPathEntries: Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.task {

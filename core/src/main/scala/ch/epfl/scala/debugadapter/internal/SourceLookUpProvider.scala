@@ -47,14 +47,14 @@ private[debugadapter] final class SourceLookUpProvider(
 }
 
 private[debugadapter] object SourceLookUpProvider {
-  def apply(classPath: Seq[ClassPathEntry], logger: Logger): SourceLookUpProvider = {
-    val classPathEntries = classPath.par.map(ClassPathEntryLookUp.apply).seq
-    val sourceUriToClassPathEntry = classPathEntries
+  def apply(allEntries: Seq[ClassPathEntry], logger: Logger): SourceLookUpProvider = {
+    val allLookUps = allEntries.par.map(ClassPathEntryLookUp.apply).seq
+    val sourceUriToClassPathEntry = allLookUps
       .flatMap(lookup => lookup.sources.map(uri => (uri, lookup)))
       .toMap
-    val fqcnToClassPathEntry = classPathEntries
+    val fqcnToClassPathEntry = allLookUps
       .flatMap(lookup => lookup.fullyQualifiedNames.map(fqcn => (fqcn, lookup)))
       .toMap
-    new SourceLookUpProvider(classPathEntries, sourceUriToClassPathEntry, fqcnToClassPathEntry, logger)
+    new SourceLookUpProvider(allLookUps, sourceUriToClassPathEntry, fqcnToClassPathEntry, logger)
   }
 }

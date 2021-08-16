@@ -168,6 +168,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val javaHome = Keys.javaHome.value
     val workingDirectory = Keys.baseDirectory.value
     val classPathEntries = InternalTasks.classPathEntries.value
+    val javaRuntime = InternalTasks.javaRuntime.value
     val envVars = Keys.envVars.value
     val logger = Keys.streams.value.log
     val state = Keys.state.value
@@ -197,6 +198,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         target,
         forkOptions,
         classPathEntries,
+        javaRuntime,
         params.`class`,
         params.arguments
       )
@@ -216,6 +218,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val testGrouping = (Keys.test / Keys.testGrouping).value
     val defaultForkOpts = Keys.forkOptions.value
     val classPathEntries = InternalTasks.classPathEntries.value
+    val javaRuntime = InternalTasks.javaRuntime.value
     val frameworks = Keys.loadedTestFrameworks.value
     val testLoader = Keys.testLoader.value
     val testExec = (Keys.test / Keys.testExecution).value
@@ -263,6 +266,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         target,
         forkOptions,
         classPathEntries,
+        javaRuntime,
         setups,
         cleanups,
         parallel,
@@ -284,10 +288,11 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val target = Keys.bspTargetIdentifier.value
     
     val classPathEntries = InternalTasks.classPathEntries.value
+    val javaRuntime = InternalTasks.javaRuntime.value
     val state = Keys.state.value
     val logger = Keys.streams.value.log
 
-    val runner = new AttachRemoteRunner(target, classPathEntries)
+    val runner = new AttachRemoteRunner(target, classPathEntries, javaRuntime)
     startServer(state, target, runner, logger)
   }
 

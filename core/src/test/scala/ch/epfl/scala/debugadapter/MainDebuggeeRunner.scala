@@ -9,6 +9,7 @@ import java.net.InetSocketAddress
 import java.nio.file.{Path, Paths}
 import scala.concurrent.{Future, Promise}
 import scala.util.control.NonFatal
+import scala.util.Properties
 
 case class MainDebuggeeRunner(source: Path, projectEntry: ClassPathEntry, dependencies: Seq[ClassPathEntry], mainClass: String) extends DebuggeeRunner {
   override def name: String = mainClass
@@ -19,6 +20,7 @@ case class MainDebuggeeRunner(source: Path, projectEntry: ClassPathEntry, depend
     val process = builder.start()
     new MainProcess(process, listener)
   }
+  override def javaRuntime: Option[ClassPathEntry] = ClassPathEntry.javaRuntime(javaHome)
 }
 
 object MainDebuggeeRunner {
@@ -69,6 +71,12 @@ object MainDebuggeeRunner {
   private def getResource(name: String): Path =
     Paths.get(getClass.getResource(name).toURI)
 
+  private val isWin = Properties.isWin
+  val javaHome = Paths.get(Properties.jdkHome)
+  private val ext = if (isWin) ".exe" else ""
+  private val java = javaHome.resolve(s"bin/java$ext")
+  private val javac = javaHome.resolve(s"bin/javac$ext")
+
   private def compileScala(src: Path, mainClass: String, dest: File, scalaVersion: ScalaVersion): MainDebuggeeRunner = {
     val classDir = dest / "classes"
     IO.createDirectory(classDir)
@@ -76,7 +84,7 @@ object MainDebuggeeRunner {
     val libraryClassPath = Coursier.fetch(scalaVersion.library)
     
     val command = Array(
-      "java",
+      java.toString,
       "-classpath",
       compilerClassPath.map(_.absolutePath).mkString(File.pathSeparator),
       scalaVersion.compilerMain,
@@ -102,7 +110,7 @@ object MainDebuggeeRunner {
     val classDir = dest / "classes"
     IO.createDirectory(classDir)
     val command = Array(
-      "javac",
+      javac.toString,
       "-d", classDir.getAbsolutePath,
       src.toAbsolutePath.toString
     )

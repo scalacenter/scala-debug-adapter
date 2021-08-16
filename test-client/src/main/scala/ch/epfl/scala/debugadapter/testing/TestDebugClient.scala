@@ -105,6 +105,13 @@ class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(
     getBody[VariablesResponseBody](response).variables
   }
 
+  def stepIn(threadId: Long): Unit = {
+    val args = new StepInArguments()
+    args.threadId = threadId
+    val request = createRequest(Command.STEPIN, args)
+    val response = sendRequest(request, timeout)
+  }
+
   def disconnect(restart: Boolean): Messages.Response = {
     val args = new DisconnectArguments()
     args.restart = restart
@@ -159,7 +166,7 @@ class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(
 }
 
 object TestDebugClient {
-  def connect(uri: URI, timeout: Duration = 2000 millis, debug: String => Unit = _ => ())(implicit ec: ExecutionContext): TestDebugClient = {
+  def connect(uri: URI, timeout: Duration = 4 seconds, debug: String => Unit = _ => ())(implicit ec: ExecutionContext): TestDebugClient = {
     val socket = new Socket()
     val address = new InetSocketAddress(uri.getHost, uri.getPort)
     socket.connect(address, timeout.toMillis.intValue)
