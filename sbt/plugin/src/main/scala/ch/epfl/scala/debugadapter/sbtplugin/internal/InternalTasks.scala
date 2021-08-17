@@ -11,10 +11,10 @@ private[sbtplugin] object InternalTasks {
     externalClassPathEntries.value ++ internalClassPathEntries.value
   }
 
-  def javaRuntime: Def.Initialize[Task[Option[ClassPathEntry]]] = Def.task {
+  def javaRuntime: Def.Initialize[Task[Option[JavaRuntime]]] = Def.task {
     for { 
       jdkHome <- Keys.javaHome.value.map(_.toString).orElse(Option(Properties.jdkHome))
-      javaRuntime <- ClassPathEntry.javaRuntime(jdkHome)
+      javaRuntime <- JavaRuntime(jdkHome)
     } yield javaRuntime
   }
 

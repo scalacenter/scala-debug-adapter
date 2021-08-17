@@ -1,15 +1,18 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter.{ClassPathEntry, Logger}
+import ch.epfl.scala.debugadapter.ClassEntry
+import ch.epfl.scala.debugadapter.ClassPathEntry
+import ch.epfl.scala.debugadapter.DebuggeeRunner
+import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.SourceJar
 import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 
 import java.net.URI
 
 private[debugadapter] final class SourceLookUpProvider(
-  private[internal] val classPathEntries: Seq[ClassPathEntryLookUp],
-  sourceUriToClassPathEntry: Map[URI, ClassPathEntryLookUp],
-  fqcnToClassPathEntry: Map[String, ClassPathEntryLookUp],
-  logger: Logger
+  private[internal] val classPathEntries: Seq[ClassEntryLookUp],
+  sourceUriToClassPathEntry: Map[URI, ClassEntryLookUp],
+  fqcnToClassPathEntry: Map[String, ClassEntryLookUp]
 ) extends ISourceLookUpProvider {
   override def supportsRealtimeBreakpointVerification(): Boolean = true
 
@@ -47,14 +50,14 @@ private[debugadapter] final class SourceLookUpProvider(
 }
 
 private[debugadapter] object SourceLookUpProvider {
-  def apply(allEntries: Seq[ClassPathEntry], logger: Logger): SourceLookUpProvider = {
-    val allLookUps = allEntries.par.map(ClassPathEntryLookUp.apply).seq
+  def apply(entries: Seq[ClassEntry]): SourceLookUpProvider = {
+    val allLookUps = entries.par.map(ClassEntryLookUp.apply).seq
     val sourceUriToClassPathEntry = allLookUps
       .flatMap(lookup => lookup.sources.map(uri => (uri, lookup)))
       .toMap
     val fqcnToClassPathEntry = allLookUps
       .flatMap(lookup => lookup.fullyQualifiedNames.map(fqcn => (fqcn, lookup)))
       .toMap
-    new SourceLookUpProvider(allLookUps, sourceUriToClassPathEntry, fqcnToClassPathEntry, logger)
+    new SourceLookUpProvider(allLookUps, sourceUriToClassPathEntry, fqcnToClassPathEntry)
   }
 }

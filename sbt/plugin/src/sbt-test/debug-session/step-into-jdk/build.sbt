@@ -34,15 +34,7 @@ checkDebugSession := {
     client.stopped
 
     val frame = client.stackTrace(threadId).stackFrames.head
-    
-    val javaVersion = Properties.javaVersion
-    if (javaVersion.startsWith("1.")) {
-      logger.info(s"Java version is: $javaVersion")
-      val expectedSource = s"jar:${jdkSourceZip.toUri}!/java/io/PrintStream.java"
-      assert(frame.source.path == expectedSource)
-    } else {
-      logger.info(s"Skipping test for java version: $javaVersion")
-    }
+    assert(frame.source.path.endsWith("/java/io/PrintStream.java"))
 
     client.continue(threadId)
 

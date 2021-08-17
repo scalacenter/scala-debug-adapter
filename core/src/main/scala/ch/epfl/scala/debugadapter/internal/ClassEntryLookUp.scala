@@ -8,26 +8,25 @@ import java.nio.file._
 import java.util
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import ClassPathEntryLookUp.{readSourceContent, withinJarFile}
+import ClassEntryLookUp.readSourceContent
 
 import scala.util.matching.Regex
 
 private case class SourceLine(uri: URI, lineNumber: Int)
 
-private case class ClassFile(fullyQualifiedName: String, sourceName: Option[String], relativePath: String) {
+private case class ClassFile(fullyQualifiedName: String, sourceName: Option[String], relativePath: String, classSystem: ClassSystem) {
   def className: String = fullyQualifiedName.split('.').last
-  def fullPackage: String = fullyQualifiedName.stripSuffix(className).stripSuffix(".")
+  def fullPackage: String = fullyQualifiedName.stripSuffix(s".$className")
+  def fullPackageAsPath: String = fullPackage.replace(".", "/")
+  def folderPath: String = relativePath.stripSuffix(s"/$className.class")
 }
 
 private case class SourceFile(entry: SourceEntry, relativePath: String, uri: URI) {
-  def extension: String = relativePath.split('.').last
-  def baseName: String = name.stripSuffix(extension)
-  def name: String = relativePath.split('/').last
-  def folderAsPackage: String = relativePath.stripSuffix(name).stripSuffix("/").replace('/', '.')
+  def fileName: String = relativePath.split('/').last
+  def folderPath: String = relativePath.stripSuffix(s"/$fileName")
 }
 
-private class ClassPathEntryLookUp(
-  val entry: ClassPathEntry,
+private class ClassEntryLookUp(
   sourceUriToSourceFile: Map[URI, SourceFile],
   sourceUriToClassFiles: Map[URI, Seq[ClassFile]],
   classNameToSourceFile: Map[String, SourceFile],
@@ -48,10 +47,11 @@ private class ClassPathEntryLookUp(
   
     if (!cachedSourceLines.contains(line)) {
       // read and cache line numbers from class files
-      for (classFiles <- sourceUriToClassFiles.get(sourceUri)) {
-        if (entry.isJar) withinJarFile(entry.absolutePath)(loadLineNumbers(_, classFiles, sourceUri))
-        else loadLineNumbers(FileSystems.getDefault, classFiles, sourceUri)
-      }
+      sourceUriToClassFiles(sourceUri)
+        .groupBy(_.classSystem)
+        .foreach { case (classSystem, classFiles) =>
+          classSystem.within((_, root) => loadLineNumbers(root, classFiles, sourceUri))
+        }
     }
 
     cachedSourceLines.get(line)
@@ -62,9 +62,9 @@ private class ClassPathEntryLookUp(
       }
   }
 
-  private def loadLineNumbers(fileSystem: FileSystem, classFiles: Seq[ClassFile], sourceUri: URI): Unit = {
+  private def loadLineNumbers(root: Path, classFiles: Seq[ClassFile], sourceUri: URI): Unit = {
     for (classFile <- classFiles) {
-      val path = fileSystem.getPath(classFile.relativePath)
+      val path = root.resolve(classFile.relativePath)
       val inputStream = Files.newInputStream(path)
       val reader = new ClassReader(inputStream)
 
@@ -100,17 +100,19 @@ private class ClassPathEntryLookUp(
   }
 }
 
-private object ClassPathEntryLookUp {
-  def empty(entry: ClassPathEntry): ClassPathEntryLookUp =
-    new ClassPathEntryLookUp(entry, Map.empty, Map.empty, Map.empty, Seq.empty, Seq.empty)
+private object ClassEntryLookUp {
+  private def empty: ClassEntryLookUp =
+    new ClassEntryLookUp(Map.empty, Map.empty, Map.empty, Seq.empty, Seq.empty)
 
-  def apply(entry: ClassPathEntry): ClassPathEntryLookUp = {
+  def apply(entry: ClassEntry): ClassEntryLookUp = {
     val sourceFiles = entry.sourceEntries.flatMap(getAllSourceFiles)
-    if (sourceFiles.isEmpty) ClassPathEntryLookUp.empty(entry)
+    if (sourceFiles.isEmpty) ClassEntryLookUp.empty
     else {
-      val classFiles = readAllClassFiles(entry)
+      val classFiles = entry.classSystems.flatMap { classSystem => 
+        classSystem.within(readAllClassFiles(classSystem))
+      }
       val sourceUriToSourceFile = sourceFiles.map(f => (f.uri, f)).toMap
-      val sourceNameToSourceFile = sourceFiles.groupBy(f => f.name)
+      val sourceNameToSourceFile = sourceFiles.groupBy(f => f.fileName)
       
       val classNameToSourceFile = mutable.Map[String, SourceFile]()
       val sourceUriToClassFiles = mutable.Map[URI, Seq[ClassFile]]()
@@ -138,25 +140,33 @@ private object ClassPathEntryLookUp {
           case manySourceFiles =>
             // there are several files with the same name
             // we find the one whose relative path matches the class package
-            manySourceFiles.find(f => f.folderAsPackage == classFile.fullPackage) match {
+            manySourceFiles.find(f => f.folderPath == classFile.folderPath) match {
               case Some(sourceFile) => recordSourceFile(sourceFile)
               case None =>
-                // there is no source file with the correct relative path
-                // so we try to find the right package declaration in each file
-                // it would be very unfortunate that 2 sources file with the same name
-                // declare the same package.
-                manySourceFiles.filter(s => findPackage(s, classFile.fullPackage)) match {
-                  case sourceFile :: Nil =>
-                    recordSourceFile(sourceFile)
-                  case _ =>
-                    orphanClassFiles.append(classFile)
-                }
+                // in some modules of the java 9+ runtimes, the pattern of the path
+                // of the source files is <module>/<project>/src/<package>/<fileName>.java
+                // we find the package name by splitting at "src/"
+                manySourceFiles
+                  .filter(_.folderPath.contains("src/"))
+                  .find(f => f.folderPath.split("src/").last == classFile.fullPackageAsPath) match {
+                    case Some(sourceFile) => recordSourceFile(sourceFile)
+                    case None => 
+                      // there is no source file with the correct relative path
+                      // so we try to find the right package declaration in each file
+                      // it would be very unfortunate that 2 sources file with the same name
+                      // declare the same package.
+                      manySourceFiles.filter(s => findPackage(s, classFile.fullPackage)) match {
+                        case sourceFile :: Nil =>
+                          recordSourceFile(sourceFile)
+                        case _ =>
+                          orphanClassFiles.append(classFile)
+                      }
+                  }
             }
         }
       }
 
-      new ClassPathEntryLookUp(
-        entry,
+      new ClassEntryLookUp(
         sourceUriToSourceFile,
         sourceUriToClassFiles.toMap,
         classNameToSourceFile.toMap,
@@ -169,7 +179,7 @@ private object ClassPathEntryLookUp {
   private def getAllSourceFiles(entry: SourceEntry): Seq[SourceFile] = {
     entry match {
       case SourceJar(jar) => 
-        withinJarFile(jar) { fileSystem =>
+        IO.withinJarFile(jar) { fileSystem =>
           getAllSourceFiles(entry, fileSystem, fileSystem.getPath("/")).toVector
         }
       case SourceDirectory(directory) =>
@@ -186,32 +196,24 @@ private object ClassPathEntryLookUp {
         .filter(sourceMatcher.matches)
         .iterator.asScala
         .map { path =>
-          val relativePath = root.relativize(path).toString
+          val relativePath = root.relativize(path).toString.replace('\\', '/')
           SourceFile(entry, relativePath, path.toUri)
         }
     } else Iterator.empty
   }
 
-  private def readAllClassFiles(entry: ClassPathEntry): Seq[ClassFile] = {
-    if (entry.isJar)
-      withinJarFile(entry.absolutePath) { fileSystem =>
-        readAllClassFiles(fileSystem, fileSystem.getPath("/")).toVector
-      }
-    else
-      readAllClassFiles(FileSystems.getDefault, entry.absolutePath).toSeq
-  }
-
-  private def readAllClassFiles(fileSystem: FileSystem, root: Path): Iterator[ClassFile] = {
+  private def readAllClassFiles(classSystem: ClassSystem)(fileSystem: FileSystem, root: Path): Vector[ClassFile] = {
     if (Files.exists(root)) {
       val classMatcher = fileSystem.getPathMatcher("glob:**.class")
       Files.walk(root)
         .filter(classMatcher.matches)
         .iterator.asScala
-        .map(readClassFile)
-    } else Iterator.empty
+        .map(readClassFile(classSystem, root))
+        .toVector
+    } else Vector.empty
   }
 
-  private def readClassFile(path: Path): ClassFile = {
+  private def readClassFile(classSystem: ClassSystem, root: Path)(path: Path): ClassFile = {
     val inputStream = Files.newInputStream(path)
     val reader = new ClassReader(inputStream)
     val fullyQualifiedName = reader.getClassName.replace('/', '.')
@@ -222,7 +224,8 @@ private object ClassPathEntryLookUp {
       override def visitSource(source: String, debug: String): Unit = sourceName = Option(source)
     }
     reader.accept(visitor, 0)
-    ClassFile(fullyQualifiedName, sourceName, path.toString)
+    val relativePath = root.relativize(path)
+    ClassFile(fullyQualifiedName, sourceName, relativePath.toString, classSystem)
   }
 
   private def findPackage(sourceFile: SourceFile, fullPackage: String): Boolean = {
@@ -234,7 +237,7 @@ private object ClassPathEntryLookUp {
     val sourceContent = readSourceContent(sourceFile)
     nestedPackages.exists { `package` =>
       val quotedPackage = Regex.quote(`package`)
-      val matcher = s"package\\s+(object\\s+)?$quotedPackage(\\{|:|\\s+)".r
+      val matcher = s"package\\s+(object\\s+)?$quotedPackage(\\{|:|;|\\s+)".r
       matcher.findFirstIn(sourceContent).isDefined
     }
   }
@@ -248,16 +251,9 @@ private object ClassPathEntryLookUp {
 
   private def withinSourceEntry[T](sourceEntry: SourceEntry)(f: Path => T): T = {
     sourceEntry match {
-      case SourceJar(jar) => withinJarFile(jar)(fs => f(fs.getPath("/")))
+      case SourceJar(jar) => IO.withinJarFile(jar)(fs => f(fs.getPath("/")))
       case SourceDirectory(dir) => f(dir)
       case StandaloneSourceFile(absolutePath, _) => f(absolutePath.getParent)
     }
-  }
-
-  private def withinJarFile[T](absolutePath: Path)(f: FileSystem => T): T = {
-    val uri = URI.create(s"jar:${absolutePath.toUri}")
-    val fileSystem = FileSystems.newFileSystem(uri, new util.HashMap[String, Any])
-    try f(fileSystem)
-    finally fileSystem.close()
   }
 }

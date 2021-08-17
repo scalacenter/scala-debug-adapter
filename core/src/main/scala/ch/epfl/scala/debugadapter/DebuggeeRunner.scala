@@ -7,6 +7,5 @@ trait DebuggeeRunner {
   def run(listener: DebuggeeListener): CancelableFuture[Unit]
   def classPathEntries: Seq[ClassPathEntry]
   def classPath: Seq[Path] = classPathEntries.map(_.absolutePath)
-  def javaRuntime: Option[ClassPathEntry]
-  def allEntries = classPathEntries ++ javaRuntime
+  def javaRuntime: Option[JavaRuntime]
 }

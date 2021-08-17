@@ -46,7 +46,7 @@ object SourceLookUpProviderStats extends TestSuite {
 
   private def printAndCheck(project: String)(deps: Dependency*)(expectedClasses: Int, expectedOrphans: Int): Unit = {
     val classPath = Coursier.fetch(deps)
-    val (duration, lookUp) = Stats.timed(SourceLookUpProvider(classPath, NoopLogger))
+    val (duration, lookUp) = Stats.timed(SourceLookUpProvider(classPath))
     val entriesCount = lookUp.classPathEntries.size
     val classCount = lookUp.allClassNames.size
     val orphanClassCount = lookUp.allOrphanClasses.size

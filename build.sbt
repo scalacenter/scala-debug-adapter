@@ -39,7 +39,8 @@ lazy val core = project
       Dependencies.javaDebug,
       Dependencies.utest % Test,
       Dependencies.sbtIo % Test,
-      Dependencies.coursier % Test
+      Dependencies.coursier % Test,
+      Dependencies.coursierJvm % Test
     ),
     testFrameworks += new TestFramework("utest.runner.Framework"),
     // Test / javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=1044",

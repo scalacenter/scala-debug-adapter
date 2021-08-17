@@ -20,7 +20,7 @@ case class MainDebuggeeRunner(source: Path, projectEntry: ClassPathEntry, depend
     val process = builder.start()
     new MainProcess(process, listener)
   }
-  override def javaRuntime: Option[ClassPathEntry] = ClassPathEntry.javaRuntime(javaHome)
+  override def javaRuntime: Option[JavaRuntime] = JavaRuntime(javaHome)
 }
 
 object MainDebuggeeRunner {
