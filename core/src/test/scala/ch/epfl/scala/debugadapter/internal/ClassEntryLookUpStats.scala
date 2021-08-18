@@ -2,17 +2,83 @@ package ch.epfl.scala.debugadapter.internal
 
 import utest._
 import coursier._
+import coursier.jvm.JvmCache
 import coursier.params.ResolutionParams
 import scala.concurrent.duration.Duration
 import java.util.concurrent.TimeUnit
 
 import ch.epfl.scala.debugadapter.Coursier
+import ch.epfl.scala.debugadapter.ClassPathEntry
+import scala.util.Properties
+import ch.epfl.scala.debugadapter.JavaRuntime
+import ch.epfl.scala.debugadapter.ClassEntry
 /** 
  * This is a test class that also
  * prints some stats about loading the look-up of some libraries
 */
-object ClassPathEntryLookUpStats extends TestSuite {
+object ClassEntryLookUpStats extends TestSuite {
+  private val jvmCache = JvmCache().withDefaultIndex
+
   def tests = Tests {
+    "adopt:1.8.0-292" - {
+      printAndCheck("adopt:1.8.0-292")(
+        classCount => classCount > 0,
+        orphanClassCount => orphanClassCount == 0
+      )
+    }
+
+    "adopt:1.9.0-0" - {
+      printAndCheck("adopt:1.9.0-0")(
+        classCount => classCount > 0,
+        orphanClassCount => orphanClassCount == 0
+      )
+    }
+
+    "adopt:1.10.0-2" - {
+      printAndCheck("adopt:1.10.0-2")(
+        classCount => classCount > 0,
+        orphanClassCount => orphanClassCount == 0
+      )
+    }
+
+    "adopt:1.11.0-11" - {
+      printAndCheck("adopt:1.11.0-11")(
+        classCount => classCount > 0,
+        orphanClassCount => orphanClassCount == 0
+      )
+    }
+
+
+    "adopt:1.12.0-2" - {
+      printAndCheck("adopt:1.12.0-2")(
+        classCount => classCount > 0,
+        orphanClassCount => orphanClassCount == 0
+      )
+    }
+
+
+    "adopt:1.13.0-2" - {
+      printAndCheck("adopt:1.13.0-2")(
+        classCount => classCount > 0,
+        orphanClassCount => orphanClassCount == 0
+      )
+    }
+
+
+    "adopt:1.14.0-2" - {
+      printAndCheck("adopt:1.14.0-2")(
+        classCount => classCount > 0,
+        orphanClassCount => orphanClassCount == 0
+      )
+    }
+
+    "adopt:1.15.0-2" - {
+      printAndCheck("adopt:1.15.0-2")(
+        classCount => classCount > 0,
+        orphanClassCount => orphanClassCount == 0
+      )
+    }
+
     "scala-lang" - {
       val org = "org.scala-lang"
       printAndCheck(org, "scala-library", "2.13.6")(2870, 0)
@@ -89,17 +155,28 @@ object ClassPathEntryLookUpStats extends TestSuite {
     }
   }
 
+  private def printAndCheck(jvm: String)(classCountAssertion: Int => Boolean, orphanAssertion: Int => Boolean): Unit = {
+    import scala.concurrent.ExecutionContext.Implicits.global
+    val javaHome = jvmCache.get(jvm).unsafeRun()
+    val javaRuntime = JavaRuntime(javaHome.toPath).get
+    printAndCheck(jvm, javaRuntime)(classCountAssertion, orphanAssertion)
+  }
+
   private def printAndCheck(org: String, name: String, version: String)(expectedClasses: Int, expectedOrphans: Int): Unit = {
-    val classPathEntry = Coursier.fetchOnly(org, name, version)
-    val (duration, lookup) = Stats.timed(ClassPathEntryLookUp(classPathEntry))
+    val entry = Coursier.fetchOnly(org, name, version)
+    printAndCheck(name, entry)(_ == expectedClasses, _ == expectedOrphans)
+  }
+
+  private def printAndCheck(name: String, entry: ClassEntry)(classCountAssertion: Int => Boolean, orphanAssertion: Int => Boolean): Unit = {
+    val (duration, lookup) = Stats.timed(ClassEntryLookUp(entry))
     val classCount = lookup.fullyQualifiedNames.size
     val orphanClassCount = lookup.orphanClassFiles.size
-    println(s"${classPathEntry.name}:")
+    println(s"$name:")
     println(s"  - $classCount classes loaded in $duration")
     if (orphanClassCount > 0) {
       val orphanClassFilePercent = (orphanClassCount * 10000 / classCount).toFloat / 100
       println(s"  - $orphanClassCount orphan class files ($orphanClassFilePercent%)")
     }
-    assert(classCount == expectedClasses, orphanClassCount == expectedOrphans)
+    assert(classCountAssertion(classCount), orphanAssertion(orphanClassCount))
   }
 }

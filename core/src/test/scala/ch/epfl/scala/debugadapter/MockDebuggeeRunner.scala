@@ -19,6 +19,7 @@ class MockDebuggeeRunner() extends DebuggeeRunner {
   }
 
   override def classPathEntries: Seq[ClassPathEntry] = Seq.empty
+  override def javaRuntime: Option[JavaRuntime] = None
 }
 
 class MockCancelableFuture() extends CancelableFuture[Unit] {
