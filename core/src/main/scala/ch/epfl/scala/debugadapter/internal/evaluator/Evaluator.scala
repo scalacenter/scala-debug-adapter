@@ -29,22 +29,21 @@ object Evaluator {
     val result = for {
       classLoader <- vm.allClasses().asScala.find(_.classLoader() != null).map(_.classLoader()).flatMap(JdiClassLoader(_, thread))
       variables = frame.visibleVariables().asScala
-      variableNames <- Some(variables.map(_.name()).map(vm.mirrorOf).toList)
-      variableValues <- Some(variables.map(frame.getValue).flatMap(value => boxIfNeeded(value, classLoader, thread)).toList)
+      variableNames = variables.map(_.name()).map(vm.mirrorOf).toList
+      variableValues = variables.map(frame.getValue).flatMap(value => boxIfNeeded(value, classLoader, thread)).toList
       fields = thisObject.map(_.referenceType().fields().asScala).getOrElse(List())
       fieldNames = fields.map(_.name()).map(vm.mirrorOf).toList
       fieldValues = thisObject.map(thiz => fields.map(field => thiz.getValue(field)).flatMap(value => boxIfNeeded(value, classLoader, thread))).getOrElse(List())
       thisObjectName = thisObject.map(_ => vm.mirrorOf("$this"))
       names = variableNames ++ fieldNames ++ thisObjectName.map(Seq(_)).getOrElse(Seq())
-      values <- Some(variableValues ++ fieldValues ++ thisObject.map(Seq(_)).getOrElse(Seq()))
+      values = variableValues ++ fieldValues ++ thisObject.map(Seq(_)).getOrElse(Seq())
       systemClass <- classLoader.loadClass("java.lang.System")
       classPath <- systemClass
         .invokeStatic("getProperty", List(vm.mirrorOf("java.class.path")))
         .map(_.toString)
         .map(_.drop(1).dropRight(1)) // remove quotation marks
-      expressionCompiler <- Some(ExpressionCompiler(classPath, line, expression, names.map(_.value()).toSet))
-      _ <- Some(println(expressionCompiler.dir))
-      expressionClassPath = s"file://${expressionCompiler.dir.toString}/"
+      expressionCompiler = ExpressionCompiler(classPath, line, expression, names.map(_.value()).toSet)
+      expressionClassPath = expressionCompiler.dir.toUri.toString
       _ <- expressionCompiler.compile(content, errorMessage => error = Some(errorMessage))
       url <- classLoader
         .loadClass("java.net.URL")
@@ -60,8 +59,8 @@ object Evaluator {
       expression <- expressionClass.newInstance(List())
       namesArray <- JdiArray("java.lang.String", names.size, classLoader, thread)
       valuesArray <- JdiArray("java.lang.Object", values.size, classLoader, thread) // add boxing
-      _ <- Some(namesArray.setValues(names))
-      _ <- Some(valuesArray.setValues(values))
+      _ = namesArray.setValues(names)
+      _ = valuesArray.setValues(values)
       result <- expression.invoke("evaluate", List(namesArray.reference, valuesArray.reference))
     } yield result
 

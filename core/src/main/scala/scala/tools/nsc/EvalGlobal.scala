@@ -33,12 +33,17 @@ private[nsc] class EvalGlobal(
       else noopTransformer
     }
 
+    /**
+     * This transformer:
+     * - inserts the expression at the line of the breakpoint,
+     * - inserts the expression class in the same package as the expression.
+     */
     class InsExprTransformer extends Transformer {
       private val expressionClassSource =
         s"""class ${ExpressionCompiler.ExpressionClassName} {
            |  def evaluate(names: Array[Any], values: Array[Any]) = {
-           |    val valuesByName = names.map(_.asInstanceOf[String]).zip(values).toMap
-           |    valuesByName
+           |    val ${ExpressionCompiler.ValuesByNameIdentName} = names.map(_.asInstanceOf[String]).zip(values).toMap
+           |    ${ExpressionCompiler.ValuesByNameIdentName}
            |    ()
            |  }
            |}
@@ -47,16 +52,16 @@ private[nsc] class EvalGlobal(
       private val parsedExpression = parseExpression(expression)
       private val parsedExpressionClass = parseExpressionClass(expressionClassSource)
 
-      private var expressionFound = false
+      private var expressionInserted = false
 
       override def transform(tree: Tree): Tree = tree match {
         case tree if tree.pos.line == line =>
-          expressionFound = true
+          expressionInserted = true
           atPos(tree.pos)(Block(List(parsedExpression), tree))
         case tree: PackageDef =>
           val transformed = super.transform(tree).asInstanceOf[PackageDef]
-          if (expressionFound) {
-            expressionFound = false
+          if (expressionInserted) {
+            expressionInserted = false
             atPos(tree.pos)(treeCopy.PackageDef(transformed, transformed.pid, transformed.stats :+ parsedExpressionClass))
           } else {
             transformed
@@ -66,7 +71,7 @@ private[nsc] class EvalGlobal(
       }
 
       private def parseExpression(expression: String): Tree = {
-        // It's need to be wrapped because it's not possible to parse single expression
+        // It needs to be wrapped because it's not possible to parse single expression
         val wrappedExpressionSource =
           s"""object Expression {
              |  $expression
@@ -87,6 +92,13 @@ private[nsc] class EvalGlobal(
     }
   }
 
+  /**
+   * This transformer extracts transformed expression, extracts all defs (local variables, fields, arguments, etc.)
+   * and transforms `Expression` class that was inserted in the `insexpr` phase in the following way:
+   * - creates local variables that are equivalent to accessible values,
+   * - inserts extracted expression at the end of the `evaluate` method,
+   * - modifies the return type of `evaluate` method.
+   */
   class GenExpr extends Transform with TypingTransformers {
     override val global: EvalGlobal.this.type = EvalGlobal.this
     override val phaseName: String = "genexpr"
@@ -107,6 +119,9 @@ private[nsc] class EvalGlobal(
       }
     }
 
+    /**
+     * Extracts transformed expression that was inserted in the `insexpr` phase at the line of the breakpoint.
+     */
     class ExpressionExtractor extends Traverser {
       override def traverse(tree: Tree): Unit = tree match {
         // Don't extract expression from the Expression class
@@ -123,6 +138,9 @@ private[nsc] class EvalGlobal(
       }
     }
 
+    /**
+     * Extracts all defs (local variables, fields, arguments, etc.) that are accessible in the line of the breakpoint.
+     */
     class DefExtractor extends Traverser {
       override def traverse(tree: Tree): Unit = tree match {
         // Don't extract expression from the Expression class
@@ -138,6 +156,13 @@ private[nsc] class EvalGlobal(
       }
     }
 
+    /**
+     * Transforms `Expression` class:
+     * - for every extracted def it creates a local variable in the method `evaluate` in the form:
+     * `val foo: String = valuesByName("foo").asInstanceOf[String]`,
+     * - inserts the expression,
+     * - modifies return type of the `evaluate` method.
+     */
     class GenExprTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
 
       import definitions._
@@ -146,7 +171,10 @@ private[nsc] class EvalGlobal(
       private var valuesByNameIdent: Ident = _
 
       override def transform(tree: Tree): Tree = tree match {
-        case tree: Ident if tree.name == TermName("valuesByName") && valuesByNameIdent == null =>
+        // Don't transform class different than Expression
+        case tree: ClassDef if tree.name.decode != ExpressionCompiler.ExpressionClassName =>
+          tree
+        case tree: Ident if tree.name == TermName(ExpressionCompiler.ValuesByNameIdentName) && valuesByNameIdent == null =>
           valuesByNameIdent = tree
           EmptyTree
         case tree: DefDef if tree.name == TermName("evaluate") =>
