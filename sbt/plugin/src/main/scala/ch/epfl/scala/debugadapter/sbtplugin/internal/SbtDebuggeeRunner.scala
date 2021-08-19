@@ -20,7 +20,8 @@ private[debugadapter] final class MainClassRunner(
   val classPathEntries: Seq[ClassPathEntry],
   val javaRuntime: Option[JavaRuntime],
   mainClass: String,
-  args: Seq[String]
+  args: Seq[String],
+  val evaluationClassLoader: Option[ClassLoader]
 )(implicit ec: ExecutionContext) extends DebuggeeRunner {
   override def name: String = s"${getClass.getSimpleName}(${target.uri}, $mainClass)"
 
@@ -38,7 +39,8 @@ private[debugadapter] final class TestSuitesRunner(
     cleanups: Seq[Cleanup],
     parallel: Boolean, 
     runners: Map[TestFramework, Runner],
-    tests: Seq[TestDefinition]
+    tests: Seq[TestDefinition],
+    val evaluationClassLoader: Option[ClassLoader]
 )(implicit executionContext: ExecutionContext) extends DebuggeeRunner {
   override def name: String = s"${getClass.getSimpleName}(${target.uri}, [${tests.mkString(", ")}])"
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] = {
@@ -121,6 +123,7 @@ private[debugadapter] final class AttachRemoteRunner(
   target: BuildTargetIdentifier,
   val classPathEntries: Seq[ClassPathEntry],
   val javaRuntime: Option[JavaRuntime],
+  val evaluationClassLoader: Option[ClassLoader]
 ) extends DebuggeeRunner {
   override def name: String = s"${getClass.getSimpleName}(${target.uri})"
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] = new CancelableFuture[Unit] {

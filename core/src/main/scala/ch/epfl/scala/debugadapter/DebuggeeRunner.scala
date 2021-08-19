@@ -8,4 +8,5 @@ trait DebuggeeRunner {
   def classPathEntries: Seq[ClassPathEntry]
   def classPath: Seq[Path] = classPathEntries.map(_.absolutePath)
   def javaRuntime: Option[JavaRuntime]
+  def evaluationClassLoader: Option[ClassLoader]
 }
