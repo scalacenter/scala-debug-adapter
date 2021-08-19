@@ -1,10 +1,10 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter.internal.evaluator.Evaluator
+import ch.epfl.scala.debugadapter.internal.evaluator.EvaluationProvider
 import ch.epfl.scala.debugadapter.{DebuggeeRunner, Logger}
+import com.microsoft.java.debug.core.DebugSettings
 import com.microsoft.java.debug.core.adapter._
 import com.microsoft.java.debug.core.protocol.Types
-import com.microsoft.java.debug.core.{DebugSettings, IEvaluatableBreakpoint}
 import com.sun.jdi._
 import io.reactivex.Observable
 
@@ -39,7 +39,7 @@ private[debugadapter] object DebugAdapter {
     context.registerProvider(classOf[IHotCodeReplaceProvider], HotCodeReplaceProvider)
     context.registerProvider(classOf[IVirtualMachineManagerProvider], VirtualMachineManagerProvider)
     context.registerProvider(classOf[ISourceLookUpProvider], sourceLookUpProvider)
-    context.registerProvider(classOf[IEvaluationProvider], new EvaluationProvider(sourceLookUpProvider))
+    context.registerProvider(classOf[IEvaluationProvider], EvaluationProvider(runner, sourceLookUpProvider))
     context.registerProvider(classOf[ICompletionsProvider], CompletionsProvider)
     context
   }
@@ -51,42 +51,6 @@ private[debugadapter] object DebugAdapter {
       line: Int,
       column: Int
     ): util.List[Types.CompletionItem] = Collections.emptyList()
-  }
-
-  class EvaluationProvider(sourceLookUpProvider: ISourceLookUpProvider) extends IEvaluationProvider {
-    override def isInEvaluation(thread: ThreadReference): Boolean = false
-
-    override def evaluate(
-      expression: String,
-      thread: ThreadReference,
-      depth: Int
-    ): CompletableFuture[Value] = {
-      val frame = thread.frames().get(depth)
-      Evaluator.evaluate(expression, thread, frame)(sourceLookUpProvider)
-    }
-
-    override def evaluate(
-      expression: String,
-      thisContext: ObjectReference,
-      thread: ThreadReference
-    ): CompletableFuture[Value] = ???
-
-    override def evaluateForBreakpoint(
-      breakpoint: IEvaluatableBreakpoint,
-      thread: ThreadReference
-    ): CompletableFuture[Value] = ???
-
-    override def invokeMethod(
-      thisContext: ObjectReference,
-      methodName: String,
-      methodSignature: String,
-      args: Array[Value],
-      thread: ThreadReference,
-      invokeSuper: Boolean
-    ): CompletableFuture[Value] =
-      Evaluator.invokeMethod(thisContext, methodName, methodSignature, args, thread, invokeSuper)
-
-    override def clearState(thread: ThreadReference): Unit = {}
   }
 
   object HotCodeReplaceProvider extends IHotCodeReplaceProvider {

@@ -3,17 +3,17 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 import com.sun.jdi._
 
+import java.nio.file.Files
 import java.util.concurrent.CompletableFuture
 import scala.collection.JavaConverters._
-import scala.tools.nsc.ExpressionCompiler
 import scala.util.Try
 
-object Evaluator {
+private[evaluator] class Evaluator(sourceLookUpProvider: ISourceLookUpProvider, expressionCompiler: ExpressionCompiler) {
   def evaluate(
     expression: String,
     thread: ThreadReference,
     frame: StackFrame
-  )(sourceLookUpProvider: ISourceLookUpProvider): CompletableFuture[Value] = {
+  ): CompletableFuture[Value] = {
     val vm = thread.virtualMachine()
     val thisObject = Option(frame.thisObject())
 
@@ -25,9 +25,16 @@ object Evaluator {
     val uri = sourceLookUpProvider.getSourceFileURI(fqcn, sourcePath)
     val content = sourceLookUpProvider.getSourceContents(uri)
 
+    val expressionDir = Files.createTempDirectory("expr-eval")
+    val expressionId = java.util.UUID.randomUUID.toString.replace("-", "")
+    val expressionClassName: String = s"Expression$expressionId"
+    val valuesByNameIdentName: String = s"valuesByName$expressionId"
+
+    val expressionFqcn = (fqcn.split("\\.").dropRight(1) :+ expressionClassName).mkString(".")
+
     var error: Option[String] = None
     val result = for {
-      classLoader <- vm.allClasses().asScala.find(_.classLoader() != null).map(_.classLoader()).flatMap(JdiClassLoader(_, thread))
+      classLoader <- findClassLoader(vm).flatMap(JdiClassLoader(_, thread))
       variables = frame.visibleVariables().asScala
       variableNames = variables.map(_.name()).map(vm.mirrorOf).toList
       variableValues = variables.map(frame.getValue).flatMap(value => boxIfNeeded(value, classLoader, thread)).toList
@@ -42,9 +49,19 @@ object Evaluator {
         .invokeStatic("getProperty", List(vm.mirrorOf("java.class.path")))
         .map(_.toString)
         .map(_.drop(1).dropRight(1)) // remove quotation marks
-      expressionCompiler = ExpressionCompiler(classPath, line, expression, names.map(_.value()).toSet)
-      expressionClassPath = expressionCompiler.dir.toUri.toString
-      _ <- expressionCompiler.compile(content, errorMessage => error = Some(errorMessage))
+      expressionClassPath = expressionDir.toUri.toString
+      compiledSuccessfully = expressionCompiler.compile(
+        expressionDir,
+        expressionClassName,
+        valuesByNameIdentName,
+        classPath,
+        content,
+        line,
+        expression,
+        names.map(_.value()).toSet,
+        errorMessage => error = Some(errorMessage)
+      )
+      _ <- if (compiledSuccessfully) Some(()) else None
       url <- classLoader
         .loadClass("java.net.URL")
         .flatMap(_.newInstance(List(vm.mirrorOf(expressionClassPath))))
@@ -55,7 +72,7 @@ object Evaluator {
         .flatMap(_.newInstance(List(urls.reference)))
         .map(_.reference.asInstanceOf[ClassLoaderReference])
         .flatMap(JdiClassLoader(_, thread))
-      expressionClass <- urlClassLoader.loadClass(ExpressionCompiler.expressionClassFqcn(fqcn))
+      expressionClass <- urlClassLoader.loadClass(expressionFqcn)
       expression <- expressionClass.newInstance(List())
       namesArray <- JdiArray("java.lang.String", names.size, classLoader, thread)
       valuesArray <- JdiArray("java.lang.Object", values.size, classLoader, thread) // add boxing
@@ -76,7 +93,10 @@ object Evaluator {
     }
   }
 
-  private def boxIfNeeded(value: Value, classLoader: JdiClassLoader, thread: ThreadReference): Option[Value] = value match {
+  private def findClassLoader(vm: VirtualMachine) =
+    vm.allClasses().asScala.find(_.classLoader() != null).map(_.classLoader())
+
+  private def boxIfNeeded(value: Value, classLoader: JdiClassLoader, thread: ThreadReference) = value match {
     case value: BooleanValue =>
       JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
     case value: CharValue =>

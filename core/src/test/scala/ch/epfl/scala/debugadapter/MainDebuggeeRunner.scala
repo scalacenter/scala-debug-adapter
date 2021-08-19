@@ -21,6 +21,7 @@ case class MainDebuggeeRunner(source: Path, projectEntry: ClassPathEntry, depend
     new MainProcess(process, listener)
   }
   override def javaRuntime: Option[JavaRuntime] = JavaRuntime(javaHome)
+  override def evaluationClassLoader: Option[ClassLoader] = Some(getClass.getClassLoader)
 }
 
 object MainDebuggeeRunner {

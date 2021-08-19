@@ -17,6 +17,9 @@ jobs:
     - uses: olafurpg/setup-scala@v10
       with:
         java-version: ${{ matrix.jdk }}
+    - name: Cross-publish the expression evaluator
+      run: sbt --client + expressionCompiler/publishLocal
+      shell: bash
     - name: Test core project
       run: sbt --client core/test
       shell: bash

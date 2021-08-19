@@ -9,7 +9,9 @@ private[nsc] class EvalGlobal(
   reporter: Reporter,
   val line: Int,
   val expression: String,
-  valOrDefDefNames: Set[String]
+  defNames: Set[String],
+  expressionClassName: String,
+  valuesByNameIdentName: String
 ) extends Global(settings, reporter) {
   private var valOrDefDefs: Map[TermName, ValOrDefDef] = Map()
   private var extractedExpression: Tree = _
@@ -40,10 +42,10 @@ private[nsc] class EvalGlobal(
      */
     class InsExprTransformer extends Transformer {
       private val expressionClassSource =
-        s"""class ${ExpressionCompiler.ExpressionClassName} {
+        s"""class $expressionClassName {
            |  def evaluate(names: Array[Any], values: Array[Any]) = {
-           |    val ${ExpressionCompiler.ValuesByNameIdentName} = names.map(_.asInstanceOf[String]).zip(values).toMap
-           |    ${ExpressionCompiler.ValuesByNameIdentName}
+           |    val $valuesByNameIdentName = names.map(_.asInstanceOf[String]).zip(values).toMap
+           |    $valuesByNameIdentName
            |    ()
            |  }
            |}
@@ -125,7 +127,7 @@ private[nsc] class EvalGlobal(
     class ExpressionExtractor extends Traverser {
       override def traverse(tree: Tree): Unit = tree match {
         // Don't extract expression from the Expression class
-        case tree: ClassDef if tree.name.decode == ExpressionCompiler.ExpressionClassName =>
+        case tree: ClassDef if tree.name.decode == expressionClassName =>
         // ignore
         case tree: Block if tree.pos.line == line =>
           expressionOwners = currentOwner.ownerChain
@@ -144,12 +146,12 @@ private[nsc] class EvalGlobal(
     class DefExtractor extends Traverser {
       override def traverse(tree: Tree): Unit = tree match {
         // Don't extract expression from the Expression class
-        case tree: ClassDef if tree.name.decode == ExpressionCompiler.ExpressionClassName =>
+        case tree: ClassDef if tree.name.decode == expressionClassName =>
         // ignore
-        case tree: ValDef if expressionOwners.contains(tree.symbol.owner) && valOrDefDefNames.contains(tree.name.decode) =>
+        case tree: ValDef if expressionOwners.contains(tree.symbol.owner) && defNames.contains(tree.name.decode) =>
           valOrDefDefs += (tree.name -> tree)
           super.traverse(tree)
-        case tree: DefDef if expressionOwners.contains(tree.symbol.owner) && tree.symbol.isGetter && valOrDefDefNames.contains(tree.name.decode) =>
+        case tree: DefDef if expressionOwners.contains(tree.symbol.owner) && tree.symbol.isGetter && defNames.contains(tree.name.decode) =>
           valOrDefDefs += (tree.name -> tree)
           super.traverse(tree)
         case _ => super.traverse(tree)
@@ -172,9 +174,9 @@ private[nsc] class EvalGlobal(
 
       override def transform(tree: Tree): Tree = tree match {
         // Don't transform class different than Expression
-        case tree: ClassDef if tree.name.decode != ExpressionCompiler.ExpressionClassName =>
+        case tree: ClassDef if tree.name.decode != expressionClassName =>
           tree
-        case tree: Ident if tree.name == TermName(ExpressionCompiler.ValuesByNameIdentName) && valuesByNameIdent == null =>
+        case tree: Ident if tree.name == TermName(valuesByNameIdentName) && valuesByNameIdent == null =>
           valuesByNameIdent = tree
           EmptyTree
         case tree: DefDef if tree.name == TermName("evaluate") =>
@@ -195,7 +197,7 @@ private[nsc] class EvalGlobal(
               newValDef(tree, valOrDefDef)
             } ++ thisValDef
 
-            val symbolsByName: Map[Name, Symbol] = newValOrDefDefs.mapValues(_.symbol)
+            val symbolsByName = newValOrDefDefs.mapValues(_.symbol).toMap
 
             // replace symbols in the expression with those from the `evaluate` method
             val newExpression = new ExpressionTransformer(symbolsByName).transform(extractedExpression)
@@ -220,7 +222,7 @@ private[nsc] class EvalGlobal(
       }
 
       private def newThisValDef(owner: DefDef, thisSymbol: ClassSymbol): Option[(Name, ValDef)] = {
-        if (!valOrDefDefNames.contains("$this")) {
+        if (!defNames.contains("$this")) {
           None
         } else {
           val name = TermName("$this")
