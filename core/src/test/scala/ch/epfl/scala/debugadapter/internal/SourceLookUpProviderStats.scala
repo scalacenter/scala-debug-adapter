@@ -44,7 +44,9 @@ object SourceLookUpProviderStats extends TestSuite {
     )(32037, 4)
   }
 
-  private def printAndCheck(project: String)(deps: Dependency*)(expectedClasses: Int, expectedOrphans: Int): Unit = {
+  private def printAndCheck(
+      project: String
+  )(deps: Dependency*)(expectedClasses: Int, expectedOrphans: Int): Unit = {
     val classPath = Coursier.fetch(deps)
     val (duration, lookUp) = Stats.timed(SourceLookUpProvider(classPath))
     val entriesCount = lookUp.classPathEntries.size
@@ -54,7 +56,8 @@ object SourceLookUpProviderStats extends TestSuite {
     println(s"  - $entriesCount class path entries loaded in $duration")
     println(s"  - $classCount classes")
     if (orphanClassCount != 0) {
-      val orphanClassPercent = (orphanClassCount * 100000 / classCount).toFloat / 1000
+      val orphanClassPercent =
+        (orphanClassCount * 100000 / classCount).toFloat / 1000
       println(s"  - $orphanClassCount orphan classes ($orphanClassPercent%)")
     }
     assert(classCount == expectedClasses, orphanClassCount == expectedOrphans)

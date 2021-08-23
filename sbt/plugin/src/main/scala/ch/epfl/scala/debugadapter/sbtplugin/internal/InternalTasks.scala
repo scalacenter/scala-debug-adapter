@@ -12,43 +12,45 @@ private[sbtplugin] object InternalTasks {
   }
 
   def javaRuntime: Def.Initialize[Task[Option[JavaRuntime]]] = Def.task {
-    for { 
-      jdkHome <- Keys.javaHome.value.map(_.toString).orElse(Option(Properties.jdkHome))
+    for {
+      jdkHome <- Keys.javaHome.value
+        .map(_.toString)
+        .orElse(Option(Properties.jdkHome))
       javaRuntime <- JavaRuntime(jdkHome)
     } yield javaRuntime
   }
 
-  private def externalClassPathEntries: Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.task {
+  private def externalClassPathEntries
+      : Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.task {
     val classifierReport = Keys.updateClassifiers.value
     val report = Keys.update.value
     val configRef = Keys.configuration.value.toConfigRef
-    val allSourceJars = classifierReport
-      .configurations
+    val allSourceJars = classifierReport.configurations
       .filter(report => report.configuration == configRef)
       .flatMap(_.modules)
       .map { module =>
-        val sourceJars = module.artifacts.collect { 
+        val sourceJars = module.artifacts.collect {
           case (artifact, jar) if artifact.classifier.contains("sources") =>
             SourceJar(jar.toPath)
-        } 
+        }
         (module.module, sourceJars)
       }
       .toMap
-    
-    report
-      .configurations
+
+    report.configurations
       .filter(report => report.configuration == configRef)
       .flatMap(_.modules)
       .flatMap { module =>
         val sourceEntries = allSourceJars.getOrElse(module.module, Seq.empty)
         module.artifacts.collectFirst {
-          case (artifact, jar) if artifact.classifier.isEmpty => 
-            ClassPathEntry(jar.toPath, sourceEntries) 
+          case (artifact, jar) if artifact.classifier.isEmpty =>
+            ClassPathEntry(jar.toPath, sourceEntries)
         }
       }
   }
 
-  private def internalClassPathEntries: Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.taskDyn {
+  private def internalClassPathEntries
+      : Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.taskDyn {
     val internalDependencies = Keys.bspInternalDependencyConfigurations
     val classPathEntries = for {
       (proj, configs) <- Keys.bspInternalDependencyConfigurations.value
@@ -57,16 +59,22 @@ private[sbtplugin] object InternalTasks {
     classPathEntries.join(_.join)
   }
 
-  private def internalClassPathEntry(proj: ProjectRef, config: ConfigKey): Def.Initialize[Task[ClassPathEntry]] = Def.task {
+  private def internalClassPathEntry(
+      proj: ProjectRef,
+      config: ConfigKey
+  ): Def.Initialize[Task[ClassPathEntry]] = Def.task {
     val classDirectory = (proj / config / Keys.classDirectory).value.toPath
-    val sourceDirectories = (proj / config / Keys.sourceDirectories).value.map(_.toPath)
+    val sourceDirectories =
+      (proj / config / Keys.sourceDirectories).value.map(_.toPath)
     val sourceFiles = (proj / config / Keys.sources).value.map(_.toPath)
-    val standaloneSourceFiles = sourceFiles.filter { file => 
+    val standaloneSourceFiles = sourceFiles.filter { file =>
       sourceDirectories.forall(dir => !file.startsWith(dir))
     }
     val sourceEntries =
       sourceDirectories.map(SourceDirectory.apply) ++
-        standaloneSourceFiles.map(f => StandaloneSourceFile(f, f.getFileName.toString))
+        standaloneSourceFiles.map(f =>
+          StandaloneSourceFile(f, f.getFileName.toString)
+        )
     ClassPathEntry(classDirectory, sourceEntries)
   }
 }

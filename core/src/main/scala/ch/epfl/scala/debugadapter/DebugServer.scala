@@ -9,10 +9,10 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
 
 final class DebugServer private (
-  runner: DebuggeeRunner,
-  logger: Logger,
-  autoCloseSession: Boolean,
-  gracePeriod: Duration
+    runner: DebuggeeRunner,
+    logger: Logger,
+    autoCloseSession: Boolean,
+    gracePeriod: Duration
 )(implicit ec: ExecutionContext) {
 
   private val address = new InetSocketAddress(0)
@@ -25,15 +25,17 @@ final class DebugServer private (
    * which can happen when a restart is request and the client immediately
    * connects without waiting for the other session to finish.
    */
-  private val serverSocket = new ServerSocket(address.getPort, 1, address.getAddress)
+  private val serverSocket =
+    new ServerSocket(address.getPort, 1, address.getAddress)
 
-  def uri: URI = URI.create(s"tcp://${address.getHostString}:${serverSocket.getLocalPort}")
+  def uri: URI =
+    URI.create(s"tcp://${address.getHostString}:${serverSocket.getLocalPort}")
 
   /**
-    * Wait for a connection then start a session
-    * If the session returns `DebugSession.Restarted`, wait for a new connection and start a new session
-    * Until the session returns `DebugSession.Terminated` or `DebugSession.Disconnected`
-    */
+   * Wait for a connection then start a session
+   * If the session returns `DebugSession.Restarted`, wait for a new connection and start a new session
+   * Until the session returns `DebugSession.Terminated` or `DebugSession.Disconnected`
+   */
   def start(): Future[Unit] = {
     for {
       session <- Future(connect())
@@ -46,12 +48,13 @@ final class DebugServer private (
   }
 
   /**
-    * Connect once and return a running session
-    * In case of race condition with the [[close]] method, the session can be closed before returned
-    */
+   * Connect once and return a running session
+   * In case of race condition with the [[close]] method, the session can be closed before returned
+   */
   private[debugadapter] def connect(): DebugSession = {
     val socket = serverSocket.accept()
-    val session = DebugSession(socket, runner, logger, autoCloseSession, gracePeriod)
+    val session =
+      DebugSession(socket, runner, logger, autoCloseSession, gracePeriod)
     lock.synchronized {
       if (closedServer) {
         session.close()
@@ -86,43 +89,43 @@ object DebugServer {
   final class Handler(val uri: URI, val running: Future[Unit])
 
   /**
-    * Create the server.
-    * The server must then be started manually
-    *
-    * @param runner The debuggee process
-    * @param logger
-    * @param autoCloseSession If true the session closes itself after receiving terminated event from the debuggee
-    * @param gracePeriod When closed the session waits for the debuggee to terminated gracefully
-    * @param ec
-    * @return a new instance of DebugServer
-    */
+   * Create the server.
+   * The server must then be started manually
+   *
+   * @param runner The debuggee process
+   * @param logger
+   * @param autoCloseSession If true the session closes itself after receiving terminated event from the debuggee
+   * @param gracePeriod When closed the session waits for the debuggee to terminated gracefully
+   * @param ec
+   * @return a new instance of DebugServer
+   */
   def apply(
-    runner: DebuggeeRunner,
-    logger: Logger,
-    autoCloseSession: Boolean = false,
-    gracePeriod: Duration = Duration(5, TimeUnit.SECONDS)
+      runner: DebuggeeRunner,
+      logger: Logger,
+      autoCloseSession: Boolean = false,
+      gracePeriod: Duration = Duration(5, TimeUnit.SECONDS)
   )(implicit ec: ExecutionContext): DebugServer = {
     new DebugServer(runner, logger, autoCloseSession, gracePeriod)
   }
 
   /**
-    * Create a new server and start it.
-    * The server waits for a connection then starts a session
-    * If the session returns Restarted, the server will wait for a new connection
-    * If the session returns Terminated or Disconnected it stops
-    * 
-    * @param runner The debuggee process
-    * @param logger
-    * @param autoCloseSession If true the session closes itself after receiving terminated event from the debuggee
-    * @param gracePeriod When closed the session waits for the debuggee to terminated gracefully
-    * @param ec
-    * @return The uri and running future of the server
-    */
+   * Create a new server and start it.
+   * The server waits for a connection then starts a session
+   * If the session returns Restarted, the server will wait for a new connection
+   * If the session returns Terminated or Disconnected it stops
+   *
+   * @param runner The debuggee process
+   * @param logger
+   * @param autoCloseSession If true the session closes itself after receiving terminated event from the debuggee
+   * @param gracePeriod When closed the session waits for the debuggee to terminated gracefully
+   * @param ec
+   * @return The uri and running future of the server
+   */
   def start(
-    runner: DebuggeeRunner,
-    logger: Logger,
-    autoCloseSession: Boolean = false,
-    gracePeriod: Duration = Duration(2, TimeUnit.SECONDS)
+      runner: DebuggeeRunner,
+      logger: Logger,
+      autoCloseSession: Boolean = false,
+      gracePeriod: Duration = Duration(2, TimeUnit.SECONDS)
   )(implicit ec: ExecutionContext): Handler = {
     val server = new DebugServer(runner, logger, autoCloseSession, gracePeriod)
     val running = server.start()

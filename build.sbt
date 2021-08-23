@@ -13,13 +13,15 @@ inThisBuild(
     organization := "ch.epfl.scala",
     homepage := Some(url("https://github.com/scalacenter/scala-debug-adapter")),
     onLoadMessage := s"Welcome to scala-debug-adapter ${version.value}",
-    licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
+    licenses := List(
+      "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
+    ),
     developers := Developers.list,
     scalaVersion := Dependencies.scala212,
     version ~= { dynVer =>
       if (isRelease) dynVer
       else "2.0.0-SNAPSHOT" // only for local publishing
-    },
+    }
     // resolvers += Resolver.mavenLocal
   )
 )
@@ -118,7 +120,8 @@ lazy val expressionCompiler = project
     crossVersion := CrossVersion.full,
     libraryDependencies ++= {
       CrossVersion.partialVersion(scalaVersion.value) match {
-        case Some((2, _)) => List("org.scala-lang" % "scala-compiler" % scalaVersion.value)
+        case Some((2, _)) =>
+          List("org.scala-lang" % "scala-compiler" % scalaVersion.value)
         case _ => Nil
       }
     }

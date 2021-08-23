@@ -9,10 +9,19 @@ import sbt.internal.bsp.BuildTargetIdentifier
 import sbt.internal.protocol.JsonRpcRequestMessage
 import sbt.internal.server.{ServerHandler, ServerIntent}
 import sbt.internal.util.complete.{Parser, Parsers}
-import sbt.librarymanagement.{DependencyResolution, ScalaModuleInfo, UnresolvedWarningConfiguration, UpdateConfiguration}
+import sbt.librarymanagement.{
+  DependencyResolution,
+  ScalaModuleInfo,
+  UnresolvedWarningConfiguration,
+  UpdateConfiguration
+}
 import sjsonnew.BasicJsonProtocol
 import sjsonnew.shaded.scalajson.ast.unsafe.JValue
-import sjsonnew.support.scalajson.unsafe.{CompactPrinter, Converter, Parser => JsonParser}
+import sjsonnew.support.scalajson.unsafe.{
+  CompactPrinter,
+  Converter,
+  Parser => JsonParser
+}
 
 import java.io.File
 import java.net.URLClassLoader
@@ -33,8 +42,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   // each build target can only have one debug server
   private val debugServers = TrieMap[BuildTargetIdentifier, DebugServer]()
 
-  private val jsonParser: Parser[Result[JValue]] = Parsers.any.*
-    .map(_.mkString)
+  private val jsonParser: Parser[Result[JValue]] = Parsers.any.*.map(_.mkString)
     .map(JsonParser.parseFromString)
     .map(_.toEither.left.map(Error.parseError))
 
@@ -42,12 +50,21 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     ExecutionContext.fromExecutor(DebugServerThreadPool.executor)
 
   object autoImport {
-    val startMainClassDebugSession = inputKey[URI]("Start a debug session for running a scala main class").withRank(KeyRanks.DTask)
-    val startTestSuitesDebugSession = inputKey[URI]("Start a debug session for running test suites").withRank(KeyRanks.DTask)
-    val startRemoteDebugSession = taskKey[URI]("Start a debug session on a remote process").withRank(KeyRanks.DTask)
+    val startMainClassDebugSession = inputKey[URI](
+      "Start a debug session for running a scala main class"
+    ).withRank(KeyRanks.DTask)
+    val startTestSuitesDebugSession = inputKey[URI](
+      "Start a debug session for running test suites"
+    ).withRank(KeyRanks.DTask)
+    val startRemoteDebugSession = taskKey[URI](
+      "Start a debug session on a remote process"
+    ).withRank(KeyRanks.DTask)
 
-    val stopDebugSession = taskKey[Unit]("Stop the current debug session").withRank(KeyRanks.DTask)
-    val resolveEvaluationClassLoader = taskKey[ClassLoader]("Resolve a class loader for expression evaluation").withRank(KeyRanks.DTask)
+    val stopDebugSession =
+      taskKey[Unit]("Stop the current debug session").withRank(KeyRanks.DTask)
+    val resolveEvaluationClassLoader = taskKey[ClassLoader](
+      "Resolve a class loader for expression evaluation"
+    ).withRank(KeyRanks.DTask)
   }
 
   import autoImport._
@@ -109,7 +126,9 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       loader.loadClass("com.sun.jdi.Value")
     } catch {
       case c: ClassNotFoundException =>
-        logger.warn("The sbt-debug-adapter cannot work because the JDI tools are not loaded.")
+        logger.warn(
+          "The sbt-debug-adapter cannot work because the JDI tools are not loaded."
+        )
         logger.warn(
           """|
              |Consider adding the sbt-jdi-tools plugin to your `./project/project/plugins.sbt` file:
@@ -121,19 +140,23 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   }
 
   private def debugSessionStartHandler(
-    workspace: Map[BuildTargetIdentifier, Scope],
-    configMap: Map[ConfigKey, Configuration]
+      workspace: Map[BuildTargetIdentifier, Scope],
+      configMap: Map[ConfigKey, Configuration]
   ): ServerHandler = ServerHandler { callback =>
     ServerIntent.request {
       case r: JsonRpcRequestMessage if r.method == DebugSessionStart =>
         val commandLine = for {
           params <- getDebugSessionParams(r)
           targetId <- singleBuildTarget(params)
-          scope <- workspace.get(targetId).toRight(
-            Error.invalidParams(s"$targetId is not a valid build target")
-          )
+          scope <- workspace
+            .get(targetId)
+            .toRight(
+              Error.invalidParams(s"$targetId is not a valid build target")
+            )
           dataKind <- params.dataKind.toRight(
-            Error.invalidParams(s"dataKind field is expected in '$DebugSessionStart' method")
+            Error.invalidParams(
+              s"dataKind field is expected in '$DebugSessionStart' method"
+            )
           )
         } yield {
           val task = dataKind match {
@@ -142,7 +165,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             case DataKind.ScalaAttachRemote => startRemoteDebugSession.key
           }
           val data = params.data.map(CompactPrinter.apply).getOrElse("")
-          val project = scope.project.toOption.get.asInstanceOf[ProjectRef].project
+          val project =
+            scope.project.toOption.get.asInstanceOf[ProjectRef].project
           val config = configMap(scope.config.toOption.get).id
 
           // the project and config that correspond to the target identifier
@@ -181,24 +205,27 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       Keys.scalaModuleInfo.value,
       Keys.updateConfiguration.value,
       (Keys.update / Keys.unresolvedWarningConfiguration).value,
-      Keys.streams.value.log,
+      Keys.streams.value.log
     )
-    val evaluatorJars = updateReport.select(
-      configurationFilter(Runtime.name),
-      moduleFilter(org, AllPassFilter, version),
-      artifactFilter(extension = "jar", classifier = "")
-    ).map(_.toURL).toArray
+    val evaluatorJars = updateReport
+      .select(
+        configurationFilter(Runtime.name),
+        moduleFilter(org, AllPassFilter, version),
+        artifactFilter(extension = "jar", classifier = "")
+      )
+      .map(_.toURL)
+      .toArray
 
     new URLClassLoader(evaluatorJars, scalaInstance.loader)
   }
 
   private def fetchArtifactsOf(
-    moduleID: ModuleID,
-    dependencyRes: DependencyResolution,
-    scalaInfo: Option[ScalaModuleInfo],
-    updateConfig: UpdateConfiguration,
-    warningConfig: UnresolvedWarningConfiguration,
-    log: sbt.Logger
+      moduleID: ModuleID,
+      dependencyRes: DependencyResolution,
+      scalaInfo: Option[ScalaModuleInfo],
+      updateConfig: UpdateConfiguration,
+      warningConfig: UnresolvedWarningConfiguration,
+      log: sbt.Logger
   ) = {
     val descriptor = dependencyRes.wrapDependencyInModule(moduleID, scalaInfo)
 
@@ -206,134 +233,152 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       case Right(report) =>
         report
       case Left(warning) =>
-        throw new MessageOnlyException(s"Couldn't retrieve `$moduleID` : ${warning.resolveException.getMessage}.")
+        throw new MessageOnlyException(
+          s"Couldn't retrieve `$moduleID` : ${warning.resolveException.getMessage}."
+        )
     }
   }
 
-  private def mainClassSessionTask: Def.Initialize[InputTask[URI]] = Def.inputTask {
-    val target = Keys.bspTargetIdentifier.value
-    val javaHome = Keys.javaHome.value
-    val workingDirectory = Keys.baseDirectory.value
-    val classPathEntries = InternalTasks.classPathEntries.value
-    val javaRuntime = InternalTasks.javaRuntime.value
-    val envVars = Keys.envVars.value
-    val logger = Keys.streams.value.log
-    val state = Keys.state.value
-    val evaluationClassLoader = resolveEvaluationClassLoader.?.value
+  private def mainClassSessionTask: Def.Initialize[InputTask[URI]] =
+    Def.inputTask {
+      val target = Keys.bspTargetIdentifier.value
+      val javaHome = Keys.javaHome.value
+      val workingDirectory = Keys.baseDirectory.value
+      val classPathEntries = InternalTasks.classPathEntries.value
+      val javaRuntime = InternalTasks.javaRuntime.value
+      val envVars = Keys.envVars.value
+      val logger = Keys.streams.value.log
+      val state = Keys.state.value
+      val evaluationClassLoader = resolveEvaluationClassLoader.?.value
 
-    val runner = for {
-      json <- jsonParser.parsed
-      params <- Converter.fromJson[ScalaMainClass](json).toEither.left.map { cause =>
-        Error.invalidParams(s"expected data of kind ${DataKind.ScalaMainClass}: ${cause.getMessage}")
-      }
-    } yield {
-      val forkOptions = ForkOptions(
-        javaHome = javaHome,
-        outputStrategy = None,
-        bootJars = Vector.empty[File],
-        workingDirectory = Option(workingDirectory),
-        runJVMOptions = params.jvmOptions,
-        connectInput = false,
-        envVars = envVars ++ params.environmentVariables
-          .flatMap(_.split("=", 2).toList match {
-            case key :: value :: Nil => Some(key -> value)
-            case _ => None
-          })
-          .toMap
-      )
+      val runner = for {
+        json <- jsonParser.parsed
+        params <- Converter.fromJson[ScalaMainClass](json).toEither.left.map {
+          cause =>
+            Error.invalidParams(
+              s"expected data of kind ${DataKind.ScalaMainClass}: ${cause.getMessage}"
+            )
+        }
+      } yield {
+        val forkOptions = ForkOptions(
+          javaHome = javaHome,
+          outputStrategy = None,
+          bootJars = Vector.empty[File],
+          workingDirectory = Option(workingDirectory),
+          runJVMOptions = params.jvmOptions,
+          connectInput = false,
+          envVars = envVars ++ params.environmentVariables
+            .flatMap(_.split("=", 2).toList match {
+              case key :: value :: Nil => Some(key -> value)
+              case _ => None
+            })
+            .toMap
+        )
 
-      new MainClassRunner(
-        target,
-        forkOptions,
-        classPathEntries,
-        javaRuntime,
-        params.`class`,
-        params.arguments,
-        evaluationClassLoader
-      )
-    }
-
-    runner match {
-      case Left(error) =>
-        Keys.state.value.respondError(error.code, error.message)
-        throw new MessageOnlyException(error.message)
-      case Right(runner) =>
-        startServer(state, target, runner, logger)
-    }
-  }
-
-  private def testSuitesSessionTask: Def.Initialize[InputTask[URI]] = Def.inputTask {
-    val target = Keys.bspTargetIdentifier.value
-    val testGrouping = (Keys.test / Keys.testGrouping).value
-    val defaultForkOpts = Keys.forkOptions.value
-    val classPathEntries = InternalTasks.classPathEntries.value
-    val javaRuntime = InternalTasks.javaRuntime.value
-    val frameworks = Keys.loadedTestFrameworks.value
-    val testLoader = Keys.testLoader.value
-    val testExec = (Keys.test / Keys.testExecution).value
-    val parallelExec = (Keys.test / Keys.testForkedParallel).value
-    val state = Keys.state.value
-    val logger = Keys.streams.value.log
-    val evaluationClassLoader = resolveEvaluationClassLoader.?.value
-
-    import BasicJsonProtocol._
-    val runner = for {
-      json <- jsonParser.parsed
-      testSuites <- Converter.fromJson[Array[String]](json).toEither.left.map { cause =>
-        Error.invalidParams(
-          s"expected data of kind ${DataKind.ScalaTestSuites}: ${cause.getMessage}"
+        new MainClassRunner(
+          target,
+          forkOptions,
+          classPathEntries,
+          javaRuntime,
+          params.`class`,
+          params.arguments,
+          evaluationClassLoader
         )
       }
-      testGroup <- testGrouping.find { g =>
-        val testSet = g.tests.map(_.name).toSet
-        testSuites.forall(testSet.contains)
-      }.toRight {
-        Error.invalidParams("no matching test group")
-      }
-    } yield {
-      val testDefinitions = testGroup.tests.filter(test => testSuites.contains(test.name))
-      val forkOptions = testGroup.runPolicy match {
-        case InProcess => defaultForkOpts
-        case SubProcess(forkOpts) => forkOpts
-      }
 
-      val setups = testExec.options.collect { case setup@Setup(_) => setup }
-      val cleanups = testExec.options.collect { case cleanup@Cleanup(_) => cleanup }
-      val arguments = testExec.options.collect { case argument@Argument(_, _) => argument }
-      val parallel = testExec.parallel && parallelExec
+      runner match {
+        case Left(error) =>
+          Keys.state.value.respondError(error.code, error.message)
+          throw new MessageOnlyException(error.message)
+        case Right(runner) =>
+          startServer(state, target, runner, logger)
+      }
+    }
 
-      val testRunners = frameworks.map {
-        case (name, framework) =>
+  private def testSuitesSessionTask: Def.Initialize[InputTask[URI]] =
+    Def.inputTask {
+      val target = Keys.bspTargetIdentifier.value
+      val testGrouping = (Keys.test / Keys.testGrouping).value
+      val defaultForkOpts = Keys.forkOptions.value
+      val classPathEntries = InternalTasks.classPathEntries.value
+      val javaRuntime = InternalTasks.javaRuntime.value
+      val frameworks = Keys.loadedTestFrameworks.value
+      val testLoader = Keys.testLoader.value
+      val testExec = (Keys.test / Keys.testExecution).value
+      val parallelExec = (Keys.test / Keys.testForkedParallel).value
+      val state = Keys.state.value
+      val logger = Keys.streams.value.log
+      val evaluationClassLoader = resolveEvaluationClassLoader.?.value
+
+      import BasicJsonProtocol._
+      val runner = for {
+        json <- jsonParser.parsed
+        testSuites <- Converter
+          .fromJson[Array[String]](json)
+          .toEither
+          .left
+          .map { cause =>
+            Error.invalidParams(
+              s"expected data of kind ${DataKind.ScalaTestSuites}: ${cause.getMessage}"
+            )
+          }
+        testGroup <- testGrouping
+          .find { g =>
+            val testSet = g.tests.map(_.name).toSet
+            testSuites.forall(testSet.contains)
+          }
+          .toRight {
+            Error.invalidParams("no matching test group")
+          }
+      } yield {
+        val testDefinitions =
+          testGroup.tests.filter(test => testSuites.contains(test.name))
+        val forkOptions = testGroup.runPolicy match {
+          case InProcess => defaultForkOpts
+          case SubProcess(forkOpts) => forkOpts
+        }
+
+        val setups = testExec.options.collect { case setup @ Setup(_) => setup }
+        val cleanups = testExec.options.collect { case cleanup @ Cleanup(_) =>
+          cleanup
+        }
+        val arguments = testExec.options.collect {
+          case argument @ Argument(_, _) => argument
+        }
+        val parallel = testExec.parallel && parallelExec
+
+        val testRunners = frameworks.map { case (name, framework) =>
           val args = arguments.collect {
             case Argument(None, args) => args
             case Argument(Some(tf), args) if tf == name => args
           }.flatten
-          val mainRunner = framework.runner(args.toArray, Array.empty[String], testLoader)
+          val mainRunner =
+            framework.runner(args.toArray, Array.empty[String], testLoader)
           name -> mainRunner
+        }
+
+        new TestSuitesRunner(
+          target,
+          forkOptions,
+          classPathEntries,
+          javaRuntime,
+          setups,
+          cleanups,
+          parallel,
+          testRunners,
+          testDefinitions,
+          evaluationClassLoader
+        )
       }
 
-      new TestSuitesRunner(
-        target,
-        forkOptions,
-        classPathEntries,
-        javaRuntime,
-        setups,
-        cleanups,
-        parallel,
-        testRunners,
-        testDefinitions,
-        evaluationClassLoader
-      )
+      runner match {
+        case Left(error) =>
+          state.respondError(error.code, error.message)
+          throw new MessageOnlyException(error.message)
+        case Right(runner) =>
+          startServer(state, target, runner, logger)
+      }
     }
-
-    runner match {
-      case Left(error) =>
-        state.respondError(error.code, error.message)
-        throw new MessageOnlyException(error.message)
-      case Right(runner) =>
-        startServer(state, target, runner, logger)
-    }
-  }
 
   private def remoteSessionTask: Def.Initialize[Task[URI]] = Def.task {
     val target = Keys.bspTargetIdentifier.value
@@ -343,34 +388,54 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val state = Keys.state.value
     val logger = Keys.streams.value.log
 
-    val runner = new AttachRemoteRunner(target, classPathEntries, javaRuntime, evaluationClassLoader)
+    val runner = new AttachRemoteRunner(
+      target,
+      classPathEntries,
+      javaRuntime,
+      evaluationClassLoader
+    )
     startServer(state, target, runner, logger)
   }
 
   private def startServer(
-    state: State,
-    target: BuildTargetIdentifier,
-    runner: DebuggeeRunner,
-    logger: sbt.util.Logger
+      state: State,
+      target: BuildTargetIdentifier,
+      runner: DebuggeeRunner,
+      logger: sbt.util.Logger
   ): URI = {
     // if there is a server for this target then close it
     debugServers.get(target).foreach(_.close())
-    val server = DebugServer(runner, new LoggerAdapter(logger), autoCloseSession = true)
+    val server =
+      DebugServer(runner, new LoggerAdapter(logger), autoCloseSession = true)
     server.start()
     debugServers.update(target, server)
     state.respondEvent(DebugSessionAddress(server.uri))
     server.uri
   }
 
-  private def singleBuildTarget(params: DebugSessionParams): Result[BuildTargetIdentifier] = {
+  private def singleBuildTarget(
+      params: DebugSessionParams
+  ): Result[BuildTargetIdentifier] = {
     params.targets.size match {
-      case 0 => Left(Error.invalidParams(s"one build target is expected in '$DebugSessionStart' method"))
+      case 0 =>
+        Left(
+          Error.invalidParams(
+            s"one build target is expected in '$DebugSessionStart' method"
+          )
+        )
       case 1 => Right(params.targets.head)
-      case _ => Left(Error.invalidParams(s"multiple build targets is not supported in '$DebugSessionStart'"))
+      case _ =>
+        Left(
+          Error.invalidParams(
+            s"multiple build targets is not supported in '$DebugSessionStart'"
+          )
+        )
     }
   }
 
-  private def getDebugSessionParams(r: JsonRpcRequestMessage): Result[DebugSessionParams] = {
+  private def getDebugSessionParams(
+      r: JsonRpcRequestMessage
+  ): Result[DebugSessionParams] = {
     r.params match {
       case None => Left(Error.paramsMissing(r.method))
       case Some(value: JValue) =>

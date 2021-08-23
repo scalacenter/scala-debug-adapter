@@ -14,6 +14,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 
 private[debugadapter] object DebugAdapter {
+
   /**
    * Disable evaluation of variable's `toString` methods
    * since code evaluation is not supported.
@@ -35,34 +36,51 @@ private[debugadapter] object DebugAdapter {
 
   def context(runner: DebuggeeRunner, logger: Logger): IProviderContext = {
     val context = new ProviderContext
-    val sourceLookUpProvider = SourceLookUpProvider(runner.classPathEntries ++ runner.javaRuntime)
-    context.registerProvider(classOf[IHotCodeReplaceProvider], HotCodeReplaceProvider)
-    context.registerProvider(classOf[IVirtualMachineManagerProvider], VirtualMachineManagerProvider)
-    context.registerProvider(classOf[ISourceLookUpProvider], sourceLookUpProvider)
-    context.registerProvider(classOf[IEvaluationProvider], EvaluationProvider(runner, sourceLookUpProvider))
+    val sourceLookUpProvider = SourceLookUpProvider(
+      runner.classPathEntries ++ runner.javaRuntime
+    )
+    context.registerProvider(
+      classOf[IHotCodeReplaceProvider],
+      HotCodeReplaceProvider
+    )
+    context.registerProvider(
+      classOf[IVirtualMachineManagerProvider],
+      VirtualMachineManagerProvider
+    )
+    context.registerProvider(
+      classOf[ISourceLookUpProvider],
+      sourceLookUpProvider
+    )
+    context.registerProvider(
+      classOf[IEvaluationProvider],
+      EvaluationProvider(runner, sourceLookUpProvider)
+    )
     context.registerProvider(classOf[ICompletionsProvider], CompletionsProvider)
     context
   }
 
   object CompletionsProvider extends ICompletionsProvider {
     override def codeComplete(
-      frame: StackFrame,
-      snippet: String,
-      line: Int,
-      column: Int
+        frame: StackFrame,
+        snippet: String,
+        line: Int,
+        column: Int
     ): util.List[Types.CompletionItem] = Collections.emptyList()
   }
 
   object HotCodeReplaceProvider extends IHotCodeReplaceProvider {
-    override def onClassRedefined(consumer: Consumer[util.List[String]]): Unit = ()
+    override def onClassRedefined(consumer: Consumer[util.List[String]]): Unit =
+      ()
 
     override def redefineClasses(): CompletableFuture[util.List[String]] =
       CompletableFuture.completedFuture(Collections.emptyList())
 
-    override def getEventHub: Observable[HotCodeReplaceEvent] = Observable.empty()
+    override def getEventHub: Observable[HotCodeReplaceEvent] =
+      Observable.empty()
   }
 
   object VirtualMachineManagerProvider extends IVirtualMachineManagerProvider {
-    def getVirtualMachineManager: VirtualMachineManager = Bootstrap.virtualMachineManager
+    def getVirtualMachineManager: VirtualMachineManager =
+      Bootstrap.virtualMachineManager
   }
 }

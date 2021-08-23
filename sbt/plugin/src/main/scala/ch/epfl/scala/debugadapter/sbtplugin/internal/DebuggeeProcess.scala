@@ -15,7 +15,9 @@ private class DebuggeeProcess(process: Process) extends CancelableFuture[Unit] {
   DebuggeeProcess.fork { () =>
     val exitCode = process.exitValue()
     if (exitCode != 0)
-      exited.failure(new Exception(s"""Nonzero exit code returned: $exitCode""".stripMargin))
+      exited.failure(
+        new Exception(s"""Nonzero exit code returned: $exitCode""".stripMargin)
+      )
     else exited.success(())
   }
 
@@ -24,18 +26,20 @@ private class DebuggeeProcess(process: Process) extends CancelableFuture[Unit] {
 }
 
 private object DebuggeeProcess {
-  private final val debugInterface: String = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,quiet=n"
+  private final val debugInterface: String =
+    "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,quiet=n"
 
   def start(
-    forkOptions: ForkOptions,
-    classpath: Seq[Path],
-    mainClass: String,
-    arguments: Seq[String],
-    listener: DebuggeeListener
+      forkOptions: ForkOptions,
+      classpath: Seq[Path],
+      mainClass: String,
+      arguments: Seq[String],
+      listener: DebuggeeListener
   ): DebuggeeProcess = {
-    val javaHome = forkOptions.javaHome.getOrElse(new File(System.getProperty("java.home")))
+    val javaHome =
+      forkOptions.javaHome.getOrElse(new File(System.getProperty("java.home")))
     val javaBin = (javaHome / "bin" / "java").getAbsolutePath
-    
+
     val classpathOption = classpath.mkString(File.pathSeparator)
     val envVars = forkOptions.envVars + ("CLASSPATH" -> classpathOption)
 
@@ -43,8 +47,9 @@ private object DebuggeeProcess {
       forkOptions.runJVMOptions ++
       Some(mainClass) ++
       arguments
-    
-    val builder = Process(command, forkOptions.workingDirectory, envVars.toSeq: _*)
+
+    val builder =
+      Process(command, forkOptions.workingDirectory, envVars.toSeq: _*)
     val processLogger = new DebuggeeProcessLogger(listener)
     val process = builder.run(processLogger)
 

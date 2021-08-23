@@ -4,7 +4,10 @@ import com.microsoft.java.debug.core.{Configuration, LoggerFactory}
 
 import java.util.logging.{Logger => JLogger, _}
 
-private[debugadapter] class LoggingAdapter(logger: ch.epfl.scala.debugadapter.Logger) extends Handler {
+private[debugadapter] class LoggingAdapter(
+    logger: ch.epfl.scala.debugadapter.Logger
+) extends Handler {
+
   /**
    * DAP server tends to send a lot of SocketClosed exceptions when the Debuggee process has exited. This helps us filter those logs
    */

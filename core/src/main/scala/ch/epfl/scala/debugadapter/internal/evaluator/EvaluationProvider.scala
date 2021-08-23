@@ -9,7 +9,10 @@ import com.sun.jdi.{ObjectReference, ThreadReference, Value}
 import java.util.concurrent.CompletableFuture
 
 object EvaluationProvider {
-  def apply(runner: DebuggeeRunner, sourceLookUpProvider: SourceLookUpProvider): IEvaluationProvider = {
+  def apply(
+      runner: DebuggeeRunner,
+      sourceLookUpProvider: SourceLookUpProvider
+  ): IEvaluationProvider = {
     val evaluator = for {
       classLoader <- runner.evaluationClassLoader
       expressionCompiler <- ExpressionCompiler(classLoader)
@@ -22,33 +25,40 @@ class EvaluationProvider(evaluator: Evaluator) extends IEvaluationProvider {
   override def isInEvaluation(thread: ThreadReference) = false
 
   override def evaluate(
-    expression: String,
-    thread: ThreadReference,
-    depth: Int
+      expression: String,
+      thread: ThreadReference,
+      depth: Int
   ): CompletableFuture[Value] = {
     val frame = thread.frames().get(depth)
     evaluator.evaluate(expression, thread, frame)
   }
 
   override def evaluate(
-    expression: String,
-    thisContext: ObjectReference,
-    thread: ThreadReference
+      expression: String,
+      thisContext: ObjectReference,
+      thread: ThreadReference
   ): CompletableFuture[Value] = ???
 
   override def evaluateForBreakpoint(
-    breakpoint: IEvaluatableBreakpoint,
-    thread: ThreadReference
+      breakpoint: IEvaluatableBreakpoint,
+      thread: ThreadReference
   ): CompletableFuture[Value] = ???
 
   override def invokeMethod(
-    thisContext: ObjectReference,
-    methodName: String,
-    methodSignature: String,
-    args: Array[Value],
-    thread: ThreadReference,
-    invokeSuper: Boolean
-  ): CompletableFuture[Value] = evaluator.invokeMethod(thisContext, methodName, methodSignature, args, thread, invokeSuper)
+      thisContext: ObjectReference,
+      methodName: String,
+      methodSignature: String,
+      args: Array[Value],
+      thread: ThreadReference,
+      invokeSuper: Boolean
+  ): CompletableFuture[Value] = evaluator.invokeMethod(
+    thisContext,
+    methodName,
+    methodSignature,
+    args,
+    thread,
+    invokeSuper
+  )
 
   override def clearState(thread: ThreadReference): Unit = {}
 }
@@ -58,29 +68,29 @@ object NoopEvaluationProvider extends IEvaluationProvider {
   override def isInEvaluation(thread: ThreadReference) = false
 
   override def evaluate(
-    expression: String,
-    thread: ThreadReference,
-    depth: Int
+      expression: String,
+      thread: ThreadReference,
+      depth: Int
   ): CompletableFuture[Value] = ???
 
   override def evaluate(
-    expression: String,
-    thisContext: ObjectReference,
-    thread: ThreadReference
+      expression: String,
+      thisContext: ObjectReference,
+      thread: ThreadReference
   ): CompletableFuture[Value] = ???
 
   override def evaluateForBreakpoint(
-    breakpoint: IEvaluatableBreakpoint,
-    thread: ThreadReference
+      breakpoint: IEvaluatableBreakpoint,
+      thread: ThreadReference
   ): CompletableFuture[Value] = ???
 
   override def invokeMethod(
-    thisContext: ObjectReference,
-    methodName: String,
-    methodSignature: String,
-    args: Array[Value],
-    thread: ThreadReference,
-    invokeSuper: Boolean
+      thisContext: ObjectReference,
+      methodName: String,
+      methodSignature: String,
+      args: Array[Value],
+      thread: ThreadReference,
+      invokeSuper: Boolean
   ): CompletableFuture[Value] = ???
 
   override def clearState(thread: ThreadReference): Unit = {}

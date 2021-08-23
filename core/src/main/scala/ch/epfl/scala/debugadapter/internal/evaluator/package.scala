@@ -9,11 +9,29 @@ package object evaluator {
   private[evaluator] def method(name: String, referenceType: ReferenceType) =
     Try(referenceType.methodsByName(name).asScala.headOption).toOption.flatten
 
-  private[evaluator] def method(name: String, signature: String, referenceType: ReferenceType) =
-    Try(referenceType.methodsByName(name, signature).asScala.headOption).toOption.flatten
+  private[evaluator] def method(
+      name: String,
+      signature: String,
+      referenceType: ReferenceType
+  ) =
+    Try(
+      referenceType.methodsByName(name, signature).asScala.headOption
+    ).toOption.flatten
 
-  private[evaluator] def invokeMethod(objRef: ObjectReference, method: Method, args: List[Value], thread: ThreadReference) =
-    Try(objRef.invokeMethod(thread, method, args.asJava, ObjectReference.INVOKE_SINGLE_THREADED)) match {
+  private[evaluator] def invokeMethod(
+      objRef: ObjectReference,
+      method: Method,
+      args: List[Value],
+      thread: ThreadReference
+  ) =
+    Try(
+      objRef.invokeMethod(
+        thread,
+        method,
+        args.asJava,
+        ObjectReference.INVOKE_SINGLE_THREADED
+      )
+    ) match {
       case Failure(error: InvocationException) =>
         println(s"InvocationException: ${error.exception()}")
         None
@@ -23,6 +41,8 @@ package object evaluator {
       case Success(result) => Some(result)
     }
 
-  private[evaluator] def classLoader(objRef: ObjectReference): Option[ClassLoaderReference] =
+  private[evaluator] def classLoader(
+      objRef: ObjectReference
+  ): Option[ClassLoaderReference] =
     Try(objRef.referenceType().classLoader()).toOption
 }

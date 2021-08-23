@@ -10,12 +10,14 @@ import scala.collection.JavaConverters._
 
 sealed trait JavaRuntime extends ClassEntry
 
-final case class Java8(classJars: Seq[Path], sourceZip: Path) extends JavaRuntime {
+final case class Java8(classJars: Seq[Path], sourceZip: Path)
+    extends JavaRuntime {
   override def sourceEntries: Seq[SourceEntry] = Seq(SourceJar(sourceZip))
   override def classSystems: Seq[ClassSystem] = classJars.map(ClassJar.apply)
 }
 
-final case class Java9OrAbove(fsJar: Path, javaHome: Path, sourceZip: Path) extends JavaRuntime {
+final case class Java9OrAbove(fsJar: Path, javaHome: Path, sourceZip: Path)
+    extends JavaRuntime {
   override def sourceEntries: Seq[SourceEntry] = Seq(SourceJar(sourceZip))
   override def classSystems: Seq[ClassSystem] = {
     val classLoader = new URLClassLoader(Array(fsJar.toUri.toURL))
@@ -26,7 +28,7 @@ final case class Java9OrAbove(fsJar: Path, javaHome: Path, sourceZip: Path) exte
 object JavaRuntime {
   def apply(javaHome: String): Option[JavaRuntime] =
     JavaRuntime(Paths.get(javaHome))
-  
+
   def apply(javaHome: Path): Option[JavaRuntime] = {
     for {
       srcZip <- Seq("src.zip", "lib/src.zip")
@@ -50,7 +52,10 @@ object JavaRuntime {
     }
   }
 
-  private def java9OrAbove(javaHome: Path, srcZip: Path): Option[JavaRuntime] = {
+  private def java9OrAbove(
+      javaHome: Path,
+      srcZip: Path
+  ): Option[JavaRuntime] = {
     Some("lib/jrt-fs.jar")
       .map(javaHome.resolve)
       .filter(Files.exists(_))

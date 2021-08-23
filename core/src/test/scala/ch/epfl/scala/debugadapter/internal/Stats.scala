@@ -7,7 +7,8 @@ object Stats {
   def timed[T](f: => T): (Duration, T) = {
     val start = System.currentTimeMillis()
     val result = f
-    val duration = Duration(System.currentTimeMillis - start, TimeUnit.MILLISECONDS)
+    val duration =
+      Duration(System.currentTimeMillis - start, TimeUnit.MILLISECONDS)
     (duration, result)
   }
 }

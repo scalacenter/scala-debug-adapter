@@ -12,7 +12,8 @@ import scala.concurrent.duration._
 object ExpressionEvaluatorSpec extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
   private val executorService = Executors.newFixedThreadPool(1)
-  private implicit val ec = ExecutionContext.fromExecutorService(executorService)
+  private implicit val ec =
+    ExecutionContext.fromExecutorService(executorService)
 
   def tests: Tests = Tests {
     "should evaluate expression with primitives" - {
@@ -250,7 +251,13 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 3, "new java.util.ArrayList[String]().toString", _ == "\"[]\"")
+      assertEvaluation(
+        source,
+        "EvaluateTest",
+        3,
+        "new java.util.ArrayList[String]().toString",
+        _ == "\"[]\""
+      )
     }
 
     "should return null when expression is invalid" - {
@@ -315,14 +322,26 @@ object ExpressionEvaluatorSpec extends TestSuite {
     }
   }
 
-  private def assertEvaluation(source: String, mainClass: String, line: Int, expression: String, assertion: String => Boolean): Unit = {
+  private def assertEvaluation(
+      source: String,
+      mainClass: String,
+      line: Int,
+      expression: String,
+      assertion: String => Boolean
+  ): Unit = {
     val tempDir = IO.createTemporaryDirectory
     val srcDir = new File(tempDir, "src")
     IO.createDirectory(srcDir)
     val outDir = new File(tempDir, "out")
     IO.createDirectory(outDir)
 
-    val runner = MainDebuggeeRunner.fromSource(srcDir, "EvaluateTest.scala", source, mainClass, outDir)
+    val runner = MainDebuggeeRunner.fromSource(
+      srcDir,
+      "EvaluateTest.scala",
+      source,
+      mainClass,
+      outDir
+    )
     val server = DebugServer(runner, NoopLogger)
     val client = TestDebugClient.connect(server.uri, 20.seconds)
     try {

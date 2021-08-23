@@ -9,21 +9,29 @@ import scala.tools.nsc.reporters.StoreReporter
 
 final class ExpressionCompiler {
   def compile(
-    expressionDir: Path,
-    expressionClassName: String,
-    valuesByNameIdentName: String,
-    classPath: String,
-    code: String,
-    line: Int,
-    expression: String,
-    defNames: ju.Set[String],
-    errorConsumer: Consumer[String]
+      expressionDir: Path,
+      expressionClassName: String,
+      valuesByNameIdentName: String,
+      classPath: String,
+      code: String,
+      line: Int,
+      expression: String,
+      defNames: ju.Set[String],
+      errorConsumer: Consumer[String]
   ): Boolean = {
     val settings = new Settings
     settings.classpath.value = classPath
     settings.outputDirs.setSingleOutput(expressionDir.toString)
     val reporter = new StoreReporter
-    val global = new EvalGlobal(settings, reporter, line, expression, defNames.asScala.toSet, expressionClassName, valuesByNameIdentName)
+    val global = new EvalGlobal(
+      settings,
+      reporter,
+      line,
+      expression,
+      defNames.asScala.toSet,
+      expressionClassName,
+      valuesByNameIdentName
+    )
     val compilerRun = new global.Run()
     val source = new BatchSourceFile("<source>", code)
 

@@ -20,7 +20,9 @@ class MockDebuggeeRunner() extends DebuggeeRunner {
 
   override def classPathEntries: Seq[ClassPathEntry] = Seq.empty
   override def javaRuntime: Option[JavaRuntime] = None
-  override def evaluationClassLoader: Option[ClassLoader] = Some(getClass.getClassLoader)
+  override def evaluationClassLoader: Option[ClassLoader] = Some(
+    getClass.getClassLoader
+  )
 }
 
 class MockCancelableFuture() extends CancelableFuture[Unit] {

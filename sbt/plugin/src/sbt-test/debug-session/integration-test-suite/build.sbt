@@ -2,9 +2,11 @@ import ch.epfl.scala.debugadapter.sbtplugin.DebugAdapterPlugin
 import scala.concurrent.ExecutionContext
 import ch.epfl.scala.debugadapter.testing.TestDebugClient
 
-val checkDebugSession = inputKey[Unit]("Check the integration test suite debug session")
+val checkDebugSession =
+  inputKey[Unit]("Check the integration test suite debug session")
 
-val root = project.in(file("."))
+val root = project
+  .in(file("."))
   .configs(IntegrationTest)
   .settings(
     scalaVersion := "2.12.14",
@@ -26,20 +28,19 @@ def checkDebugSessionTask = Def.inputTask {
   try {
     client.initialize()
     client.launch()
-    
-    
+
     val breakpoints = client.setBreakpoints(mainSource, Array(3)) ++
       client.setBreakpoints(specSource, Array(6, 8))
     assert(breakpoints.size == 3)
     assert(breakpoints.forall(_.verified))
-    
+
     client.configurationDone()
 
     val threadId = client.stopped.threadId
-    
+
     client.continue(threadId)
     client.stopped
-    
+
     client.continue(threadId)
     client.stopped
 
