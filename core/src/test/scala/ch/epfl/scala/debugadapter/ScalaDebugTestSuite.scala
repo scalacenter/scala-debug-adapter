@@ -138,5 +138,51 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         IO.delete(tempDir)
       }
     }
+
+    "should return variables after expression evaluation" - {
+      val tempDir = IO.createTemporaryDirectory
+      val runner = MainDebuggeeRunner.scalaBreakpointTest(tempDir, scalaVersion)
+      val server = DebugServer(runner, NoopLogger)
+      val client = TestDebugClient.connect(server.uri)
+      try {
+        server.connect()
+        client.initialize()
+        client.launch()
+        client.setBreakpoints(runner.source, Array(7))
+        client.configurationDone()
+
+        val stopped = client.stopped
+        val stackTrace = client.stackTrace(stopped.threadId)
+        assert(stackTrace.totalFrames == 2)
+
+        val topFrame = stackTrace.stackFrames.head
+        val scopes = client.scopes(topFrame.id)
+        assert(scopes.length == 1)
+
+        val localScope = scopes.head
+        assert(localScope.name == "Local")
+
+        val localVars = client.variables(localScope.variablesReference)
+        assertMatch(localVars.map(_.name)) { case Array("args", "h", "this") =>
+          ()
+        }
+
+        client.evaluate("1 + 2", topFrame.id)
+        val localVarsAfterEvaluation =
+          client.variables(localScope.variablesReference)
+        assertMatch(localVarsAfterEvaluation.map(_.name)) {
+          case Array("args", "h", "this") =>
+            ()
+        }
+
+        client.continue(stopped.threadId)
+        client.exited
+        client.terminated
+      } finally {
+        server.close()
+        client.close()
+        IO.delete(tempDir)
+      }
+    }
   }
 }
