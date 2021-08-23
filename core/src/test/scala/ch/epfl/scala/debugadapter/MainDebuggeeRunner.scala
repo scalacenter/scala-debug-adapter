@@ -60,12 +60,12 @@ object MainDebuggeeRunner {
   }
 
   def scala3Braceless(dest: File): MainDebuggeeRunner = {
-    val src = getResource("/scala3/braceless.scala")
+    val src = getResource("/scala-3/braceless.scala")
     compileScala(src, "scaladebug.test.Example", dest, ScalaVersion.`3`)
   }
 
   def scala3MainAnnotation(dest: File): MainDebuggeeRunner = {
-    val src = getResource("/scala3/main-annotation.scala")
+    val src = getResource("/scala-3/main-annotation.scala")
     compileScala(src, "scaladebug.test.app", dest, ScalaVersion.`3`)
   }
 
