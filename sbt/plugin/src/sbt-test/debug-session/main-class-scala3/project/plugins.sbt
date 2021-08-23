@@ -1,4 +1,5 @@
-val pluginVersion = sys.props.get("plugin.version")
+val pluginVersion = sys.props
+  .get("plugin.version")
   .getOrElse {
     sys.error(
       """|The system property 'plugin.version' is not defined.
@@ -6,7 +7,6 @@ val pluginVersion = sys.props.get("plugin.version")
          |""".stripMargin
     )
   }
-
 
 addSbtPlugin("ch.epfl.scala" % "sbt-debug-adapter" % pluginVersion)
 libraryDependencies += "ch.epfl.scala" %% "debug-adapter-test-client" % pluginVersion

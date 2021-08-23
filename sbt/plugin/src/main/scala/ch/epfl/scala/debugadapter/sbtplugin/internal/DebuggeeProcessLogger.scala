@@ -5,8 +5,10 @@ import ch.epfl.scala.debugadapter.DebuggeeListener
 import java.net.InetSocketAddress
 import scala.sys.process.ProcessLogger
 
-private class DebuggeeProcessLogger(listener: DebuggeeListener) extends ProcessLogger {
-  private final val JDINotificationPrefix = "Listening for transport dt_socket at address: "
+private class DebuggeeProcessLogger(listener: DebuggeeListener)
+    extends ProcessLogger {
+  private final val JDINotificationPrefix =
+    "Listening for transport dt_socket at address: "
 
   override def out(line: => String): Unit = {
     if (line.startsWith(JDINotificationPrefix)) {

@@ -21,13 +21,13 @@ checkDebugSession := {
   try {
     client.initialize()
     client.launch()
-    
+
     val breakpoints = client.setBreakpoints(source, Array(5))
     assert(breakpoints.size == 1)
     assert(breakpoints.forall(_.verified))
 
     client.configurationDone()
-    
+
     val threadId = client.stopped.threadId
 
     client.stepIn(threadId)

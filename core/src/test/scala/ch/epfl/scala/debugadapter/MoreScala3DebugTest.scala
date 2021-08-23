@@ -9,7 +9,7 @@ import scala.concurrent.ExecutionContext
 
 object MoreScala3DebugTest extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
-  val executorService  = Executors.newFixedThreadPool(1)
+  val executorService = Executors.newFixedThreadPool(1)
   implicit val ec = ExecutionContext.fromExecutorService(executorService)
 
   def tests: Tests = Tests {
@@ -22,15 +22,15 @@ object MoreScala3DebugTest extends TestSuite {
         server.connect()
         client.initialize()
         client.launch()
-        
+
         val breakpoints = client.setBreakpoints(runner.source, Array(5, 7, 11))
         assert(breakpoints.size == 3)
         assert(breakpoints.forall(_.verified))
-        
+
         client.configurationDone()
         val stop = client.stopped
         val threadId = stop.threadId
-        
+
         client.continue(threadId)
         client.stopped
 
@@ -56,15 +56,15 @@ object MoreScala3DebugTest extends TestSuite {
         server.connect()
         client.initialize()
         client.launch()
-        
+
         val breakpoints = client.setBreakpoints(runner.source, Array(4, 6, 10))
         assert(breakpoints.size == 3)
         assert(breakpoints.forall(_.verified))
-        
+
         client.configurationDone()
         val stop = client.stopped
         val threadId = stop.threadId
-        
+
         client.continue(threadId)
         client.stopped
 

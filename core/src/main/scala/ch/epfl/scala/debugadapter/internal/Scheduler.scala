@@ -11,7 +11,9 @@ private[debugadapter] object Scheduler {
   def timeout[T](promise: Promise[T], duration: Duration): Promise[T] = {
     val task = new TimerTask {
       def run(): Unit =
-        promise.tryFailure(new TimeoutException(s"Operation timed out after $duration"))
+        promise.tryFailure(
+          new TimeoutException(s"Operation timed out after $duration")
+        )
     }
     timer.schedule(task, duration.toMillis)
     promise

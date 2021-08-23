@@ -13,7 +13,7 @@ object Scala3DebugTest extends ScalaDebugTestSuite(ScalaVersion.`3`)
 
 class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
-  val executorService  = Executors.newFixedThreadPool(1)
+  val executorService = Executors.newFixedThreadPool(1)
   implicit val ec = ExecutionContext.fromExecutorService(executorService)
 
   def tests: Tests = Tests {
@@ -26,31 +26,32 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         server.connect()
         client.initialize()
         client.launch()
-        
-        val breakpoints = client.setBreakpoints(runner.source, Array(5, 13, 20, 14, 9))
+
+        val breakpoints =
+          client.setBreakpoints(runner.source, Array(5, 13, 20, 14, 9))
         assert(breakpoints.size == 5)
         assert(breakpoints.forall(_.verified))
-        
+
         client.configurationDone()
         val stopped1 = client.stopped
         val threadId = stopped1.threadId
         assert(stopped1.reason == "breakpoint")
-        
+
         client.continue(threadId)
         val stopped2 = client.stopped
         assert(stopped2.reason == "breakpoint")
         assert(stopped2.threadId == threadId)
-        
+
         client.continue(threadId)
         val stopped3 = client.stopped
         assert(stopped3.reason == "breakpoint")
         assert(stopped3.threadId == threadId)
-        
+
         client.continue(threadId)
         val stopped4 = client.stopped
         assert(stopped4.reason == "breakpoint")
         assert(stopped4.threadId == threadId)
-        
+
         client.continue(threadId)
         val stopped5 = client.stopped
         assert(stopped5.reason == "breakpoint")
@@ -75,21 +76,21 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         server.connect()
         client.initialize()
         client.launch()
-        
+
         val breakpoints = client.setBreakpoints(runner.mainClass, Array(5, 9))
         assert(breakpoints.size == 2)
         assert(breakpoints.forall(_.verified))
-        
+
         client.configurationDone()
         val stopped1 = client.stopped
         val threadId = stopped1.threadId
         assert(stopped1.reason == "breakpoint")
-        
+
         client.continue(threadId)
         val stopped2 = client.stopped
         assert(stopped2.reason == "breakpoint")
         assert(stopped2.threadId == threadId)
-        
+
         client.continue(threadId)
         client.exited
         client.terminated
@@ -115,7 +116,7 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         val stopped = client.stopped
         val stackTrace = client.stackTrace(stopped.threadId)
         assert(stackTrace.totalFrames == 2)
-        
+
         val topFrame = stackTrace.stackFrames.head
         val scopes = client.scopes(topFrame.id)
         assert(scopes.length == 1)
@@ -124,8 +125,8 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         assert(localScope.name == "Local")
 
         val localVars = client.variables(localScope.variablesReference)
-        assertMatch(localVars.map(_.name)) {
-          case Array("args", "h", "this") => ()
+        assertMatch(localVars.map(_.name)) { case Array("args", "h", "this") =>
+          ()
         }
 
         client.continue(stopped.threadId)

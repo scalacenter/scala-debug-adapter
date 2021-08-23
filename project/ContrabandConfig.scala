@@ -20,16 +20,19 @@ object ContrabandConfig {
   /** sbt codecs */
   val sbtCodecs: PartialFunction[String, Type => List[String]] = {
     // sbt-contraband should handle them by default
-    case "Option" | "Set" | "scala.Vector" =>
-      { tpe => getFormats(oneArg(tpe)) }
-    case "Map" | "Tuple2" | "scala.Tuple2" =>
-      { tpe => twoArgs(tpe).flatMap(getFormats) }
+    case "Option" | "Set" | "scala.Vector" => { tpe => getFormats(oneArg(tpe)) }
+    case "Map" | "Tuple2" | "scala.Tuple2" => { tpe =>
+      twoArgs(tpe).flatMap(getFormats)
+    }
     case "Int" | "Long" => { _ => Nil }
-    case "scalajson.ast.unsafe.JValue" | "sjsonnew.shaded.scalajson.ast.unsafe.JValue" =>
-      { _ => List("sbt.internal.util.codec.JValueFormats") }
+    case "scalajson.ast.unsafe.JValue" |
+        "sjsonnew.shaded.scalajson.ast.unsafe.JValue" => { _ =>
+      List("sbt.internal.util.codec.JValueFormats")
+    }
 
-    case "sbt.internal.bsp.BuildTargetIdentifier" =>
-      { _ => List("sbt.internal.bsp.codec.BuildTargetIdentifierFormats")}
+    case "sbt.internal.bsp.BuildTargetIdentifier" => { _ =>
+      List("sbt.internal.bsp.codec.BuildTargetIdentifierFormats")
+    }
   }
 
   /** Returns the list of formats required to encode the given `TpeRef`. */

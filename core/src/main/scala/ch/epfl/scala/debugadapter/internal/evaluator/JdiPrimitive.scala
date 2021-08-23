@@ -3,7 +3,11 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import com.sun.jdi.{ObjectReference, ThreadReference}
 
 object JdiPrimitive {
-  def boxed(value: AnyVal, classLoader: JdiClassLoader, thread: ThreadReference): Option[JdiObject] = {
+  def boxed(
+      value: AnyVal,
+      classLoader: JdiClassLoader,
+      thread: ThreadReference
+  ): Option[JdiObject] = {
     val vm = thread.virtualMachine()
     val jdiValue = vm.mirrorOf(value.toString)
     for {

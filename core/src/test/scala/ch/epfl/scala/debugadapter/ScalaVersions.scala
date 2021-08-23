@@ -11,14 +11,18 @@ sealed trait ScalaVersion {
 }
 
 final case class Scala2(version: String) extends ScalaVersion {
-  def compiler: Dependency = Dependency(Module(organization, name"scala-compiler"), version)
-  def library: Dependency = Dependency(Module(organization, name"scala-library"), version)
+  def compiler: Dependency =
+    Dependency(Module(organization, name"scala-compiler"), version)
+  def library: Dependency =
+    Dependency(Module(organization, name"scala-library"), version)
   def compilerMain: String = "scala.tools.nsc.Main"
 }
 
 final case class Scala3(version: String) extends ScalaVersion {
-  def compiler: Dependency = Dependency(Module(organization, name"scala3-compiler_3"), version)
-  def library: Dependency = Dependency(Module(organization, name"scala3-library_3"), version)
+  def compiler: Dependency =
+    Dependency(Module(organization, name"scala3-compiler_3"), version)
+  def library: Dependency =
+    Dependency(Module(organization, name"scala3-library_3"), version)
   def compilerMain: String = "dotty.tools.dotc.Main"
 }
 

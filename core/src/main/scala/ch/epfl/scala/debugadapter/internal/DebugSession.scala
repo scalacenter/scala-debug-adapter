@@ -1,7 +1,10 @@
 package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter._
-import com.microsoft.java.debug.core.adapter.{IProviderContext, ProtocolServer => DapServer}
+import com.microsoft.java.debug.core.adapter.{
+  IProviderContext,
+  ProtocolServer => DapServer
+}
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent
 import com.microsoft.java.debug.core.protocol.Messages.{Request, Response}
 import com.microsoft.java.debug.core.protocol.Requests._
@@ -25,20 +28,21 @@ import scala.util.{Failure, Success, Try}
  * If autoCloseSession then the session is closed automatically after the debuggee has terminated
  * Otherwise a disconnect request should be received or the close method should be called manually
  */
-private[debugadapter] final class DebugSession private(
-  socket: Socket,
-  runner: DebuggeeRunner,
-  context: IProviderContext,
-  logger: Logger,
-  loggingAdapter: LoggingAdapter,
-  autoClose: Boolean,
-  gracePeriod: Duration
-)(implicit executionContext: ExecutionContext) extends DapServer(
-  socket.getInputStream,
-  socket.getOutputStream,
-  context,
-  loggingAdapter.factory,
-) {
+private[debugadapter] final class DebugSession private (
+    socket: Socket,
+    runner: DebuggeeRunner,
+    context: IProviderContext,
+    logger: Logger,
+    loggingAdapter: LoggingAdapter,
+    autoClose: Boolean,
+    gracePeriod: Duration
+)(implicit executionContext: ExecutionContext)
+    extends DapServer(
+      socket.getInputStream,
+      socket.getOutputStream,
+      context,
+      loggingAdapter.factory
+    ) {
   private type LaunchId = Int
 
   // A set of all processed launched requests by the client
@@ -49,11 +53,14 @@ private[debugadapter] final class DebugSession private(
   private val attached = Promise[Unit]()
 
   private val exitStatusPromise = Promise[DebugSession.ExitStatus]()
-  private val debugState: Synchronized[DebugSession.State] = new Synchronized(DebugSession.Ready)
+  private val debugState: Synchronized[DebugSession.State] = new Synchronized(
+    DebugSession.Ready
+  )
 
   private[debugadapter] def currentState: DebugSession.State = debugState.value
 
-  private[debugadapter] def getDebugeeAddress: Future[InetSocketAddress] = debuggeeAddress.future
+  private[debugadapter] def getDebugeeAddress: Future[InetSocketAddress] =
+    debuggeeAddress.future
 
   /**
    * Schedules the start of the debugging session.
@@ -79,7 +86,6 @@ private[debugadapter] final class DebugSession private(
               }
             }
           }
-
 
         DebugSession.Started(debuggee)
 
@@ -115,7 +121,9 @@ private[debugadapter] final class DebugSession private(
         try Await.result(terminatedEvent.future, gracePeriod)
         catch {
           case _: TimeoutException =>
-            logger.warn(s"Communication with debuggee $name is frozen: missing terminated event.")
+            logger.warn(
+              s"Communication with debuggee $name is frozen: missing terminated event."
+            )
         }
         DebugSession.Stopped
 
@@ -133,13 +141,17 @@ private[debugadapter] final class DebugSession private(
         // launch request is implemented by spinning up a JVM
         // and sending an attach request to the java DapServer
         launchedRequests.add(requestId)
-        Scheduler.timeout(debuggeeAddress, gracePeriod)
+        Scheduler
+          .timeout(debuggeeAddress, gracePeriod)
           .future
           .onComplete {
             case Success(address) =>
-              super.dispatchRequest(DebugSession.toAttachRequest(requestId, address))
+              super.dispatchRequest(
+                DebugSession.toAttachRequest(requestId, address)
+              )
             case Failure(exception) =>
-              val cause = s"Could not start debuggee $name due to: ${exception.getMessage}"
+              val cause =
+                s"Could not start debuggee $name due to: ${exception.getMessage}"
               this.sendResponse(DebugSession.failed(request, cause))
               attached.tryFailure(new IllegalStateException(cause))
               ()
@@ -199,14 +211,12 @@ private[debugadapter] final class DebugSession private(
   protected override def sendEvent(event: Events.DebugEvent): Unit = {
     try {
       super.sendEvent(event)
-    }
-    finally {
+    } finally {
       if (event.`type` == "terminated") terminatedEvent.trySuccess(())
     }
   }
 
   private def name = runner.name
-
 
   private def cancelPromises(cause: Throwable): Unit = {
     debuggeeAddress.tryFailure(cause)
@@ -219,12 +229,18 @@ private[debugadapter] final class DebugSession private(
     }
 
     def out(line: String): Unit = {
-      val event = new OutputEvent(OutputEvent.Category.stdout, line + System.lineSeparator())
+      val event = new OutputEvent(
+        OutputEvent.Category.stdout,
+        line + System.lineSeparator()
+      )
       sendEvent(event)
     }
 
     def err(line: String): Unit = {
-      val event = new OutputEvent(OutputEvent.Category.stderr, line + System.lineSeparator())
+      val event = new OutputEvent(
+        OutputEvent.Category.stderr,
+        line + System.lineSeparator()
+      )
       sendEvent(event)
     }
   }
@@ -257,16 +273,24 @@ private[debugadapter] object DebugSession {
   final case object Stopped extends State
 
   def apply(
-    socket: Socket,
-    runner: DebuggeeRunner,
-    logger: Logger,
-    autoClose: Boolean,
-    gracePeriod: Duration
+      socket: Socket,
+      runner: DebuggeeRunner,
+      logger: Logger,
+      autoClose: Boolean,
+      gracePeriod: Duration
   )(implicit executionContext: ExecutionContext): DebugSession = {
     try {
       val context = DebugAdapter.context(runner, logger)
       val loggingHandler = new LoggingAdapter(logger)
-      new DebugSession(socket, runner, context, logger, loggingHandler, autoClose, gracePeriod)
+      new DebugSession(
+        socket,
+        runner,
+        context,
+        logger,
+        loggingHandler,
+        autoClose,
+        gracePeriod
+      )
     } catch {
       case NonFatal(cause) =>
         logger.error(cause.toString())
@@ -296,7 +320,12 @@ private[debugadapter] object DebugSession {
   }
 
   private def shouldRestart(disconnectRequest: Request): Boolean = {
-    Try(JsonUtils.fromJson(disconnectRequest.arguments, classOf[DisconnectArguments]))
+    Try(
+      JsonUtils.fromJson(
+        disconnectRequest.arguments,
+        classOf[DisconnectArguments]
+      )
+    )
       .map(_.restart)
       .getOrElse(false)
   }

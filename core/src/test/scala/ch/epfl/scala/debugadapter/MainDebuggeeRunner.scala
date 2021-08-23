@@ -11,24 +11,44 @@ import scala.concurrent.{Future, Promise}
 import scala.util.control.NonFatal
 import scala.util.Properties
 
-case class MainDebuggeeRunner(source: Path, projectEntry: ClassPathEntry, dependencies: Seq[ClassPathEntry], mainClass: String) extends DebuggeeRunner {
+case class MainDebuggeeRunner(
+    source: Path,
+    projectEntry: ClassPathEntry,
+    dependencies: Seq[ClassPathEntry],
+    mainClass: String
+) extends DebuggeeRunner {
   override def name: String = mainClass
-  override def classPathEntries: Seq[ClassPathEntry] = projectEntry +: dependencies
+  override def classPathEntries: Seq[ClassPathEntry] =
+    projectEntry +: dependencies
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] = {
-    val cmd = Seq("java", DebugInterface, "-cp", classPath.mkString(File.pathSeparator), mainClass)
+    val cmd = Seq(
+      "java",
+      DebugInterface,
+      "-cp",
+      classPath.mkString(File.pathSeparator),
+      mainClass
+    )
     val builder = new ProcessBuilder(cmd: _*)
     val process = builder.start()
     new MainProcess(process, listener)
   }
   override def javaRuntime: Option[JavaRuntime] = JavaRuntime(javaHome)
-  override def evaluationClassLoader: Option[ClassLoader] = Some(getClass.getClassLoader)
+  override def evaluationClassLoader: Option[ClassLoader] = Some(
+    getClass.getClassLoader
+  )
 }
 
 object MainDebuggeeRunner {
-  private final val DebugInterface = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,quiet=n"
-  private final val JDINotificationPrefix = "Listening for transport dt_socket at address: "
-  
-  def fromSource(source: String, scalaVersion: ScalaVersion, dest: File): MainDebuggeeRunner = {
+  private final val DebugInterface =
+    "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,quiet=n"
+  private final val JDINotificationPrefix =
+    "Listening for transport dt_socket at address: "
+
+  def fromSource(
+      source: String,
+      scalaVersion: ScalaVersion,
+      dest: File
+  ): MainDebuggeeRunner = {
     val srcFile = dest / "src" / "Main.scala"
     IO.write(srcFile, source.getBytes)
     compileScala(srcFile.toPath, "", dest, scalaVersion)
@@ -49,7 +69,10 @@ object MainDebuggeeRunner {
     compileScala(src, "scaladebug.test.SysExit", dest, ScalaVersion.`2.12`)
   }
 
-  def scalaBreakpointTest(dest: File, scalaVersion: ScalaVersion): MainDebuggeeRunner = {
+  def scalaBreakpointTest(
+      dest: File,
+      scalaVersion: ScalaVersion
+  ): MainDebuggeeRunner = {
     val src = getResource("/scala/BreakpointTest.scala")
     compileScala(src, "scaladebug.test.BreakpointTest", dest, scalaVersion)
   }
@@ -69,7 +92,13 @@ object MainDebuggeeRunner {
     compileScala(src, "scaladebug.test.app", dest, ScalaVersion.`3`)
   }
 
-  def fromSource(srcDir: File, filename: String, source: String, mainClass: String, outDir: File): MainDebuggeeRunner = {
+  def fromSource(
+      srcDir: File,
+      filename: String,
+      source: String,
+      mainClass: String,
+      outDir: File
+  ): MainDebuggeeRunner = {
     val path = new File(srcDir, filename).toPath
     Files.write(path, source.getBytes())
     compileScala(path, mainClass, outDir, ScalaVersion.`2.12`)
@@ -84,18 +113,24 @@ object MainDebuggeeRunner {
   private val java = javaHome.resolve(s"bin/java$ext")
   private val javac = javaHome.resolve(s"bin/javac$ext")
 
-  private def compileScala(src: Path, mainClass: String, dest: File, scalaVersion: ScalaVersion): MainDebuggeeRunner = {
+  private def compileScala(
+      src: Path,
+      mainClass: String,
+      dest: File,
+      scalaVersion: ScalaVersion
+  ): MainDebuggeeRunner = {
     val classDir = dest / "classes"
     IO.createDirectory(classDir)
     val compilerClassPath = Coursier.fetch(scalaVersion.compiler)
     val libraryClassPath = Coursier.fetch(scalaVersion.library)
-    
+
     val command = Array(
       java.toString,
       "-classpath",
       compilerClassPath.map(_.absolutePath).mkString(File.pathSeparator),
       scalaVersion.compilerMain,
-      "-d", classDir.getAbsolutePath,
+      "-d",
+      classDir.getAbsolutePath,
       "-classpath",
       libraryClassPath.map(_.absolutePath).mkString(File.pathSeparator),
       src.toAbsolutePath.toString
@@ -106,31 +141,40 @@ object MainDebuggeeRunner {
     startCrawling(process.getErrorStream)(System.err.println)
 
     val exitValue = process.waitFor()
-    if (exitValue != 0) throw new IllegalArgumentException(s"cannot compile $src")
-    
-    val sourceEntry = StandaloneSourceFile(src, src.getParent.relativize(src).toString)
+    if (exitValue != 0)
+      throw new IllegalArgumentException(s"cannot compile $src")
+
+    val sourceEntry =
+      StandaloneSourceFile(src, src.getParent.relativize(src).toString)
     val mainClassPathEntry = ClassPathEntry(classDir.toPath, Seq(sourceEntry))
     MainDebuggeeRunner(src, mainClassPathEntry, libraryClassPath, mainClass)
   }
 
-  private def compileJava(src: Path, mainClass: String, dest: File): MainDebuggeeRunner = {
+  private def compileJava(
+      src: Path,
+      mainClass: String,
+      dest: File
+  ): MainDebuggeeRunner = {
     val classDir = dest / "classes"
     IO.createDirectory(classDir)
     val command = Array(
       javac.toString,
-      "-d", classDir.getAbsolutePath,
+      "-d",
+      classDir.getAbsolutePath,
       src.toAbsolutePath.toString
     )
     val builder = new ProcessBuilder(command: _*)
     val process = builder.start()
-    
+
     startCrawling(process.getInputStream)(System.out.println)
     startCrawling(process.getErrorStream)(System.err.println)
 
     val exitValue = process.waitFor()
-    if (exitValue != 0) throw new IllegalArgumentException(s"cannot compile $src")
+    if (exitValue != 0)
+      throw new IllegalArgumentException(s"cannot compile $src")
 
-    val sourceEntry = StandaloneSourceFile(src, src.getParent.relativize(src).toString)
+    val sourceEntry =
+      StandaloneSourceFile(src, src.getParent.relativize(src).toString)
     val mainClassPathEntry = ClassPathEntry(classDir.toPath, Seq(sourceEntry))
     new MainDebuggeeRunner(src, mainClassPathEntry, Seq.empty, mainClass)
   }
@@ -159,8 +203,8 @@ object MainDebuggeeRunner {
   }
 
   private class MainProcess(
-    process: Process,
-    listener: DebuggeeListener
+      process: Process,
+      listener: DebuggeeListener
   ) extends CancelableFuture[Unit] {
     private val exited = Promise[Unit]()
 
@@ -174,12 +218,13 @@ object MainDebuggeeRunner {
       }
     }
     startCrawling(process.getErrorStream)(listener.err)
-    
+
     private val thread = new Thread {
       override def run(): Unit = {
         val exitValue = process.waitFor()
         if (exitValue == 0) exited.success(())
-        else exited.failure(new Exception(s"Process exited with code $exitValue"))
+        else
+          exited.failure(new Exception(s"Process exited with code $exitValue"))
       }
     }
     thread.start()

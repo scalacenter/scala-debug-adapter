@@ -14,7 +14,7 @@ import scala.concurrent.{Await, ExecutionContext}
 object DebugServerSpec extends TestSuite {
   val DefaultTimeout = Duration(2, TimeUnit.SECONDS)
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
-  val executorService  = Executors.newFixedThreadPool(1)
+  val executorService = Executors.newFixedThreadPool(1)
   implicit val ec = ExecutionContext.fromExecutorService(executorService)
 
   def tests: Tests = Tests {
@@ -22,7 +22,7 @@ object DebugServerSpec extends TestSuite {
       val runner = new MockDebuggeeRunner()
       val server = DebugServer(runner, NoopLogger, gracePeriod = Duration.Zero)
       server.close()
-      try  { 
+      try {
         TestDebugClient.connect(server.uri)
         assert(false) // connect was supposed to fail
       } catch {
@@ -30,7 +30,11 @@ object DebugServerSpec extends TestSuite {
         case _: ConnectException => ()
         case e: SocketException =>
           val msg = e.getMessage
-          assert(msg.endsWith("(Connection refused)") || msg.endsWith("(Connection Failed)"))
+          assert(
+            msg.endsWith("(Connection refused)") || msg.endsWith(
+              "(Connection Failed)"
+            )
+          )
       }
     }
 
@@ -40,8 +44,8 @@ object DebugServerSpec extends TestSuite {
       val client = TestDebugClient.connect(server.uri)
       try {
         val session = server.connect()
-        assertMatch(session.currentState) {
-          case DebugSession.Started(_) => ()
+        assertMatch(session.currentState) { case DebugSession.Started(_) =>
+          ()
         }
       } finally {
         server.close()
@@ -70,7 +74,7 @@ object DebugServerSpec extends TestSuite {
       try {
         server.connect()
         client1.initialize()
-        
+
         var client2: TestDebugClient = null
         try {
           client2 = TestDebugClient.connect(server.uri)
@@ -91,7 +95,7 @@ object DebugServerSpec extends TestSuite {
 
     "should not launch if the debuggee has not started a jvm" - {
       val runner = new MockDebuggeeRunner()
-      val server = DebugServer(runner, NoopLogger, gracePeriod =  Duration.Zero)
+      val server = DebugServer(runner, NoopLogger, gracePeriod = Duration.Zero)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -127,7 +131,7 @@ object DebugServerSpec extends TestSuite {
         runner.currentProcess.stopped.failure(new Exception())
         client.initialize()
         assert(!client.launch().success)
-      } finally {  
+      } finally {
         server.close()
         client.close()
       }
@@ -144,7 +148,7 @@ object DebugServerSpec extends TestSuite {
         assert(client.launch().success)
         client.initialized
         client.configurationDone()
-      } finally {  
+      } finally {
         server.close()
         client.close()
         IO.delete(tempDir)
@@ -164,7 +168,7 @@ object DebugServerSpec extends TestSuite {
         // give some time for the debuggee to terminate gracefully
         server.close()
         client.terminated
-      } finally { 
+      } finally {
         server.close() // in case test fails
         client.close()
         IO.delete(tempDir)
@@ -246,15 +250,16 @@ object DebugServerSpec extends TestSuite {
         server.connect()
         client.initialize()
         client.launch()
-        val breakpoints = client.setBreakpoints(runner.source, Array(5, 12, 16, 8))
+        val breakpoints =
+          client.setBreakpoints(runner.source, Array(5, 12, 16, 8))
         assert(breakpoints.size == 4)
         assert(breakpoints.forall(_.verified))
-        
+
         client.configurationDone()
         val stopped1 = client.stopped
         val threadId = stopped1.threadId
         assert(stopped1.reason == "breakpoint")
-        
+
         client.continue(threadId)
         val stopped2 = client.stopped
         assert(stopped2.reason == "breakpoint")
@@ -264,12 +269,12 @@ object DebugServerSpec extends TestSuite {
         val stopped3 = client.stopped
         assert(stopped3.reason == "breakpoint")
         assert(stopped3.threadId == threadId)
-        
+
         client.continue(threadId)
         val stopped4 = client.stopped
         assert(stopped4.reason == "breakpoint")
         assert(stopped4.threadId == threadId)
-        
+
         client.continue(threadId)
         client.exited
         client.terminated
@@ -284,12 +289,12 @@ object DebugServerSpec extends TestSuite {
       val runner = new MockDebuggeeRunner()
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
-      
+
       try {
         val session = server.connect()
         client.initialize()
         client.disconnect(restart = false)
-        
+
         Await.result(runner.currentProcess.future, DefaultTimeout)
       } finally {
         server.close()
@@ -299,13 +304,14 @@ object DebugServerSpec extends TestSuite {
 
     "should accept a second connection when the session disconnects with restart = true" - {
       val runner = new MockDebuggeeRunner()
-      val handler = DebugServer.start(runner, NoopLogger, gracePeriod = Duration.Zero)
+      val handler =
+        DebugServer.start(runner, NoopLogger, gracePeriod = Duration.Zero)
       val client1 = TestDebugClient.connect(handler.uri)
-      
+
       try {
         client1.initialize()
         client1.disconnect(restart = true)
-        
+
         val client2 = TestDebugClient.connect(handler.uri)
         try {
           client2.initialize()
@@ -319,14 +325,15 @@ object DebugServerSpec extends TestSuite {
     }
 
     "should not accept a second connection when the session disconnects with restart = false" - {
-      val runner =  new MockDebuggeeRunner()
-      val handler = DebugServer.start(runner, NoopLogger, gracePeriod = Duration.Zero)
+      val runner = new MockDebuggeeRunner()
+      val handler =
+        DebugServer.start(runner, NoopLogger, gracePeriod = Duration.Zero)
       val client1 = TestDebugClient.connect(handler.uri)
-      
+
       try {
         client1.initialize()
         client1.disconnect(restart = false)
-        
+
         var client2: TestDebugClient = null
         try {
           client2 = TestDebugClient.connect(handler.uri)
@@ -338,11 +345,15 @@ object DebugServerSpec extends TestSuite {
           case _: SocketTimeoutException => ()
           case e: SocketException =>
             val msg = e.getMessage
-            assert(msg.endsWith("(Connection refused)") || msg.endsWith("(Connection Failed)"))
+            assert(
+              msg.endsWith("(Connection refused)") || msg.endsWith(
+                "(Connection Failed)"
+              )
+            )
         } finally {
           if (client2 != null) client2.close()
         }
-        
+
       } finally {
         client1.close()
       }
