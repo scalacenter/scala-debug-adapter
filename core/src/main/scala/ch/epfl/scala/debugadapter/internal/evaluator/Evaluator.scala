@@ -1,6 +1,9 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
+import com.microsoft.java.debug.core.adapter.{
+  IDebugAdapterContext,
+  ISourceLookUpProvider
+}
 import com.sun.jdi._
 
 import java.nio.file.Files
@@ -16,7 +19,7 @@ private[evaluator] class Evaluator(
       expression: String,
       thread: ThreadReference,
       frame: StackFrame
-  ): CompletableFuture[Value] = {
+  )(debugContext: IDebugAdapterContext): CompletableFuture[Value] = {
     val vm = thread.virtualMachine()
     val thisObject = Option(frame.thisObject())
 
@@ -113,6 +116,8 @@ private[evaluator] class Evaluator(
       )
     } yield result
 
+    debugContext.getStackFrameManager.reloadStackFrames(thread)
+
     result match {
       case Some(value) =>
         CompletableFuture.completedFuture(value)
@@ -158,7 +163,7 @@ private[evaluator] class Evaluator(
       args: Array[Value],
       thread: ThreadReference,
       invokeSuper: Boolean
-  ): CompletableFuture[Value] = {
+  )(debugContext: IDebugAdapterContext): CompletableFuture[Value] = {
     val result = for {
       obj <- Try(new JdiObject(thisContext, thread)).toOption
       result <- obj.invoke(
@@ -167,6 +172,8 @@ private[evaluator] class Evaluator(
         if (args == null) List() else args.toList
       )
     } yield result
+
+    debugContext.getStackFrameManager.reloadStackFrames(thread)
 
     result match {
       case Some(value) =>

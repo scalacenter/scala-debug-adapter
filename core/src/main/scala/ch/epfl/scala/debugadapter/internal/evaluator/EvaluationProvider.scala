@@ -3,9 +3,13 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import ch.epfl.scala.debugadapter.DebuggeeRunner
 import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
 import com.microsoft.java.debug.core.IEvaluatableBreakpoint
-import com.microsoft.java.debug.core.adapter.IEvaluationProvider
+import com.microsoft.java.debug.core.adapter.{
+  IDebugAdapterContext,
+  IEvaluationProvider
+}
 import com.sun.jdi.{ObjectReference, ThreadReference, Value}
 
+import java.util
 import java.util.concurrent.CompletableFuture
 
 object EvaluationProvider {
@@ -22,6 +26,16 @@ object EvaluationProvider {
 }
 
 class EvaluationProvider(evaluator: Evaluator) extends IEvaluationProvider {
+
+  private var debugContext: IDebugAdapterContext = _
+
+  override def initialize(
+      debugContext: IDebugAdapterContext,
+      options: util.Map[String, AnyRef]
+  ): Unit = {
+    this.debugContext = debugContext
+  }
+
   override def isInEvaluation(thread: ThreadReference) = false
 
   override def evaluate(
@@ -30,7 +44,7 @@ class EvaluationProvider(evaluator: Evaluator) extends IEvaluationProvider {
       depth: Int
   ): CompletableFuture[Value] = {
     val frame = thread.frames().get(depth)
-    evaluator.evaluate(expression, thread, frame)
+    evaluator.evaluate(expression, thread, frame)(debugContext)
   }
 
   override def evaluate(
@@ -58,7 +72,7 @@ class EvaluationProvider(evaluator: Evaluator) extends IEvaluationProvider {
     args,
     thread,
     invokeSuper
-  )
+  )(debugContext)
 
   override def clearState(thread: ThreadReference): Unit = {}
 }
