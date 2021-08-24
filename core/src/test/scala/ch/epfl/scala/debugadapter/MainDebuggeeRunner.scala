@@ -1,21 +1,23 @@
 package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.MainDebuggeeRunner._
+import coursier.{Dependency, Module, ModuleName, Organization}
 import sbt.io.IO
 import sbt.io.syntax._
 
 import java.io.{BufferedReader, File, InputStream, InputStreamReader}
-import java.net.InetSocketAddress
+import java.net.{InetSocketAddress, URLClassLoader}
 import java.nio.file.{Files, Path, Paths}
 import scala.concurrent.{Future, Promise}
-import scala.util.control.NonFatal
 import scala.util.Properties
+import scala.util.control.NonFatal
 
 case class MainDebuggeeRunner(
     source: Path,
     projectEntry: ClassPathEntry,
     dependencies: Seq[ClassPathEntry],
-    mainClass: String
+    mainClass: String,
+    override val evaluationClassLoader: Option[ClassLoader]
 ) extends DebuggeeRunner {
   override def name: String = mainClass
   override def classPathEntries: Seq[ClassPathEntry] =
@@ -33,9 +35,6 @@ case class MainDebuggeeRunner(
     new MainProcess(process, listener)
   }
   override def javaRuntime: Option[JavaRuntime] = JavaRuntime(javaHome)
-  override def evaluationClassLoader: Option[ClassLoader] = Some(
-    getClass.getClassLoader
-  )
 }
 
 object MainDebuggeeRunner {
@@ -123,6 +122,17 @@ object MainDebuggeeRunner {
     IO.createDirectory(classDir)
     val compilerClassPath = Coursier.fetch(scalaVersion.compiler)
     val libraryClassPath = Coursier.fetch(scalaVersion.library)
+    val expressionCompilerDependency = Dependency(
+      Module(
+        Organization(BuildInfo.expressionCompilerOrganization),
+        ModuleName(
+          s"${BuildInfo.expressionCompilerName}_${scalaVersion.version}"
+        )
+      ),
+      BuildInfo.expressionCompilerVersion
+    )
+    val expressionCompilerClassPath =
+      Coursier.fetch(expressionCompilerDependency)
 
     val command = Array(
       java.toString,
@@ -147,7 +157,20 @@ object MainDebuggeeRunner {
     val sourceEntry =
       StandaloneSourceFile(src, src.getParent.relativize(src).toString)
     val mainClassPathEntry = ClassPathEntry(classDir.toPath, Seq(sourceEntry))
-    MainDebuggeeRunner(src, mainClassPathEntry, libraryClassPath, mainClass)
+    val expressionCompilerClassPathUrls = expressionCompilerClassPath
+      .map(_.absolutePath.toUri.toURL)
+      .toArray
+    val evaluationClassLoader = new URLClassLoader(
+      expressionCompilerClassPathUrls,
+      null
+    )
+    MainDebuggeeRunner(
+      src,
+      mainClassPathEntry,
+      libraryClassPath,
+      mainClass,
+      Some(evaluationClassLoader)
+    )
   }
 
   private def compileJava(
@@ -176,7 +199,7 @@ object MainDebuggeeRunner {
     val sourceEntry =
       StandaloneSourceFile(src, src.getParent.relativize(src).toString)
     val mainClassPathEntry = ClassPathEntry(classDir.toPath, Seq(sourceEntry))
-    new MainDebuggeeRunner(src, mainClassPathEntry, Seq.empty, mainClass)
+    MainDebuggeeRunner(src, mainClassPathEntry, Seq.empty, mainClass, None)
   }
 
   private def startCrawling(input: InputStream)(f: String => Unit): Unit = {

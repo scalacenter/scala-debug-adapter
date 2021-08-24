@@ -21,21 +21,23 @@ private[evaluator] class ExpressionCompiler(
       defNames: Set[String],
       errorConsumer: Consumer[String]
   ): Boolean = {
-    val compiledSuccessfully = compileMethod
-      .invoke(
-        expressionCompilerInstance,
-        expressionDir,
-        expressionClassName,
-        valuesByNameIdentName,
-        classPath,
-        code,
-        Integer.valueOf(line),
-        expression,
-        defNames.asJava,
-        (errorMessage => errorConsumer.accept(errorMessage)): Consumer[String]
-      )
-      .asInstanceOf[Boolean]
-    compiledSuccessfully
+    val compiledSuccessfully = Try(
+      compileMethod
+        .invoke(
+          expressionCompilerInstance,
+          expressionDir,
+          expressionClassName,
+          valuesByNameIdentName,
+          classPath,
+          code,
+          Integer.valueOf(line),
+          expression,
+          defNames.asJava,
+          (errorMessage => errorConsumer.accept(errorMessage)): Consumer[String]
+        )
+    )
+      .map(_.asInstanceOf[Boolean])
+    compiledSuccessfully.getOrElse(false)
   }
 }
 
