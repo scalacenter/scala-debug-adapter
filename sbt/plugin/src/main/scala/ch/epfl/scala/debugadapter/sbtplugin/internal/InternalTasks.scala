@@ -1,9 +1,16 @@
 package ch.epfl.scala.debugadapter.sbtplugin.internal
 
-import sbt._
 import ch.epfl.scala.debugadapter._
-import scala.util.Properties
+import sbt._
+import sbt.librarymanagement.DependencyResolution
+import sbt.librarymanagement.ScalaModuleInfo
+import sbt.librarymanagement.UnresolvedWarningConfiguration
+import sbt.librarymanagement.UpdateConfiguration
+import sbt.std.TaskExtra
+
+import java.net.URLClassLoader
 import java.nio.file.Files
+import scala.util.Properties
 
 private[sbtplugin] object InternalTasks {
   def classPathEntries: Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.task {
@@ -18,6 +25,42 @@ private[sbtplugin] object InternalTasks {
         .orElse(Option(Properties.jdkHome))
       javaRuntime <- JavaRuntime(jdkHome)
     } yield javaRuntime
+  }
+
+  def tryResolveEvaluationClassLoader
+      : Def.Initialize[Task[Option[URLClassLoader]]] = {
+    Def.optional(resolveEvaluationClassLoader) {
+      case None => TaskExtra.task(None)
+      case Some(t) => t.map(Some(_))
+    }
+  }
+
+  private def resolveEvaluationClassLoader = Def.task {
+    val scalaInstance = Keys.scalaInstance.value
+    val scalaVersion = Keys.scalaVersion.value
+
+    val org = BuildInfo.expressionCompilerOrganization
+    val artifact = s"${BuildInfo.expressionCompilerName}_$scalaVersion"
+    val version = BuildInfo.expressionCompilerVersion
+
+    val updateReport = fetchArtifactsOf(
+      org % artifact % version,
+      Keys.dependencyResolution.value,
+      Keys.scalaModuleInfo.value,
+      Keys.updateConfiguration.value,
+      (Keys.update / Keys.unresolvedWarningConfiguration).value,
+      Keys.streams.value.log
+    )
+    val evaluatorJars = updateReport
+      .select(
+        configurationFilter(Runtime.name),
+        moduleFilter(org, artifact, version),
+        artifactFilter(extension = "jar", classifier = "")
+      )
+      .map(_.toURI.toURL)
+      .toArray
+
+    new URLClassLoader(evaluatorJars, scalaInstance.loader)
   }
 
   private def externalClassPathEntries
@@ -76,5 +119,25 @@ private[sbtplugin] object InternalTasks {
           StandaloneSourceFile(f, f.getFileName.toString)
         )
     ClassPathEntry(classDirectory, sourceEntries)
+  }
+
+  private def fetchArtifactsOf(
+      moduleID: ModuleID,
+      dependencyRes: DependencyResolution,
+      scalaInfo: Option[ScalaModuleInfo],
+      updateConfig: UpdateConfiguration,
+      warningConfig: UnresolvedWarningConfiguration,
+      log: sbt.Logger
+  ) = {
+    val descriptor = dependencyRes.wrapDependencyInModule(moduleID, scalaInfo)
+
+    dependencyRes.update(descriptor, updateConfig, warningConfig, log) match {
+      case Right(report) =>
+        report
+      case Left(warning) =>
+        throw new MessageOnlyException(
+          s"Couldn't retrieve `$moduleID` : ${warning.resolveException.getMessage}."
+        )
+    }
   }
 }
