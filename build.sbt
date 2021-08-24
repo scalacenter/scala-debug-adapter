@@ -36,7 +36,7 @@ lazy val root = project
 
 lazy val core = project
   .in(file("core"))
-  .enablePlugins(SbtJdiTools)
+  .enablePlugins(SbtJdiTools, BuildInfoPlugin)
   .settings(
     name := "scala-debug-adapter",
     libraryDependencies ++= List(
@@ -48,6 +48,18 @@ lazy val core = project
       Dependencies.coursier % Test,
       Dependencies.coursierJvm % Test
     ),
+    buildInfoKeys := Seq[BuildInfoKey](
+      BuildInfoKey.action("expressionCompilerOrganization")(
+        (expressionCompiler / organization).value
+      ),
+      BuildInfoKey.action("expressionCompilerName")(
+        (expressionCompiler / name).value
+      ),
+      BuildInfoKey.action("expressionCompilerVersion")(
+        (expressionCompiler / version).value
+      )
+    ),
+    buildInfoPackage := "ch.epfl.scala.debugadapter",
     testFrameworks += new TestFramework("utest.runner.Framework"),
     // Test / javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=1044",
     Test / fork := true
@@ -97,7 +109,7 @@ lazy val testAgent = project
 lazy val expressionCompiler = project
   .in(file("expression-compiler"))
   .settings(
-    name := "expression-compiler",
+    name := "scala-expression-compiler",
     crossScalaVersions := Seq(
       "3.0.2-RC1",
       "3.0.1",

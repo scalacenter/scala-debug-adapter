@@ -7,27 +7,23 @@ import sbt.Tests._
 import sbt._
 import sbt.internal.bsp.BuildTargetIdentifier
 import sbt.internal.protocol.JsonRpcRequestMessage
-import sbt.internal.server.{ServerHandler, ServerIntent}
-import sbt.internal.util.complete.{Parser, Parsers}
-import sbt.librarymanagement.{
-  DependencyResolution,
-  ScalaModuleInfo,
-  UnresolvedWarningConfiguration,
-  UpdateConfiguration
-}
+import sbt.internal.server.ServerHandler
+import sbt.internal.server.ServerIntent
+import sbt.internal.util.complete.Parser
+import sbt.internal.util.complete.Parsers
 import sjsonnew.BasicJsonProtocol
 import sjsonnew.shaded.scalajson.ast.unsafe.JValue
-import sjsonnew.support.scalajson.unsafe.{
-  CompactPrinter,
-  Converter,
-  Parser => JsonParser
-}
+import sjsonnew.support.scalajson.unsafe.CompactPrinter
+import sjsonnew.support.scalajson.unsafe.Converter
+import sjsonnew.support.scalajson.unsafe.{Parser => JsonParser}
 
 import java.io.File
 import java.net.URLClassLoader
 import scala.collection.concurrent.TrieMap
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
-import scala.util.{Failure, Success}
+import scala.concurrent.ExecutionContext
+import scala.concurrent.ExecutionContextExecutor
+import scala.util.Failure
+import scala.util.Success
 
 object DebugAdapterPlugin extends sbt.AutoPlugin {
   private final val DebugSessionStart: String = "debugSession/start"
@@ -62,9 +58,6 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
 
     val stopDebugSession =
       taskKey[Unit]("Stop the current debug session").withRank(KeyRanks.DTask)
-    val resolveEvaluationClassLoader = taskKey[ClassLoader](
-      "Resolve a class loader for expression evaluation"
-    ).withRank(KeyRanks.DTask)
   }
 
   import autoImport._
@@ -93,8 +86,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     startMainClassDebugSession / Keys.aggregate := false,
     startTestSuitesDebugSession / Keys.aggregate := false,
     startRemoteDebugSession / Keys.aggregate := false,
-    stopDebugSession / Keys.aggregate := false,
-    resolveEvaluationClassLoader := resolveEvaluationClassLoaderTask.value
+    stopDebugSession / Keys.aggregate := false
   )
 
   def runSettings: Seq[Def.Setting[_]] = Seq(
@@ -191,54 +183,6 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val _ = debugServers.remove(target)
   }
 
-  private def resolveEvaluationClassLoaderTask = Def.task {
-    val scalaInstance = Keys.scalaInstance.value
-    val scalaVersion = Keys.scalaVersion.value
-
-    val org = "ch.epfl.scala"
-    val artifact = s"expression-compiler_$scalaVersion"
-    val version = "2.0.0-SNAPSHOT"
-
-    val updateReport = fetchArtifactsOf(
-      org % artifact % version,
-      Keys.dependencyResolution.value,
-      Keys.scalaModuleInfo.value,
-      Keys.updateConfiguration.value,
-      (Keys.update / Keys.unresolvedWarningConfiguration).value,
-      Keys.streams.value.log
-    )
-    val evaluatorJars = updateReport
-      .select(
-        configurationFilter(Runtime.name),
-        moduleFilter(org, AllPassFilter, version),
-        artifactFilter(extension = "jar", classifier = "")
-      )
-      .map(_.toURL)
-      .toArray
-
-    new URLClassLoader(evaluatorJars, scalaInstance.loader)
-  }
-
-  private def fetchArtifactsOf(
-      moduleID: ModuleID,
-      dependencyRes: DependencyResolution,
-      scalaInfo: Option[ScalaModuleInfo],
-      updateConfig: UpdateConfiguration,
-      warningConfig: UnresolvedWarningConfiguration,
-      log: sbt.Logger
-  ) = {
-    val descriptor = dependencyRes.wrapDependencyInModule(moduleID, scalaInfo)
-
-    dependencyRes.update(descriptor, updateConfig, warningConfig, log) match {
-      case Right(report) =>
-        report
-      case Left(warning) =>
-        throw new MessageOnlyException(
-          s"Couldn't retrieve `$moduleID` : ${warning.resolveException.getMessage}."
-        )
-    }
-  }
-
   private def mainClassSessionTask: Def.Initialize[InputTask[URI]] =
     Def.inputTask {
       val target = Keys.bspTargetIdentifier.value
@@ -249,7 +193,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val envVars = Keys.envVars.value
       val logger = Keys.streams.value.log
       val state = Keys.state.value
-      val evaluationClassLoader = resolveEvaluationClassLoader.?.value
+      val evaluationClassLoader =
+        InternalTasks.tryResolveEvaluationClassLoader.value
 
       val runner = for {
         json <- jsonParser.parsed
@@ -308,7 +253,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val parallelExec = (Keys.test / Keys.testForkedParallel).value
       val state = Keys.state.value
       val logger = Keys.streams.value.log
-      val evaluationClassLoader = resolveEvaluationClassLoader.?.value
+      val evaluationClassLoader =
+        InternalTasks.tryResolveEvaluationClassLoader.value
 
       import BasicJsonProtocol._
       val runner = for {
@@ -384,7 +330,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val target = Keys.bspTargetIdentifier.value
     val classPathEntries = InternalTasks.classPathEntries.value
     val javaRuntime = InternalTasks.javaRuntime.value
-    val evaluationClassLoader = resolveEvaluationClassLoader.?.value
+    val evaluationClassLoader =
+      InternalTasks.tryResolveEvaluationClassLoader.value
     val state = Keys.state.value
     val logger = Keys.streams.value.log
 
