@@ -40,94 +40,96 @@ private[evaluator] class Evaluator(
       (fqcn.split("\\.").dropRight(1) :+ expressionClassName).mkString(".")
 
     var error: Option[String] = None
-    val result = for {
-      classLoader <- findClassLoader(vm).flatMap(JdiClassLoader(_, thread))
-      variables = frame.visibleVariables().asScala
-      variableNames = variables.map(_.name()).map(vm.mirrorOf).toList
-      variableValues = variables
-        .map(frame.getValue)
-        .flatMap(value => boxIfNeeded(value, classLoader, thread))
-        .toList
-      fields = thisObject
-        .map(_.referenceType().fields().asScala)
-        .getOrElse(List())
-      fieldNames = fields.map(_.name()).map(vm.mirrorOf).toList
-      fieldValues = thisObject
-        .map(thiz =>
-          fields
-            .map(field => thiz.getValue(field))
-            .flatMap(value => boxIfNeeded(value, classLoader, thread))
+    try {
+      val result = for {
+        classLoader <- findClassLoader(vm).flatMap(JdiClassLoader(_, thread))
+        variables = frame.visibleVariables().asScala
+        variableNames = variables.map(_.name()).map(vm.mirrorOf).toList
+        variableValues = variables
+          .map(frame.getValue)
+          .flatMap(value => boxIfNeeded(value, classLoader, thread))
+          .toList
+        fields = thisObject
+          .map(_.referenceType().fields().asScala)
+          .getOrElse(List())
+        fieldNames = fields.map(_.name()).map(vm.mirrorOf).toList
+        fieldValues = thisObject
+          .map(thiz =>
+            fields
+              .map(field => thiz.getValue(field))
+              .flatMap(value => boxIfNeeded(value, classLoader, thread))
+          )
+          .getOrElse(List())
+        thisObjectName = thisObject.map(_ => vm.mirrorOf("$this"))
+        names = variableNames ++ fieldNames ++ thisObjectName
+          .map(Seq(_))
+          .getOrElse(Seq())
+        values = variableValues ++ fieldValues ++ thisObject
+          .map(Seq(_))
+          .getOrElse(Seq())
+        systemClass <- classLoader.loadClass("java.lang.System")
+        classPath <- systemClass
+          .invokeStatic("getProperty", List(vm.mirrorOf("java.class.path")))
+          .map(_.toString)
+          .map(_.drop(1).dropRight(1)) // remove quotation marks
+        expressionClassPath = expressionDir.toUri.toString
+        compiledSuccessfully = expressionCompiler.compile(
+          expressionDir,
+          expressionClassName,
+          valuesByNameIdentName,
+          classPath,
+          content,
+          line,
+          expression,
+          names.map(_.value()).toSet,
+          errorMessage => error = Some(errorMessage)
         )
-        .getOrElse(List())
-      thisObjectName = thisObject.map(_ => vm.mirrorOf("$this"))
-      names = variableNames ++ fieldNames ++ thisObjectName
-        .map(Seq(_))
-        .getOrElse(Seq())
-      values = variableValues ++ fieldValues ++ thisObject
-        .map(Seq(_))
-        .getOrElse(Seq())
-      systemClass <- classLoader.loadClass("java.lang.System")
-      classPath <- systemClass
-        .invokeStatic("getProperty", List(vm.mirrorOf("java.class.path")))
-        .map(_.toString)
-        .map(_.drop(1).dropRight(1)) // remove quotation marks
-      expressionClassPath = expressionDir.toUri.toString
-      compiledSuccessfully = expressionCompiler.compile(
-        expressionDir,
-        expressionClassName,
-        valuesByNameIdentName,
-        classPath,
-        content,
-        line,
-        expression,
-        names.map(_.value()).toSet,
-        errorMessage => error = Some(errorMessage)
-      )
-      _ <- if (compiledSuccessfully) Some(()) else None
-      url <- classLoader
-        .loadClass("java.net.URL")
-        .flatMap(_.newInstance(List(vm.mirrorOf(expressionClassPath))))
-      urls <- JdiArray("java.net.URL", 1, classLoader, thread)
-      _ <- urls.setValue(0, url.reference)
-      urlClassLoader <- classLoader
-        .loadClass("java.net.URLClassLoader")
-        .flatMap(_.newInstance(List(urls.reference)))
-        .map(_.reference.asInstanceOf[ClassLoaderReference])
-        .flatMap(JdiClassLoader(_, thread))
-      expressionClass <- urlClassLoader.loadClass(expressionFqcn)
-      expression <- expressionClass.newInstance(List())
-      namesArray <- JdiArray(
-        "java.lang.String",
-        names.size,
-        classLoader,
-        thread
-      )
-      valuesArray <- JdiArray(
-        "java.lang.Object",
-        values.size,
-        classLoader,
-        thread
-      ) // add boxing
-      _ = namesArray.setValues(names)
-      _ = valuesArray.setValues(values)
-      result <- expression.invoke(
-        "evaluate",
-        List(namesArray.reference, valuesArray.reference)
-      )
-    } yield result
+        _ <- if (compiledSuccessfully) Some(()) else None
+        url <- classLoader
+          .loadClass("java.net.URL")
+          .flatMap(_.newInstance(List(vm.mirrorOf(expressionClassPath))))
+        urls <- JdiArray("java.net.URL", 1, classLoader, thread)
+        _ <- urls.setValue(0, url.reference)
+        urlClassLoader <- classLoader
+          .loadClass("java.net.URLClassLoader")
+          .flatMap(_.newInstance(List(urls.reference)))
+          .map(_.reference.asInstanceOf[ClassLoaderReference])
+          .flatMap(JdiClassLoader(_, thread))
+        expressionClass <- urlClassLoader.loadClass(expressionFqcn)
+        expression <- expressionClass.newInstance(List())
+        namesArray <- JdiArray(
+          "java.lang.String",
+          names.size,
+          classLoader,
+          thread
+        )
+        valuesArray <- JdiArray(
+          "java.lang.Object",
+          values.size,
+          classLoader,
+          thread
+        ) // add boxing
+        _ = namesArray.setValues(names)
+        _ = valuesArray.setValues(values)
+        result <- expression.invoke(
+          "evaluate",
+          List(namesArray.reference, valuesArray.reference)
+        )
+      } yield result
 
-    debugContext.getStackFrameManager.reloadStackFrames(thread)
-
-    result match {
-      case Some(value) =>
-        CompletableFuture.completedFuture(value)
-      case None =>
-        error match {
-          case Some(message) =>
-            throw new Exception(message)
-          case None =>
-            throw new Exception("Unable to evaluate the expression")
-        }
+      result match {
+        case Some(value) =>
+          CompletableFuture.completedFuture(value)
+        case None =>
+          error match {
+            case Some(message) =>
+              throw new Exception(message)
+            case None =>
+              throw new Exception("Unable to evaluate the expression")
+          }
+      }
+    } finally {
+      debugContext.getStackFrameManager.reloadStackFrames(thread)
     }
   }
 

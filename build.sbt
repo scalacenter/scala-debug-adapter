@@ -64,7 +64,7 @@ lazy val core = project
     // Test / javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=1044",
     Test / fork := true
   )
-  .dependsOn(testClient % Test, expressionCompiler % Test)
+  .dependsOn(testClient % Test)
 
 lazy val testClient = project
   .in(file("test-client"))
