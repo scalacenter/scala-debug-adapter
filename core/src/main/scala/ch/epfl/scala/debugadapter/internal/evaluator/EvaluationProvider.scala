@@ -17,11 +17,16 @@ object EvaluationProvider {
       runner: DebuggeeRunner,
       sourceLookUpProvider: SourceLookUpProvider
   ): IEvaluationProvider = {
-    val evaluator = for {
-      classLoader <- runner.evaluationClassLoader
-      expressionCompiler <- ExpressionCompiler(classLoader)
-    } yield new Evaluator(sourceLookUpProvider, expressionCompiler)
-    evaluator.map(new EvaluationProvider(_)).getOrElse(NoopEvaluationProvider)
+    runner.evaluationClassLoader
+      .flatMap(ExpressionCompiler(_))
+      .map(expressionCompiler =>
+        new EvaluationProvider(
+          new Evaluator(sourceLookUpProvider, Some(expressionCompiler))
+        )
+      )
+      .getOrElse(
+        new EvaluationProvider(new Evaluator(sourceLookUpProvider, None))
+      )
   }
 }
 
@@ -73,39 +78,6 @@ class EvaluationProvider(evaluator: Evaluator) extends IEvaluationProvider {
     thread,
     invokeSuper
   )(debugContext)
-
-  override def clearState(thread: ThreadReference): Unit = {}
-}
-
-object NoopEvaluationProvider extends IEvaluationProvider {
-
-  override def isInEvaluation(thread: ThreadReference) = false
-
-  override def evaluate(
-      expression: String,
-      thread: ThreadReference,
-      depth: Int
-  ): CompletableFuture[Value] = ???
-
-  override def evaluate(
-      expression: String,
-      thisContext: ObjectReference,
-      thread: ThreadReference
-  ): CompletableFuture[Value] = ???
-
-  override def evaluateForBreakpoint(
-      breakpoint: IEvaluatableBreakpoint,
-      thread: ThreadReference
-  ): CompletableFuture[Value] = ???
-
-  override def invokeMethod(
-      thisContext: ObjectReference,
-      methodName: String,
-      methodSignature: String,
-      args: Array[Value],
-      thread: ThreadReference,
-      invokeSuper: Boolean
-  ): CompletableFuture[Value] = ???
 
   override def clearState(thread: ThreadReference): Unit = {}
 }

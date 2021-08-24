@@ -16,19 +16,6 @@ import java.util.function.Consumer
 private[debugadapter] object DebugAdapter {
 
   /**
-   * Disable evaluation of variable's `toString` methods
-   * since code evaluation is not supported.
-   *
-   * Debug adapter, when asked for variables, tries to present them in a readable way,
-   * hence it evaluates the `toString` method for each object providing it.
-   * The adapter is not checking if evaluation is supported, so the whole request
-   * fails if there is at least one variable with custom `toString` in scope.
-   *
-   * See usages of [[com.microsoft.java.debug.core.adapter.variables.VariableDetailUtils.formatDetailsValue()]]
-   */
-  DebugSettings.getCurrent.showToString = false
-
-  /**
    * Since Scala 2.13, object fields are represented by static fields in JVM byte code.
    * See https://github.com/scala/scala/pull/7270
    */

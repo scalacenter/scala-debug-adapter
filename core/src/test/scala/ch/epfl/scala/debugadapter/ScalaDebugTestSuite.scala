@@ -28,7 +28,7 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         client.launch()
 
         val breakpoints =
-          client.setBreakpoints(runner.source, Array(5, 13, 20, 14, 9))
+          client.setBreakpoints(runner.source, Array(5, 13, 22, 14, 9))
         assert(breakpoints.size == 5)
         assert(breakpoints.forall(_.verified))
 
@@ -128,6 +128,10 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         val localVars = client.variables(localScope.variablesReference)
         assertMatch(localVars.map(_.name)) { case Array("args", "h", "this") =>
           ()
+        }
+        assertMatch(localVars.map(_.value).map(_.split(" ").last)) {
+          case Array(_, "\"hello\"", _) =>
+            ()
         }
 
         client.continue(stopped.threadId)

@@ -13,13 +13,31 @@ import scala.util.Try
 
 private[evaluator] class Evaluator(
     sourceLookUpProvider: ISourceLookUpProvider,
-    expressionCompiler: ExpressionCompiler
+    expressionCompiler: Option[ExpressionCompiler]
 ) {
   def evaluate(
       expression: String,
       thread: ThreadReference,
       frame: StackFrame
-  )(debugContext: IDebugAdapterContext): CompletableFuture[Value] = {
+  )(debugContext: IDebugAdapterContext): CompletableFuture[Value] =
+    expressionCompiler match {
+      case Some(expressionCompiler) =>
+        evaluateWithCompiler(expression, thread, frame)(
+          debugContext,
+          expressionCompiler
+        )
+      case None =>
+        ???
+    }
+
+  private def evaluateWithCompiler(
+      expression: String,
+      thread: ThreadReference,
+      frame: StackFrame
+  )(
+      debugContext: IDebugAdapterContext,
+      expressionCompiler: ExpressionCompiler
+  ): CompletableFuture[Value] = {
     val vm = thread.virtualMachine()
     val thisObject = Option(frame.thisObject())
 
@@ -39,8 +57,8 @@ private[evaluator] class Evaluator(
     val expressionFqcn =
       (fqcn.split("\\.").dropRight(1) :+ expressionClassName).mkString(".")
 
-    var error: Option[String] = None
     try {
+      var error: Option[String] = None
       val result = for {
         classLoader <- findClassLoader(vm).flatMap(JdiClassLoader(_, thread))
         variables = frame.visibleVariables().asScala
@@ -73,17 +91,18 @@ private[evaluator] class Evaluator(
           .map(_.toString)
           .map(_.drop(1).dropRight(1)) // remove quotation marks
         expressionClassPath = expressionDir.toUri.toString
-        compiledSuccessfully = expressionCompiler.compile(
-          expressionDir,
-          expressionClassName,
-          valuesByNameIdentName,
-          classPath,
-          content,
-          line,
-          expression,
-          names.map(_.value()).toSet,
-          errorMessage => error = Some(errorMessage)
-        )
+        compiledSuccessfully = expressionCompiler
+          .compile(
+            expressionDir,
+            expressionClassName,
+            valuesByNameIdentName,
+            classPath,
+            content,
+            line,
+            expression,
+            names.map(_.value()).toSet,
+            errorMessage => error = Some(errorMessage)
+          )
         _ <- if (compiledSuccessfully) Some(()) else None
         url <- classLoader
           .loadClass("java.net.URL")
@@ -166,22 +185,24 @@ private[evaluator] class Evaluator(
       thread: ThreadReference,
       invokeSuper: Boolean
   )(debugContext: IDebugAdapterContext): CompletableFuture[Value] = {
-    val result = for {
-      obj <- Try(new JdiObject(thisContext, thread)).toOption
-      result <- obj.invoke(
-        methodName,
-        signature,
-        if (args == null) List() else args.toList
-      )
-    } yield result
+    try {
+      val result = for {
+        obj <- Try(new JdiObject(thisContext, thread)).toOption
+        result <- obj.invoke(
+          methodName,
+          signature,
+          if (args == null) List() else args.toList
+        )
+      } yield result
 
-    debugContext.getStackFrameManager.reloadStackFrames(thread)
-
-    result match {
-      case Some(value) =>
-        CompletableFuture.completedFuture(value)
-      case None =>
-        throw new Exception("Unable to evaluate the expression")
+      result match {
+        case Some(value) =>
+          CompletableFuture.completedFuture(value)
+        case None =>
+          throw new Exception("Unable to evaluate the expression")
+      }
+    } finally {
+      debugContext.getStackFrameManager.reloadStackFrames(thread)
     }
   }
 }
