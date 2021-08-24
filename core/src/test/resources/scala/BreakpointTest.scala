@@ -15,6 +15,8 @@ object BreakpointTest {
       new InnerHello()
       ()
     }
+
+    override def toString: String = "hello"
   }
   object Hello {
     println("Breakpoint in hello object")

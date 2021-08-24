@@ -142,7 +142,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
   def evaluate(
       expression: String,
       frameId: Int,
-      timeout: Duration = 6 seconds
+      timeout: Duration = 10 seconds
   ): Either[Message, String] = {
     val args = new EvaluateArguments()
     args.expression = expression
