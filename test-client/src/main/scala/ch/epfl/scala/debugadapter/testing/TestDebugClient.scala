@@ -143,14 +143,16 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
       expression: String,
       frameId: Int,
       timeout: Duration = 6 seconds
-  ): String = {
+  ): Either[Message, String] = {
     val args = new EvaluateArguments()
     args.expression = expression
     args.frameId = frameId
     args.context = "repl"
     val request = createRequest(Command.EVALUATE, args)
     val response = sendRequest(request, timeout)
-    getBody[EvaluateResponseBody](response).result
+
+    Option(getBody[EvaluateResponseBody](response).result)
+      .toRight(getBody[ErrorResponseBody](response).error)
   }
 
   def disconnect(

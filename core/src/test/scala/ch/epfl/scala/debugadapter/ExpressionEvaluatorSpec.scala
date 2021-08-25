@@ -8,6 +8,7 @@ import java.io.File
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import com.microsoft.java.debug.core.protocol.Types.Message
 
 object ExpressionEvaluatorSpec extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
@@ -24,7 +25,9 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 3, "1 + 2", _.toInt == 3)
+      assertEvaluation(source, "EvaluateTest", 3, "1 + 2")(
+        _.exists(_.toInt == 3)
+      )
     }
 
     "should evaluate expression with local variables" - {
@@ -37,7 +40,9 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 5, "x1 + x2", _.toDouble == 3.3)
+      assertEvaluation(source, "EvaluateTest", 5, "x1 + x2")(
+        _.exists(_.toDouble == 3.3)
+      )
     }
 
     "should evaluate expression with object's public fields" - {
@@ -55,8 +60,12 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 10, "x1 + x2", _.toDouble == 3.3)
-      assertEvaluation(source, "EvaluateTest", 10, "A.x1", _ == "\"x1\"")
+      assertEvaluation(source, "EvaluateTest", 10, "x1 + x2")(
+        _.exists(_.toDouble == 3.3)
+      )
+      assertEvaluation(source, "EvaluateTest", 10, "A.x1")(
+        _.exists(_ == "\"x1\"")
+      )
     }
 
     "should evaluate expression with object's private fields" - {
@@ -70,7 +79,9 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 6, "x1 + x2", _.toDouble == 3.3)
+      assertEvaluation(source, "EvaluateTest", 6, "x1 + x2")(
+        _.exists(_.toDouble == 3.3)
+      )
     }
 
     "should evaluate expression with class's public fields" - {
@@ -89,8 +100,10 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 5, "x1", _ == "\"x1\"")
-      assertEvaluation(source, "EvaluateTest", 11, "new A().x1", _ == "\"x1\"")
+      assertEvaluation(source, "EvaluateTest", 5, "x1")(_.exists(_ == "\"x1\""))
+      assertEvaluation(source, "EvaluateTest", 11, "new A().x1")(
+        _.exists(_ == "\"x1\"")
+      )
     }
 
     "should evaluate expression with class's private fields" - {
@@ -109,7 +122,7 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 5, "x1", _ == "\"x1\"")
+      assertEvaluation(source, "EvaluateTest", 5, "x1")(_.exists(_ == "\"x1\""))
     }
 
     "should evaluate expression with inner class's public fields" - {
@@ -132,8 +145,10 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 6, "x1", _ == "\"x1\"")
-      assertEvaluation(source, "EvaluateTest", 15, "b.x1", _ == "\"x1\"")
+      assertEvaluation(source, "EvaluateTest", 6, "x1")(_.exists(_ == "\"x1\""))
+      assertEvaluation(source, "EvaluateTest", 15, "b.x1")(
+        _.exists(_ == "\"x1\"")
+      )
     }
 
     "should evaluate expression with inner class's private fields" - {
@@ -156,7 +171,7 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 6, "x1", _ == "\"x1\"")
+      assertEvaluation(source, "EvaluateTest", 6, "x1")(_.exists(_ == "\"x1\""))
     }
 
     "should evaluate expression with outer class's public fields" - {
@@ -178,7 +193,7 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 5, "x1", _ == "\"x1\"")
+      assertEvaluation(source, "EvaluateTest", 5, "x1")(_.exists(_ == "\"x1\""))
     }
 
     "should evaluate expression with a public method call" - {
@@ -203,7 +218,9 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |}
           |""".stripMargin
 
-      assertEvaluation(source, "EvaluateTest", 5, "m2()", _.toInt == 1)
+      assertEvaluation(source, "EvaluateTest", 5, "m2()")(
+        _.exists(_.toInt == 1)
+      )
     }
 
     "should evaluate expression with inner class's overridden fields" - {
@@ -227,7 +244,9 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 7, "x1", _ == "\"x1x1\"")
+      assertEvaluation(source, "EvaluateTest", 7, "x1")(
+        _.exists(_ == "\"x1x1\"")
+      )
     }
 
     "should evaluate expression in package" - {
@@ -240,7 +259,9 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "debug.EvaluateTest", 4, "1 + 2", _.toInt == 3)
+      assertEvaluation(source, "debug.EvaluateTest", 4, "1 + 2")(
+        _.exists(_.toInt == 3)
+      )
     }
 
     "should evaluate expression with Java util code" - {
@@ -255,9 +276,8 @@ object ExpressionEvaluatorSpec extends TestSuite {
         source,
         "EvaluateTest",
         3,
-        "new java.util.ArrayList[String]().toString",
-        _ == "\"[]\""
-      )
+        "new java.util.ArrayList[String]().toString"
+      )(_.exists(_ == "\"[]\""))
     }
 
     "should return null when expression is invalid" - {
@@ -268,7 +288,9 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 3, "1 ++ 2", _ == null)
+      assertEvaluation(source, "EvaluateTest", 3, "1 ++ 2")(
+        _.left.exists(_.format == "value ++ is not a member of Int")
+      )
     }
 
     "should evaluate expression inside of a lambda" - {
@@ -281,7 +303,7 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 4, "n", _.toInt == 1)
+      assertEvaluation(source, "EvaluateTest", 4, "n")(_.exists(_.toInt == 1))
     }
 
     "should evaluate expression a object's method call inside of a lambda" - {
@@ -296,7 +318,9 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  def m1(): Int = 9
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 4, "m1()", _.toInt == 9)
+      assertEvaluation(source, "EvaluateTest", 4, "m1()")(
+        _.exists(_.toInt == 9)
+      )
     }
 
     "should evaluate expression a class's method call inside of a lambda" - {
@@ -318,7 +342,9 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 4, "m2()", _.toInt == 10)
+      assertEvaluation(source, "EvaluateTest", 4, "m2()")(
+        _.exists(_.toInt == 10)
+      )
     }
   }
 
@@ -326,9 +352,8 @@ object ExpressionEvaluatorSpec extends TestSuite {
       source: String,
       mainClass: String,
       line: Int,
-      expression: String,
-      assertion: String => Boolean
-  ): Unit = {
+      expression: String
+  )(assertion: Either[Message, String] => Boolean): Unit = {
     val tempDir = IO.createTemporaryDirectory
     val srcDir = new File(tempDir, "src")
     IO.createDirectory(srcDir)

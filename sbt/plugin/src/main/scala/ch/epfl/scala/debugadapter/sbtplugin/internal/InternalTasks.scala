@@ -29,9 +29,9 @@ private[sbtplugin] object InternalTasks {
 
   def tryResolveEvaluationClassLoader
       : Def.Initialize[Task[Option[URLClassLoader]]] = {
-    Def.optional(resolveEvaluationClassLoader) {
-      case None => TaskExtra.task(None)
-      case Some(t) => t.map(Some(_))
+    resolveEvaluationClassLoader.result.map {
+      case Inc(cause) => None
+      case Value(value) => Some(value)
     }
   }
 
