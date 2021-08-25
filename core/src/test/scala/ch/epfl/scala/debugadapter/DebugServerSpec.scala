@@ -148,7 +148,7 @@ object DebugServerSpec extends TestSuite {
         server.connect()
         client.initialize()
         assert(client.launch().success)
-        client.initialized
+        client.initialized()
         client.configurationDone()
       } finally {
         server.close()
@@ -169,7 +169,7 @@ object DebugServerSpec extends TestSuite {
         client.configurationDone()
         // give some time for the debuggee to terminate gracefully
         server.close()
-        client.terminated
+        client.terminated()
       } finally {
         server.close() // in case test fails
         client.close()
@@ -207,10 +207,10 @@ object DebugServerSpec extends TestSuite {
         client.launch()
         client.configurationDone()
         // the debuggee should exits immediately
-        val exitedEvent = client.exited
+        val exitedEvent = client.exited()
         assert(exitedEvent.exitCode == 0)
 
-        client.terminated
+        client.terminated()
       } finally {
         server.close()
         client.close()
@@ -229,13 +229,13 @@ object DebugServerSpec extends TestSuite {
         client.launch()
         client.configurationDone()
         // the debuggee should exits immediately
-        val exitedEvent = client.exited
+        val exitedEvent = client.exited()
 
         // surprisingly, the java debug implementation always set exitCode to 0
         // https://github.com/microsoft/java-debug/blob/211c47aabec6d47d8393ec39b6fdf0cbfcd8dbb0/com.microsoft.java.debug.core/src/main/java/com/microsoft/java/debug/core/adapter/handler/ConfigurationDoneRequestHandler.java#L84
         assert(exitedEvent.exitCode == 0)
 
-        client.terminated
+        client.terminated()
       } finally {
         server.close()
         client.close()
@@ -258,28 +258,28 @@ object DebugServerSpec extends TestSuite {
         assert(breakpoints.forall(_.verified))
 
         client.configurationDone()
-        val stopped1 = client.stopped
+        val stopped1 = client.stopped()
         val threadId = stopped1.threadId
         assert(stopped1.reason == "breakpoint")
 
         client.continue(threadId)
-        val stopped2 = client.stopped
+        val stopped2 = client.stopped()
         assert(stopped2.reason == "breakpoint")
         assert(stopped2.threadId == threadId)
 
         client.continue(threadId)
-        val stopped3 = client.stopped
+        val stopped3 = client.stopped()
         assert(stopped3.reason == "breakpoint")
         assert(stopped3.threadId == threadId)
 
         client.continue(threadId)
-        val stopped4 = client.stopped
+        val stopped4 = client.stopped()
         assert(stopped4.reason == "breakpoint")
         assert(stopped4.threadId == threadId)
 
         client.continue(threadId)
-        client.exited
-        client.terminated
+        client.exited()
+        client.terminated()
       } finally {
         server.close()
         client.close()

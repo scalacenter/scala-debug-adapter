@@ -354,7 +354,7 @@ object ExpressionEvaluatorSpec extends TestSuite {
       assert(breakpoints.forall(_.verified))
       client.configurationDone()
 
-      val stopped = client.stopped
+      val stopped = client.stopped()
       val threadId = stopped.threadId
       assert(stopped.reason == "breakpoint")
 
@@ -365,8 +365,8 @@ object ExpressionEvaluatorSpec extends TestSuite {
       assert(assertion(result))
 
       client.continue(threadId)
-      client.exited
-      client.terminated
+      client.exited()
+      client.terminated()
     } finally {
       server.close()
       client.close()
