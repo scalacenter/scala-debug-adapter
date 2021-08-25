@@ -19,8 +19,8 @@ import scala.concurrent.duration._
 import scala.reflect._
 import scala.util.control.NonFatal
 
-class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(
-    implicit ec: ExecutionContext
+class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
+    ec: ExecutionContext
 ) extends AbstractDebugClient(
       socket.getInputStream,
       socket.getOutputStream,
@@ -31,7 +31,7 @@ class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(
     socket.close()
   }
 
-  def initialize(): Messages.Response = {
+  def initialize(timeout: Duration = 4 seconds): Messages.Response = {
     val args = new InitializeArguments()
     args.linesStartAt1 = true
     args.columnsStartAt1 = true
@@ -39,12 +39,16 @@ class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(
     sendRequest(request, timeout)
   }
 
-  def launch(): Messages.Response = {
+  def launch(timeout: Duration = 1 second): Messages.Response = {
     val request = createRequest(Command.LAUNCH, new LaunchArguments())
     sendRequest(request, timeout)
   }
 
-  def attach(hostName: String, port: Int): Messages.Response = {
+  def attach(
+      hostName: String,
+      port: Int,
+      timeout: Duration = 1 second
+  ): Messages.Response = {
     val arguments = new AttachArguments()
     arguments.hostName = hostName
     arguments.port = port
@@ -52,20 +56,27 @@ class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(
     sendRequest(request, timeout)
   }
 
-  def configurationDone(): Messages.Response = {
+  def configurationDone(timeout: Duration = 1 second): Messages.Response = {
     val request =
       createRequest(Command.CONFIGURATIONDONE, new ConfigurationDoneArguments())
     sendRequest(request, timeout)
   }
 
-  def continue(threadId: Long): Messages.Response = {
+  def continue(
+      threadId: Long,
+      timeout: Duration = 1 second
+  ): Messages.Response = {
     val args = new ContinueArguments()
     args.threadId = threadId
     val request = createRequest(Command.CONTINUE, args)
     sendRequest(request, timeout)
   }
 
-  def setBreakpoints(source: Path, lines: Array[Int]): Array[Breakpoint] = {
+  def setBreakpoints(
+      source: Path,
+      lines: Array[Int],
+      timeout: Duration = 1 second
+  ): Array[Breakpoint] = {
     val args = new SetBreakpointArguments()
     args.source = new Types.Source(source.toString, 0)
     args.breakpoints = lines.map(l => new SourceBreakpoint(l, null, null))
@@ -74,9 +85,10 @@ class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(
     getBody[SetBreakpointsResponseBody](response).breakpoints
   }
 
-  def setBreakpoints(
+  def setBreakpointsInClass(
       className: String,
-      lines: Array[Int]
+      lines: Array[Int],
+      timeout: Duration = 1 second
   ): Array[Breakpoint] = {
     val args = new SetBreakpointArguments()
     val source = new Types.Source()
@@ -90,7 +102,10 @@ class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(
     getBody[SetBreakpointsResponseBody](response).breakpoints
   }
 
-  def stackTrace(threadId: Long): StackTraceResponseBody = {
+  def stackTrace(
+      threadId: Long,
+      timeout: Duration = 1 second
+  ): StackTraceResponseBody = {
     val args = new StackTraceArguments()
     args.threadId = threadId
     val request = createRequest(Command.STACKTRACE, args)
@@ -98,7 +113,7 @@ class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(
     getBody[StackTraceResponseBody](response)
   }
 
-  def scopes(frameId: Int): Array[Scope] = {
+  def scopes(frameId: Int, timeout: Duration = 1 second): Array[Scope] = {
     val args = new ScopesArguments()
     args.frameId = frameId
     val request = createRequest(Command.SCOPES, args)
@@ -106,7 +121,10 @@ class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(
     getBody[ScopesResponseBody](response).scopes
   }
 
-  def variables(variablesReference: Int): Array[Variable] = {
+  def variables(
+      variablesReference: Int,
+      timeout: Duration = 1 second
+  ): Array[Variable] = {
     val args = new VariablesArguments()
     args.variablesReference = variablesReference
     val request = createRequest(Command.VARIABLES, args)
@@ -114,14 +132,18 @@ class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(
     getBody[VariablesResponseBody](response).variables
   }
 
-  def stepIn(threadId: Long): Unit = {
+  def stepIn(threadId: Long, timeout: Duration = 1 second): Unit = {
     val args = new StepInArguments()
     args.threadId = threadId
     val request = createRequest(Command.STEPIN, args)
     val response = sendRequest(request, timeout)
   }
 
-  def evaluate(expression: String, frameId: Int): String = {
+  def evaluate(
+      expression: String,
+      frameId: Int,
+      timeout: Duration = 6 seconds
+  ): String = {
     val args = new EvaluateArguments()
     args.expression = expression
     args.frameId = frameId
@@ -131,29 +153,35 @@ class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(
     getBody[EvaluateResponseBody](response).result
   }
 
-  def disconnect(restart: Boolean): Messages.Response = {
+  def disconnect(
+      restart: Boolean,
+      timeout: Duration = 1 second
+  ): Messages.Response = {
     val args = new DisconnectArguments()
     args.restart = restart
     val request = createRequest(Command.DISCONNECT, args)
     sendRequest(request, timeout)
   }
 
-  def initialized: InitializedEvent = {
+  def initialized(timeout: Duration = 1 second): InitializedEvent = {
     val event = receiveEvent(timeout)(e => e.event == "initialized")
     getBody[InitializedEvent](event)
   }
 
-  def terminated: TerminatedEvent = {
+  def terminated(timeout: Duration = 1 second): TerminatedEvent = {
     val event = receiveEvent(timeout)(e => e.event == "terminated")
     getBody[TerminatedEvent](event)
   }
 
-  def exited: ExitedEvent = {
+  def exited(timeout: Duration = 1 second): ExitedEvent = {
     val event = receiveEvent(timeout)(e => e.event == "exited")
     getBody[ExitedEvent](event)
   }
 
-  def outputed(f: OutputEvent => Boolean): OutputEvent = {
+  def outputed(
+      f: OutputEvent => Boolean,
+      timeout: Duration = 1 second
+  ): OutputEvent = {
     val event = receiveEvent(timeout) { e =>
       if (e.event == "output") {
         val output = getBody[OutputEvent](e)
@@ -163,7 +191,7 @@ class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(
     getBody[OutputEvent](event)
   }
 
-  def stopped: StoppedEvent = {
+  def stopped(timeout: Duration = 1 second): StoppedEvent = {
     val event = receiveEvent(timeout)(e => e != null && e.event == "stopped")
     getBody[StoppedEvent](event)
   }
@@ -190,13 +218,13 @@ class TestDebugClient(socket: Socket, timeout: Duration, debug: String => Unit)(
 object TestDebugClient {
   def connect(
       uri: URI,
-      timeout: Duration = 4 seconds,
+      timeout: Duration = 2 seconds,
       debug: String => Unit = _ => ()
   )(implicit ec: ExecutionContext): TestDebugClient = {
     val socket = new Socket()
     val address = new InetSocketAddress(uri.getHost, uri.getPort)
     socket.connect(address, timeout.toMillis.intValue)
-    val client = new TestDebugClient(socket, timeout, debug)
+    val client = new TestDebugClient(socket, debug)
     val listening = new java.lang.Thread {
       override def run(): Unit = client.run()
     }

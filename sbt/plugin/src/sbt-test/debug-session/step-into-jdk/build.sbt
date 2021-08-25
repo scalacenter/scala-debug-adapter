@@ -28,18 +28,18 @@ checkDebugSession := {
 
     client.configurationDone()
 
-    val threadId = client.stopped.threadId
+    val threadId = client.stopped().threadId
 
     client.stepIn(threadId)
-    client.stopped
+    client.stopped()
 
     val frame = client.stackTrace(threadId).stackFrames.head
     assert(frame.source.path.endsWith("/java/io/PrintStream.java"))
 
     client.continue(threadId)
 
-    client.exited
-    client.terminated
+    client.exited()
+    client.terminated()
   } finally {
     client.close()
   }

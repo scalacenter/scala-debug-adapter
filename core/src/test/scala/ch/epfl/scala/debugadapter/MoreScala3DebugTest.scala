@@ -28,18 +28,18 @@ object MoreScala3DebugTest extends TestSuite {
         assert(breakpoints.forall(_.verified))
 
         client.configurationDone()
-        val stop = client.stopped
+        val stop = client.stopped()
         val threadId = stop.threadId
 
         client.continue(threadId)
-        client.stopped
+        client.stopped()
 
         client.continue(threadId)
-        client.stopped
+        client.stopped()
 
         client.continue(threadId)
-        client.exited
-        client.terminated
+        client.exited()
+        client.terminated()
       } finally {
         server.close()
         client.close()
@@ -62,18 +62,18 @@ object MoreScala3DebugTest extends TestSuite {
         assert(breakpoints.forall(_.verified))
 
         client.configurationDone()
-        val stop = client.stopped
+        val stop = client.stopped()
         val threadId = stop.threadId
 
         client.continue(threadId)
-        client.stopped
+        client.stopped()
 
         client.continue(threadId)
-        client.stopped
+        client.stopped()
 
         client.continue(threadId)
-        client.exited
-        client.terminated
+        client.exited()
+        client.terminated()
       } finally {
         server.close()
         client.close()

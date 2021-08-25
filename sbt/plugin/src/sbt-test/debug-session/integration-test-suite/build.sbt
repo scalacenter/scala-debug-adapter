@@ -36,17 +36,17 @@ def checkDebugSessionTask = Def.inputTask {
 
     client.configurationDone()
 
-    val threadId = client.stopped.threadId
+    val threadId = client.stopped().threadId
 
     client.continue(threadId)
-    client.stopped
+    client.stopped()
 
     client.continue(threadId)
-    client.stopped
+    client.stopped()
 
     client.continue(threadId)
-    client.exited
-    client.terminated
+    client.exited()
+    client.terminated()
   } finally {
     client.close()
   }

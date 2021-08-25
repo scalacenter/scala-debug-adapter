@@ -33,33 +33,33 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         assert(breakpoints.forall(_.verified))
 
         client.configurationDone()
-        val stopped1 = client.stopped
+        val stopped1 = client.stopped()
         val threadId = stopped1.threadId
         assert(stopped1.reason == "breakpoint")
 
         client.continue(threadId)
-        val stopped2 = client.stopped
+        val stopped2 = client.stopped()
         assert(stopped2.reason == "breakpoint")
         assert(stopped2.threadId == threadId)
 
         client.continue(threadId)
-        val stopped3 = client.stopped
+        val stopped3 = client.stopped()
         assert(stopped3.reason == "breakpoint")
         assert(stopped3.threadId == threadId)
 
         client.continue(threadId)
-        val stopped4 = client.stopped
+        val stopped4 = client.stopped()
         assert(stopped4.reason == "breakpoint")
         assert(stopped4.threadId == threadId)
 
         client.continue(threadId)
-        val stopped5 = client.stopped
+        val stopped5 = client.stopped()
         assert(stopped5.reason == "breakpoint")
         assert(stopped5.threadId == threadId)
 
         client.continue(threadId)
-        client.exited
-        client.terminated
+        client.exited()
+        client.terminated()
       } finally {
         server.close()
         client.close()
@@ -77,23 +77,24 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         client.initialize()
         client.launch()
 
-        val breakpoints = client.setBreakpoints(runner.mainClass, Array(5, 9))
+        val breakpoints =
+          client.setBreakpointsInClass(runner.mainClass, Array(5, 9))
         assert(breakpoints.size == 2)
         assert(breakpoints.forall(_.verified))
 
         client.configurationDone()
-        val stopped1 = client.stopped
+        val stopped1 = client.stopped()
         val threadId = stopped1.threadId
         assert(stopped1.reason == "breakpoint")
 
         client.continue(threadId)
-        val stopped2 = client.stopped
+        val stopped2 = client.stopped()
         assert(stopped2.reason == "breakpoint")
         assert(stopped2.threadId == threadId)
 
         client.continue(threadId)
-        client.exited
-        client.terminated
+        client.exited()
+        client.terminated()
       } finally {
         server.close()
         client.close()
@@ -113,7 +114,7 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         client.setBreakpoints(runner.source, Array(7))
         client.configurationDone()
 
-        val stopped = client.stopped
+        val stopped = client.stopped()
         val stackTrace = client.stackTrace(stopped.threadId)
         assert(stackTrace.totalFrames == 2)
 
@@ -130,8 +131,8 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         }
 
         client.continue(stopped.threadId)
-        client.exited
-        client.terminated
+        client.exited()
+        client.terminated()
       } finally {
         server.close()
         client.close()
@@ -151,7 +152,7 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         client.setBreakpoints(runner.source, Array(7))
         client.configurationDone()
 
-        val stopped = client.stopped
+        val stopped = client.stopped()
         val stackTrace = client.stackTrace(stopped.threadId)
         assert(stackTrace.totalFrames == 2)
 
@@ -176,8 +177,8 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         }
 
         client.continue(stopped.threadId)
-        client.exited
-        client.terminated
+        client.exited()
+        client.terminated()
       } finally {
         server.close()
         client.close()
