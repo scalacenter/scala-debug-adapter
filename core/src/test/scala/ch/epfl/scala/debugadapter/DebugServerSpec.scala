@@ -17,6 +17,12 @@ object DebugServerSpec extends TestSuite {
   val executorService = Executors.newFixedThreadPool(1)
   implicit val ec = ExecutionContext.fromExecutorService(executorService)
 
+  private val connectionFailedMessages = Array(
+    "(Connection refused)",
+    "(Connection Failed)",
+    "(connect failed)"
+  )
+
   def tests: Tests = Tests {
     "should prevent connection when closed" - {
       val runner = new MockDebuggeeRunner()
@@ -30,11 +36,7 @@ object DebugServerSpec extends TestSuite {
         case _: ConnectException => ()
         case e: SocketException =>
           val msg = e.getMessage
-          assert(
-            msg.endsWith("(Connection refused)") || msg.endsWith(
-              "(Connection Failed)"
-            )
-          )
+          assert(connectionFailedMessages.exists(msg.endsWith))
       }
     }
 
@@ -345,11 +347,7 @@ object DebugServerSpec extends TestSuite {
           case _: SocketTimeoutException => ()
           case e: SocketException =>
             val msg = e.getMessage
-            assert(
-              msg.endsWith("(Connection refused)") || msg.endsWith(
-                "(Connection Failed)"
-              )
-            )
+            assert(connectionFailedMessages.exists(msg.endsWith))
         } finally {
           if (client2 != null) client2.close()
         }
