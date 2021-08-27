@@ -20,13 +20,19 @@ private[nsc] class EvalGlobal(
   override protected def computeInternalPhases(): Unit = {
     super.computeInternalPhases()
 
-    addToPhasesSet(new InsExpr, "insexpr")
-    addToPhasesSet(new GenExpr, "genexpr")
+    addToPhasesSet(
+      new InsertExpression,
+      "Insert expression which is going to be evaluated"
+    )
+    addToPhasesSet(
+      new GenerateExpression,
+      "Generate the final form of the expression"
+    )
   }
 
-  class InsExpr extends Transform with TypingTransformers {
+  class InsertExpression extends Transform with TypingTransformers {
     override val global: EvalGlobal.this.type = EvalGlobal.this
-    override val phaseName: String = "insexpr"
+    override val phaseName: String = "insertExpression"
     override val runsAfter: List[String] = List("parser")
     override val runsRightAfter: Option[String] = None
 
@@ -39,8 +45,10 @@ private[nsc] class EvalGlobal(
 
     /**
      * This transformer:
-     * - inserts the expression at the line of the breakpoint,
-     * - inserts the expression class in the same package as the expression.
+     * - inserts the expression at the line of the breakpoint, which allows us to extract all needed defs, including implicit ones too.
+     * Thanks to that, evaluation of expression is done in the context of a breakpoint and logic behaves the same way like the
+     * normal code would behave.
+     * - inserts the expression class in the same package as the expression. This allows us to call package private methods without any trouble.
      */
     class InsExprTransformer extends Transformer {
       private val expressionClassSource =
@@ -116,14 +124,14 @@ private[nsc] class EvalGlobal(
 
   /**
    * This transformer extracts transformed expression, extracts all defs (local variables, fields, arguments, etc.)
-   * and transforms `Expression` class that was inserted in the `insexpr` phase in the following way:
+   * and transforms `Expression` class that was inserted by the [[InsertExpression]] in the following way:
    * - creates local variables that are equivalent to accessible values,
    * - inserts extracted expression at the end of the `evaluate` method,
    * - modifies the return type of `evaluate` method.
    */
-  class GenExpr extends Transform with TypingTransformers {
+  class GenerateExpression extends Transform with TypingTransformers {
     override val global: EvalGlobal.this.type = EvalGlobal.this
-    override val phaseName: String = "genexpr"
+    override val phaseName: String = "generateExpression"
     override val runsAfter: List[String] = List("delambdafy")
     override val runsRightAfter: Option[String] = None
 
@@ -144,7 +152,7 @@ private[nsc] class EvalGlobal(
     }
 
     /**
-     * Extracts transformed expression that was inserted in the `insexpr` phase at the line of the breakpoint.
+     * Extracts transformed expression that was inserted by the [[InsertExpression]] at the line of the breakpoint.
      */
     class ExpressionExtractor extends Traverser {
       override def traverse(tree: Tree): Unit = tree match {
@@ -187,9 +195,11 @@ private[nsc] class EvalGlobal(
 
     /**
      * Transforms `Expression` class:
-     * - for every extracted def it creates a local variable in the method `evaluate` in the form:
+     * - for every extracted def copy its value to the local variable in the method `evaluate` in the form:
      * `val foo: String = valuesByName("foo").asInstanceOf[String]`,
-     * - inserts the expression,
+     * - inserts the expression (the one that was inserted at the line of the breakpoint by [[InsertExpression]])
+     * at the end of `evaluate` method,
+     * - replaces symbols in the expression with their local equivalents
      * - modifies return type of the `evaluate` method.
      */
     class GenExprTransformer(unit: CompilationUnit)
