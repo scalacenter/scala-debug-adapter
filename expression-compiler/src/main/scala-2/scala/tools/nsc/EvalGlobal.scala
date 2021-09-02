@@ -1,5 +1,6 @@
 package scala.tools.nsc
 
+import scala.collection.mutable.ListBuffer
 import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.reporters.Reporter
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
@@ -16,6 +17,7 @@ private[nsc] class EvalGlobal(
   private var valOrDefDefs: Map[TermName, ValOrDefDef] = Map()
   private var extractedExpression: Tree = _
   private var expressionOwners: List[Symbol] = _
+  private val liftedMethods: ListBuffer[DefDef] = ListBuffer()
 
   override protected def computeInternalPhases(): Unit = {
     super.computeInternalPhases()
@@ -189,7 +191,11 @@ private[nsc] class EvalGlobal(
             ) && tree.symbol.isGetter && defNames.contains(tree.name.decode) =>
           valOrDefDefs += (tree.name -> tree)
           super.traverse(tree)
-        case _ => super.traverse(tree)
+        case tree: DefDef if tree.symbol.isLiftedMethod =>
+          liftedMethods += tree
+          super.traverse(tree)
+        case _ =>
+          super.traverse(tree)
       }
     }
 
@@ -214,6 +220,12 @@ private[nsc] class EvalGlobal(
         // Don't transform class different than Expression
         case tree: ClassDef if tree.name.decode != expressionClassName =>
           tree
+        case tree: ClassDef if tree.name.decode == expressionClassName =>
+          val transformed = super.transform(tree)
+          liftedMethods.foreach(_.symbol.owner = transformed.symbol)
+          deriveClassDef(transformed) { template =>
+            Template(template.symbol, template.body ++ liftedMethods)
+          }
         case tree: Ident
             if tree.name == TermName(
               valuesByNameIdentName
@@ -222,10 +234,10 @@ private[nsc] class EvalGlobal(
           EmptyTree
         case tree: DefDef if tree.name == TermName("evaluate") =>
           // firstly, transform the body of the method
-          super.transform(tree)
+          val transformed = super.transform(tree).asInstanceOf[DefDef]
 
           var tpt: TypeTree = TypeTree()
-          val derived = deriveDefDef(tree) { rhs =>
+          val derived = deriveDefDef(transformed) { rhs =>
             // we can be sure that `rhs` is an instance of a `Block`
             val block = rhs.asInstanceOf[Block]
 
@@ -233,14 +245,14 @@ private[nsc] class EvalGlobal(
               .find(_.isClass)
               .map(_.asInstanceOf[ClassSymbol])
               .get
-            val thisValDef = newThisValDef(tree, thisSymbol)
+            val thisValDef = newThisValDef(transformed, thisSymbol)
               .map { case (thisName, thisValDef) =>
                 Seq(thisName -> thisValDef)
               }
               .getOrElse(Seq())
             // replace original valDefs with synthesized valDefs with values that will be sent via JDI
             val newValOrDefDefs = valOrDefDefs.map { case (_, valOrDefDef) =>
-              newValDef(tree, valOrDefDef)
+              newValDef(transformed, valOrDefDef)
             } ++ thisValDef
 
             val symbolsByName = newValOrDefDefs.mapValues(_.symbol).toMap
@@ -254,7 +266,7 @@ private[nsc] class EvalGlobal(
               new Block(block.stats ++ newValOrDefDefs.values, newExpression)
 
             tpt = TypeTree().copyAttrs(newExpression)
-            typedPos(tree.pos)(newRhs).setType(tpt.tpe)
+            typedPos(transformed.pos)(newRhs).setType(tpt.tpe)
           }
           // update return type of the `evaluate` method
           derived.symbol

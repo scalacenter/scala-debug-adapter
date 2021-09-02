@@ -346,6 +346,40 @@ object ExpressionEvaluatorSpec extends TestSuite {
         _.exists(_.toInt == 10)
       )
     }
+
+    "should evaluate expression with lambda" - {
+      val source =
+        """object EvaluateTest {
+          |  def main(args: Array[String]): Unit = {
+          |    println("Hello, World!")
+          |  }
+          |}
+          |""".stripMargin
+      assertEvaluation(
+        source,
+        "EvaluateTest",
+        3,
+        "List(\"a\", \"b\", \"c\").map(_.toUpperCase).toString"
+      )(_.exists(_ == "\"List(A, B, C)\""))
+    }
+
+    "should evaluate expression with nested methods" - {
+      val source =
+        """object EvaluateTest {
+          |  def main(args: Array[String]): Unit = {
+          |    def foo(): String = "foo"
+          |    def bar(a: Int): Int = a * 2
+          |    println("Hello, World!")
+          |  }
+          |}
+          |""".stripMargin
+      assertEvaluation(
+        source,
+        "EvaluateTest",
+        5,
+        "s\"${foo}${bar(1)}\""
+      )(_.exists(_ == "\"foo2\""))
+    }
   }
 
   private def assertEvaluation(
