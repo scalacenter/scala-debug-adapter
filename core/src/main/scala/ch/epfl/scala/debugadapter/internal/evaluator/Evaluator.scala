@@ -6,10 +6,17 @@ import com.microsoft.java.debug.core.adapter.{
 }
 import com.sun.jdi._
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 import java.util.concurrent.CompletableFuture
 import scala.collection.JavaConverters._
 import scala.util.Try
+
+private case class EvaluatorContext(
+    thread: ThreadReference,
+    frame: StackFrame,
+    vm: VirtualMachine,
+    classLoader: JdiClassLoader
+)
 
 private[evaluator] class Evaluator(
     sourceLookUpProvider: ISourceLookUpProvider,
@@ -39,11 +46,10 @@ private[evaluator] class Evaluator(
       expressionCompiler: ExpressionCompiler
   ): CompletableFuture[Value] = {
     val vm = thread.virtualMachine()
-    val thisObject = Option(frame.thisObject())
 
     val location = frame.location()
     val sourcePath = location.sourcePath()
-    val line = location.lineNumber()
+    val breakpointLine = location.lineNumber()
     val fqcn = location.declaringType().name()
 
     val uri = sourceLookUpProvider.getSourceFileURI(fqcn, sourcePath)
@@ -61,30 +67,8 @@ private[evaluator] class Evaluator(
       var error: Option[String] = None
       val result = for {
         classLoader <- findClassLoader(vm).flatMap(JdiClassLoader(_, thread))
-        variables = frame.visibleVariables().asScala
-        variableNames = variables.map(_.name()).map(vm.mirrorOf).toList
-        variableValues = variables
-          .map(frame.getValue)
-          .flatMap(value => boxIfNeeded(value, classLoader, thread))
-          .toList
-        fields = thisObject
-          .map(_.referenceType().fields().asScala)
-          .getOrElse(List())
-        fieldNames = fields.map(_.name()).map(vm.mirrorOf).toList
-        fieldValues = thisObject
-          .map(thiz =>
-            fields
-              .map(field => thiz.getValue(field))
-              .flatMap(value => boxIfNeeded(value, classLoader, thread))
-          )
-          .getOrElse(List())
-        thisObjectName = thisObject.map(_ => vm.mirrorOf("$this"))
-        names = variableNames ++ fieldNames ++ thisObjectName
-          .map(Seq(_))
-          .getOrElse(Seq())
-        values = variableValues ++ fieldValues ++ thisObject
-          .map(Seq(_))
-          .getOrElse(Seq())
+        context = EvaluatorContext(thread, frame, vm, classLoader)
+        (names, values) = extractValuesAndNames(context)
         systemClass <- classLoader.loadClass("java.lang.System")
         classPath <- systemClass
           .invokeStatic("getProperty", List(vm.mirrorOf("java.class.path")))
@@ -98,23 +82,18 @@ private[evaluator] class Evaluator(
             valuesByNameIdentName,
             classPath,
             content,
-            line,
+            breakpointLine,
             expression,
             names.map(_.value()).toSet,
             errorMessage => error = Some(errorMessage)
           )
         _ <- if (compiledSuccessfully) Some(()) else None
-        url <- classLoader
-          .loadClass("java.net.URL")
-          .flatMap(_.newInstance(List(vm.mirrorOf(expressionClassPath))))
-        urls <- JdiArray("java.net.URL", 1, classLoader, thread)
-        _ <- urls.setValue(0, url.reference)
-        urlClassLoader <- classLoader
-          .loadClass("java.net.URLClassLoader")
-          .flatMap(_.newInstance(List(urls.reference)))
-          .map(_.reference.asInstanceOf[ClassLoaderReference])
-          .flatMap(JdiClassLoader(_, thread))
-        expressionClass <- urlClassLoader.loadClass(expressionFqcn)
+        // if everything went smooth we can load our expression class
+        expressionClass <- loadExpressionClass(
+          context,
+          expressionDir,
+          expressionFqcn
+        )
         expression <- expressionClass.newInstance(List())
         namesArray <- JdiArray(
           "java.lang.String",
@@ -150,6 +129,76 @@ private[evaluator] class Evaluator(
     } finally {
       debugContext.getStackFrameManager.reloadStackFrames(thread)
     }
+  }
+
+  /**
+   * In order to load the previously compiled Expression class, we need to
+   * first load and instantiate URL with expressionClassPath
+   * and then URLClassLoader with the url created before.
+   */
+  private def loadExpressionClass(
+      context: EvaluatorContext,
+      expressionDir: Path,
+      expressionFqcn: String
+  ): Option[JdiClassObject] = {
+    import context._
+    val expressionClassPath = expressionDir.toUri.toString
+    for {
+      url <- classLoader
+        .loadClass("java.net.URL")
+        .flatMap(_.newInstance(List(vm.mirrorOf(expressionClassPath))))
+      urls <- JdiArray("java.net.URL", 1, classLoader, thread)
+      _ <- urls.setValue(0, url.reference)
+      urlClassLoader <- classLoader
+        .loadClass("java.net.URLClassLoader")
+        .flatMap(_.newInstance(List(urls.reference)))
+        .map(_.reference.asInstanceOf[ClassLoaderReference])
+        .flatMap(JdiClassLoader(_, thread))
+      expressionClass <- urlClassLoader.loadClass(expressionFqcn)
+    } yield expressionClass
+  }
+
+  /**
+   * Extract all values and their corresponding names which are visible in current scope.
+   * Values consist of:
+   * - variables from stack frame
+   * - fields from this object
+   * @return Tuple of extracted names and values
+   */
+  private def extractValuesAndNames(
+      context: EvaluatorContext
+  ): (List[StringReference], List[Value]) = {
+    import context._
+    val thisObjectOpt = Option(frame.thisObject())
+
+    def extractVariablesFromFrame() = {
+      val variables: List[LocalVariable] =
+        frame.visibleVariables().asScala.toList
+      val variableNames = variables.map(_.name()).map(vm.mirrorOf)
+      val variableValues = variables
+        .map(frame.getValue)
+        .flatMap(value => boxIfNeeded(value, classLoader, thread))
+      (variableNames, variableValues)
+    }
+
+    def extractFieldsFromThisObject() =
+      thisObjectOpt
+        .map { thisObject =>
+          val fields = thisObject.referenceType().fields().asScala.toList
+          val fieldNames = fields.map(_.name()).map(vm.mirrorOf)
+          val fieldValues = fields
+            .map(field => thisObject.getValue(field))
+            .flatMap(value => boxIfNeeded(value, classLoader, thread))
+          (fieldNames, fieldValues)
+        }
+        .getOrElse((Nil, Nil))
+
+    val (variableNames, variableValues) = extractVariablesFromFrame()
+    val (fieldNames, fieldValues) = extractFieldsFromThisObject()
+    val thisObjectName = thisObjectOpt.map(_ => vm.mirrorOf("$this"))
+    val names = variableNames ++ fieldNames ++ thisObjectName.toList
+    val values = variableValues ++ fieldValues ++ thisObjectOpt.toList
+    (names, values)
   }
 
   private def findClassLoader(vm: VirtualMachine) =
