@@ -9,7 +9,7 @@ import com.sun.jdi._
 import java.nio.file.{Files, Path}
 import java.util.concurrent.CompletableFuture
 import scala.collection.JavaConverters._
-import scala.util.Try
+import scala.concurrent.duration._
 
 private case class EvaluatorContext(
     thread: ThreadReference,
@@ -18,33 +18,15 @@ private case class EvaluatorContext(
     classLoader: JdiClassLoader
 )
 
-private[evaluator] class Evaluator(
+private[internal] class ExpressionEvaluator(
     sourceLookUpProvider: ISourceLookUpProvider,
-    expressionCompiler: Option[ExpressionCompiler]
+    expressionCompiler: ExpressionCompiler
 ) {
   def evaluate(
       expression: String,
       thread: ThreadReference,
       frame: StackFrame
-  )(debugContext: IDebugAdapterContext): CompletableFuture[Value] =
-    expressionCompiler match {
-      case Some(expressionCompiler) =>
-        evaluateWithCompiler(expression, thread, frame)(
-          debugContext,
-          expressionCompiler
-        )
-      case None =>
-        ???
-    }
-
-  private def evaluateWithCompiler(
-      expression: String,
-      thread: ThreadReference,
-      frame: StackFrame
-  )(
-      debugContext: IDebugAdapterContext,
-      expressionCompiler: ExpressionCompiler
-  ): CompletableFuture[Value] = {
+  )(debugContext: IDebugAdapterContext): CompletableFuture[Value] = {
     val vm = thread.virtualMachine()
 
     val location = frame.location()
@@ -85,7 +67,8 @@ private[evaluator] class Evaluator(
             breakpointLine,
             expression,
             names.map(_.value()).toSet,
-            errorMessage => error = Some(errorMessage)
+            errorMessage => error = Some(errorMessage),
+            2 seconds
           )
         _ <- if (compiledSuccessfully) Some(()) else None
         // if everything went smooth we can load our expression class
@@ -224,34 +207,5 @@ private[evaluator] class Evaluator(
     case value: ShortValue =>
       JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
     case value => Some(value)
-  }
-
-  def invokeMethod(
-      thisContext: ObjectReference,
-      methodName: String,
-      signature: String,
-      args: Array[Value],
-      thread: ThreadReference,
-      invokeSuper: Boolean
-  )(debugContext: IDebugAdapterContext): CompletableFuture[Value] = {
-    try {
-      val result = for {
-        obj <- Try(new JdiObject(thisContext, thread)).toOption
-        result <- obj.invoke(
-          methodName,
-          signature,
-          if (args == null) List() else args.toList
-        )
-      } yield result
-
-      result match {
-        case Some(value) =>
-          CompletableFuture.completedFuture(value)
-        case None =>
-          throw new Exception("Unable to evaluate the expression")
-      }
-    } finally {
-      debugContext.getStackFrameManager.reloadStackFrames(thread)
-    }
   }
 }

@@ -1,6 +1,5 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter.internal.evaluator.EvaluationProvider
 import ch.epfl.scala.debugadapter.{DebuggeeRunner, Logger}
 import com.microsoft.java.debug.core.DebugSettings
 import com.microsoft.java.debug.core.adapter._
