@@ -6,6 +6,7 @@ import java.{util => ju}
 import scala.collection.JavaConverters._
 import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.reporters.StoreReporter
+import scala.concurrent.duration.Duration
 
 final class ExpressionCompiler {
   def compile(
@@ -17,7 +18,8 @@ final class ExpressionCompiler {
       line: Int,
       expression: String,
       defNames: ju.Set[String],
-      errorConsumer: Consumer[String]
+      errorConsumer: Consumer[String],
+      timeoutMillis: Long
   ): Boolean = {
     val settings = new Settings
     settings.classpath.value = classPath
@@ -32,10 +34,25 @@ final class ExpressionCompiler {
       expressionClassName,
       valuesByNameIdentName
     )
-    val compilerRun = new global.Run()
     val source = new BatchSourceFile("<source>", code)
 
-    compilerRun.compileSources(List(source))
+    try {
+      global
+        .askForResponse { () =>
+          val compilerRun = new global.Run()
+          compilerRun.compileSources(List(source))
+        }
+        .get(timeoutMillis)
+        .getOrElse(
+          throw new ju.concurrent.TimeoutException(
+            s"Compilation timed out after $timeoutMillis ms"
+          )
+        )
+    } finally {
+      global.askShutdown()
+      global.close()
+    }
+
     val error = reporter.infos.find(_.severity == reporter.ERROR).map(_.msg)
     error.foreach(errorConsumer.accept)
     error.isEmpty

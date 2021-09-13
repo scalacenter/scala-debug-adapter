@@ -14,7 +14,8 @@ final class ExpressionCompiler {
       line: Int,
       expression: String,
       defNames: ju.Set[String],
-      errorConsumer: Consumer[String]
+      errorConsumer: Consumer[String],
+      timeoutMillis: Long
   ): Boolean = {
     errorConsumer.accept("The Scala debugger does not yet support Scala 3")
     false

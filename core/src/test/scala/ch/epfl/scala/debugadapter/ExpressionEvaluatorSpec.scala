@@ -346,6 +346,23 @@ object ExpressionEvaluatorSpec extends TestSuite {
         _.exists(_.toInt == 10)
       )
     }
+
+    "should not loop indefinitely" - {
+      val source =
+        """package test
+          |
+          |object EvaluateTest extends App {
+          |  m()
+          |
+          |  def m(): Unit = {
+          |    val a = List(1, 2)
+          |  }
+          |}
+          |""".stripMargin
+      assertEvaluation(source, "test.EvaluateTest", 7, "\"Hello\"") { res =>
+        res.left.exists(_.format.startsWith("Compilation timed out"))
+      }
+    }
   }
 
   private def assertEvaluation(

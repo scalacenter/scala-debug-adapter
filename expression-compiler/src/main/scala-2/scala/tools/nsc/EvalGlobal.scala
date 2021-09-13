@@ -12,7 +12,7 @@ private[nsc] class EvalGlobal(
     defNames: Set[String],
     expressionClassName: String,
     valuesByNameIdentName: String
-) extends Global(settings, reporter) {
+) extends interactive.Global(settings, reporter) {
   private var valOrDefDefs: Map[TermName, ValOrDefDef] = Map()
   private var extractedExpression: Tree = _
   private var expressionOwners: List[Symbol] = _
