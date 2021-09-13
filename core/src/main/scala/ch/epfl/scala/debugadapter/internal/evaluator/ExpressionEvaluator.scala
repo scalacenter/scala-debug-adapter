@@ -68,7 +68,7 @@ private[internal] class ExpressionEvaluator(
             expression,
             names.map(_.value()).toSet,
             errorMessage => error = Some(errorMessage),
-            2 seconds
+            5 seconds
           )
         _ <- if (compiledSuccessfully) Some(()) else None
         // if everything went smooth we can load our expression class
