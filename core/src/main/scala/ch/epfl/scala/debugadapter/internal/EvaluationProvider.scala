@@ -1,7 +1,6 @@
-package ch.epfl.scala.debugadapter.internal.evaluator
+package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter.DebuggeeRunner
-import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
 import com.microsoft.java.debug.core.IEvaluatableBreakpoint
 import com.microsoft.java.debug.core.adapter.{
   IDebugAdapterContext,
@@ -11,26 +10,28 @@ import com.sun.jdi.{ObjectReference, ThreadReference, Value}
 
 import java.util
 import java.util.concurrent.CompletableFuture
+import scala.util.Try
+import ch.epfl.scala.debugadapter.internal.evaluator.{
+  ExpressionEvaluator,
+  ExpressionCompiler
+}
+import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
 
-object EvaluationProvider {
+private[internal] object EvaluationProvider {
   def apply(
       runner: DebuggeeRunner,
       sourceLookUpProvider: SourceLookUpProvider
   ): IEvaluationProvider = {
-    runner.evaluationClassLoader
+    val evaluator = runner.evaluationClassLoader
       .flatMap(ExpressionCompiler(_))
-      .map(expressionCompiler =>
-        new EvaluationProvider(
-          new Evaluator(sourceLookUpProvider, Some(expressionCompiler))
-        )
-      )
-      .getOrElse(
-        new EvaluationProvider(new Evaluator(sourceLookUpProvider, None))
-      )
+      .map(new ExpressionEvaluator(sourceLookUpProvider, _))
+    new EvaluationProvider(evaluator)
   }
 }
 
-class EvaluationProvider(evaluator: Evaluator) extends IEvaluationProvider {
+private[internal] class EvaluationProvider(
+    evaluator: Option[ExpressionEvaluator]
+) extends IEvaluationProvider {
 
   private var debugContext: IDebugAdapterContext = _
 
@@ -49,7 +50,7 @@ class EvaluationProvider(evaluator: Evaluator) extends IEvaluationProvider {
       depth: Int
   ): CompletableFuture[Value] = {
     val frame = thread.frames().get(depth)
-    evaluator.evaluate(expression, thread, frame)(debugContext)
+    evaluator.fold(???)(_.evaluate(expression, thread, frame)(debugContext))
   }
 
   override def evaluate(
@@ -70,14 +71,29 @@ class EvaluationProvider(evaluator: Evaluator) extends IEvaluationProvider {
       args: Array[Value],
       thread: ThreadReference,
       invokeSuper: Boolean
-  ): CompletableFuture[Value] = evaluator.invokeMethod(
-    thisContext,
-    methodName,
-    methodSignature,
-    args,
-    thread,
-    invokeSuper
-  )(debugContext)
+  ): CompletableFuture[Value] = {
+    try {
+      val result = for {
+        obj <- Try(new JdiObject(thisContext, thread)).toOption
+        result <- obj.invoke(
+          methodName,
+          methodSignature,
+          if (args == null) List() else args.toList
+        )
+      } yield result
+
+      result match {
+        case Some(value) =>
+          CompletableFuture.completedFuture(value)
+        case None =>
+          throw new Exception(
+            s"Unable to invoke $methodName on ${thisContext.referenceType.name}"
+          )
+      }
+    } finally {
+      debugContext.getStackFrameManager.reloadStackFrames(thread)
+    }
+  }
 
   override def clearState(thread: ThreadReference): Unit = {}
 }

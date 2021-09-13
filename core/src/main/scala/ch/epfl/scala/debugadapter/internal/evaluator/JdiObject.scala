@@ -2,7 +2,7 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi._
 
-private[evaluator] class JdiObject(
+private[internal] class JdiObject(
     val reference: ObjectReference,
     thread: ThreadReference
 ) {

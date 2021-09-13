@@ -6,7 +6,7 @@ import java.util.function.Consumer
 import scala.collection.JavaConverters._
 import scala.util.Try
 
-private[evaluator] class ExpressionCompiler(
+private[internal] class ExpressionCompiler(
     expressionCompilerInstance: Any,
     compileMethod: Method
 ) {
