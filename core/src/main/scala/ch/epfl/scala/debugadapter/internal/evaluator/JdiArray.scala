@@ -10,34 +10,29 @@ object JdiArray {
       arrayType: String,
       arraySize: Int,
       classLoader: JdiClassLoader
-  ): Option[JdiArray] = {
+  ): Safe[JdiArray] = {
     val thread = classLoader.thread
-    val vm = thread.virtualMachine
     for {
       classClass <- classLoader.loadClass("java.lang.Class")
-      intClass <- classClass.invoke(
-        "getPrimitiveClass",
-        List(vm.mirrorOf("int"))
-      )
+      intValue <- classLoader.mirrorOf("int")
+      intClass <-
+        classClass.invoke("getPrimitiveClass", List(intValue))
       arrayClass <- classLoader.loadClass("java.lang.reflect.Array")
-      newInstanceMethod <- Try(
-        arrayClass.invoke(
-          "getMethod",
-          List(vm.mirrorOf("newInstance"), classClass.reference, intClass)
-        )
-      ).toOption.flatten
-        .map(_.asInstanceOf[ObjectReference])
-        .map(new JdiObject(_, thread))
+      newInstanceValue <- classLoader.mirrorOf("newInstance")
+      newInstanceMethod <-
+        arrayClass
+          .invoke(
+            "getMethod",
+            List(newInstanceValue, classClass.reference, intClass)
+          )
+          .map(_.asInstanceOf[ObjectReference])
+          .map(new JdiObject(_, thread))
       arrayTypeClass <- classLoader.loadClass(arrayType)
       integerValue <- JdiPrimitive.boxed(arraySize, classLoader, thread)
       array <- newInstanceMethod
         .invoke(
           "invoke",
-          List(
-            arrayClass.reference,
-            arrayTypeClass.reference,
-            integerValue.reference
-          )
+          List(null, arrayTypeClass.reference, integerValue.reference)
         )
         .map(_.asInstanceOf[ArrayReference])
         .map(new JdiArray(_, thread))
@@ -47,9 +42,8 @@ object JdiArray {
 
 class JdiArray(reference: ArrayReference, thread: ThreadReference)
     extends JdiObject(reference, thread) {
-  def setValue(index: Int, value: Value): Option[Unit] =
-    Try(reference.setValue(index, value)).toOption
+  def setValue(index: Int, value: Value): Unit =
+    reference.setValue(index, value)
 
-  def setValues(values: List[Value]): Option[Unit] =
-    Try(reference.setValues(values.asJava)).toOption
+  def setValues(values: List[Value]): Unit = reference.setValues(values.asJava)
 }

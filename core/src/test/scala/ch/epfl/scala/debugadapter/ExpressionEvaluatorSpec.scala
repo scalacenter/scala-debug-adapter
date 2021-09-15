@@ -288,11 +288,11 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 3, "1 ++ 2")(
-        _.left.exists(
-          _.format == "Compilation failed: value ++ is not a member of Int"
-        )
-      )
+      assertEvaluation(source, "EvaluateTest", 3, "1 ++ 2") { result =>
+        result.left.exists { msg =>
+          msg.format.contains("value ++ is not a member of Int")
+        }
+      }
     }
 
     "should evaluate expression inside of a lambda" - {
@@ -362,7 +362,7 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |}
           |""".stripMargin
       assertEvaluation(source, "test.EvaluateTest", 7, "\"Hello\"") { res =>
-        res.left.exists(_.format.startsWith("Compilation timed out"))
+        res.left.exists(_.format.contains("Compilation timed out"))
       }
     }
   }

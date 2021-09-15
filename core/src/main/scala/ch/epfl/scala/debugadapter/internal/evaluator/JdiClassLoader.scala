@@ -8,20 +8,15 @@ private[evaluator] object JdiClassLoader {
   def apply(
       classLoader: ClassLoaderReference,
       thread: ThreadReference
-  ): Option[JdiClassLoader] =
-    for {
-      classLoaderType <- Try(
-        classLoader.referenceType().asInstanceOf[ClassType]
-      ).toOption
-      loadClassMethod <- loadClassMethod(classLoaderType)
-    } yield new JdiClassLoader(classLoader, loadClassMethod, thread)
-
-  private def loadClassMethod(classLoaderType: ReferenceType) =
-    method(
+  ): JdiClassLoader = {
+    val classLoaderType = classLoader.referenceType
+    val loadClassMethod = method(
       "loadClass",
       "(Ljava/lang/String;)Ljava/lang/Class;",
       classLoaderType
     )
+    new JdiClassLoader(classLoader, loadClassMethod, thread)
+  }
 }
 
 private[evaluator] case class JdiClassLoader(
@@ -29,15 +24,25 @@ private[evaluator] case class JdiClassLoader(
     loadClassMethod: Method,
     thread: ThreadReference
 ) {
-  val vm = thread.virtualMachine()
+  def loadClass(name: String): Safe[JdiClassObject] = {
+    for {
+      nameValue <- mirrorOf(name)
+      classObject <- invokeMethod(
+        classLoaderRef,
+        loadClassMethod,
+        List(nameValue),
+        thread
+      )
+    } yield {
+      new JdiClassObject(
+        classObject.asInstanceOf[ClassObjectReference],
+        this,
+        thread
+      )
+    }
+  }
 
-  def loadClass(name: String): Option[JdiClassObject] =
-    invokeMethod(
-      classLoaderRef,
-      loadClassMethod,
-      List(vm.mirrorOf(name)),
-      thread
-    )
-      .map(_.asInstanceOf[ClassObjectReference])
-      .map(new JdiClassObject(_, this, thread))
+  def mirrorOf(str: String): Safe[StringReference] = {
+    Safe(thread.virtualMachine.mirrorOf(str))
+  }
 }
