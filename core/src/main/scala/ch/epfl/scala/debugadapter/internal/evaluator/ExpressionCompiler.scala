@@ -4,7 +4,7 @@ import java.lang.reflect.Method
 import java.nio.file.Path
 import java.util.function.Consumer
 import scala.collection.JavaConverters._
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 private[evaluator] class ExpressionCompiler(
     expressionCompilerInstance: Any,
@@ -37,7 +37,14 @@ private[evaluator] class ExpressionCompiler(
         )
     )
       .map(_.asInstanceOf[Boolean])
-    compiledSuccessfully.getOrElse(false)
+    compiledSuccessfully match {
+      case Success(value) =>
+       value
+      case Failure(exception) =>
+        println(exception)
+        false
+    }
+//    compiledSuccessfully.getOrElse(false)
   }
 }
 

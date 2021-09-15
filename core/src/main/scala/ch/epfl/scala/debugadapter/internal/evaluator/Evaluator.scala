@@ -53,6 +53,7 @@ private[evaluator] class Evaluator(
     val expressionId = java.util.UUID.randomUUID.toString.replace("-", "")
     val expressionClassName: String = s"Expression$expressionId"
     val valuesByNameIdentName: String = s"valuesByName$expressionId"
+    println(expressionDir)
 
     val expressionFqcn =
       (fqcn.split("\\.").dropRight(1) :+ expressionClassName).mkString(".")

@@ -15,9 +15,10 @@ private[nsc] class EvalGlobal(
     valuesByNameIdentName: String
 ) extends Global(settings, reporter) {
   private var valOrDefDefs: Map[TermName, ValOrDefDef] = Map()
+  private val liftedMethods: ListBuffer[DefDef] = ListBuffer()
+
   private var extractedExpression: Tree = _
   private var expressionOwners: List[Symbol] = _
-  private val liftedMethods: ListBuffer[DefDef] = ListBuffer()
 
   override protected def computeInternalPhases(): Unit = {
     super.computeInternalPhases()
@@ -55,6 +56,7 @@ private[nsc] class EvalGlobal(
     class InsExprTransformer extends Transformer {
       private val expressionClassSource =
         s"""class $expressionClassName {
+           |  private val foo = 10
            |  def evaluate(names: Array[Any], values: Array[Any]) = {
            |    val $valuesByNameIdentName = names.map(_.asInstanceOf[String]).zip(values).toMap
            |    $valuesByNameIdentName
@@ -214,6 +216,7 @@ private[nsc] class EvalGlobal(
       import definitions._
       import typer._
 
+      private var thisSym: Symbol = _
       private var valuesByNameIdent: Ident = _
 
       override def transform(tree: Tree): Tree = tree match {
@@ -221,11 +224,35 @@ private[nsc] class EvalGlobal(
         case tree: ClassDef if tree.name.decode != expressionClassName =>
           tree
         case tree: ClassDef if tree.name.decode == expressionClassName =>
-          val transformed = super.transform(tree)
-          liftedMethods.foreach(_.symbol.owner = transformed.symbol)
-          deriveClassDef(transformed) { template =>
+          thisSym = tree.symbol
+          liftedMethods.foreach(_.symbol.owner = thisSym)
+
+          val name = TermName("bar")
+          val tpt = valOrDefDefs.find(_._1 == TermName("a")).map(_._2.tpt).get
+          val valDef =
+            ValDef(NoMods, name, TypeTree().copyAttrs(tpt), Literal(Constant(123)))
+
+          val typer = localTyper.atOwner(tree.symbol)
+          typer.namer.enterValDef(valDef)
+          val typed = typer.typed(valDef)
+
+          val synthetics = typer.namer.context.unit.synthetics.keys.flatMap(typer.namer.context.unit.synthetics.get).toList
+          val derived = deriveClassDef(tree) { template =>
             Template(template.symbol, template.body ++ liftedMethods)
           }
+          typer.namer.enterClassDef(derived)
+          val typedDerived = typer.typed(derived)
+          println(typedDerived)
+          val transformed = super.transform(derived)
+          transformed
+//        case tree: DefDef if tree.symbol.isConstructor =>
+//          val callSuper = Apply(Select(Super(thisSym, TypeName("")), nme.CONSTRUCTOR), List())
+//          val assign = Assign(Select(This(thisSym), TermName("foo")), Literal(Constant("foo")))
+//          val constructor = DefDef(NoMods, nme.CONSTRUCTOR, Nil, ListOfNil, TypeTree(), Block(List(callSuper), Literal(Constant())))
+//
+//          localTyper.namer.enterDefDef(constructor)
+//          val typed = localTyper.typedPos(tree.pos)(constructor)
+//          typed
         case tree: Ident
             if tree.name == TermName(
               valuesByNameIdentName

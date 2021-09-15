@@ -19,18 +19,27 @@ object ExpressionEvaluatorSpec extends TestSuite {
   def tests: Tests = Tests {
     "should evaluate expression with primitives" - {
       val source =
-        """object EvaluateTest {
+        """class Foo {
+          |  private val a = 3
+          |  private val b = "s"
+          |  def bar() = {
+          |    "foobar"
+          |  }
+          |}
+          |
+          |object EvaluateTest {
+          |  private val y = new Foo()
           |  def main(args: Array[String]): Unit = {
-          |    println("Hello, World!")
+          |    y.bar()
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 3, "1 + 2")(
+      assertEvaluation(source, "EvaluateTest", 5, "1 + 2")(
         _.exists(_.toInt == 3)
       )
     }
 
-    "should evaluate expression with local variables" - {
+    /*"should evaluate expression with local variables" - {
       val source =
         """object EvaluateTest {
           |  def main(args: Array[String]): Unit = {
@@ -379,7 +388,7 @@ object ExpressionEvaluatorSpec extends TestSuite {
         5,
         "s\"${foo}${bar(1)}\""
       )(_.exists(_ == "\"foo2\""))
-    }
+    }*/
   }
 
   private def assertEvaluation(
@@ -421,6 +430,12 @@ object ExpressionEvaluatorSpec extends TestSuite {
       val topFrame = stackTrace.stackFrames.head
 
       val result = client.evaluate(expression, topFrame.id)
+      result match {
+        case Right(actual) =>
+          println(actual)
+        case Left(error) =>
+          println(error.format)
+      }
       assert(assertion(result))
 
       client.continue(threadId)
