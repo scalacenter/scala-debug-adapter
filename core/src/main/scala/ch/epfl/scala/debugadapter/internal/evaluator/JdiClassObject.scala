@@ -15,7 +15,7 @@ class JdiClassObject(
     val parameterTypes =
       args.map(_.`type`().asInstanceOf[ReferenceType].classObject())
     for {
-      objects <- JdiArray("java.lang.Object", args.size, classLoader, thread)
+      objects <- JdiArray("java.lang.Object", args.size, classLoader)
       _ <- objects.setValues(args)
       constructor <- invoke("getConstructor", parameterTypes)
         .map(_.asInstanceOf[ObjectReference])

@@ -11,13 +11,6 @@ import java.util.concurrent.CompletableFuture
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 
-private case class EvaluatorContext(
-    thread: ThreadReference,
-    frame: StackFrame,
-    vm: VirtualMachine,
-    classLoader: JdiClassLoader
-)
-
 private[internal] class ExpressionEvaluator(
     sourceLookUpProvider: ISourceLookUpProvider,
     expressionCompiler: ExpressionCompiler
@@ -27,8 +20,6 @@ private[internal] class ExpressionEvaluator(
       thread: ThreadReference,
       frame: StackFrame
   )(debugContext: IDebugAdapterContext): CompletableFuture[Value] = {
-    val vm = thread.virtualMachine()
-
     val location = frame.location()
     val sourcePath = location.sourcePath()
     val breakpointLine = location.lineNumber()
@@ -48,14 +39,12 @@ private[internal] class ExpressionEvaluator(
     try {
       var error: Option[String] = None
       val result = for {
-        classLoader <- findClassLoader(vm).flatMap(JdiClassLoader(_, thread))
-        context = EvaluatorContext(thread, frame, vm, classLoader)
-        (names, values) = extractValuesAndNames(context)
-        systemClass <- classLoader.loadClass("java.lang.System")
-        classPath <- systemClass
-          .invokeStatic("getProperty", List(vm.mirrorOf("java.class.path")))
-          .map(_.toString)
-          .map(_.drop(1).dropRight(1)) // remove quotation marks
+        classLoader <-
+          findClassLoader(thread)
+            .toRight("Failed finding class loader")
+        (names, values) = extractValuesAndNames(frame, classLoader)
+        classPath <- getClassPath(classLoader)
+          .toRight("Failed getting class path")
         expressionClassPath = expressionDir.toUri.toString
         compiledSuccessfully = expressionCompiler
           .compile(
@@ -70,44 +59,33 @@ private[internal] class ExpressionEvaluator(
             errorMessage => error = Some(errorMessage),
             5 seconds
           )
-        _ <- if (compiledSuccessfully) Some(()) else None
+        _ <-
+          if (compiledSuccessfully) Right(())
+          else
+            Left("Compilation failed" + error.map(m => s": $m").getOrElse(""))
         // if everything went smooth we can load our expression class
-        expressionClass <- loadExpressionClass(
-          context,
-          expressionDir,
-          expressionFqcn
-        )
-        expression <- expressionClass.newInstance(List())
-        namesArray <- JdiArray(
-          "java.lang.String",
-          names.size,
-          classLoader,
-          thread
-        )
-        valuesArray <- JdiArray(
-          "java.lang.Object",
-          values.size,
-          classLoader,
-          thread
-        ) // add boxing
+        expressionInstance <-
+          createExpressionInstance(classLoader, expressionDir, expressionFqcn)
+            .toRight(s"Failed creating instance of ${expressionFqcn}")
+
+        namesArray <-
+          JdiArray("java.lang.String", names.size, classLoader)
+            .toRight("Failed creating array of names")
+        valuesArray <-
+          JdiArray("java.lang.Object", values.size, classLoader)
+            .toRight("Failed creating array of values") // add boxing
         _ = namesArray.setValues(names)
         _ = valuesArray.setValues(values)
-        result <- expression.invoke(
-          "evaluate",
-          List(namesArray.reference, valuesArray.reference)
-        )
+        val args = List(namesArray.reference, valuesArray.reference)
+        result <- expressionInstance
+          .invoke("evaluate", args)
+          .toRight("Failed invoking evaluate method")
       } yield result
 
       result match {
-        case Some(value) =>
+        case Right(value) =>
           CompletableFuture.completedFuture(value)
-        case None =>
-          error match {
-            case Some(message) =>
-              throw new Exception(message)
-            case None =>
-              throw new Exception("Unable to evaluate the expression")
-          }
+        case Left(error) => throw new Exception(error)
       }
     } finally {
       debugContext.getStackFrameManager.reloadStackFrames(thread)
@@ -119,26 +97,28 @@ private[internal] class ExpressionEvaluator(
    * first load and instantiate URL with expressionClassPath
    * and then URLClassLoader with the url created before.
    */
-  private def loadExpressionClass(
-      context: EvaluatorContext,
+  private def createExpressionInstance(
+      classLoader: JdiClassLoader,
       expressionDir: Path,
       expressionFqcn: String
-  ): Option[JdiClassObject] = {
-    import context._
+  ): Option[JdiObject] = {
     val expressionClassPath = expressionDir.toUri.toString
     for {
       url <- classLoader
         .loadClass("java.net.URL")
-        .flatMap(_.newInstance(List(vm.mirrorOf(expressionClassPath))))
-      urls <- JdiArray("java.net.URL", 1, classLoader, thread)
+        .flatMap(
+          _.newInstance(List(classLoader.vm.mirrorOf(expressionClassPath)))
+        )
+      urls <- JdiArray("java.net.URL", 1, classLoader)
       _ <- urls.setValue(0, url.reference)
       urlClassLoader <- classLoader
         .loadClass("java.net.URLClassLoader")
         .flatMap(_.newInstance(List(urls.reference)))
         .map(_.reference.asInstanceOf[ClassLoaderReference])
-        .flatMap(JdiClassLoader(_, thread))
+        .flatMap(JdiClassLoader(_, classLoader.thread))
       expressionClass <- urlClassLoader.loadClass(expressionFqcn)
-    } yield expressionClass
+      expressionInstance <- expressionClass.newInstance(List())
+    } yield expressionInstance
   }
 
   /**
@@ -149,18 +129,18 @@ private[internal] class ExpressionEvaluator(
    * @return Tuple of extracted names and values
    */
   private def extractValuesAndNames(
-      context: EvaluatorContext
+      frame: StackFrame,
+      classLoader: JdiClassLoader
   ): (List[StringReference], List[Value]) = {
-    import context._
     val thisObjectOpt = Option(frame.thisObject())
 
     def extractVariablesFromFrame() = {
       val variables: List[LocalVariable] =
         frame.visibleVariables().asScala.toList
-      val variableNames = variables.map(_.name()).map(vm.mirrorOf)
+      val variableNames = variables.map(_.name()).map(classLoader.vm.mirrorOf)
       val variableValues = variables
         .map(frame.getValue)
-        .flatMap(value => boxIfNeeded(value, classLoader, thread))
+        .flatMap(value => boxIfNeeded(value, classLoader, classLoader.thread))
       (variableNames, variableValues)
     }
 
@@ -168,24 +148,45 @@ private[internal] class ExpressionEvaluator(
       thisObjectOpt
         .map { thisObject =>
           val fields = thisObject.referenceType().fields().asScala.toList
-          val fieldNames = fields.map(_.name()).map(vm.mirrorOf)
+          val fieldNames = fields.map(_.name()).map(classLoader.vm.mirrorOf)
           val fieldValues = fields
             .map(field => thisObject.getValue(field))
-            .flatMap(value => boxIfNeeded(value, classLoader, thread))
+            .flatMap(value =>
+              boxIfNeeded(value, classLoader, classLoader.thread)
+            )
           (fieldNames, fieldValues)
         }
         .getOrElse((Nil, Nil))
 
     val (variableNames, variableValues) = extractVariablesFromFrame()
     val (fieldNames, fieldValues) = extractFieldsFromThisObject()
-    val thisObjectName = thisObjectOpt.map(_ => vm.mirrorOf("$this"))
+    val thisObjectName =
+      thisObjectOpt.map(_ => classLoader.vm.mirrorOf("$this"))
     val names = variableNames ++ fieldNames ++ thisObjectName.toList
     val values = variableValues ++ fieldValues ++ thisObjectOpt.toList
     (names, values)
   }
 
-  private def findClassLoader(vm: VirtualMachine) =
-    vm.allClasses().asScala.find(_.classLoader() != null).map(_.classLoader())
+  private def findClassLoader(
+      thread: ThreadReference
+  ): Option[JdiClassLoader] = {
+    thread.virtualMachine.allClasses.asScala
+      .find(_.classLoader() != null)
+      .flatMap(c => JdiClassLoader(c.classLoader, thread))
+  }
+
+  private def getClassPath(classLoader: JdiClassLoader): Option[String] = {
+    for {
+      systemClass <- classLoader.loadClass("java.lang.System")
+      classPath <- systemClass
+        .invokeStatic(
+          "getProperty",
+          List(classLoader.vm.mirrorOf("java.class.path"))
+        )
+        .map(_.toString)
+        .map(_.drop(1).dropRight(1)) // remove quotation marks
+    } yield classPath
+  }
 
   private def boxIfNeeded(
       value: Value,

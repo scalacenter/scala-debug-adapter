@@ -24,12 +24,12 @@ private[evaluator] object JdiClassLoader {
     )
 }
 
-private[evaluator] class JdiClassLoader(
+private[evaluator] case class JdiClassLoader(
     classLoaderRef: ClassLoaderReference,
     loadClassMethod: Method,
     thread: ThreadReference
 ) {
-  private val vm = thread.virtualMachine()
+  val vm = thread.virtualMachine()
 
   def loadClass(name: String): Option[JdiClassObject] =
     invokeMethod(
