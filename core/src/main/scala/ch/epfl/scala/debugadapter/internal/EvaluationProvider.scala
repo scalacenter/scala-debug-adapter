@@ -8,14 +8,14 @@ import com.microsoft.java.debug.core.adapter.{
 }
 import com.sun.jdi.{ObjectReference, ThreadReference, Value}
 
-import java.util
 import java.util.concurrent.CompletableFuture
-import scala.util.Try
 import ch.epfl.scala.debugadapter.internal.evaluator.{
   ExpressionEvaluator,
   ExpressionCompiler
 }
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
+import scala.util.Failure
+import scala.util.Success
 
 private[internal] object EvaluationProvider {
   def apply(
@@ -37,7 +37,7 @@ private[internal] class EvaluationProvider(
 
   override def initialize(
       debugContext: IDebugAdapterContext,
-      options: util.Map[String, AnyRef]
+      options: java.util.Map[String, AnyRef]
   ): Unit = {
     this.debugContext = debugContext
   }
@@ -50,7 +50,22 @@ private[internal] class EvaluationProvider(
       depth: Int
   ): CompletableFuture[Value] = {
     val frame = thread.frames().get(depth)
-    evaluator.fold(???)(_.evaluate(expression, thread, frame)(debugContext))
+    val future = new CompletableFuture[Value]()
+    evaluator match {
+      case None =>
+        future.completeExceptionally(
+          new Exception("Missing evaluator for this debug session")
+        )
+      case Some(evaluator) =>
+        evaluator.evaluate(expression, thread, frame) match {
+          case Failure(exception) =>
+            future.completeExceptionally(exception)
+          case Success(value) =>
+            future.complete(value)
+        }
+    }
+    debugContext.getStackFrameManager.reloadStackFrames(thread)
+    future
   }
 
   override def evaluate(
@@ -72,27 +87,21 @@ private[internal] class EvaluationProvider(
       thread: ThreadReference,
       invokeSuper: Boolean
   ): CompletableFuture[Value] = {
-    try {
-      val result = for {
-        obj <- Try(new JdiObject(thisContext, thread)).toOption
-        result <- obj.invoke(
-          methodName,
-          methodSignature,
-          if (args == null) List() else args.toList
-        )
-      } yield result
-
-      result match {
-        case Some(value) =>
-          CompletableFuture.completedFuture(value)
-        case None =>
-          throw new Exception(
-            s"Unable to invoke $methodName on ${thisContext.referenceType.name}"
-          )
-      }
-    } finally {
-      debugContext.getStackFrameManager.reloadStackFrames(thread)
+    val future = new CompletableFuture[Value]()
+    val obj = new JdiObject(thisContext, thread)
+    val invocation = obj.invoke(
+      methodName,
+      methodSignature,
+      if (args == null) List() else args.toList
+    )
+    invocation.getResult match {
+      case Success(value) =>
+        future.complete(value)
+      case Failure(exception) =>
+        future.completeExceptionally(exception)
     }
+    debugContext.getStackFrameManager.reloadStackFrames(thread)
+    future
   }
 
   override def clearState(thread: ThreadReference): Unit = {}

@@ -32,7 +32,11 @@ checkDebugSession := {
     val topFrame = stackTrace.stackFrames.head
 
     val error = client.evaluate("1 + 1", topFrame.id).left
-    assert(error.exists(_.format == "an implementation is missing"))
+    assert(
+      error.exists(
+        _.format.contains("Missing evaluator for this debug session")
+      )
+    )
 
     client.continue(stopped.threadId)
     client.exited()

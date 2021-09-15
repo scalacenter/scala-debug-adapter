@@ -7,10 +7,9 @@ object JdiPrimitive {
       value: AnyVal,
       classLoader: JdiClassLoader,
       thread: ThreadReference
-  ): Option[JdiObject] = {
-    val vm = thread.virtualMachine()
-    val jdiValue = vm.mirrorOf(value.toString)
+  ): Safe[JdiObject] = {
     for {
+      jdiValue <- classLoader.mirrorOf(value.toString)
       clazz <- value match {
         case _: Boolean => classLoader.loadClass("java.lang.Boolean")
         case _: Byte => classLoader.loadClass("java.lang.Byte")
