@@ -280,7 +280,7 @@ object ExpressionEvaluatorSpec extends TestSuite {
       )(_.exists(_ == "\"[]\""))
     }
 
-    "should return null when expression is invalid" - {
+    "should return error message when expression is invalid" - {
       val source =
         """object EvaluateTest {
           |  def main(args: Array[String]): Unit = {
@@ -289,7 +289,9 @@ object ExpressionEvaluatorSpec extends TestSuite {
           |}
           |""".stripMargin
       assertEvaluation(source, "EvaluateTest", 3, "1 ++ 2")(
-        _.left.exists(_.format == "value ++ is not a member of Int")
+        _.left.exists(
+          _.format == "Compilation failed: value ++ is not a member of Int"
+        )
       )
     }
 

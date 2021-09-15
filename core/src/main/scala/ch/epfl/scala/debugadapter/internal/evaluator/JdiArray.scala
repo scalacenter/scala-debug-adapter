@@ -9,10 +9,10 @@ object JdiArray {
   def apply(
       arrayType: String,
       arraySize: Int,
-      classLoader: JdiClassLoader,
-      thread: ThreadReference
+      classLoader: JdiClassLoader
   ): Option[JdiArray] = {
-    val vm = thread.virtualMachine()
+    val thread = classLoader.thread
+    val vm = thread.virtualMachine
     for {
       classClass <- classLoader.loadClass("java.lang.Class")
       intClass <- classClass.invoke(
@@ -45,7 +45,7 @@ object JdiArray {
   }
 }
 
-class JdiArray(override val reference: ArrayReference, thread: ThreadReference)
+class JdiArray(reference: ArrayReference, thread: ThreadReference)
     extends JdiObject(reference, thread) {
   def setValue(index: Int, value: Value): Option[Unit] =
     Try(reference.setValue(index, value)).toOption
