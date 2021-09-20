@@ -9,6 +9,7 @@ import java.io.File
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import com.microsoft.java.debug.core.protocol.Types.Message
 
 object Scala212EvaluatorSpec
     extends ExpressionEvaluatorSuite(ScalaVersion.`2.12`)
@@ -430,6 +431,55 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |}""".stripMargin
       )(
         _.exists(_.toInt == 6)
+      )
+    }
+
+    "should evaluate expression with private method call" - {
+      val source =
+        """class Foo {
+          |  val foo = this
+          |
+          |  def bar(): String = {
+          |    p("a") // breakpoint
+          |  }
+          |
+          |  def getFoo(): Foo = {
+          |    if (true) foo
+          |    else null
+          |  }
+          |
+          |  private def p(a: String) = a
+          |}
+          |
+          |object A {
+          |  def getFoo() = new Foo()
+          |}
+          |
+          |object EvaluateTest {
+          |  def main(args: Array[String]): Unit = {
+          |    new Foo().bar()
+          |  }
+          |}
+          |""".stripMargin
+      assertEvaluation(source, "EvaluateTest", 5, "this.p(\"foo\")")(
+        _.exists(_ == "\"foo\"")
+      )
+      assertEvaluation(source, "EvaluateTest", 5, "foo.p(\"foo\")")(
+        _.exists(_ == "\"foo\"")
+      )
+      assertEvaluation(source, "EvaluateTest", 5, "getFoo().p(\"foo\")")(
+        _.exists(_ == "\"foo\"")
+      )
+      assertEvaluation(
+        source,
+        "EvaluateTest",
+        5,
+        "getFoo().getFoo().p(\"foo\")"
+      )(
+        _.exists(_ == "\"foo\"")
+      )
+      assertEvaluation(source, "EvaluateTest", 5, "A.getFoo().p(\"foo\")")(
+        _.exists(_ == "\"foo\"")
       )
     }
   }

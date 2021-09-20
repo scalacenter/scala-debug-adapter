@@ -1,17 +1,12 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import com.microsoft.java.debug.core.adapter.{
-  IDebugAdapterContext,
-  ISourceLookUpProvider
-}
+import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 import com.sun.jdi._
 
 import java.nio.file.{Files, Path}
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
-import scala.util.Try
-import scala.util.Success
-import scala.util.Failure
+import scala.util.{Failure, Success, Try}
 
 private[internal] class ExpressionEvaluator(
     sourceLookUpProvider: ISourceLookUpProvider,
@@ -33,8 +28,9 @@ private[internal] class ExpressionEvaluator(
     val randomId = java.util.UUID.randomUUID.toString.replace("-", "")
     val expressionDir =
       Files.createTempDirectory(s"scala-debug-adapter-$randomId")
-    val expressionClassName: String = s"Expression$randomId"
-    val valuesByNameIdentName: String = s"valuesByName$randomId"
+    val expressionClassName = s"Expression$randomId"
+    val valuesByNameIdentName = s"valuesByName$randomId"
+    val callPrivateMethodName = s"callPrivate$randomId"
 
     val expressionFqcn =
       (fqcn.split("\\.").dropRight(1) :+ expressionClassName).mkString(".")
@@ -50,6 +46,7 @@ private[internal] class ExpressionEvaluator(
           expressionDir,
           expressionClassName,
           valuesByNameIdentName,
+          callPrivateMethodName,
           classPath,
           content,
           breakpointLine,

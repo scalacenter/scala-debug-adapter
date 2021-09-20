@@ -13,6 +13,7 @@ final class ExpressionCompiler {
       expressionDir: Path,
       expressionClassName: String,
       valuesByNameIdentName: String,
+      callPrivateMethodName: String,
       classPath: String,
       code: String,
       line: Int,
@@ -32,7 +33,8 @@ final class ExpressionCompiler {
       expression,
       defNames.asScala.toSet,
       expressionClassName,
-      valuesByNameIdentName
+      valuesByNameIdentName,
+      callPrivateMethodName
     )
     val source = new BatchSourceFile("<source>", code)
 
