@@ -11,11 +11,13 @@ private[nsc] class EvalGlobal(
     val expression: String,
     defNames: Set[String],
     expressionClassName: String,
-    valuesByNameIdentName: String
+    valuesByNameIdentName: String,
+    callPrivateMethodName: String
 ) extends Global(settings, reporter) {
   private var valOrDefDefs: Map[TermName, ValOrDefDef] = Map()
   private var extractedExpression: Tree = _
   private var expressionOwners: List[Symbol] = _
+  private var thisSym: Symbol = _
 
   override protected def computeInternalPhases(): Unit = {
     super.computeInternalPhases()
@@ -62,6 +64,28 @@ private[nsc] class EvalGlobal(
            |    val $valuesByNameIdentName = names.map(_.asInstanceOf[String]).zip(values).toMap
            |    $valuesByNameIdentName
            |    ()
+           |  }
+           |
+           |  def $callPrivateMethodName(obj: Any, methodName: String, paramTypeNames: Array[Object], args: Array[Object]) = {
+           |    val expectedParamTypeNames = paramTypeNames.map(_.asInstanceOf[String])
+           |    val parameterTypes = args.map(_.getClass)
+           |    val method = obj
+           |      .getClass()
+           |      .getDeclaredMethods()
+           |      .filter(_.getName() == methodName)
+           |      .find(method => {
+           |        val paramTypeNames = method.getParameterTypes().map(_.getName())
+           |        val paramTypeNamesMatch = expectedParamTypeNames
+           |          .zip(paramTypeNames)
+           |          .forall {
+           |            case (expectedParamTypeName, paramTypeName) =>
+           |              expectedParamTypeName == paramTypeName
+           |          }
+           |        method.getParameterTypes.size == paramTypeNames.size && paramTypeNamesMatch
+           |      })
+           |      .get
+           |    method.setAccessible(true)
+           |    method.invoke(obj, args: _*)
            |  }
            |}
            |""".stripMargin
@@ -249,9 +273,8 @@ private[nsc] class EvalGlobal(
      */
     class DefExtractor extends Traverser {
       override def traverse(tree: Tree): Unit = tree match {
-        // Don't extract expression from the Expression class
         case tree: ClassDef if tree.name.decode == expressionClassName =>
-        // ignore
+          thisSym = tree.symbol
         case tree: ValDef
             if expressionOwners.contains(tree.symbol.owner) && defNames
               .contains(tree.name.decode) =>
@@ -279,7 +302,6 @@ private[nsc] class EvalGlobal(
     class GenExprTransformer(unit: CompilationUnit)
         extends TypingTransformer(unit) {
 
-      import definitions._
       import typer._
 
       private var valuesByNameIdent: Ident = _
@@ -297,7 +319,6 @@ private[nsc] class EvalGlobal(
         case tree: DefDef if tree.name == TermName("evaluate") =>
           // firstly, transform the body of the method
           super.transform(tree)
-
           var tpt: TypeTree = TypeTree()
           val derived = deriveDefDef(tree) { rhs =>
             // we can be sure that `rhs` is an instance of a `Block`
@@ -320,8 +341,9 @@ private[nsc] class EvalGlobal(
             val symbolsByName = newValOrDefDefs.mapValues(_.symbol).toMap
 
             // replace symbols in the expression with those from the `evaluate` method
-            val newExpression = new ExpressionTransformer(symbolsByName)
-              .transform(extractedExpression)
+            val newExpression =
+              new ExpressionTransformer(symbolsByName, tree)(unit)
+                .transform(extractedExpression)
 
             // create a new body
             val newRhs =
@@ -381,14 +403,6 @@ private[nsc] class EvalGlobal(
         }
       }
 
-      private def mkCast(app: Apply, tpt: TypeTree) = {
-        val tapp = gen.mkTypeApply(
-          gen.mkAttributedSelect(app, Object_asInstanceOf).asInstanceOf[Tree],
-          List(tpt)
-        )
-        Apply(tapp, Nil)
-      }
-
       private def newValDef(
           owner: DefDef,
           name: TermName,
@@ -402,8 +416,11 @@ private[nsc] class EvalGlobal(
       }
     }
 
-    class ExpressionTransformer(symbolsByName: Map[Name, Symbol])
-        extends Transformer {
+    class ExpressionTransformer(
+        symbolsByName: Map[Name, Symbol],
+        evaluateTree: DefDef
+    )(unit: CompilationUnit)
+        extends TypingTransformer(unit) {
       override def transform(tree: Tree): Tree = tree match {
         case tree: This =>
           val name = TermName("$this")
@@ -420,6 +437,33 @@ private[nsc] class EvalGlobal(
           if (qualifier.isInstanceOf[This] && symbolsByName.contains(name))
             ident(name)
           else super.transform(tree)
+        case tree: Apply
+            if tree.fun.isInstanceOf[Select] && tree.fun.symbol.isPrivate =>
+          val typer = localTyper
+            .atOwner(evaluateTree, evaluateTree.symbol)
+
+          val paramTypeNames = tree.args
+            .map(_.tpe.typeSymbol.fullName)
+            .map(paramTypeName => Literal(Constant(paramTypeName)))
+          val thisIdent = ident(TermName("$this"))
+          val paramTypeNamesArray =
+            ArrayValue(TypeTree(definitions.ObjectTpe), paramTypeNames)
+          val argsArray = ArrayValue(TypeTree(definitions.ObjectTpe), tree.args)
+
+          val app = Apply(
+            Select(
+              This(thisSym),
+              TermName(callPrivateMethodName)
+            ),
+            List(
+              thisIdent,
+              Literal(Constant(tree.fun.asInstanceOf[Select].name.decode)),
+              paramTypeNamesArray,
+              argsArray
+            )
+          )
+
+          typer.typedPos(evaluateTree.pos)(app)
         case _ =>
           super.transform(tree)
       }
@@ -431,6 +475,16 @@ private[nsc] class EvalGlobal(
           .setType(symbol.tpe)
           .setPos(symbol.pos)
       }
+    }
+
+    private def mkCast(app: Tree, tpt: TypeTree) = {
+      val tapp = gen.mkTypeApply(
+        gen
+          .mkAttributedSelect(app, definitions.Object_asInstanceOf)
+          .asInstanceOf[Tree],
+        List(tpt)
+      )
+      Apply(tapp, Nil)
     }
   }
 }
