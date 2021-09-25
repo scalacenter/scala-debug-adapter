@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        jdk: [adopt@1.8, adopt@1.11]
+        jdk: [adopt@1.8, adopt@1.11, 17]
     name: Test on ${{ matrix.os }} -- ${{ matrix.jdk }}
     runs-on: ${{ matrix.os }}
     steps:
