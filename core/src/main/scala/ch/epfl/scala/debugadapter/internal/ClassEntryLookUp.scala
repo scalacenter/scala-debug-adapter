@@ -271,7 +271,7 @@ private object ClassEntryLookUp {
 
     var sourceName = Option.empty[String]
 
-    val visitor = new ClassVisitor(Opcodes.ASM7) {
+    val visitor = new ClassVisitor(Opcodes.ASM8) {
       override def visitSource(source: String, debug: String): Unit =
         sourceName = Option(source)
     }

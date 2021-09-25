@@ -77,6 +77,20 @@ object ClassEntryLookUpStats extends TestSuite {
       )
     }
 
+    "adopt:1.16.0-1" - {
+      printAndCheck("adopt:1.16.0-1")(
+        classCount => classCount > 0,
+        orphanClassCount => orphanClassCount == 0
+      )
+    }
+
+    "zulu:1.17.0-0" - {
+      printAndCheck("zulu:1.17.0-0")(
+        classCount => classCount > 0,
+        orphanClassCount => orphanClassCount == 0
+      )
+    }
+
     "scala-lang" - {
       val org = "org.scala-lang"
       printAndCheck(org, "scala-library", "2.13.6")(2870, 0)
