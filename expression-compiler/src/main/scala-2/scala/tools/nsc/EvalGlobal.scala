@@ -12,7 +12,7 @@ private[nsc] class EvalGlobal(
     defNames: Set[String],
     expressionClassName: String,
     valuesByNameIdentName: String
-) extends interactive.Global(settings, reporter) {
+) extends Global(settings, reporter) {
   private var valOrDefDefs: Map[TermName, ValOrDefDef] = Map()
   private var extractedExpression: Tree = _
   private var expressionOwners: List[Symbol] = _
@@ -68,28 +68,6 @@ private[nsc] class EvalGlobal(
 
       private var expressionInserted = false
 
-      override def transform(tree: Tree): Tree = tree match {
-        case tree if tree.pos.line == line =>
-          expressionInserted = true
-          atPos(tree.pos)(Block(List(parsedExpression), tree))
-        case tree: PackageDef =>
-          val transformed = super.transform(tree).asInstanceOf[PackageDef]
-          if (expressionInserted) {
-            expressionInserted = false
-            atPos(tree.pos)(
-              treeCopy.PackageDef(
-                transformed,
-                transformed.pid,
-                transformed.stats :+ parsedExpressionClass
-              )
-            )
-          } else {
-            transformed
-          }
-        case _ =>
-          super.transform(tree)
-      }
-
       private def parseExpression(expression: String): Tree = {
         // It needs to be wrapped because it's not possible to parse single expression
         val wrappedExpressionSource =
@@ -119,6 +97,47 @@ private[nsc] class EvalGlobal(
           new CompilationUnit(new BatchSourceFile(sourceName, source))
         ).parse()
       }
+
+      override def transform(tree: Tree): Tree = tree match {
+        case tree: DefDef if tree.pos.line == line =>
+          expressionInserted = true
+          atPos(tree.pos)(
+            treeCopy.DefDef(
+              tree,
+              tree.mods,
+              tree.name,
+              tree.tparams,
+              tree.vparamss,
+              tree.tpt,
+              mkExprBlock(tree.rhs)
+            )
+          )
+        case tree if tree.pos.line == line =>
+          expressionInserted = true
+          atPos(tree.pos)(mkExprBlock(tree))
+        case tree: PackageDef =>
+          val transformed = super.transform(tree).asInstanceOf[PackageDef]
+          if (expressionInserted) {
+            expressionInserted = false
+            atPos(tree.pos)(
+              treeCopy.PackageDef(
+                transformed,
+                transformed.pid,
+                transformed.stats :+ parsedExpressionClass
+              )
+            )
+          } else {
+            transformed
+          }
+        case _ =>
+          super.transform(tree)
+      }
+
+      private def mkExprBlock(tree: Tree): Tree =
+        if (tree.isDef)
+          Block(List(parsedExpression, tree), Literal(Constant()))
+        else
+          Block(List(parsedExpression), tree)
     }
   }
 
@@ -159,14 +178,30 @@ private[nsc] class EvalGlobal(
         // Don't extract expression from the Expression class
         case tree: ClassDef if tree.name.decode == expressionClassName =>
         // ignore
+        case tree: DefDef if tree.pos.line == line =>
+          expressionOwners = ownerChain(tree)
+          extractedExpression = extractExpression(tree.rhs)
         case tree: Block if tree.pos.line == line =>
-          expressionOwners = currentOwner.ownerChain
-          extractedExpression = tree.stats.head
+          expressionOwners = ownerChain(tree)
+          extractedExpression = extractExpression(tree)
         case _ if tree.pos.line == line =>
-          expressionOwners = currentOwner.ownerChain
-          extractedExpression = tree
+          expressionOwners = ownerChain(tree)
+          extractedExpression = extractExpression(tree)
         case _ =>
           super.traverse(tree)
+      }
+
+      private def ownerChain(tree: Tree): List[Symbol] =
+        if (tree.symbol == null)
+          currentOwner.ownerChain
+        else
+          tree.symbol.ownerChain
+
+      private def extractExpression(tree: Tree): Tree = tree match {
+        case tree: Block =>
+          tree.stats.head
+        case _ =>
+          tree
       }
     }
 

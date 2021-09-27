@@ -349,21 +349,35 @@ object ExpressionEvaluatorSpec extends TestSuite {
       )
     }
 
-    "should not loop indefinitely" - {
+    "should evaluate expression with breakpoint on an assignment" - {
       val source =
-        """package test
-          |
-          |object EvaluateTest extends App {
-          |  m()
-          |
-          |  def m(): Unit = {
-          |    val a = List(1, 2)
+        """object EvaluateTest {
+          |  def main(args: Array[String]): Unit = {
+          |    val a = 1
+          |    println("Hello, World!")
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "test.EvaluateTest", 7, "\"Hello\"") { res =>
-        res.left.exists(_.format.contains("Compilation timed out"))
-      }
+      assertEvaluation(source, "EvaluateTest", 3, "1 + 2")(
+        _.exists(_.toInt == 3)
+      )
+    }
+
+    "should evaluate expression with breakpoint on method definition" - {
+      val source =
+        """class Foo {
+          |  def bar(): String = "foobar"
+          |}
+          |
+          |object EvaluateTest {
+          |  def main(args: Array[String]): Unit = {
+          |    new Foo().bar()
+          |  }
+          |}
+          |""".stripMargin
+      assertEvaluation(source, "EvaluateTest", 2, "1 + 2")(
+        _.exists(_.toInt == 3)
+      )
     }
   }
 

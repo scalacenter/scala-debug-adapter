@@ -6,7 +6,7 @@ import java.{util => ju}
 import scala.collection.JavaConverters._
 import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.reporters.StoreReporter
-import scala.concurrent.duration.Duration
+import scala.util.control.NonFatal
 
 final class ExpressionCompiler {
   def compile(
@@ -37,24 +37,15 @@ final class ExpressionCompiler {
     val source = new BatchSourceFile("<source>", code)
 
     try {
-      global
-        .askForResponse { () =>
-          val compilerRun = new global.Run()
-          compilerRun.compileSources(List(source))
-        }
-        .get(timeoutMillis)
-        .getOrElse(
-          throw new ju.concurrent.TimeoutException(
-            s"Compilation timed out after $timeoutMillis ms"
-          )
-        )
-    } finally {
-      global.askShutdown()
-      global.close()
-    }
+      val compilerRun = new global.Run()
+      compilerRun.compileSources(List(source))
 
-    val error = reporter.infos.find(_.severity == reporter.ERROR).map(_.msg)
-    error.foreach(errorConsumer.accept)
-    error.isEmpty
+      val error = reporter.infos.find(_.severity == reporter.ERROR).map(_.msg)
+      error.foreach(errorConsumer.accept)
+      error.isEmpty
+    } catch {
+      case NonFatal(_) =>
+        false
+    }
   }
 }
