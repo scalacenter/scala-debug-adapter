@@ -96,11 +96,12 @@ object MainDebuggeeRunner {
       filename: String,
       source: String,
       mainClass: String,
-      outDir: File
+      outDir: File,
+      scalaVersion: ScalaVersion
   ): MainDebuggeeRunner = {
     val path = new File(srcDir, filename).toPath
     Files.write(path, source.getBytes())
-    compileScala(path, mainClass, outDir, ScalaVersion.`2.12`)
+    compileScala(path, mainClass, outDir, scalaVersion)
   }
 
   private def getResource(name: String): Path =
