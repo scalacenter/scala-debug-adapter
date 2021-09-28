@@ -10,7 +10,13 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import com.microsoft.java.debug.core.protocol.Types.Message
 
-object ExpressionEvaluatorSpec extends TestSuite {
+object Scala212EvaluatorSpec
+    extends ExpressionEvaluatorSuite(ScalaVersion.`2.12`)
+object Scala213EvaluatorSpec
+    extends ExpressionEvaluatorSuite(ScalaVersion.`2.13`)
+
+abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
+    extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
   private val executorService = Executors.newFixedThreadPool(1)
   private implicit val ec =
@@ -398,7 +404,8 @@ object ExpressionEvaluatorSpec extends TestSuite {
       "EvaluateTest.scala",
       source,
       mainClass,
-      outDir
+      outDir,
+      scalaVersion
     )
     val server = DebugServer(runner, NoopLogger)
     val client = TestDebugClient.connect(server.uri, 20.seconds)
