@@ -20,7 +20,8 @@ object DebugServerSpec extends TestSuite {
   private val connectionFailedMessages = Array(
     "(Connection refused)",
     "(Connection Failed)",
-    "(connect failed)"
+    "(connect failed)",
+    "Connection reset by peer"
   )
 
   def tests: Tests = Tests {

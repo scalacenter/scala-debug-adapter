@@ -31,7 +31,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     socket.close()
   }
 
-  def initialize(timeout: Duration = 4 seconds): Messages.Response = {
+  def initialize(timeout: Duration = 8 seconds): Messages.Response = {
     val args = new InitializeArguments()
     args.linesStartAt1 = true
     args.columnsStartAt1 = true
