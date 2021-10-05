@@ -78,12 +78,17 @@ private[nsc] class EvalGlobal(
         val parsedWrappedExpression =
           parse("<wrapped-expression>", wrappedExpressionSource)
             .asInstanceOf[PackageDef]
-        parsedWrappedExpression.stats.head
+        val parsed = parsedWrappedExpression.stats.head
           .asInstanceOf[ModuleDef]
           .impl
           .body
           .last
           .setPos(NoPosition)
+        parsed match {
+          case df: ValOrDefDef =>
+            Block(df, Literal(Constant()))
+          case expr => expr
+        }
       }
 
       private def parseExpressionClass(source: String): Tree = {

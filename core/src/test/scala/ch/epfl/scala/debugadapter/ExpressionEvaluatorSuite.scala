@@ -385,6 +385,19 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
         _.exists(_.toInt == 3)
       )
     }
+
+    "should evaluate expression definition" - {
+      val source =
+        """|object EvaluateTest {
+           |  def main(args: Array[String]): Unit = {
+           |    println("Hello, World!")
+           |  }
+           |}
+           |""".stripMargin
+      assertEvaluation(source, "EvaluateTest", 3, "val x = 123")(
+        _.exists(_ == "<void value>")
+      )
+    }
   }
 
   private def assertEvaluation(
