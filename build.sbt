@@ -111,7 +111,7 @@ lazy val expressionCompiler = project
   .settings(
     name := "scala-expression-compiler",
     crossScalaVersions := Seq(
-      "3.0.2-RC1",
+      "3.0.2",
       "3.0.1",
       "3.0.0",
       "2.13.6",
