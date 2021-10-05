@@ -1,9 +1,8 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi._
-import scala.util.Try
-import scala.util.Failure
-import scala.util.Success
+
+import scala.util.{Failure, Success, Try}
 
 /**
  * Objects created on the remote JVM can be garbage-collected at any time.
@@ -39,6 +38,24 @@ class Safe[A] private (
 
   def withFilter(p: A => Boolean): Safe[A] = {
     new Safe(result.withFilter(p).map(identity), dispose)
+  }
+
+  def recover[B >: A](f: PartialFunction[Throwable, B]): Safe[B] = {
+    new Safe(result.recover(f), dispose)
+  }
+
+  def recoverWith[B >: A](f: PartialFunction[Throwable, Safe[B]]): Safe[B] = {
+    result match {
+      case Failure(exception) if f.isDefinedAt(exception) =>
+        val b = f(exception)
+        new Safe(
+          b.result,
+          () => {
+            dispose(); b.dispose()
+          }
+        )
+      case _ => new Safe(result, dispose)
+    }
   }
 }
 
