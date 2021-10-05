@@ -23,7 +23,7 @@ package object evaluator {
       method: Method,
       args: List[Value],
       thread: ThreadReference
-  ): Safe[Value] =
+  ): Safe[Value] = {
     Safe(
       objRef.invokeMethod(
         thread,
@@ -31,7 +31,24 @@ package object evaluator {
         args.asJava,
         ObjectReference.INVOKE_SINGLE_THREADED
       )
-    )
+    ).recoverWith { case t: InvocationException =>
+      extractMessage(t)(thread).map(message =>
+        throw new ExpressionEvaluationFailed(message)
+      )
+    }
+  }
+
+  private def extractMessage(
+      invocationException: InvocationException
+  )(thread: ThreadReference): Safe[String] = {
+    val exception = invocationException.exception()
+    val getMessageMethod = method("toString", exception.referenceType())
+    val message =
+      invokeMethod(exception, getMessageMethod, List(), thread)
+    message.map(_.toString).recover { case _ =>
+      ""
+    }
+  }
 
   implicit class SafeList[A](seq: List[Safe[A]]) {
     def traverse: Safe[List[A]] = {
