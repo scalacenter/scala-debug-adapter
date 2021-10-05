@@ -359,12 +359,26 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
       val source =
         """object EvaluateTest {
           |  def main(args: Array[String]): Unit = {
-          |    val a = 1
-          |    println("Hello, World!")
+          |    val a = "Hello, World!"
+          |    println(a)
           |  }
           |}
           |""".stripMargin
       assertEvaluation(source, "EvaluateTest", 3, "1 + 2")(
+        _.exists(_.toInt == 3)
+      )
+    }
+
+    "should evaluate expression with breakpoint on last statement" - {
+      val source =
+        """object EvaluateTest {
+          |  def main(args: Array[String]): Unit = {
+          |    val a = "Hello, World!"
+          |    println(a)
+          |  }
+          |}
+          |""".stripMargin
+      assertEvaluation(source, "EvaluateTest", 4, "1 + 2")(
         _.exists(_.toInt == 3)
       )
     }
