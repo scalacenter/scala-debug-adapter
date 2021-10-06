@@ -69,10 +69,13 @@ private[nsc] class EvalGlobal(
       private var expressionInserted = false
 
       private def parseExpression(expression: String): Tree = {
-        // It needs to be wrapped because it's not possible to parse single expression
+        // It needs to be wrapped because it's not possible to parse single expression.
+        // `$expression` is wrapped in a block to support multiline expressions.
         val wrappedExpressionSource =
           s"""object Expression {
-             |  $expression
+             |  {
+             |    $expression
+             |  }
              |}
              |""".stripMargin
         val parsedWrappedExpression =
