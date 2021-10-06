@@ -135,20 +135,50 @@ private[nsc] class EvalGlobal(
         ).parse()
       }
 
+      private def filterOutTailRec(defdef: DefDef): DefDef = {
+        val copiedMods = defdef.mods.copy(
+          annotations = defdef.mods.annotations.filterNot {
+            case Apply(
+                  Select(
+                    New(Select(Select(Ident(scala), annotation), tailrec)),
+                    _
+                  ),
+                  List()
+                ) =>
+              scala.toString == "scala" &&
+                annotation.toString() == "annotation" &&
+                tailrec.toString() == "tailrec"
+            case _ => false
+          }
+        )
+        treeCopy.DefDef(
+          defdef,
+          copiedMods,
+          defdef.name,
+          defdef.tparams,
+          defdef.vparamss,
+          defdef.tpt,
+          defdef.rhs
+        )
+      }
       override def transform(tree: Tree): Tree = tree match {
         case tree: DefDef if tree.pos.line == line =>
           expressionInserted = true
           atPos(tree.pos)(
-            treeCopy.DefDef(
-              tree,
-              tree.mods,
-              tree.name,
-              tree.tparams,
-              tree.vparamss,
-              tree.tpt,
-              mkExprBlock(tree.rhs)
+            filterOutTailRec(
+              treeCopy.DefDef(
+                tree,
+                tree.mods,
+                tree.name,
+                tree.tparams,
+                tree.vparamss,
+                tree.tpt,
+                mkExprBlock(tree.rhs)
+              )
             )
           )
+        case tree: DefDef =>
+          super.transform(filterOutTailRec(tree))
         case vd: ValDef if vd.pos.line == line =>
           expressionInserted = true
           val res = atPos(vd.pos)(
@@ -295,7 +325,7 @@ private[nsc] class EvalGlobal(
       override def transform(tree: Tree): Tree = tree match {
         // Don't transform class different than Expression
         case tree: ClassDef if tree.name.decode != expressionClassName =>
-          tree
+          EmptyTree
         case tree: Ident
             if tree.name == TermName(
               valuesByNameIdentName

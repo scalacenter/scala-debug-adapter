@@ -16,6 +16,7 @@ import ch.epfl.scala.debugadapter.internal.evaluator.{
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
 import scala.util.Failure
 import scala.util.Success
+import java.util.concurrent.atomic.AtomicBoolean
 
 private[internal] object EvaluationProvider {
   def apply(
@@ -34,6 +35,7 @@ private[internal] class EvaluationProvider(
 ) extends IEvaluationProvider {
 
   private var debugContext: IDebugAdapterContext = _
+  private val isEvaluating = new AtomicBoolean(false)
 
   override def initialize(
       debugContext: IDebugAdapterContext,
@@ -42,7 +44,7 @@ private[internal] class EvaluationProvider(
     this.debugContext = debugContext
   }
 
-  override def isInEvaluation(thread: ThreadReference) = false
+  override def isInEvaluation(thread: ThreadReference) = isEvaluating.get()
 
   override def evaluate(
       expression: String,
@@ -57,12 +59,15 @@ private[internal] class EvaluationProvider(
           new Exception("Missing evaluator for this debug session")
         )
       case Some(evaluator) =>
-        evaluator.evaluate(expression, thread, frame) match {
+        isEvaluating.set(true)
+        val result = evaluator.evaluate(expression, thread, frame) match {
           case Failure(exception) =>
             future.completeExceptionally(exception)
           case Success(value) =>
             future.complete(value)
         }
+        isEvaluating.set(false)
+        result
     }
     debugContext.getStackFrameManager.reloadStackFrames(thread)
     future
@@ -87,6 +92,7 @@ private[internal] class EvaluationProvider(
       thread: ThreadReference,
       invokeSuper: Boolean
   ): CompletableFuture[Value] = {
+    isEvaluating.set(true)
     val future = new CompletableFuture[Value]()
     val obj = new JdiObject(thisContext, thread)
     val invocation = obj.invoke(
@@ -101,6 +107,7 @@ private[internal] class EvaluationProvider(
         future.completeExceptionally(exception)
     }
     debugContext.getStackFrameManager.reloadStackFrames(thread)
+    isEvaluating.set(false)
     future
   }
 

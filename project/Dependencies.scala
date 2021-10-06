@@ -15,4 +15,5 @@ object Dependencies {
   val sbtTestInterface = "org.scala-sbt" % "test-interface" % "1.0"
   val coursier = "io.get-coursier" %% "coursier" % coursierVersion
   val coursierJvm = "io.get-coursier" %% "coursier-jvm" % coursierVersion
+  val pprint = "com.lihaoyi" %% "pprint" % "0.6.6"
 }

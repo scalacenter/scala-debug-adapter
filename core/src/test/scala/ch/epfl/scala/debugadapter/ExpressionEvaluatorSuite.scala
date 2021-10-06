@@ -516,14 +516,46 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
         _.exists(_ == "\"Hello, Alice\"")
       )
     }
+
+    "should evaluate tail-rec function" - {
+      val source =
+        """|object EvaluateTest {
+           |  @scala.annotation.tailrec
+           |  def f(x: Int): Int = {
+           |    if (x <= 42) {
+           |      x
+           |    } else f(x/2)
+           |  }
+           |  def main(args: Array[String]): Unit = {
+           |    val result = f(2)
+           |    println(result)
+           |    println(result)
+           |    println(result)
+           |  }
+           |}
+           |""".stripMargin
+      assertEvaluations(
+        source,
+        "EvaluateTest",
+        ExpressionEvaluation(5, "f(x)", _.exists(_.toInt == 2)),
+        ExpressionEvaluation(10, "result + 1", _.exists(_.toInt == 3)),
+        ExpressionEvaluation(11, "resulterror", _.isLeft),
+        ExpressionEvaluation(12, "result + 2", _.exists(_.toInt == 4))
+      )
+    }
   }
 
-  private def assertEvaluation(
+  case class ExpressionEvaluation(
+      line: Int,
+      expression: String,
+      assertion: Either[Message, String] => Boolean
+  )
+
+  private def assertEvaluations(
       source: String,
       mainClass: String,
-      line: Int,
-      expression: String
-  )(assertion: Either[Message, String] => Boolean): Unit = {
+      evaluationSteps: ExpressionEvaluation*
+  ): Unit = {
     val tempDir = IO.createTemporaryDirectory
     val srcDir = new File(tempDir, "src")
     IO.createDirectory(srcDir)
@@ -545,22 +577,24 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
       client.initialize()
       client.launch()
 
-      val breakpoints = client.setBreakpoints(runner.source, Array(line))
-      assert(breakpoints.length == 1)
+      val lines = evaluationSteps.map(_.line).distinct.toArray
+      val breakpoints = client.setBreakpoints(runner.source, lines)
+      assert(breakpoints.length == lines.length)
       assert(breakpoints.forall(_.verified))
       client.configurationDone()
 
-      val stopped = client.stopped()
-      val threadId = stopped.threadId
-      assert(stopped.reason == "breakpoint")
+      evaluationSteps.foreach { expressionCase =>
+        val stopped = client.stopped()
+        val threadId = stopped.threadId
+        assert(stopped.reason == "breakpoint")
 
-      val stackTrace = client.stackTrace(threadId)
-      val topFrame = stackTrace.stackFrames.head
+        val stackTrace = client.stackTrace(threadId)
+        val topFrame = stackTrace.stackFrames.head
+        val result = client.evaluate(expressionCase.expression, topFrame.id)
+        assert(expressionCase.assertion(result))
+        client.continue(threadId)
+      }
 
-      val result = client.evaluate(expression, topFrame.id)
-      assert(assertion(result))
-
-      client.continue(threadId)
       client.exited()
       client.terminated()
     } finally {
@@ -568,5 +602,18 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
       client.close()
       IO.delete(tempDir)
     }
+  }
+
+  private def assertEvaluation(
+      source: String,
+      mainClass: String,
+      line: Int,
+      expression: String
+  )(assertion: Either[Message, String] => Boolean): Unit = {
+    assertEvaluations(
+      source,
+      mainClass,
+      ExpressionEvaluation(line, expression, assertion)
+    )
   }
 }
