@@ -1,6 +1,7 @@
 package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testing.TestDebugClient
+import com.microsoft.java.debug.core.protocol.Types.Message
 import sbt.io.IO
 import utest._
 
@@ -8,7 +9,6 @@ import java.io.File
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import com.microsoft.java.debug.core.protocol.Types.Message
 
 object Scala212EvaluatorSpec
     extends ExpressionEvaluatorSuite(ScalaVersion.`2.12`)
@@ -396,6 +396,40 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
            |""".stripMargin
       assertEvaluation(source, "EvaluateTest", 3, "val x = 123")(
         _.exists(_ == "<void value>")
+      )
+    }
+
+    "should evaluate multi-line expression" - {
+      val source =
+        """object EvaluateTest {
+          |  def main(args: Array[String]): Unit = {
+          |    val a = 1
+          |    println("Hello, World!")
+          |  }
+          |}
+          |""".stripMargin
+      assertEvaluation(
+        source,
+        "EvaluateTest",
+        4,
+        """val b = 2
+          |val c = 3
+          |a + b + c
+          |""".stripMargin
+      )(
+        _.exists(_.toInt == 6)
+      )
+      assertEvaluation(
+        source,
+        "EvaluateTest",
+        4,
+        """{
+          |val b = 2
+          |val c = 3
+          |a + b + c
+          |}""".stripMargin
+      )(
+        _.exists(_.toInt == 6)
       )
     }
   }
