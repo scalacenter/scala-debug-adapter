@@ -89,7 +89,7 @@ private class ClassEntryLookUp(
 
       val lineNumbers = mutable.Buffer[Int]()
 
-      val visitor = new ClassVisitor(Opcodes.ASM7) {
+      val visitor = new ClassVisitor(Opcodes.ASM9) {
         override def visitMethod(
             access: Int,
             name: String,
@@ -97,7 +97,7 @@ private class ClassEntryLookUp(
             signature: String,
             exceptions: Array[String]
         ): MethodVisitor = {
-          new MethodVisitor(Opcodes.ASM7) {
+          new MethodVisitor(Opcodes.ASM9) {
             override def visitLineNumber(line: Int, start: Label): Unit = {
               lineNumbers.append(line)
             }
@@ -271,7 +271,7 @@ private object ClassEntryLookUp {
 
     var sourceName = Option.empty[String]
 
-    val visitor = new ClassVisitor(Opcodes.ASM8) {
+    val visitor = new ClassVisitor(Opcodes.ASM9) {
       override def visitSource(source: String, debug: String): Unit =
         sourceName = Option(source)
     }
