@@ -482,6 +482,22 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
         _.exists(_ == "\"foo\"")
       )
     }
+
+    "should evaluate nested method" - {
+      val source =
+        """|object EvaluateTest {
+           |  def main(args: Array[String]): Unit = {
+           |    def msg(name: String): String = {
+           |      s"Hello, $name"
+           |    }
+           |    println(msg("World"))
+           |  }
+           |} 
+           |""".stripMargin
+      assertEvaluation(source, "EvaluateTest", 6, """ msg("Alice") """)(
+        _.exists(_ == "\"Hello, Alice\"")
+      )
+    }
   }
 
   private def assertEvaluation(
