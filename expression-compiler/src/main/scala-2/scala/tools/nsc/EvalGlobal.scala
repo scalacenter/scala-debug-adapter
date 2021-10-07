@@ -149,22 +149,18 @@ private[nsc] class EvalGlobal(
               mkExprBlock(tree.rhs)
             )
           )
-        case tree: Block
-            if encloses(tree) && tree.stats.exists(_.pos.line == line) =>
+        case vd: ValDef if vd.pos.line == line =>
           expressionInserted = true
-          val index = tree.stats.indexWhere(_.pos.line == line)
-          val (pre, after) = tree.stats.splitAt(index)
-          atPos(tree.pos)(
-            Block((pre :+ parsedExpression) ::: after, tree.expr)
-          )
-        case tree: Block if encloses(tree) && tree.expr.pos.line == line =>
-          expressionInserted = true
-          atPos(tree.pos)(
-            Block(
-              tree.stats :+ parsedExpression,
-              tree.expr
+          val res = atPos(vd.pos)(
+            treeCopy.ValDef(
+              vd,
+              vd.mods,
+              vd.name,
+              vd.tpt,
+              mkExprBlock(vd.rhs)
             )
           )
+          res
         case tree if tree.pos.line == line =>
           expressionInserted = true
           atPos(tree.pos)(mkExprBlock(tree))
@@ -234,19 +230,9 @@ private[nsc] class EvalGlobal(
         case tree: DefDef if tree.pos.line == line =>
           expressionOwners = ownerChain(tree)
           extractedExpression = extractExpression(tree.rhs)
-        case tree: Block if encloses(tree) && tree.expr.pos.line == line =>
-          if (tree.stats.isEmpty)
-            throw new RuntimeException(
-              "Expected evaluated expression inside the block, but the block was empty"
-            )
+        case tree: ValDef if tree.pos.line == line =>
           expressionOwners = ownerChain(tree)
-          extractedExpression = tree.stats.last
-        case tree: Block
-            if encloses(tree) && tree.stats.exists(_.pos.line == line) =>
-          expressionOwners = ownerChain(tree)
-          val index = tree.stats.indexWhere(_.pos.line == line)
-          if (index > 0)
-            extractedExpression = tree.stats(index - 1)
+          extractedExpression = extractExpression(tree.rhs)
         case _ if tree.pos.line == line =>
           expressionOwners = ownerChain(tree)
           extractedExpression = extractExpression(tree)
