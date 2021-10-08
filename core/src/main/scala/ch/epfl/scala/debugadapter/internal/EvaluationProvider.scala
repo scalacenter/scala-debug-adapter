@@ -59,15 +59,14 @@ private[internal] class EvaluationProvider(
           new Exception("Missing evaluator for this debug session")
         )
       case Some(evaluator) =>
-        isEvaluating.set(true)
-        val result = evaluator.evaluate(expression, thread, frame) match {
-          case Failure(exception) =>
-            future.completeExceptionally(exception)
-          case Success(value) =>
-            future.complete(value)
+        evaluationBlock {
+          evaluator.evaluate(expression, thread, frame) match {
+            case Failure(exception) =>
+              future.completeExceptionally(exception)
+            case Success(value) =>
+              future.complete(value)
+          }
         }
-        isEvaluating.set(false)
-        result
     }
     debugContext.getStackFrameManager.reloadStackFrames(thread)
     future
@@ -92,23 +91,29 @@ private[internal] class EvaluationProvider(
       thread: ThreadReference,
       invokeSuper: Boolean
   ): CompletableFuture[Value] = {
-    isEvaluating.set(true)
     val future = new CompletableFuture[Value]()
     val obj = new JdiObject(thisContext, thread)
-    val invocation = obj.invoke(
-      methodName,
-      methodSignature,
-      if (args == null) List() else args.toList
-    )
-    invocation.getResult match {
-      case Success(value) =>
-        future.complete(value)
-      case Failure(exception) =>
-        future.completeExceptionally(exception)
+    evaluationBlock {
+      val invocation = obj.invoke(
+        methodName,
+        methodSignature,
+        if (args == null) List() else args.toList
+      )
+      invocation.getResult match {
+        case Success(value) =>
+          future.complete(value)
+        case Failure(exception) =>
+          future.completeExceptionally(exception)
+      }
+      debugContext.getStackFrameManager.reloadStackFrames(thread)
     }
-    debugContext.getStackFrameManager.reloadStackFrames(thread)
-    isEvaluating.set(false)
     future
+  }
+
+  private def evaluationBlock(f: => Unit): Unit = {
+    isEvaluating.set(true)
+    try f
+    finally { isEvaluating.set(false) }
   }
 
   override def clearState(thread: ThreadReference): Unit = {}
