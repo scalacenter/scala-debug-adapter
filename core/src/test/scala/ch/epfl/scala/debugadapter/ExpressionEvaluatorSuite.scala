@@ -528,6 +528,21 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
            |  }
            |  def main(args: Array[String]): Unit = {
            |    val result = f(2)
+           |  }
+           |}
+           |""".stripMargin
+      assertEvaluations(
+        source,
+        "EvaluateTest",
+        ExpressionEvaluation(5, "f(x)", _.exists(_.toInt == 2))
+      )
+    }
+
+    "should keep working after success or failure" - {
+      val source =
+        """|object EvaluateTest {
+           |  def main(args: Array[String]): Unit = {
+           |    val result = 2
            |    println(result)
            |    println(result)
            |    println(result)
@@ -537,10 +552,9 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
       assertEvaluations(
         source,
         "EvaluateTest",
-        ExpressionEvaluation(5, "f(x)", _.exists(_.toInt == 2)),
-        ExpressionEvaluation(10, "result + 1", _.exists(_.toInt == 3)),
-        ExpressionEvaluation(11, "resulterror", _.isLeft),
-        ExpressionEvaluation(12, "result + 2", _.exists(_.toInt == 4))
+        ExpressionEvaluation(4, "result + 1", _.exists(_.toInt == 3)),
+        ExpressionEvaluation(5, "resulterror", _.isLeft),
+        ExpressionEvaluation(6, "result + 2", _.exists(_.toInt == 4))
       )
     }
   }
