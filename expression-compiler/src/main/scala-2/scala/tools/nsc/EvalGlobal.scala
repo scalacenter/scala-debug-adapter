@@ -288,18 +288,24 @@ private[nsc] class EvalGlobal(
      * Extracts all defs (local variables, fields, arguments, etc.) that are accessible in the line of the breakpoint.
      */
     class DefExtractor extends Traverser {
+
+      def isCorrectOwner(tree: Tree) = {
+        expressionOwners.contains(tree.symbol.owner) ||
+        (tree.symbol.owner.isConstructor) && expressionOwners.contains(
+          tree.symbol.owner.owner
+        )
+      }
+
       override def traverse(tree: Tree): Unit = tree match {
         case tree: ClassDef if tree.name.decode == expressionClassName =>
           thisSym = tree.symbol
         case tree: ValDef
-            if expressionOwners.contains(tree.symbol.owner) && defNames
-              .contains(tree.name.decode) =>
+            if isCorrectOwner(tree) && defNames.contains(tree.name.decode) =>
           valOrDefDefs += (tree.name -> tree)
           super.traverse(tree)
         case tree: DefDef
-            if expressionOwners.contains(
-              tree.symbol.owner
-            ) && tree.symbol.isGetter && defNames.contains(tree.name.decode) =>
+            if isCorrectOwner(tree) && tree.symbol.isGetter &&
+              defNames.contains(tree.name.decode) =>
           valOrDefDefs += (tree.name -> tree)
           super.traverse(tree)
         case _ => super.traverse(tree)
