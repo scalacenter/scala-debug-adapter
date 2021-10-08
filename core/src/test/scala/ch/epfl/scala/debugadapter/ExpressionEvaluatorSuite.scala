@@ -483,6 +483,24 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
       )
     }
 
+    "should evaluate in default arguments" - {
+      val source =
+        """|object EvaluateTest {
+           |  def main(args: Array[String]): Unit = {
+           |    foo(3)()
+           |  }
+           |  def foo(x: Int)(
+           |    y: Int = x + 1
+           |  ): Unit = {
+           |    println("foo")
+           |  }
+           |}
+           |""".stripMargin
+      assertEvaluation(source, "EvaluateTest", 6, "x + 1")(
+        _.exists(_.toInt == 4)
+      )
+    }
+
     "should evaluate nested method" - {
       val source =
         """|object EvaluateTest {

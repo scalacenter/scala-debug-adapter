@@ -46,7 +46,9 @@ final class ExpressionCompiler {
       error.foreach(errorConsumer.accept)
       error.isEmpty
     } catch {
-      case NonFatal(_) =>
+      case NonFatal(t) =>
+        t.printStackTrace()
+        errorConsumer.accept(t.getMessage())
         false
     }
   }
