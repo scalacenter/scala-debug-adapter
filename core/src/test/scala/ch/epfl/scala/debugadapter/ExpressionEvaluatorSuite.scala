@@ -557,6 +557,22 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
         ExpressionEvaluation(6, "result + 2", _.exists(_.toInt == 4))
       )
     }
+
+    "should evaluate App block method" - {
+      val source =
+        """|object EvaluateTest extends App {
+           |  val x = 1
+           |  val y = {
+           |    val msg = "Hello World!"
+           |    println(msg)
+           |    true
+           |  }
+           |}
+           |""".stripMargin
+      assertEvaluation(source, "EvaluateTest", 6, "msg.toString()")(
+        _.exists(_ == "\"Hello World!\"")
+      )
+    }
   }
 
   case class ExpressionEvaluation(
