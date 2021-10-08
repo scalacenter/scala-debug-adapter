@@ -587,17 +587,11 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
       evaluationSteps: ExpressionEvaluation*
   ): Unit = {
     val tempDir = IO.createTemporaryDirectory
-    val srcDir = new File(tempDir, "src")
-    IO.createDirectory(srcDir)
-    val outDir = new File(tempDir, "out")
-    IO.createDirectory(outDir)
-
     val runner = MainDebuggeeRunner.fromSource(
-      srcDir,
+      tempDir,
       "EvaluateTest.scala",
       source,
       mainClass,
-      outDir,
       scalaVersion
     )
     val server = DebugServer(runner, NoopLogger)

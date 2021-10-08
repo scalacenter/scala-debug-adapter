@@ -193,11 +193,6 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
 
     "should invoke custom toString even if there is a breakpoint inside" - {
       val tempDir = IO.createTemporaryDirectory
-      val srcDir = new File(tempDir, "src")
-      IO.createDirectory(srcDir)
-      val outDir = new File(tempDir, "out")
-      IO.createDirectory(outDir)
-
       val source =
         """|package example
            |
@@ -215,11 +210,10 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |}
            |""".stripMargin
       val runner = MainDebuggeeRunner.fromSource(
-        srcDir,
-        "Main.scala",
+        tempDir,
+        "example/Main.scala",
         source,
         "example.Main",
-        outDir,
         scalaVersion
       )
       val server = DebugServer(runner, NoopLogger)
@@ -241,7 +235,6 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
         assert(localScope.name == "Local")
 
         val localVars = client.variables(localScope.variablesReference)
-        println(localVars.map(_.value).mkString(" "))
         assert(localVars.map(_.value).exists(_.contains("\"B\"")))
 
         client.continue(stopped.threadId)

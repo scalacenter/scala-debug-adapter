@@ -92,16 +92,22 @@ object MainDebuggeeRunner {
   }
 
   def fromSource(
-      srcDir: File,
+      tempDir: File,
       filename: String,
       source: String,
       mainClass: String,
-      outDir: File,
       scalaVersion: ScalaVersion
   ): MainDebuggeeRunner = {
-    val path = new File(srcDir, filename).toPath
-    Files.write(path, source.getBytes())
-    compileScala(path, mainClass, outDir, scalaVersion)
+    val srcDir = new File(tempDir, "src")
+    IO.createDirectory(srcDir)
+    val outDir = new File(tempDir, "out")
+    IO.createDirectory(outDir)
+
+    val sourceFile = new File(srcDir, filename)
+    val packageFile = sourceFile.get
+
+    IO.write(sourceFile, source.getBytes())
+    compileScala(sourceFile.toPath(), mainClass, outDir, scalaVersion)
   }
 
   private def getResource(name: String): Path =
