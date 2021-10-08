@@ -12,7 +12,6 @@ import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext}
 
 object DebugServerSpec extends TestSuite {
-  val DefaultTimeout = Duration(2, TimeUnit.SECONDS)
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
   val executorService = Executors.newFixedThreadPool(1)
   implicit val ec = ExecutionContext.fromExecutorService(executorService)
@@ -81,7 +80,7 @@ object DebugServerSpec extends TestSuite {
         var client2: TestDebugClient = null
         try {
           client2 = TestDebugClient.connect(server.uri)
-          client2.initialize()
+          client2.initialize(1.second)
           assert(false) // the server should not respond to the second client
         } catch {
           case _: SocketTimeoutException => ()
@@ -117,7 +116,7 @@ object DebugServerSpec extends TestSuite {
       val client = TestDebugClient.connect(server.uri)
       try {
         val session = server.connect()
-        Await.result(session.getDebugeeAddress, DefaultTimeout)
+        Await.result(session.getDebugeeAddress, 2 seconds)
       } finally {
         server.close()
         client.close()
@@ -182,7 +181,7 @@ object DebugServerSpec extends TestSuite {
       val tempDir = IO.createTemporaryDirectory
       val runner = MainDebuggeeRunner.helloWorld(tempDir)
       val server = DebugServer(runner, NoopLogger)
-      val client = TestDebugClient.connect(server.uri, DefaultTimeout)
+      val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
         client.initialize()
@@ -201,7 +200,7 @@ object DebugServerSpec extends TestSuite {
       val tempDir = IO.createTemporaryDirectory
       val runner = MainDebuggeeRunner.helloWorld(tempDir)
       val server = DebugServer(runner, NoopLogger)
-      val client = TestDebugClient.connect(server.uri, DefaultTimeout)
+      val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
         client.initialize()
@@ -298,7 +297,7 @@ object DebugServerSpec extends TestSuite {
         client.initialize()
         client.disconnect(restart = false)
 
-        Await.result(runner.currentProcess.future, DefaultTimeout)
+        Await.result(runner.currentProcess.future, 2 seconds)
       } finally {
         server.close()
         client.close()
@@ -340,7 +339,7 @@ object DebugServerSpec extends TestSuite {
         var client2: TestDebugClient = null
         try {
           client2 = TestDebugClient.connect(handler.uri)
-          client2.initialize()
+          client2.initialize(1 second)
           assert(false) // it should not accept a second connection
         } catch {
           case _: TimeoutException => ()
