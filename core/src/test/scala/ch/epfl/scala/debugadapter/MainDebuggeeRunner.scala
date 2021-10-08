@@ -127,56 +127,17 @@ object MainDebuggeeRunner {
   ): MainDebuggeeRunner = {
     val classDir = dest / "classes"
     IO.createDirectory(classDir)
-    val compilerClassPath = Coursier.fetch(scalaVersion.compiler)
-    val libraryClassPath = Coursier.fetch(scalaVersion.library)
-    val expressionCompilerDependency = Dependency(
-      Module(
-        Organization(BuildInfo.expressionCompilerOrganization),
-        ModuleName(
-          s"${BuildInfo.expressionCompilerName}_${scalaVersion.version}"
-        )
-      ),
-      BuildInfo.expressionCompilerVersion
-    )
-    val expressionCompilerClassPath =
-      Coursier.fetch(expressionCompilerDependency)
-
-    val command = Array(
-      java.toString,
-      "-classpath",
-      compilerClassPath.map(_.absolutePath).mkString(File.pathSeparator),
-      scalaVersion.compilerMain,
-      "-d",
-      classDir.getAbsolutePath,
-      "-classpath",
-      libraryClassPath.map(_.absolutePath).mkString(File.pathSeparator),
-      src.toAbsolutePath.toString
-    )
-    val builder = new ProcessBuilder(command: _*)
-    val process = builder.start()
-    startCrawling(process.getInputStream)(System.out.println)
-    startCrawling(process.getErrorStream)(System.err.println)
-
-    val exitValue = process.waitFor()
-    if (exitValue != 0)
-      throw new IllegalArgumentException(s"cannot compile $src")
-
+    val scalaInstance = ScalaInstanceCache.get(scalaVersion)
+    scalaInstance.compile(classDir.toPath, src)
     val sourceEntry =
       StandaloneSourceFile(src, src.getParent.relativize(src).toString)
     val mainClassPathEntry = ClassPathEntry(classDir.toPath, Seq(sourceEntry))
-    val expressionCompilerClassPathUrls = expressionCompilerClassPath
-      .map(_.absolutePath.toUri.toURL)
-      .toArray
-    val evaluationClassLoader = new URLClassLoader(
-      expressionCompilerClassPathUrls,
-      null
-    )
     MainDebuggeeRunner(
       src,
       mainClassPathEntry,
-      libraryClassPath,
+      scalaInstance.libraryJars,
       mainClass,
-      Some(evaluationClassLoader)
+      Some(scalaInstance.expressionCompilerClassLoader)
     )
   }
 
