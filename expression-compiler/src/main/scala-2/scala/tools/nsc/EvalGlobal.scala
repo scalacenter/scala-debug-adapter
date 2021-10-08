@@ -181,7 +181,7 @@ private[nsc] class EvalGlobal(
           super.transform(filterOutTailRec(tree))
         case vd: ValDef if vd.pos.line == line =>
           expressionInserted = true
-          val res = atPos(vd.pos)(
+          atPos(vd.pos)(
             treeCopy.ValDef(
               vd,
               vd.mods,
@@ -190,7 +190,7 @@ private[nsc] class EvalGlobal(
               mkExprBlock(vd.rhs)
             )
           )
-          res
+
         case tree if tree.pos.line == line =>
           expressionInserted = true
           atPos(tree.pos)(mkExprBlock(tree))
@@ -253,17 +253,22 @@ private[nsc] class EvalGlobal(
      * Extracts transformed expression that was inserted by the [[InsertExpression]] at the line of the breakpoint.
      */
     class ExpressionExtractor extends Traverser {
+
+      private def expressionExtracted = extractedExpression != null
+
       override def traverse(tree: Tree): Unit = tree match {
         // Don't extract expression from the Expression class
         case tree: ClassDef if tree.name.decode == expressionClassName =>
         // ignore
-        case tree: DefDef if tree.pos.line == line =>
+        case tree: DefDef if !expressionExtracted && tree.pos.line == line =>
           expressionOwners = ownerChain(tree)
           extractedExpression = extractExpression(tree.rhs)
-        case tree: ValDef if tree.pos.line == line =>
+        // default arguments will have an additional method generated, which we need to skip
+        case tree: ValDef if tree.rhs.isEmpty =>
+        case tree: ValDef if !expressionExtracted && tree.pos.line == line =>
           expressionOwners = ownerChain(tree)
           extractedExpression = extractExpression(tree.rhs)
-        case _ if tree.pos.line == line =>
+        case _ if !expressionExtracted && tree.pos.line == line =>
           expressionOwners = ownerChain(tree)
           extractedExpression = extractExpression(tree)
         case _ =>

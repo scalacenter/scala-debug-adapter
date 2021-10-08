@@ -573,6 +573,22 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
         _.exists(_ == "\"Hello World!\"")
       )
     }
+
+    "should evaluate at lambda start" - {
+      val source =
+        """|object EvaluateTest{
+           |  def main(args: Array[String]): Unit = {
+           |    val list = List(1, 2, 3)
+           |    list.foreach { x => 
+           |      println(x)
+           |    }
+           |  }
+           |}
+           |""".stripMargin
+      assertEvaluation(source, "EvaluateTest", 4, "1 + 1")(
+        _.exists(_.toInt == 2)
+      )
+    }
   }
 
   case class ExpressionEvaluation(
