@@ -8,6 +8,8 @@ def isRelease() =
   System.getenv("GITHUB_REPOSITORY") == "scalacenter/scala-debug-adapter" &&
     System.getenv("GITHUB_WORKFLOW") == "Release"
 
+def isCI = System.getenv("CI") != null
+
 inThisBuild(
   Seq(
     organization := "ch.epfl.scala",
@@ -21,6 +23,10 @@ inThisBuild(
     version ~= { dynVer =>
       if (isRelease) dynVer
       else "2.1.0-SNAPSHOT" // only for local publishing
+    },
+    libraryDependencies ++= {
+      if (isCI) Nil
+      else List(Dependencies.pprint)
     }
     // resolvers += Resolver.mavenLocal
   )

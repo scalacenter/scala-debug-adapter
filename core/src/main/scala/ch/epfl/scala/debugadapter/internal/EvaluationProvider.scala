@@ -16,6 +16,7 @@ import ch.epfl.scala.debugadapter.internal.evaluator.{
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
 import scala.util.Failure
 import scala.util.Success
+import java.util.concurrent.atomic.AtomicBoolean
 
 private[internal] object EvaluationProvider {
   def apply(
@@ -34,6 +35,7 @@ private[internal] class EvaluationProvider(
 ) extends IEvaluationProvider {
 
   private var debugContext: IDebugAdapterContext = _
+  private val isEvaluating = new AtomicBoolean(false)
 
   override def initialize(
       debugContext: IDebugAdapterContext,
@@ -42,7 +44,7 @@ private[internal] class EvaluationProvider(
     this.debugContext = debugContext
   }
 
-  override def isInEvaluation(thread: ThreadReference) = false
+  override def isInEvaluation(thread: ThreadReference) = isEvaluating.get()
 
   override def evaluate(
       expression: String,
@@ -57,11 +59,13 @@ private[internal] class EvaluationProvider(
           new Exception("Missing evaluator for this debug session")
         )
       case Some(evaluator) =>
-        evaluator.evaluate(expression, thread, frame) match {
-          case Failure(exception) =>
-            future.completeExceptionally(exception)
-          case Success(value) =>
-            future.complete(value)
+        evaluationBlock {
+          evaluator.evaluate(expression, thread, frame) match {
+            case Failure(exception) =>
+              future.completeExceptionally(exception)
+            case Success(value) =>
+              future.complete(value)
+          }
         }
     }
     debugContext.getStackFrameManager.reloadStackFrames(thread)
@@ -89,19 +93,27 @@ private[internal] class EvaluationProvider(
   ): CompletableFuture[Value] = {
     val future = new CompletableFuture[Value]()
     val obj = new JdiObject(thisContext, thread)
-    val invocation = obj.invoke(
-      methodName,
-      methodSignature,
-      if (args == null) List() else args.toList
-    )
-    invocation.getResult match {
-      case Success(value) =>
-        future.complete(value)
-      case Failure(exception) =>
-        future.completeExceptionally(exception)
+    evaluationBlock {
+      val invocation = obj.invoke(
+        methodName,
+        methodSignature,
+        if (args == null) List() else args.toList
+      )
+      invocation.getResult match {
+        case Success(value) =>
+          future.complete(value)
+        case Failure(exception) =>
+          future.completeExceptionally(exception)
+      }
+      debugContext.getStackFrameManager.reloadStackFrames(thread)
     }
-    debugContext.getStackFrameManager.reloadStackFrames(thread)
     future
+  }
+
+  private def evaluationBlock(f: => Unit): Unit = {
+    isEvaluating.set(true)
+    try f
+    finally { isEvaluating.set(false) }
   }
 
   override def clearState(thread: ThreadReference): Unit = {}

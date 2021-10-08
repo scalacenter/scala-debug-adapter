@@ -6,6 +6,7 @@ import utest._
 
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
+import java.io.File
 
 object Scala212DebugTest extends ScalaDebugTestSuite(ScalaVersion.`2.12`)
 object Scala213DebugTest extends ScalaDebugTestSuite(ScalaVersion.`2.13`)
@@ -179,6 +180,69 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
           case Array("args", "h", "this") =>
             ()
         }
+
+        client.continue(stopped.threadId)
+        client.exited()
+        client.terminated()
+      } finally {
+        server.close()
+        client.close()
+        IO.delete(tempDir)
+      }
+    }
+
+    "should invoke custom toString even if there is a breakpoint inside" - {
+      val tempDir = IO.createTemporaryDirectory
+      val srcDir = new File(tempDir, "src")
+      IO.createDirectory(srcDir)
+      val outDir = new File(tempDir, "out")
+      IO.createDirectory(outDir)
+
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A()
+           |    println("exiting")
+           |  }
+           |}
+           |
+           |class A {
+           |  override def toString(): String = {
+           |    "B"
+           |  }
+           |}
+           |""".stripMargin
+      val runner = MainDebuggeeRunner.fromSource(
+        srcDir,
+        "Main.scala",
+        source,
+        "example.Main",
+        outDir,
+        scalaVersion
+      )
+      val server = DebugServer(runner, NoopLogger)
+      val client = TestDebugClient.connect(server.uri)
+      try {
+        server.connect()
+        client.initialize()
+        client.launch()
+        client.setBreakpoints(runner.source, Array(6, 12))
+        client.configurationDone()
+
+        val stopped = client.stopped()
+        val stackTrace = client.stackTrace(stopped.threadId)
+        val topFrame = stackTrace.stackFrames.head
+        val scopes = client.scopes(topFrame.id)
+        assert(scopes.length == 1)
+
+        val localScope = scopes.head
+        assert(localScope.name == "Local")
+
+        val localVars = client.variables(localScope.variablesReference)
+        println(localVars.map(_.value).mkString(" "))
+        assert(localVars.map(_.value).exists(_.contains("\"B\"")))
 
         client.continue(stopped.threadId)
         client.exited()
