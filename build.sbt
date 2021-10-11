@@ -20,6 +20,7 @@ inThisBuild(
     ),
     developers := Developers.list,
     scalaVersion := Dependencies.scala212,
+    scalacOptions ++= Seq("-Xsource:3"),
     version ~= { dynVer =>
       if (isRelease) dynVer
       else "2.1.0-SNAPSHOT" // only for local publishing
