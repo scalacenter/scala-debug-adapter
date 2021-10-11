@@ -118,7 +118,7 @@ private[nsc] class EvalGlobal(
           .setPos(NoPosition)
         parsed match {
           case df: ValOrDefDef =>
-            Block(df, Literal(Constant()))
+            Block(df, Literal(Constant(())))
           case expr => expr
         }
       }
@@ -214,7 +214,7 @@ private[nsc] class EvalGlobal(
 
       private def mkExprBlock(tree: Tree): Tree =
         if (tree.isDef)
-          Block(List(parsedExpression, tree), Literal(Constant()))
+          Block(List(parsedExpression, tree), Literal(Constant(())))
         else
           Block(List(parsedExpression), tree)
     }
