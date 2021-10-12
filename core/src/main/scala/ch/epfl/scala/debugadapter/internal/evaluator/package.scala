@@ -33,7 +33,7 @@ package object evaluator {
       )
     ).recoverWith { case t: InvocationException =>
       extractMessage(t)(thread).map(message =>
-        throw new ExpressionEvaluationFailed(message)
+        throw new MethodInvocationFailed(message, t.exception())
       )
     }
   }

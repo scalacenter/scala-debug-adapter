@@ -1,22 +1,21 @@
 package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter.DebuggeeRunner
+import ch.epfl.scala.debugadapter.internal.evaluator.ExpressionCompiler
+import ch.epfl.scala.debugadapter.internal.evaluator.ExpressionEvaluator
+import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
+import ch.epfl.scala.debugadapter.internal.evaluator.MethodInvocationFailed
 import com.microsoft.java.debug.core.IEvaluatableBreakpoint
-import com.microsoft.java.debug.core.adapter.{
-  IDebugAdapterContext,
-  IEvaluationProvider
-}
-import com.sun.jdi.{ObjectReference, ThreadReference, Value}
+import com.microsoft.java.debug.core.adapter.IDebugAdapterContext
+import com.microsoft.java.debug.core.adapter.IEvaluationProvider
+import com.sun.jdi.ObjectReference
+import com.sun.jdi.ThreadReference
+import com.sun.jdi.Value
 
 import java.util.concurrent.CompletableFuture
-import ch.epfl.scala.debugadapter.internal.evaluator.{
-  ExpressionEvaluator,
-  ExpressionCompiler
-}
-import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.util.Failure
 import scala.util.Success
-import java.util.concurrent.atomic.AtomicBoolean
 
 private[internal] object EvaluationProvider {
   def apply(
@@ -94,11 +93,16 @@ private[internal] class EvaluationProvider(
     val future = new CompletableFuture[Value]()
     val obj = new JdiObject(thisContext, thread)
     evaluationBlock {
-      val invocation = obj.invoke(
-        methodName,
-        methodSignature,
-        if (args == null) List() else args.toList
-      )
+      val invocation = obj
+        .invoke(
+          methodName,
+          methodSignature,
+          if (args == null) List() else args.toList
+        )
+        .recover {
+          // if invocation throws an exception, we return that exception as the result
+          case MethodInvocationFailed(msg, exception) => exception
+        }
       invocation.getResult match {
         case Success(value) =>
           future.complete(value)

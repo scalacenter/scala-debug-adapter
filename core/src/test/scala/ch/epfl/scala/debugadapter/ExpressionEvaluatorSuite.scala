@@ -589,6 +589,23 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
         _.exists(_.toInt == 2)
       )
     }
+
+    "should return exception as the result of evaluation" - {
+      val source =
+        """|object EvaluateTest{
+           |  def main(args: Array[String]): Unit = {
+           |    println("Hello, World!")
+           |  }
+           |
+           |  def throwException(): Unit = {
+           |    throw new Exception("error")
+           |  }
+           |}
+           |""".stripMargin
+      assertEvaluation(source, "EvaluateTest", 3, "throwException()")(
+        _.exists(_.contains("\"java.lang.Exception: error\""))
+      )
+    }
   }
 
   case class ExpressionEvaluation(
