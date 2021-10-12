@@ -79,13 +79,12 @@ private[internal] class ExpressionEvaluator(
       expressionInstance: JdiObject,
       args: List[ObjectReference]
   ): Safe[Value] = {
-    Try(expressionInstance.invoke("evaluate", args)) match {
-      case Failure(cause: InvocationException) =>
-        // if invocation fails, return the exception as result
-        Safe(cause.exception)
-      case Failure(cause) => throw cause
-      case Success(value) => value
-    }
+    expressionInstance
+      .invoke("evaluate", args)
+      .recover {
+        // if evaluation throws an exception, we return that exception as the result
+        case MethodInvocationFailed(msg, exception) => exception
+      }
   }
 
   /**
