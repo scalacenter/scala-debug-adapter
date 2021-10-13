@@ -3,7 +3,6 @@ package ch.epfl.scala.debugadapter
 import ch.epfl.scala.debugadapter.internal.DebugSession
 import ch.epfl.scala.debugadapter.testing.TestDebugClient
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
-import sbt.io.IO
 import utest._
 
 import java.net.{ConnectException, SocketException, SocketTimeoutException}
@@ -110,8 +109,7 @@ object DebugServerSpec extends TestSuite {
     }
 
     "should set debug address when debuggee starts the jvm" - {
-      val tempDir = IO.temporaryDirectory
-      val runner = MainDebuggeeRunner.sleep(tempDir)
+      val runner = MainDebuggeeRunner.sleep()
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -120,7 +118,6 @@ object DebugServerSpec extends TestSuite {
       } finally {
         server.close()
         client.close()
-        IO.delete(tempDir)
       }
     }
 
@@ -140,8 +137,7 @@ object DebugServerSpec extends TestSuite {
     }
 
     "should launch and send initialized event if the debuggee has started a jvm" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.sleep(tempDir)
+      val runner = MainDebuggeeRunner.sleep()
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -153,13 +149,11 @@ object DebugServerSpec extends TestSuite {
       } finally {
         server.close()
         client.close()
-        IO.delete(tempDir)
       }
     }
 
     "should send terminated events when closed" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.sleep(tempDir)
+      val runner = MainDebuggeeRunner.sleep()
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -173,13 +167,11 @@ object DebugServerSpec extends TestSuite {
       } finally {
         server.close() // in case test fails
         client.close()
-        IO.delete(tempDir)
       }
     }
 
     "should send output event when debuggee prints to stdout" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.helloWorld(tempDir)
+      val runner = MainDebuggeeRunner.helloWorld()
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -192,13 +184,11 @@ object DebugServerSpec extends TestSuite {
       } finally {
         server.close()
         client.close()
-        IO.delete(tempDir)
       }
     }
 
     "should send exited and terminated events when debuggee exits successfully" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.helloWorld(tempDir)
+      val runner = MainDebuggeeRunner.helloWorld()
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -214,13 +204,11 @@ object DebugServerSpec extends TestSuite {
       } finally {
         server.close()
         client.close()
-        IO.delete(tempDir)
       }
     }
 
     "should send exited and terminated events when debuggee exits in error" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.sysExit(tempDir)
+      val runner = MainDebuggeeRunner.sysExit()
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -239,13 +227,11 @@ object DebugServerSpec extends TestSuite {
       } finally {
         server.close()
         client.close()
-        IO.delete(tempDir)
       }
     }
 
     "should support breakpoints in java classes" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.javaBreakpointTest(tempDir)
+      val runner = MainDebuggeeRunner.javaBreakpointTest()
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -283,7 +269,6 @@ object DebugServerSpec extends TestSuite {
       } finally {
         server.close()
         client.close()
-        IO.delete(tempDir)
       }
     }
 

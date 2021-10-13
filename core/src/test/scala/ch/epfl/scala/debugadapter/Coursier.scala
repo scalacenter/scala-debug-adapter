@@ -6,11 +6,15 @@ import java.io.File
 
 object Coursier {
   def fetchOnly(org: String, name: String, version: String): ClassPathEntry = {
+    fetch(org, name, version)
+      .find(_.absolutePath.getFileName.toString == s"$name-$version.jar")
+      .get
+  }
+
+  def fetch(org: String, name: String, version: String): Seq[ClassPathEntry] = {
     val dependency =
       Dependency(Module(Organization(org), ModuleName(name)), version)
     fetch(dependency)
-      .find(_.absolutePath.getFileName.toString == s"$name-$version.jar")
-      .get
   }
 
   def fetch(dependency: Dependency): Seq[ClassPathEntry] = fetch(

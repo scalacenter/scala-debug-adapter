@@ -1,7 +1,6 @@
 package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testing.TestDebugClient
-import sbt.io.IO
 import utest._
 
 import java.util.concurrent.Executors
@@ -19,8 +18,7 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
 
   def tests: Tests = Tests {
     "should support breakpoints in scala sources" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.scalaBreakpointTest(tempDir, scalaVersion)
+      val runner = MainDebuggeeRunner.scalaBreakpointTest(scalaVersion)
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -64,13 +62,11 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
       } finally {
         server.close()
         client.close()
-        IO.delete(tempDir)
       }
     }
 
     "should support breakpoints in fully qualified classes" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.scalaBreakpointTest(tempDir, scalaVersion)
+      val runner = MainDebuggeeRunner.scalaBreakpointTest(scalaVersion)
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -99,13 +95,11 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
       } finally {
         server.close()
         client.close()
-        IO.delete(tempDir)
       }
     }
 
     "should return stacktrace, scopes and variables when stopped by a breakpoint" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.scalaBreakpointTest(tempDir, scalaVersion)
+      val runner = MainDebuggeeRunner.scalaBreakpointTest(scalaVersion)
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -141,13 +135,11 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
       } finally {
         server.close()
         client.close()
-        IO.delete(tempDir)
       }
     }
 
     "should return variables after expression evaluation" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.scalaBreakpointTest(tempDir, scalaVersion)
+      val runner = MainDebuggeeRunner.scalaBreakpointTest(scalaVersion)
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -187,12 +179,10 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
       } finally {
         server.close()
         client.close()
-        IO.delete(tempDir)
       }
     }
 
     "should invoke custom toString even if there is a breakpoint inside" - {
-      val tempDir = IO.createTemporaryDirectory
       val source =
         """|package example
            |
@@ -209,9 +199,7 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |  }
            |}
            |""".stripMargin
-      val runner = MainDebuggeeRunner.fromSource(
-        tempDir,
-        "example/Main.scala",
+      val runner = MainDebuggeeRunner.mainClassRunner(
         source,
         "example.Main",
         scalaVersion
@@ -243,7 +231,6 @@ class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
       } finally {
         server.close()
         client.close()
-        IO.delete(tempDir)
       }
     }
   }
