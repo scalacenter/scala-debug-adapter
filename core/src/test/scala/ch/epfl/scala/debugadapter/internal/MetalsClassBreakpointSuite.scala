@@ -173,24 +173,22 @@ object MetalsClassBreakpointSuite extends TestSuite {
         expectedClassName: String,
         scalaVersion: ScalaVersion = ScalaVersion.`2.13`
     ): Unit = {
-      val tempDir = sbt.io.IO.createTemporaryDirectory
-      try {
-        val source = original.replace(">>", "  ")
-        val lineNumber =
-          original.linesIterator.toSeq.indexWhere(_.contains(">>")) + 1
+      val source = original.replace(">>", "  ")
+      val lineNumber =
+        original.linesIterator.toSeq.indexWhere(_.contains(">>")) + 1
 
-        val runner =
-          MainDebuggeeRunner.fromSource(source, scalaVersion, tempDir)
-        val lookUp = ClassEntryLookUp(runner.projectEntry)
+      val runner = MainDebuggeeRunner.mainClassRunner(
+        source,
+        "Main", // incorrect but not used
+        scalaVersion
+      )
+      val lookUp = ClassEntryLookUp(runner.projectEntry)
 
-        val sourceFile = runner.source.toUri
+      val sourceFile = runner.source.toUri
 
-        val className =
-          lookUp.getFullyQualifiedClassName(sourceFile, lineNumber)
-        assert(className.contains(expectedClassName))
-      } finally {
-        sbt.io.IO.delete(tempDir)
-      }
+      val className =
+        lookUp.getFullyQualifiedClassName(sourceFile, lineNumber)
+      assert(className.contains(expectedClassName))
     }
   }
 }

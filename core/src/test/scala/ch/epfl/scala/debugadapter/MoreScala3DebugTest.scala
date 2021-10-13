@@ -1,7 +1,6 @@
 package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testing.TestDebugClient
-import sbt.io.IO
 import utest._
 
 import java.util.concurrent.Executors
@@ -14,8 +13,7 @@ object MoreScala3DebugTest extends TestSuite {
 
   def tests: Tests = Tests {
     "should support breakpoints in scala 3 with brace-less syntax" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.scala3Braceless(tempDir)
+      val runner = MainDebuggeeRunner.scala3Braceless()
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -43,13 +41,11 @@ object MoreScala3DebugTest extends TestSuite {
       } finally {
         server.close()
         client.close()
-        IO.delete(tempDir)
       }
     }
 
     "should support breakpoints in scala 3 with @main" - {
-      val tempDir = IO.createTemporaryDirectory
-      val runner = MainDebuggeeRunner.scala3MainAnnotation(tempDir)
+      val runner = MainDebuggeeRunner.scala3MainAnnotation()
       val server = DebugServer(runner, NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -77,7 +73,6 @@ object MoreScala3DebugTest extends TestSuite {
       } finally {
         server.close()
         client.close()
-        IO.delete(tempDir)
       }
     }
   }

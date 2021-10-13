@@ -2,7 +2,6 @@ package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testing.TestDebugClient
 import com.microsoft.java.debug.core.protocol.Types.Message
-import sbt.io.IO
 import utest._
 
 import java.io.File
@@ -10,6 +9,8 @@ import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import com.microsoft.java.debug.core.protocol.Types.Message
+import java.nio.file.Path
+import org.iq80.snappy.Main
 
 object Scala212EvaluatorSpec
     extends ExpressionEvaluatorSuite(ScalaVersion.`2.12`)
@@ -32,7 +33,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 3, "1 + 2")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 3, "1 + 2")(
         _.exists(_.toInt == 3)
       )
     }
@@ -47,7 +48,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 5, "x1 + x2")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 5, "x1 + x2")(
         _.exists(_.toDouble == 3.3)
       )
     }
@@ -67,10 +68,10 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 10, "x1 + x2")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 10, "x1 + x2")(
         _.exists(_.toDouble == 3.3)
       )
-      assertEvaluation(source, "EvaluateTest", 10, "A.x1")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 10, "A.x1")(
         _.exists(_ == "\"x1\"")
       )
     }
@@ -86,7 +87,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 6, "x1 + x2")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 6, "x1 + x2")(
         _.exists(_.toDouble == 3.3)
       )
     }
@@ -107,9 +108,11 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 5, "x1")(_.exists(_ == "\"x1\""))
-      assertEvaluation(source, "EvaluateTest", 11, "new A().x1")(
-        _.exists(_ == "\"x1\"")
+      assertEvaluationsInMainClass(
+        source,
+        "EvaluateTest",
+        ExpressionEvaluation(11, "new A().x1", _.exists(_ == "\"x1\"")),
+        ExpressionEvaluation(5, "x1", _.exists(_ == "\"x1\""))
       )
     }
 
@@ -129,7 +132,9 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 5, "x1")(_.exists(_ == "\"x1\""))
+      assertEvaluationInMainClass(source, "EvaluateTest", 5, "x1")(
+        _.exists(_ == "\"x1\"")
+      )
     }
 
     "should evaluate expression with inner class's public fields" - {
@@ -152,9 +157,11 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 6, "x1")(_.exists(_ == "\"x1\""))
-      assertEvaluation(source, "EvaluateTest", 15, "b.x1")(
-        _.exists(_ == "\"x1\"")
+      assertEvaluationsInMainClass(
+        source,
+        "EvaluateTest",
+        ExpressionEvaluation(15, "b.x1", _.exists(_ == "\"x1\"")),
+        ExpressionEvaluation(6, "x1", _.exists(_ == "\"x1\""))
       )
     }
 
@@ -178,7 +185,9 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 6, "x1")(_.exists(_ == "\"x1\""))
+      assertEvaluationInMainClass(source, "EvaluateTest", 6, "x1")(
+        _.exists(_ == "\"x1\"")
+      )
     }
 
     "should evaluate expression with outer class's public fields" - {
@@ -200,7 +209,9 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 5, "x1")(_.exists(_ == "\"x1\""))
+      assertEvaluationInMainClass(source, "EvaluateTest", 5, "x1")(
+        _.exists(_ == "\"x1\"")
+      )
     }
 
     "should evaluate expression with a public method call" - {
@@ -225,7 +236,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |}
           |""".stripMargin
 
-      assertEvaluation(source, "EvaluateTest", 5, "m2()")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 5, "m2()")(
         _.exists(_.toInt == 1)
       )
     }
@@ -251,7 +262,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 7, "x1")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 7, "x1")(
         _.exists(_ == "\"x1x1\"")
       )
     }
@@ -266,7 +277,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "debug.EvaluateTest", 4, "1 + 2")(
+      assertEvaluationInMainClass(source, "debug.EvaluateTest", 4, "1 + 2")(
         _.exists(_.toInt == 3)
       )
     }
@@ -279,7 +290,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(
+      assertEvaluationInMainClass(
         source,
         "EvaluateTest",
         3,
@@ -295,10 +306,11 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 3, "1 ++ 2") { result =>
-        result.left.exists { msg =>
-          msg.format.contains("value ++ is not a member of Int")
-        }
+      assertEvaluationInMainClass(source, "EvaluateTest", 3, "1 ++ 2") {
+        result =>
+          result.left.exists { msg =>
+            msg.format.contains("value ++ is not a member of Int")
+          }
       }
     }
 
@@ -312,7 +324,9 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 4, "n")(_.exists(_.toInt == 1))
+      assertEvaluationInMainClass(source, "EvaluateTest", 4, "n")(
+        _.exists(_.toInt == 1)
+      )
     }
 
     "should evaluate expression a object's method call inside of a lambda" - {
@@ -327,7 +341,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  def m1(): Int = 9
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 4, "m1()")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 4, "m1()")(
         _.exists(_.toInt == 9)
       )
     }
@@ -351,7 +365,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 4, "m2()")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 4, "m2()")(
         _.exists(_.toInt == 10)
       )
     }
@@ -365,7 +379,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 3, "1 + 2")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 3, "1 + 2")(
         _.exists(_.toInt == 3)
       )
     }
@@ -382,7 +396,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 2, "1 + 2")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 2, "1 + 2")(
         _.exists(_.toInt == 3)
       )
     }
@@ -395,7 +409,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
            |  }
            |}
            |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 3, "val x = 123")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 3, "val x = 123")(
         _.exists(_ == "<void value>")
       )
     }
@@ -409,7 +423,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(
+      assertEvaluationInMainClass(
         source,
         "EvaluateTest",
         4,
@@ -420,7 +434,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
       )(
         _.exists(_.toInt == 6)
       )
-      assertEvaluation(
+      assertEvaluationInMainClass(
         source,
         "EvaluateTest",
         4,
@@ -461,16 +475,21 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 5, "this.p(\"foo\")")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 5, "this.p(\"foo\")")(
         _.exists(_ == "\"foo\"")
       )
-      assertEvaluation(source, "EvaluateTest", 5, "foo.p(\"foo\")")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 5, "foo.p(\"foo\")")(
         _.exists(_ == "\"foo\"")
       )
-      assertEvaluation(source, "EvaluateTest", 5, "getFoo().p(\"foo\")")(
+      assertEvaluationInMainClass(
+        source,
+        "EvaluateTest",
+        5,
+        "getFoo().p(\"foo\")"
+      )(
         _.exists(_ == "\"foo\"")
       )
-      assertEvaluation(
+      assertEvaluationInMainClass(
         source,
         "EvaluateTest",
         5,
@@ -478,7 +497,12 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
       )(
         _.exists(_ == "\"foo\"")
       )
-      assertEvaluation(source, "EvaluateTest", 5, "A.getFoo().p(\"foo\")")(
+      assertEvaluationInMainClass(
+        source,
+        "EvaluateTest",
+        5,
+        "A.getFoo().p(\"foo\")"
+      )(
         _.exists(_ == "\"foo\"")
       )
     }
@@ -496,7 +520,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
            |  }
            |}
            |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 6, "x + 1")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 6, "x + 1")(
         _.exists(_.toInt == 4)
       )
     }
@@ -512,7 +536,12 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
            |  }
            |} 
            |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 6, """ msg("Alice") """)(
+      assertEvaluationInMainClass(
+        source,
+        "EvaluateTest",
+        6,
+        """ msg("Alice") """
+      )(
         _.exists(_ == "\"Hello, Alice\"")
       )
     }
@@ -531,7 +560,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
            |  }
            |}
            |""".stripMargin
-      assertEvaluations(
+      assertEvaluationsInMainClass(
         source,
         "EvaluateTest",
         ExpressionEvaluation(5, "f(x)", _.exists(_.toInt == 2))
@@ -549,7 +578,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
            |  }
            |}
            |""".stripMargin
-      assertEvaluations(
+      assertEvaluationsInMainClass(
         source,
         "EvaluateTest",
         ExpressionEvaluation(4, "result + 1", _.exists(_.toInt == 3)),
@@ -569,7 +598,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
            |  }
            |}
            |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 6, "msg.toString()")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 6, "msg.toString()")(
         _.exists(_ == "\"Hello World!\"")
       )
     }
@@ -585,7 +614,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
            |  }
            |}
            |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 4, "1 + 1")(
+      assertEvaluationInMainClass(source, "EvaluateTest", 4, "1 + 1")(
         _.exists(_.toInt == 2)
       )
     }
@@ -602,8 +631,39 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
            |  }
            |}
            |""".stripMargin
-      assertEvaluation(source, "EvaluateTest", 3, "throwException()")(
+      assertEvaluationInMainClass(
+        source,
+        "EvaluateTest",
+        3,
+        "throwException()"
+      )(
         _.exists(_.contains("\"java.lang.Exception: error\""))
+      )
+    }
+
+    "should evaluate in munit test (pending)" - {
+      val source =
+        """|class MySuite extends munit.FunSuite {
+           |  def sum(list: List[Int]): Int = list.sum
+           |
+           |  test("sum of a few numbers") {
+           |    assertEquals(sum(List(1,2,0)), 3)
+           |  }
+           |}""".stripMargin
+      assertEvaluationsInTestSuite(
+        source,
+        "MySuite",
+        ExpressionEvaluation(
+          5,
+          "1 + 1",
+          _.exists(_ == "\"values are not the same\"")
+        ),
+        // evaluating twice because the program stops twice at the same breakpoint...
+        ExpressionEvaluation(
+          5,
+          "1 + 1",
+          _.exists(_ == "\"values are not the same\"")
+        )
       )
     }
   }
@@ -614,19 +674,43 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
       assertion: Either[Message, String] => Boolean
   )
 
-  private def assertEvaluations(
+  private def assertEvaluationInMainClass(
+      source: String,
+      mainClass: String,
+      line: Int,
+      expression: String
+  )(assertion: Either[Message, String] => Boolean): Unit = {
+    assertEvaluationsInMainClass(
+      source,
+      mainClass,
+      ExpressionEvaluation(line, expression, assertion)
+    )
+  }
+
+  private def assertEvaluationsInMainClass(
       source: String,
       mainClass: String,
       evaluationSteps: ExpressionEvaluation*
   ): Unit = {
-    val tempDir = IO.createTemporaryDirectory
-    val runner = MainDebuggeeRunner.fromSource(
-      tempDir,
-      "EvaluateTest.scala",
-      source,
-      mainClass,
-      scalaVersion
-    )
+    val runner =
+      MainDebuggeeRunner.mainClassRunner(source, mainClass, scalaVersion)
+    assertEvaluations(runner, evaluationSteps)
+  }
+
+  private def assertEvaluationsInTestSuite(
+      source: String,
+      testSuite: String,
+      evaluationSteps: ExpressionEvaluation*
+  ): Unit = {
+    val runner =
+      MainDebuggeeRunner.munitTestSuite(source, testSuite, scalaVersion)
+    assertEvaluations(runner, evaluationSteps)
+  }
+
+  private def assertEvaluations(
+      runner: MainDebuggeeRunner,
+      evaluationSteps: Seq[ExpressionEvaluation]
+  ): Unit = {
     val server = DebugServer(runner, NoopLogger)
     val client = TestDebugClient.connect(server.uri, 20.seconds)
     try {
@@ -657,20 +741,6 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
     } finally {
       server.close()
       client.close()
-      IO.delete(tempDir)
     }
-  }
-
-  private def assertEvaluation(
-      source: String,
-      mainClass: String,
-      line: Int,
-      expression: String
-  )(assertion: Either[Message, String] => Boolean): Unit = {
-    assertEvaluations(
-      source,
-      mainClass,
-      ExpressionEvaluation(line, expression, assertion)
-    )
   }
 }

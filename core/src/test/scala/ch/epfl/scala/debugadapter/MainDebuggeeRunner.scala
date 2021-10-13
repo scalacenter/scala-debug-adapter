@@ -2,8 +2,6 @@ package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.MainDebuggeeRunner._
 import coursier.{Dependency, Module, ModuleName, Organization}
-import sbt.io.IO
-import sbt.io.syntax._
 
 import java.io.{BufferedReader, File, InputStream, InputStreamReader}
 import java.net.{InetSocketAddress, URLClassLoader}
@@ -11,6 +9,8 @@ import java.nio.file.{Files, Path, Paths}
 import scala.concurrent.{Future, Promise}
 import scala.util.Properties
 import scala.util.control.NonFatal
+import utest.test
+import scala.concurrent.duration.Duration
 
 case class MainDebuggeeRunner(
     source: Path,
@@ -43,71 +43,152 @@ object MainDebuggeeRunner {
   private final val JDINotificationPrefix =
     "Listening for transport dt_socket at address: "
 
-  def fromSource(
-      source: String,
-      scalaVersion: ScalaVersion,
-      dest: File
-  ): MainDebuggeeRunner = {
-    val srcFile = dest / "src" / "Main.scala"
-    IO.write(srcFile, source.getBytes)
-    compileScala(srcFile.toPath, "", dest, scalaVersion)
-  }
+  def sleep(): MainDebuggeeRunner =
+    fromResource(
+      "/scala/Sleep.scala",
+      "scaladebug.test.Sleep",
+      ScalaVersion.`2.12`
+    )
 
-  def sleep(dest: File): MainDebuggeeRunner = {
-    val src = getResource("/scala/Sleep.scala")
-    compileScala(src, "scaladebug.test.Sleep", dest, ScalaVersion.`2.12`)
-  }
+  def helloWorld(): MainDebuggeeRunner =
+    fromResource(
+      "/scala/HelloWorld.scala",
+      "scaladebug.test.HelloWorld",
+      ScalaVersion.`2.12`
+    )
 
-  def helloWorld(dest: File): MainDebuggeeRunner = {
-    val src = getResource("/scala/HelloWorld.scala")
-    compileScala(src, "scaladebug.test.HelloWorld", dest, ScalaVersion.`2.12`)
-  }
-
-  def sysExit(dest: File): MainDebuggeeRunner = {
-    val src = getResource("/scala/SysExit.scala")
-    compileScala(src, "scaladebug.test.SysExit", dest, ScalaVersion.`2.12`)
-  }
+  def sysExit(): MainDebuggeeRunner =
+    fromResource(
+      "/scala/SysExit.scala",
+      "scaladebug.test.SysExit",
+      ScalaVersion.`2.12`
+    )
 
   def scalaBreakpointTest(
-      dest: File,
+      scalaVersion: ScalaVersion
+  ): MainDebuggeeRunner =
+    fromResource(
+      "/scala/BreakpointTest.scala",
+      "scaladebug.test.BreakpointTest",
+      scalaVersion
+    )
+
+  def javaBreakpointTest(): MainDebuggeeRunner = {
+    val file = getResource("/java/BreakpointTest.java")
+    val source = new String(Files.readAllBytes(file))
+    fromJavaSource(source, "scaladebug.test.BreakpointTest")
+  }
+
+  def scala3Braceless(): MainDebuggeeRunner =
+    fromResource(
+      "/scala-3/braceless.scala",
+      "scaladebug.test.Example",
+      ScalaVersion.`3`
+    )
+
+  def scala3MainAnnotation(): MainDebuggeeRunner =
+    fromResource(
+      "/scala-3/main-annotation.scala",
+      "scaladebug.test.app",
+      ScalaVersion.`3`
+    )
+
+  def fromResource(
+      resource: String,
+      mainClass: String,
       scalaVersion: ScalaVersion
   ): MainDebuggeeRunner = {
-    val src = getResource("/scala/BreakpointTest.scala")
-    compileScala(src, "scaladebug.test.BreakpointTest", dest, scalaVersion)
+    val file = getResource(resource)
+    val source = new String(Files.readAllBytes(file))
+    mainClassRunner(source, mainClass, scalaVersion)
   }
 
-  def javaBreakpointTest(dest: File): MainDebuggeeRunner = {
-    val src = getResource("/java/BreakpointTest.java")
-    compileJava(src, "scaladebug.test.BreakpointTest", dest)
+  private def munitTestRunner(testSuite: String) =
+    s"""|import scala.concurrent.Await
+        |import scala.util.Try
+        |import scala.concurrent.duration.Duration
+        |
+        |object TestRunner {
+        |  def main(args: Array[String]): Unit = {
+        |    val suite = new $testSuite()
+        |    suite.munitTests().foreach { test =>
+        |      Try(Await.result(test.body(), Duration.Inf))
+        |    }
+        |  }
+        |}
+        |""".stripMargin
+
+  def munitTestSuite(
+      source: String,
+      testSuite: String,
+      scalaVersion: ScalaVersion
+  ): MainDebuggeeRunner = {
+    val tempDir = Files.createTempDirectory("scala-debug-adapter")
+
+    val srcDir = tempDir.resolve("src")
+    Files.createDirectory(srcDir)
+    val outDir = tempDir.resolve("out")
+    Files.createDirectory(outDir)
+
+    val sourceFile = srcDir.resolve(s"$testSuite.scala")
+    Files.write(sourceFile, source.getBytes())
+
+    val testRunner = srcDir.resolve("TestRunner.scala")
+    Files.write(testRunner, munitTestRunner(testSuite).getBytes())
+
+    val scalaInstance = ScalaInstanceCache.get(scalaVersion)
+    val classDir = outDir.resolve("classes")
+    Files.createDirectory(classDir)
+
+    val dependencies = Coursier.fetch(
+      "org.scalameta",
+      s"munit_${scalaVersion.binaryVersion}",
+      "0.7.29"
+    )
+    val classPath = (scalaInstance.libraryJars ++ dependencies).distinct
+    scalaInstance.compile(classDir, classPath, Seq(sourceFile, testRunner))
+
+    val sourceEntry = SourceDirectory(srcDir)
+    val mainClassPathEntry = ClassPathEntry(classDir, Seq(sourceEntry))
+    MainDebuggeeRunner(
+      sourceFile,
+      mainClassPathEntry,
+      classPath,
+      "TestRunner",
+      Some(scalaInstance.expressionCompilerClassLoader)
+    )
   }
 
-  def scala3Braceless(dest: File): MainDebuggeeRunner = {
-    val src = getResource("/scala-3/braceless.scala")
-    compileScala(src, "scaladebug.test.Example", dest, ScalaVersion.`3`)
-  }
-
-  def scala3MainAnnotation(dest: File): MainDebuggeeRunner = {
-    val src = getResource("/scala-3/main-annotation.scala")
-    compileScala(src, "scaladebug.test.app", dest, ScalaVersion.`3`)
-  }
-
-  def fromSource(
-      tempDir: File,
-      filename: String,
+  def mainClassRunner(
       source: String,
       mainClass: String,
       scalaVersion: ScalaVersion
   ): MainDebuggeeRunner = {
-    val srcDir = new File(tempDir, "src")
-    IO.createDirectory(srcDir)
-    val outDir = new File(tempDir, "out")
-    IO.createDirectory(outDir)
+    val tempDir = Files.createTempDirectory("scala-debug-adapter")
 
-    val sourceFile = new File(srcDir, filename)
-    val packageFile = sourceFile.get
+    val srcDir = tempDir.resolve("src")
+    Files.createDirectory(srcDir)
+    val classDir = tempDir.resolve("classes")
+    Files.createDirectory(classDir)
 
-    IO.write(sourceFile, source.getBytes())
-    compileScala(sourceFile.toPath(), mainClass, outDir, scalaVersion)
+    val sourceFile = srcDir.resolve(s"$mainClass.scala")
+    Files.write(sourceFile, source.getBytes())
+
+    val scalaInstance = ScalaInstanceCache.get(scalaVersion)
+    scalaInstance.compile(classDir, scalaInstance.libraryJars, Seq(sourceFile))
+    val sourceEntry =
+      StandaloneSourceFile(
+        sourceFile,
+        sourceFile.getParent.relativize(sourceFile).toString
+      )
+    val mainClassPathEntry = ClassPathEntry(classDir, Seq(sourceEntry))
+    MainDebuggeeRunner(
+      sourceFile,
+      mainClassPathEntry,
+      scalaInstance.libraryJars,
+      mainClass,
+      Some(scalaInstance.expressionCompilerClassLoader)
+    )
   }
 
   private def getResource(name: String): Path =
@@ -119,40 +200,25 @@ object MainDebuggeeRunner {
   private val java = javaHome.resolve(s"bin/java$ext")
   private val javac = javaHome.resolve(s"bin/javac$ext")
 
-  private def compileScala(
-      src: Path,
-      mainClass: String,
-      dest: File,
-      scalaVersion: ScalaVersion
+  private def fromJavaSource(
+      source: String,
+      mainClass: String
   ): MainDebuggeeRunner = {
-    val classDir = dest / "classes"
-    IO.createDirectory(classDir)
-    val scalaInstance = ScalaInstanceCache.get(scalaVersion)
-    scalaInstance.compile(classDir.toPath, src)
-    val sourceEntry =
-      StandaloneSourceFile(src, src.getParent.relativize(src).toString)
-    val mainClassPathEntry = ClassPathEntry(classDir.toPath, Seq(sourceEntry))
-    MainDebuggeeRunner(
-      src,
-      mainClassPathEntry,
-      scalaInstance.libraryJars,
-      mainClass,
-      Some(scalaInstance.expressionCompilerClassLoader)
-    )
-  }
+    val tempDir = Files.createTempDirectory("scala-debug-adapter")
 
-  private def compileJava(
-      src: Path,
-      mainClass: String,
-      dest: File
-  ): MainDebuggeeRunner = {
-    val classDir = dest / "classes"
-    IO.createDirectory(classDir)
+    val srcDir = tempDir.resolve("src")
+    Files.createDirectory(srcDir)
+    val classDir = tempDir.resolve("classes")
+    Files.createDirectory(classDir)
+
+    val srcFile = srcDir.resolve(s"$mainClass.java")
+    Files.write(srcFile, source.getBytes())
+
     val command = Array(
       javac.toString,
       "-d",
-      classDir.getAbsolutePath,
-      src.toAbsolutePath.toString
+      classDir.toString,
+      srcFile.toString
     )
     val builder = new ProcessBuilder(command: _*)
     val process = builder.start()
@@ -162,12 +228,11 @@ object MainDebuggeeRunner {
 
     val exitValue = process.waitFor()
     if (exitValue != 0)
-      throw new IllegalArgumentException(s"cannot compile $src")
+      throw new IllegalArgumentException(s"cannot compile $srcFile")
 
-    val sourceEntry =
-      StandaloneSourceFile(src, src.getParent.relativize(src).toString)
-    val mainClassPathEntry = ClassPathEntry(classDir.toPath, Seq(sourceEntry))
-    MainDebuggeeRunner(src, mainClassPathEntry, Seq.empty, mainClass, None)
+    val sourceEntry = SourceDirectory(srcDir)
+    val mainClassPathEntry = ClassPathEntry(classDir, Seq(sourceEntry))
+    MainDebuggeeRunner(srcFile, mainClassPathEntry, Seq.empty, mainClass, None)
   }
 
   private def startCrawling(input: InputStream)(f: String => Unit): Unit = {

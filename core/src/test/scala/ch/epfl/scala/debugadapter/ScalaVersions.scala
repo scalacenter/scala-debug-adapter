@@ -8,6 +8,7 @@ sealed trait ScalaVersion {
   def compiler: Dependency
   def library: Dependency
   def compilerMain: String
+  def binaryVersion: String
 }
 
 final case class Scala2(version: String) extends ScalaVersion {
@@ -16,6 +17,8 @@ final case class Scala2(version: String) extends ScalaVersion {
   def library: Dependency =
     Dependency(Module(organization, name"scala-library"), version)
   def compilerMain: String = "scala.tools.nsc.Main"
+  def binaryVersion: String =
+    version.split('.').take(2).mkString(".")
 }
 
 final case class Scala3(version: String) extends ScalaVersion {
@@ -24,6 +27,7 @@ final case class Scala3(version: String) extends ScalaVersion {
   def library: Dependency =
     Dependency(Module(organization, name"scala3-library_3"), version)
   def compilerMain: String = "dotty.tools.dotc.Main"
+  def binaryVersion: String = "3"
 }
 
 object ScalaVersion {

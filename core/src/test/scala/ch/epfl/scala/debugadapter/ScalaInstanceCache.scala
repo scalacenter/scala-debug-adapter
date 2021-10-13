@@ -23,14 +23,17 @@ case class ScalaInstance(
       .getOrElse(compilerClassLoader)
   }
 
-  def compile(classDir: Path, sourceFile: Path): Unit = {
+  def compile(
+      classDir: Path,
+      classPath: Seq[ClassPathEntry],
+      sourceFiles: Seq[Path]
+  ): Unit = {
     val args = Array(
       "-d",
       classDir.toString,
       "-classpath",
-      libraryJars.map(_.absolutePath).mkString(File.pathSeparator),
-      sourceFile.toString
-    )
+      classPath.map(_.absolutePath).mkString(File.pathSeparator)
+    ) ++ sourceFiles.map(_.toString)
     scalaVersion match {
       case Scala2(_) => compileScala2(args)
       case Scala3(_) => compileScala3(args)
