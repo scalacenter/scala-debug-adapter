@@ -6,7 +6,7 @@ import com.sun.jdi._
 import java.nio.file.{Files, Path}
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 private[internal] class ExpressionEvaluator(
     sourceLookUpProvider: ISourceLookUpProvider,
@@ -60,9 +60,6 @@ private[internal] class ExpressionEvaluator(
           throw new ExpressionCompilationFailed(error.getOrElse(""))
       }
       // // if everything went smooth we can load our expression class
-      expressionInstance <-
-        createExpressionInstance(classLoader, expressionDir, expressionFqcn)
-
       namesArray <-
         JdiArray("java.lang.String", names.size, classLoader)
       valuesArray <-
@@ -70,17 +67,24 @@ private[internal] class ExpressionEvaluator(
       _ = namesArray.setValues(names)
       _ = valuesArray.setValues(values)
       args = List(namesArray.reference, valuesArray.reference)
-      evaluatedValue <- evaluateExpression(expressionInstance, args)
+      expressionInstance <-
+        createExpressionInstance(
+          classLoader,
+          expressionDir,
+          expressionFqcn,
+          args
+        )
+
+      evaluatedValue <- evaluateExpression(expressionInstance)
     } yield evaluatedValue
     evaluatedValue.getResult
   }
 
   private def evaluateExpression(
-      expressionInstance: JdiObject,
-      args: List[ObjectReference]
+      expressionInstance: JdiObject
   ): Safe[Value] = {
     expressionInstance
-      .invoke("evaluate", args)
+      .invoke("evaluate", List())
       .recover {
         // if evaluation throws an exception, we return that exception as the result
         case MethodInvocationFailed(msg, exception) => exception
@@ -95,7 +99,8 @@ private[internal] class ExpressionEvaluator(
   private def createExpressionInstance(
       classLoader: JdiClassLoader,
       expressionDir: Path,
-      expressionFqcn: String
+      expressionFqcn: String,
+      args: List[ObjectReference]
   ): Safe[JdiObject] = {
     val expressionClassPath = expressionDir.toUri.toString
     for {
@@ -111,7 +116,7 @@ private[internal] class ExpressionEvaluator(
         .map(_.reference.asInstanceOf[ClassLoaderReference])
         .map(JdiClassLoader(_, classLoader.thread))
       expressionClass <- urlClassLoader.loadClass(expressionFqcn)
-      expressionInstance <- expressionClass.newInstance(List())
+      expressionInstance <- expressionClass.newInstance(args)
     } yield expressionInstance
   }
 

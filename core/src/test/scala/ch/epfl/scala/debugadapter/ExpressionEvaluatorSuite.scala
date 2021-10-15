@@ -4,13 +4,9 @@ import ch.epfl.scala.debugadapter.testing.TestDebugClient
 import com.microsoft.java.debug.core.protocol.Types.Message
 import utest._
 
-import java.io.File
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import com.microsoft.java.debug.core.protocol.Types.Message
-import java.nio.file.Path
-import org.iq80.snappy.Main
 
 object Scala212EvaluatorSpec
     extends ExpressionEvaluatorSuite(ScalaVersion.`2.12`)
@@ -527,22 +523,42 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
 
     "should evaluate nested method" - {
       val source =
-        """|object EvaluateTest {
-           |  def main(args: Array[String]): Unit = {
-           |    def msg(name: String): String = {
-           |      s"Hello, $name"
-           |    }
-           |    println(msg("World"))
-           |  }
-           |} 
-           |""".stripMargin
-      assertEvaluationInMainClass(
+        """class Foo {
+          |  private val hello = "Hello"
+          |  def bar() = {
+          |    val sign = "!"
+          |    def msg(name: String): String = {
+          |      s"$hello, $name$sign"
+          |    }
+          |    println(msg("World"))
+          |  }
+          |}
+          |
+          |object EvaluateTest {
+          |  private val hello = "Hello"
+          |  def main(args: Array[String]): Unit = {
+          |    val sign = "!"
+          |    def msg(name: String): String = {
+          |      s"$hello, $name$sign"
+          |    }
+          |    println(msg("World"))
+          |    new Foo().bar()
+          |  }
+          |}
+          |""".stripMargin
+      assertEvaluationsInMainClass(
         source,
         "EvaluateTest",
-        6,
-        """ msg("Alice") """
-      )(
-        _.exists(_ == "\"Hello, Alice\"")
+        ExpressionEvaluation(
+          8,
+          """ msg("Alice") """,
+          _.exists(_ == "\"Hello, Alice!\"")
+        ),
+        ExpressionEvaluation(
+          19,
+          """ msg("Alice") """,
+          _.exists(_ == "\"Hello, Alice!\"")
+        )
       )
     }
 
@@ -608,7 +624,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
         """|object EvaluateTest{
            |  def main(args: Array[String]): Unit = {
            |    val list = List(1, 2, 3)
-           |    list.foreach { x => 
+           |    list.foreach { x =>
            |      println(x)
            |    }
            |  }
@@ -663,6 +679,43 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           5,
           "1 + 1",
           _.exists(_ == "\"values are not the same\"")
+        )
+      )
+    }
+
+    "should evaluate lambdas" - {
+      val source =
+        """class Foo {
+          |  val a = 1
+          |  private val b = 2
+          |  def bar() = {
+          |    val c = 3
+          |    println(s"a + b = ${a + b}")
+          |  }
+          |}
+          |
+          |object EvaluateTest {
+          |  val a = 1
+          |  private val b = 2
+          |  def main(args: Array[String]): Unit = {
+          |    val c = 3
+          |    println(a + b + c)
+          |    new Foo().bar()
+          |  }
+          |}
+          |""".stripMargin
+      assertEvaluationsInMainClass(
+        source,
+        "EvaluateTest",
+        ExpressionEvaluation(
+          6,
+          "List(1, 2, 3).map(_ * a * b * c).sum.asInstanceOf[Int]",
+          _.exists(_.toInt == 36)
+        ),
+        ExpressionEvaluation(
+          15,
+          "List(1, 2, 3).map(_ * a * b * c).sum.asInstanceOf[Int]",
+          _.exists(_.toInt == 36)
         )
       )
     }
