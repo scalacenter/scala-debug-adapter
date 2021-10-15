@@ -1,5 +1,7 @@
 package scala.tools.nsc
 
+import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.reporters.Reporter
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
@@ -14,9 +16,12 @@ private[nsc] class EvalGlobal(
     valuesByNameIdentName: String,
     callPrivateMethodName: String
 ) extends Global(settings, reporter) {
-  private var valOrDefDefs: Map[TermName, ValOrDefDef] = Map()
-  private var extractedExpression: Tree = _
+  private val valOrDefDefs: mutable.Map[Name, ValOrDefDef] = mutable.Map()
+  private val lambdas: ListBuffer[DefDef] = mutable.ListBuffer()
+
   private var expressionOwners: List[Symbol] = _
+  private var extractedExpression: Tree = _
+
   private var thisSym: Symbol = _
 
   override protected def computeInternalPhases(): Unit = {
@@ -32,14 +37,9 @@ private[nsc] class EvalGlobal(
     )
   }
 
-  def encloses(b: Block): Boolean = {
-    val lineOffset = b.pos.source.lineToOffset(line)
-    lineOffset >= b.pos.start && lineOffset <= b.expr.pos.end
-  }
-
   class InsertExpression extends Transform with TypingTransformers {
     override val global: EvalGlobal.this.type = EvalGlobal.this
-    override val phaseName: String = "insertExpression"
+    override val phaseName: String = "insertexpression"
     override val runsAfter: List[String] = List("parser")
     override val runsRightAfter: Option[String] = None
 
@@ -59,13 +59,15 @@ private[nsc] class EvalGlobal(
      */
     class InsExprTransformer extends Transformer {
       private val expressionClassSource =
-        s"""class $expressionClassName {
-           |  def evaluate(names: Array[Any], values: Array[Any]) = {
-           |    val $valuesByNameIdentName = names.map(_.asInstanceOf[String]).zip(values).toMap
-           |    $valuesByNameIdentName
+        s"""class $expressionClassName(names: Array[String], values: Array[Object]) {
+           |  val $valuesByNameIdentName = names.map(_.asInstanceOf[String]).zip(values).toMap
+           |
+           |  def evaluate() = {
            |    ()
            |  }
+           |}
            |
+           |object $expressionClassName {
            |  def $callPrivateMethodName(obj: Any, methodName: String, paramTypeNames: Array[Object], args: Array[Object]) = {
            |    val expectedParamTypeNames = paramTypeNames.map(_.asInstanceOf[String])
            |    val parameterTypes = args.map(_.getClass)
@@ -91,9 +93,10 @@ private[nsc] class EvalGlobal(
            |""".stripMargin
 
       private val parsedExpression = parseExpression(expression)
-      private val parsedExpressionClass = parseExpressionClass(
-        expressionClassSource
-      )
+      private val parsedExpressionClassAndObject =
+        parseExpressionClassAndObject(
+          expressionClassSource
+        )
 
       private var expressionInserted = false
 
@@ -123,10 +126,10 @@ private[nsc] class EvalGlobal(
         }
       }
 
-      private def parseExpressionClass(source: String): Tree = {
+      private def parseExpressionClassAndObject(source: String): Seq[Tree] = {
         val parsedExpressionClass =
           parse("<expression>", source).asInstanceOf[PackageDef]
-        parsedExpressionClass.stats.head.setPos(NoPosition)
+        parsedExpressionClass.stats.take(2).map(_.setPos(NoPosition))
       }
 
       private def parse(sourceName: String, source: String): Tree = {
@@ -161,6 +164,7 @@ private[nsc] class EvalGlobal(
           defdef.rhs
         )
       }
+
       override def transform(tree: Tree): Tree = tree match {
         case tree: DefDef if tree.pos.line == line =>
           expressionInserted = true
@@ -202,7 +206,7 @@ private[nsc] class EvalGlobal(
               treeCopy.PackageDef(
                 transformed,
                 transformed.pid,
-                transformed.stats :+ parsedExpressionClass
+                transformed.stats ++ parsedExpressionClassAndObject
               )
             )
           } else {
@@ -229,9 +233,18 @@ private[nsc] class EvalGlobal(
    */
   class GenerateExpression extends Transform with TypingTransformers {
     override val global: EvalGlobal.this.type = EvalGlobal.this
-    override val phaseName: String = "generateExpression"
+    override val phaseName: String = "generateexpression"
     override val runsAfter: List[String] = List("delambdafy")
     override val runsRightAfter: Option[String] = None
+
+    private lazy val originalThisSymbol: ClassSymbol = expressionOwners
+      .find(_.isClass)
+      .map(_.asInstanceOf[ClassSymbol])
+      .get
+    private lazy val symbolsByName: Map[Name, Symbol] =
+      valOrDefDefs
+        .map(valOrDefDef => valOrDefDef._1 -> valOrDefDef._2.symbol)
+        .toMap + (TermName("$this") -> originalThisSymbol)
 
     override protected def newTransformer(
         unit: CompilationUnit
@@ -293,8 +306,7 @@ private[nsc] class EvalGlobal(
      * Extracts all defs (local variables, fields, arguments, etc.) that are accessible in the line of the breakpoint.
      */
     class DefExtractor extends Traverser {
-
-      def isCorrectOwner(tree: Tree) = {
+      def isCorrectOwner(tree: Tree): Boolean = {
         expressionOwners.contains(tree.symbol.owner) ||
         (tree.symbol.owner.isConstructor) && expressionOwners.contains(
           tree.symbol.owner.owner
@@ -313,7 +325,11 @@ private[nsc] class EvalGlobal(
               defNames.contains(tree.name.decode) =>
           valOrDefDefs += (tree.name -> tree)
           super.traverse(tree)
-        case _ => super.traverse(tree)
+        case tree: DefDef if isCorrectOwner(tree) && isLambda(tree) =>
+          lambdas += tree
+          super.traverse(tree)
+        case _ =>
+          super.traverse(tree)
       }
     }
 
@@ -328,15 +344,29 @@ private[nsc] class EvalGlobal(
      */
     class GenExprTransformer(unit: CompilationUnit)
         extends TypingTransformer(unit) {
-
-      import typer._
-
       private var valuesByNameIdent: Ident = _
 
       override def transform(tree: Tree): Tree = tree match {
-        // Don't transform class different than Expression
+        // Discard classes different than Expression
         case tree: ClassDef if tree.name.decode != expressionClassName =>
           EmptyTree
+        case tree: ClassDef if tree.name.decode == expressionClassName =>
+          thisSym = tree.symbol
+
+          val typer = localTyper.atOwner(tree, tree.symbol)
+          val transformedLambdas = lambdas.map(lambda => {
+            lambda.symbol.owner = thisSym
+            deriveDefDef(lambda)(rhs =>
+              new LambdaExpressionTransformer(
+                typer
+              )(unit).transform(rhs)
+            )
+          })
+
+          val derivedClass = deriveClassDef(tree) { template =>
+            Template(template.symbol, template.body ++ transformedLambdas)
+          }
+          super.transform(derivedClass)
         case tree: Ident
             if tree.name == TermName(
               valuesByNameIdentName
@@ -345,117 +375,58 @@ private[nsc] class EvalGlobal(
           EmptyTree
         case tree: DefDef if tree.name == TermName("evaluate") =>
           // firstly, transform the body of the method
-          super.transform(tree)
-          var tpt: TypeTree = TypeTree()
-          val derived = deriveDefDef(tree) { rhs =>
-            // we can be sure that `rhs` is an instance of a `Block`
-            val block = rhs.asInstanceOf[Block]
+          val transformed = super.transform(tree).asInstanceOf[DefDef]
+          // replace symbols in the expression with those from the `evaluate` method
+          val newExpression =
+            new ExpressionTransformer(
+              localTyper.atOwner(tree, tree.symbol)
+            )(unit)
+              .transform(extractedExpression)
 
-            val thisSymbol = expressionOwners
-              .find(_.isClass)
-              .map(_.asInstanceOf[ClassSymbol])
-              .get
-            val thisValDef = newThisValDef(tree, thisSymbol)
-              .map { case (thisName, thisValDef) =>
-                Seq(thisName -> thisValDef)
-              }
-              .getOrElse(Seq())
-            // replace original valDefs with synthesized valDefs with values that will be sent via JDI
-            val newValOrDefDefs = valOrDefDefs.map { case (_, valOrDefDef) =>
-              newValDef(tree, valOrDefDef)
-            } ++ thisValDef
+          val typedNewExpression =
+            typer
+              .typedPos(transformed.pos)(newExpression)
+              .setType(newExpression.tpe)
 
-            val symbolsByName = newValOrDefDefs.mapValues(_.symbol).toMap
+          val tpe = typedNewExpression.tpe
 
-            // replace symbols in the expression with those from the `evaluate` method
-            val newExpression =
-              new ExpressionTransformer(symbolsByName, tree)(unit)
-                .transform(extractedExpression)
+          val derived: DefDef = treeCopy.DefDef(
+            transformed,
+            transformed.mods,
+            transformed.name,
+            transformed.tparams,
+            transformed.vparamss,
+            TypeTree(tpe),
+            typedNewExpression
+          )
 
-            // create a new body
-            val newRhs =
-              new Block(block.stats ++ newValOrDefDefs.values, newExpression)
-
-            tpt = TypeTree().copyAttrs(newExpression)
-            typedPos(tree.pos)(newRhs).setType(tpt.tpe)
-          }
           // update return type of the `evaluate` method
           derived.symbol
             .asInstanceOf[MethodSymbol]
             .modifyInfo(info => {
               val methodType = info.asInstanceOf[MethodType]
-              methodType.copy(resultType = tpt.tpe)
+              methodType.copy(resultType = tpe)
             })
-          derived.setType(tpt.tpe)
+          derived.setType(tpe)
         case _ =>
           super.transform(tree)
-      }
-
-      private def newThisValDef(
-          owner: DefDef,
-          thisSymbol: ClassSymbol
-      ): Option[(Name, ValDef)] = {
-        if (!defNames.contains("$this")) {
-          None
-        } else {
-          val name = TermName("$this")
-          val app =
-            Apply(valuesByNameIdent, List(Literal(Constant(name.decode))))
-          val tpt = TypeTree().setType(thisSymbol.tpe)
-          val casted = mkCast(app, tpt)
-
-          val sym = owner.symbol.newValue(name).setInfo(tpt.tpe)
-          val newValDef =
-            ValDef(Modifiers(), TermName(name.decode), tpt, casted)
-              .setSymbol(sym)
-          Some(name -> newValDef)
-        }
-      }
-
-      private def newValDef(
-          owner: DefDef,
-          valOrDefDef: ValOrDefDef
-      ): (Name, ValDef) = {
-        val name = valOrDefDef.name
-        val app = Apply(valuesByNameIdent, List(Literal(Constant(name.decode))))
-        val tpt = valOrDefDef.tpt.asInstanceOf[TypeTree]
-        if (tpt.symbol.isPrimitiveValueClass) {
-          val unboxedMethodSym =
-            currentRun.runDefinitions.unboxMethod(tpt.symbol)
-          val casted = Apply(unboxedMethodSym, app)
-          newValDef(owner, name, casted)
-        } else {
-          val casted = mkCast(app, tpt)
-          newValDef(owner, name, casted)
-        }
-      }
-
-      private def newValDef(
-          owner: DefDef,
-          name: TermName,
-          rhs: Tree
-      ): (TermName, ValDef) = {
-        val tpt = valOrDefDefs(TermName(name.decode)).tpt
-        val sym = owner.symbol.newValue(name.toTermName).setInfo(tpt.tpe)
-        val newValDef =
-          ValDef(Modifiers(), TermName(name.decode), tpt, rhs).setSymbol(sym)
-        name -> newValDef
       }
     }
 
     class ExpressionTransformer(
-        symbolsByName: Map[Name, Symbol],
-        evaluateTree: DefDef
+        typer: analyzer.Typer
     )(unit: CompilationUnit)
         extends TypingTransformer(unit) {
       override def transform(tree: Tree): Tree = tree match {
-        case tree: This =>
+        case tree: This if tree.symbol == originalThisSymbol =>
           val name = TermName("$this")
-          if (symbolsByName.contains(name)) ident(name)
+          if (defNames.contains(name.decode)) ident(name)
           else super.transform(tree)
+        case tree: This =>
+          tree
         case tree: Ident =>
           val name = tree.name
-          if (symbolsByName.contains(name)) ident(name)
+          if (defNames.contains(name.decode)) ident(name)
           else super.transform(tree)
         case tree: Apply if tree.fun.symbol.isGetter =>
           val fun = tree.fun.asInstanceOf[Select]
@@ -466,52 +437,90 @@ private[nsc] class EvalGlobal(
           else super.transform(tree)
         case tree: Apply
             if tree.fun.isInstanceOf[Select] && tree.fun.symbol.isPrivate =>
-          val typer = localTyper
-            .atOwner(evaluateTree, evaluateTree.symbol)
-
-          val paramTypeNames = tree.args
-            .map(_.tpe.typeSymbol.fullName)
-            .map(paramTypeName => Literal(Constant(paramTypeName)))
-          val thisIdent = ident(TermName("$this"))
-          val paramTypeNamesArray =
-            ArrayValue(TypeTree(definitions.ObjectTpe), paramTypeNames)
-          val argsArray = ArrayValue(TypeTree(definitions.ObjectTpe), tree.args)
-
-          val app = Apply(
-            Select(
-              This(thisSym),
-              TermName(callPrivateMethodName)
-            ),
-            List(
-              thisIdent,
-              Literal(Constant(tree.fun.asInstanceOf[Select].name.decode)),
-              paramTypeNamesArray,
-              argsArray
-            )
-          )
-
-          typer.typedPos(evaluateTree.pos)(app)
+          val privateCall = mkCallPrivate(tree)(typer)
+          super.transform(privateCall)
         case _ =>
           super.transform(tree)
       }
 
       private def ident(name: Name) = {
+        val app = Apply(
+          Select(
+            Apply(
+              Select(This(thisSym), TermName(valuesByNameIdentName)),
+              List()
+            ),
+            TermName("apply")
+          ),
+          List(Literal(Constant(name.decode)))
+        )
         val symbol = symbolsByName(name)
-        Ident(name)
-          .setSymbol(symbol)
-          .setType(symbol.tpe)
-          .setPos(symbol.pos)
+        val tpe = symbol.tpe match {
+          case tpe: MethodType =>
+            tpe.resultType
+          case tpe =>
+            tpe
+        }
+
+        val tpt = TypeTree().setType(tpe)
+        val casted = mkCast(app, tpt)
+        typer.typed(casted)
       }
     }
 
-    private def mkCast(app: Tree, tpt: TypeTree) = {
-      val tapp = gen.mkTypeApply(
-        gen
-          .mkAttributedSelect(app, definitions.Object_asInstanceOf)
-          .asInstanceOf[Tree],
-        List(tpt)
-      )
-      Apply(tapp, Nil)
+    class LambdaExpressionTransformer(
+        typer: analyzer.Typer
+    )(unit: CompilationUnit)
+        extends TypingTransformer(unit) {
+      override def transform(tree: Tree): Tree = tree match {
+        case tree: Apply
+            if tree.fun.isInstanceOf[Select] && tree.fun.symbol.isPrivate =>
+          super.transform(mkCallPrivate(tree)(typer))
+        case _ =>
+          super.transform(tree)
+      }
     }
+
+    private def mkCallPrivate(tree: Apply)(typer: analyzer.Typer) = {
+      val fun = tree.fun.asInstanceOf[Select]
+      val paramTypeNames = tree.args
+        .map(_.tpe.typeSymbol.fullName)
+        .map(paramTypeName => Literal(Constant(paramTypeName)))
+      val paramTypeNamesArray =
+        ArrayValue(TypeTree(definitions.ObjectTpe), paramTypeNames)
+      val argsArray = ArrayValue(TypeTree(definitions.ObjectTpe), tree.args)
+      val app = Apply(
+        Select(Ident(expressionClassName), TermName(callPrivateMethodName)),
+        List(
+          fun.qualifier,
+          Literal(Constant(tree.fun.asInstanceOf[Select].name.decode)),
+          paramTypeNamesArray,
+          argsArray
+        )
+      )
+      val casted = mkCast(app, TypeTree(tree.tpe))
+      val typed = typer.typed(casted)
+      typed
+    }
+
+    private def mkCast(tree: Tree, tpt: TypeTree) = {
+      if (tpt.symbol.isPrimitiveValueClass) {
+        val unboxedMethodSym =
+          currentRun.runDefinitions.unboxMethod(tpt.symbol)
+        Apply(unboxedMethodSym, tree)
+      } else {
+        val tapp = gen.mkTypeApply(
+          gen
+            .mkAttributedSelect(tree, definitions.Object_asInstanceOf)
+            .asInstanceOf[Tree],
+          List(tpt)
+        )
+        Apply(tapp, Nil)
+      }
+    }
+
+    private def isLambda(tree: DefDef) =
+      tree.symbol.isLiftedMethod && tree.symbol.name.decode
+        .contains(nme.ANON_FUN_NAME)
   }
 }
