@@ -85,33 +85,37 @@ private class ClassEntryLookUp(
     for (classFile <- classFiles) {
       val path = root.resolve(classFile.relativePath)
       val inputStream = Files.newInputStream(path)
-      val reader = new ClassReader(inputStream)
+      try {
+        val reader = new ClassReader(inputStream)
 
-      val lineNumbers = mutable.Buffer[Int]()
+        val lineNumbers = mutable.Buffer[Int]()
 
-      val visitor = new ClassVisitor(Opcodes.ASM9) {
-        override def visitMethod(
-            access: Int,
-            name: String,
-            desc: String,
-            signature: String,
-            exceptions: Array[String]
-        ): MethodVisitor = {
-          new MethodVisitor(Opcodes.ASM9) {
-            override def visitLineNumber(line: Int, start: Label): Unit = {
-              lineNumbers.append(line)
+        val visitor = new ClassVisitor(Opcodes.ASM9) {
+          override def visitMethod(
+              access: Int,
+              name: String,
+              desc: String,
+              signature: String,
+              exceptions: Array[String]
+          ): MethodVisitor = {
+            new MethodVisitor(Opcodes.ASM9) {
+              override def visitLineNumber(line: Int, start: Label): Unit = {
+                lineNumbers.append(line)
+              }
             }
           }
         }
-      }
-      reader.accept(visitor, 0)
+        reader.accept(visitor, 0)
 
-      for (n <- lineNumbers) {
-        val line = SourceLine(sourceUri, n)
-        cachedSourceLines.update(
-          line,
-          cachedSourceLines.getOrElse(line, Seq.empty) :+ classFile
-        )
+        for (n <- lineNumbers) {
+          val line = SourceLine(sourceUri, n)
+          cachedSourceLines.update(
+            line,
+            cachedSourceLines.getOrElse(line, Seq.empty) :+ classFile
+          )
+        }
+      } finally {
+        inputStream.close()
       }
     }
   }
@@ -266,23 +270,27 @@ private object ClassEntryLookUp {
       path: Path
   ): ClassFile = {
     val inputStream = Files.newInputStream(path)
-    val reader = new ClassReader(inputStream)
-    val fullyQualifiedName = reader.getClassName.replace('/', '.')
+    try {
+      val reader = new ClassReader(inputStream)
+      val fullyQualifiedName = reader.getClassName.replace('/', '.')
 
-    var sourceName = Option.empty[String]
+      var sourceName = Option.empty[String]
 
-    val visitor = new ClassVisitor(Opcodes.ASM9) {
-      override def visitSource(source: String, debug: String): Unit =
-        sourceName = Option(source)
+      val visitor = new ClassVisitor(Opcodes.ASM9) {
+        override def visitSource(source: String, debug: String): Unit =
+          sourceName = Option(source)
+      }
+      reader.accept(visitor, 0)
+      val relativePath = root.relativize(path)
+      ClassFile(
+        fullyQualifiedName,
+        sourceName,
+        relativePath.toString,
+        classSystem
+      )
+    } finally {
+      inputStream.close()
     }
-    reader.accept(visitor, 0)
-    val relativePath = root.relativize(path)
-    ClassFile(
-      fullyQualifiedName,
-      sourceName,
-      relativePath.toString,
-      classSystem
-    )
   }
 
   private def findPackage(
