@@ -709,13 +709,13 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
         "EvaluateTest",
         ExpressionEvaluation(
           6,
-          "List(1, 2, 3).map(_ * a * b * c).sum.asInstanceOf[Int]",
-          _.exists(_.toInt == 36)
+          "List(1, 2, 3).map(_ * a * b * c).sum",
+          _.exists(_.contains("\"36\""))
         ),
         ExpressionEvaluation(
           15,
-          "List(1, 2, 3).map(_ * a * b * c).sum.asInstanceOf[Int]",
-          _.exists(_.toInt == 36)
+          "List(1, 2, 3).map(_ * a * b * c).sum",
+          _.exists(_.contains("\"36\""))
         )
       )
     }
