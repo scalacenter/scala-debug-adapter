@@ -493,8 +493,15 @@ private[nsc] class EvalGlobal(
     private def mkCallPrivate(tree: Apply)(typer: analyzer.Typer) = {
       val fun = tree.fun.asInstanceOf[Select]
       val paramTypeNames = tree.args
-        .map(_.tpe.typeSymbol.fullName)
-        .map(paramTypeName => Literal(Constant(paramTypeName)))
+        .map { arg =>
+          val tpeSymbol = arg.tpe.typeSymbol
+          val paramTypeName = if (tpeSymbol.isPrimitiveValueClass) {
+            tpeSymbol.fullName.stripPrefix("scala.").toLowerCase()
+          } else {
+            tpeSymbol.fullName
+          }
+          Literal(Constant(paramTypeName))
+        }
       val paramTypeNamesArray =
         ArrayValue(TypeTree(definitions.ObjectTpe), paramTypeNames)
       val argsArray = ArrayValue(TypeTree(definitions.ObjectTpe), tree.args)
