@@ -525,9 +525,16 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
       val source =
         """class Foo {
           |  private val hello = "Hello"
+          |  override def toString() = "foo"
           |  def bar() = {
           |    val sign = "!"
           |    def msg(name: String): String = {
+          |      s"$hello, $name$sign"
+          |    }
+          |    def msg1(name: Int): String = {
+          |      s"$hello, $name$sign"
+          |    }
+          |    def msg2(name: Foo): String = {
           |      s"$hello, $name$sign"
           |    }
           |    println(msg("World"))
@@ -541,6 +548,12 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           |    def msg(name: String): String = {
           |      s"$hello, $name$sign"
           |    }
+          |    def msg1(name: Int): String = {
+          |      s"$hello, $name$sign"
+          |    }
+          |    def msg2(name: Foo): String = {
+          |      s"$hello, $name$sign"
+          |    }
           |    println(msg("World"))
           |    new Foo().bar()
           |  }
@@ -550,14 +563,34 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
         source,
         "EvaluateTest",
         ExpressionEvaluation(
-          8,
+          15,
           """ msg("Alice") """,
           _.exists(_ == "\"Hello, Alice!\"")
         ),
         ExpressionEvaluation(
-          19,
+          15,
+          """ msg1(1) """,
+          _.exists(_ == "\"Hello, 1!\"")
+        ),
+        ExpressionEvaluation(
+          15,
+          """ msg2(new Foo) """,
+          _.exists(_ == "\"Hello, foo!\"")
+        ),
+        ExpressionEvaluation(
+          32,
           """ msg("Alice") """,
           _.exists(_ == "\"Hello, Alice!\"")
+        ),
+        ExpressionEvaluation(
+          32,
+          """ msg1(1) """,
+          _.exists(_ == "\"Hello, 1!\"")
+        ),
+        ExpressionEvaluation(
+          32,
+          """ msg2(new Foo) """,
+          _.exists(_ == "\"Hello, foo!\"")
         )
       )
     }
@@ -672,13 +705,15 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
         ExpressionEvaluation(
           5,
           "1 + 1",
-          _.exists(_ == "\"values are not the same\"")
+          _.exists(_ == "\"values are not the same\""),
+          stoppageNo = 0
         ),
         // evaluating twice because the program stops twice at the same breakpoint...
         ExpressionEvaluation(
           5,
           "1 + 1",
-          _.exists(_ == "\"values are not the same\"")
+          _.exists(_ == "\"values are not the same\""),
+          stoppageNo = 1
         )
       )
     }
@@ -724,7 +759,8 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
   case class ExpressionEvaluation(
       line: Int,
       expression: String,
-      assertion: Either[Message, String] => Boolean
+      assertion: Either[Message, String] => Boolean,
+      stoppageNo: Int = 0
   )
 
   private def assertEvaluationInMainClass(
@@ -777,16 +813,19 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
       assert(breakpoints.forall(_.verified))
       client.configurationDone()
 
-      evaluationSteps.foreach { expressionCase =>
-        val stopped = client.stopped()
-        val threadId = stopped.threadId
-        assert(stopped.reason == "breakpoint")
+      evaluationSteps.groupBy(expr => (expr.line, expr.stoppageNo)).foreach {
+        case ((line, _), expressionCases) =>
+          val stopped = client.stopped()
+          val threadId = stopped.threadId
+          assert(stopped.reason == "breakpoint")
 
-        val stackTrace = client.stackTrace(threadId)
-        val topFrame = stackTrace.stackFrames.head
-        val result = client.evaluate(expressionCase.expression, topFrame.id)
-        assert(expressionCase.assertion(result))
-        client.continue(threadId)
+          val stackTrace = client.stackTrace(threadId)
+          val topFrame = stackTrace.stackFrames.head
+          expressionCases.foreach { expressionCase =>
+            val result = client.evaluate(expressionCase.expression, topFrame.id)
+            assert(expressionCase.assertion(result))
+          }
+          client.continue(threadId)
       }
 
       client.exited()
