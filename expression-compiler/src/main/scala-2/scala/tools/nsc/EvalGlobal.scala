@@ -463,8 +463,8 @@ private[nsc] class EvalGlobal(
         }
 
         val tpt = TypeTree().setType(tpe)
-        val casted = mkCast(app, tpt)
-        typer.typed(casted)
+        val cast = mkCast(app, tpt)
+        typer.typed(cast)
       }
     }
 
@@ -498,8 +498,8 @@ private[nsc] class EvalGlobal(
           argsArray
         )
       )
-      val casted = mkCast(app, TypeTree(tree.tpe))
-      val typed = typer.typed(casted)
+      val cast = mkCast(app, TypeTree(tree.tpe))
+      val typed = typer.typed(cast)
       typed
     }
 
