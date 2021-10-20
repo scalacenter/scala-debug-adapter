@@ -129,7 +129,16 @@ private[nsc] class EvalGlobal(
       private def parseExpressionClassAndObject(source: String): Seq[Tree] = {
         val parsedExpressionClass =
           parse("<expression>", source).asInstanceOf[PackageDef]
-        parsedExpressionClass.stats.take(2).map(_.setPos(NoPosition))
+        parsedExpressionClass.stats match {
+          case cls :: obj :: _ =>
+            cls.setPos(NoPosition)
+            obj.setPos(NoPosition)
+            Seq(cls, obj)
+          case stats =>
+            throw new IllegalArgumentException(
+              s"Expected at least two statements but got ${stats.size}"
+            )
+        }
       }
 
       private def parse(sourceName: String, source: String): Tree = {
