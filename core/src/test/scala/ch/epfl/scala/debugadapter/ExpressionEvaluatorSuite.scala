@@ -380,6 +380,25 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
       )
     }
 
+    "should evaluate expression with breakpoint on a field's assignment" - {
+      val source =
+        """class Foo {
+          |  val a = 1
+          |  val b = 2
+          |  def bar() = a + b
+          |}
+          |
+          |object EvaluateTest {
+          |  def main(args: Array[String]): Unit = {
+          |    new Foo()
+          |  }
+          |}
+          |""".stripMargin
+      assertEvaluationInMainClass(source, "EvaluateTest", 3, "a + 2")(
+        _.exists(_.toInt == 3)
+      )
+    }
+
     "should evaluate expression with breakpoint on method definition" - {
       val source =
         """class Foo {
@@ -705,14 +724,14 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
         ExpressionEvaluation(
           5,
           "1 + 1",
-          _.exists(_ == "\"values are not the same\""),
+          _.exists(_.toInt == 2),
           stoppageNo = 0
         ),
         // evaluating twice because the program stops twice at the same breakpoint...
         ExpressionEvaluation(
           5,
           "1 + 1",
-          _.exists(_ == "\"values are not the same\""),
+          _.exists(_.toInt == 2),
           stoppageNo = 1
         )
       )

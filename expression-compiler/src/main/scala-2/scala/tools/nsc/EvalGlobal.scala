@@ -37,6 +37,8 @@ private[nsc] class EvalGlobal(
     )
   }
 
+  case object ExpressionAttachment extends PlainAttachment
+
   class InsertExpression extends Transform with TypingTransformers {
     override val global: EvalGlobal.this.type = EvalGlobal.this
     override val phaseName: String = "insertexpression"
@@ -176,8 +178,7 @@ private[nsc] class EvalGlobal(
 
       override def transform(tree: Tree): Tree = tree match {
         case tree: DefDef if tree.pos.line == line =>
-          expressionInserted = true
-          atPos(tree.pos)(
+          insertAt(tree.pos)(
             filterOutTailRec(
               treeCopy.DefDef(
                 tree,
@@ -193,8 +194,7 @@ private[nsc] class EvalGlobal(
         case tree: DefDef =>
           super.transform(filterOutTailRec(tree))
         case vd: ValDef if vd.pos.line == line =>
-          expressionInserted = true
-          atPos(vd.pos)(
+          insertAt(vd.pos)(
             treeCopy.ValDef(
               vd,
               vd.mods,
@@ -203,10 +203,8 @@ private[nsc] class EvalGlobal(
               mkExprBlock(vd.rhs)
             )
           )
-
         case tree if tree.pos.line == line =>
-          expressionInserted = true
-          atPos(tree.pos)(mkExprBlock(tree))
+          insertAt(tree.pos)(mkExprBlock(tree))
         case tree: PackageDef =>
           val transformed = super.transform(tree).asInstanceOf[PackageDef]
           if (expressionInserted) {
@@ -225,11 +223,25 @@ private[nsc] class EvalGlobal(
           super.transform(tree)
       }
 
-      private def mkExprBlock(tree: Tree): Tree =
-        if (tree.isDef)
-          Block(List(parsedExpression, tree), Literal(Constant(())))
-        else
-          Block(List(parsedExpression), tree)
+      private def insertAt(pos: Position)(tree: Tree): Tree = {
+        expressionInserted = true
+        atPos(pos)(tree)
+      }
+
+      private def mkExprBlock(tree: Tree): Tree = {
+        val block =
+          if (tree.isDef)
+            Block(List(parsedExpression, tree), Literal(Constant(())))
+          else
+            Block(List(parsedExpression), tree)
+        addExpressionAttachment(block)
+      }
+
+      // `ExpressionAttachment` allows to find the inserted expression later on
+      private def addExpressionAttachment(tree: Tree): Tree = {
+        val attachments = tree.attachments.update(ExpressionAttachment)
+        tree.setAttachments(attachments)
+      }
     }
   }
 
@@ -282,20 +294,25 @@ private[nsc] class EvalGlobal(
         // Don't extract expression from the Expression class
         case tree: ClassDef if tree.name.decode == expressionClassName =>
         // ignore
-        case tree: DefDef if !expressionExtracted && tree.pos.line == line =>
+        case tree: DefDef if shouldExtract(tree) =>
           expressionOwners = ownerChain(tree)
           extractedExpression = extractExpression(tree.rhs)
         // default arguments will have an additional method generated, which we need to skip
         case tree: ValDef if tree.rhs.isEmpty =>
-        case tree: ValDef if !expressionExtracted && tree.pos.line == line =>
+        case tree: ValDef if shouldExtract(tree) =>
           expressionOwners = ownerChain(tree)
           extractedExpression = extractExpression(tree.rhs)
-        case _ if !expressionExtracted && tree.pos.line == line =>
+        case _ if shouldExtract(tree) =>
           expressionOwners = ownerChain(tree)
           extractedExpression = extractExpression(tree)
         case _ =>
           super.traverse(tree)
       }
+
+      private def shouldExtract(tree: Tree): Boolean =
+        !expressionExtracted && tree.attachments
+          .get[ExpressionAttachment.type]
+          .isDefined
 
       private def ownerChain(tree: Tree): List[Symbol] =
         if (tree.symbol == null)
