@@ -24,7 +24,13 @@ private[internal] object EvaluationProvider {
   ): IEvaluationProvider = {
     val evaluator = runner.evaluationClassLoader
       .flatMap(ExpressionCompiler(_))
-      .map(new ExpressionEvaluator(sourceLookUpProvider, _))
+      .map(
+        new ExpressionEvaluator(
+          runner.classPathEntries,
+          sourceLookUpProvider,
+          _
+        )
+      )
     new EvaluationProvider(evaluator)
   }
 }
