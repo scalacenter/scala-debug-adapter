@@ -1,17 +1,24 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
+import ch.epfl.scala.debugadapter.ClassPathEntry
 import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 import com.sun.jdi._
 
-import java.nio.file.{Files, Path}
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.Path
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.util.Try
 
 private[internal] class ExpressionEvaluator(
+    classPathEntries: Seq[ClassPathEntry],
     sourceLookUpProvider: ISourceLookUpProvider,
     expressionCompiler: ExpressionCompiler
 ) {
+  private val classPath =
+    classPathEntries.map(_.absolutePath).mkString(File.pathSeparator)
+
   def evaluate(
       expression: String,
       thread: ThreadReference,
@@ -40,7 +47,6 @@ private[internal] class ExpressionEvaluator(
       // must be called before any invocation otherwise
       // it throws an InvalidStackFrameException
       (names, values) <- extractValuesAndNames(frame, classLoader)
-      classPath <- getClassPath(classLoader)
       compiled = expressionCompiler
         .compile(
           expressionDir,
@@ -184,17 +190,6 @@ private[internal] class ExpressionEvaluator(
       .find(_.classLoader() != null)
       .head
     JdiClassLoader(someClass.classLoader, thread)
-  }
-
-  private def getClassPath(classLoader: JdiClassLoader): Safe[String] = {
-    for {
-      systemClass <- classLoader.loadClass("java.lang.System")
-      propertyValue <- classLoader.mirrorOf("java.class.path")
-      classPath <- systemClass
-        .invokeStatic("getProperty", List(propertyValue))
-        .map(_.toString)
-        .map(_.drop(1).dropRight(1)) // remove quotation marks
-    } yield classPath
   }
 
   private def boxIfNeeded(
