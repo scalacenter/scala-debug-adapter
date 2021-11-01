@@ -15,5 +15,12 @@ object Developers {
     url("https://github.com/er1c")
   )
 
-  val list: List[Developer] = List(adpi2, ericpeters)
+  val tdudzik = Developer(
+    "tdudzik",
+    "Tomasz Dudzik",
+    "tdudzik@virtuslab.com",
+    url("https://github.com/tdudzik")
+  )
+
+  val list: List[Developer] = List(adpi2, ericpeters, tdudzik)
 }
