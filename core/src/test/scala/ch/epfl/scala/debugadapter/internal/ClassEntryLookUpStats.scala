@@ -93,8 +93,8 @@ object ClassEntryLookUpStats extends TestSuite {
 
     "scala-lang" - {
       val org = "org.scala-lang"
-      printAndCheck(org, "scala-library", "2.13.6")(2870, 0)
-      printAndCheck(org, "scala-compiler", "2.13.6")(3399, 3)
+      printAndCheck(org, "scala-library", "2.13.7")(2870, 0)
+      printAndCheck(org, "scala-compiler", "2.13.7")(3399, 3)
       printAndCheck(org, "scala3-library_3", "3.0.0")(487, 0)
       printAndCheck(org, "scala3-compiler_3", "3.0.0")(3565, 0)
     }
