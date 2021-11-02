@@ -26,7 +26,7 @@ private[internal] object EvaluationProvider {
       .flatMap(ExpressionCompiler(_))
       .map(
         new ExpressionEvaluator(
-          runner.classPathEntries,
+          runner.classPath,
           sourceLookUpProvider,
           _
         )
