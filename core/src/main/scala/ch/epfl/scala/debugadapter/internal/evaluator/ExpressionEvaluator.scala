@@ -12,12 +12,12 @@ import scala.concurrent.duration._
 import scala.util.Try
 
 private[internal] class ExpressionEvaluator(
-    classPathEntries: Seq[ClassPathEntry],
+    classPath: Seq[Path],
     sourceLookUpProvider: ISourceLookUpProvider,
     expressionCompiler: ExpressionCompiler
 ) {
-  private val classPath =
-    classPathEntries.map(_.absolutePath).mkString(File.pathSeparator)
+  private val classPathString =
+    classPath.mkString(File.pathSeparator)
 
   def evaluate(
       expression: String,
@@ -53,7 +53,7 @@ private[internal] class ExpressionEvaluator(
           expressionClassName,
           valuesByNameIdentName,
           callPrivateMethodName,
-          classPath,
+          classPathString,
           content,
           breakpointLine,
           expression,
