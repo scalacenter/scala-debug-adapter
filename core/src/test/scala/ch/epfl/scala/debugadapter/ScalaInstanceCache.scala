@@ -100,22 +100,40 @@ object ScalaInstanceCache {
   }
 
   private def fetch(scalaVersion: Scala3): ScalaInstance = {
-    val artifactName = "scala3-compiler_3"
-    val dependency = Dependency(
+    val compilerArtifactName = "scala3-compiler_3"
+    val compilerDependency = Dependency(
       Module(
         Organization("org.scala-lang"),
-        ModuleName(artifactName)
+        ModuleName(compilerArtifactName)
       ),
       scalaVersion.version
     )
-    val jars = Coursier.fetch(dependency)
+
+    val expressionCompilerArtifactName =
+      s"${BuildInfo.expressionCompilerName}_${scalaVersion.version}"
+    val expressionCompilerDependency = Dependency(
+      Module(
+        Organization(BuildInfo.expressionCompilerOrganization),
+        ModuleName(expressionCompilerArtifactName)
+      ),
+      BuildInfo.expressionCompilerVersion
+    )
+
+    val jars = Coursier.fetch(compilerDependency, expressionCompilerDependency)
 
     val libraryJars = jars.filter { jar =>
       jar.name.startsWith("scala-library") ||
-      jar.name.startsWith("scala3-library")
+      jar.name.startsWith("scala3-library_3")
     }
+    val expressionCompilerJar =
+      jars.find(jar => jar.name.startsWith(expressionCompilerArtifactName)).get
     val compilerJars = jars.filter(jar => !libraryJars.contains(jar))
 
-    ScalaInstance(scalaVersion, libraryJars, compilerJars, None)
+    ScalaInstance(
+      scalaVersion,
+      libraryJars,
+      compilerJars,
+      Some(expressionCompilerJar)
+    )
   }
 }

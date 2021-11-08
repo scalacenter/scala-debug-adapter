@@ -4,11 +4,12 @@ import java.nio.file.Path
 import java.util.function.Consumer
 import java.{util => ju}
 
-final class ExpressionCompiler {
+final class ExpressionCompiler:
   def compile(
       expressionDir: Path,
       expressionClassName: String,
       valuesByNameIdentName: String,
+      callPrivateMethodName: String,
       classPath: String,
       code: String,
       line: Int,
@@ -16,8 +17,7 @@ final class ExpressionCompiler {
       defNames: ju.Set[String],
       errorConsumer: Consumer[String],
       timeoutMillis: Long
-  ): Boolean = {
-    errorConsumer.accept("The Scala debugger does not yet support Scala 3")
+  ): Boolean =
+    errorConsumer.accept("The Scala debugger does not yet support Scala 3.0")
     false
-  }
-}
+end ExpressionCompiler

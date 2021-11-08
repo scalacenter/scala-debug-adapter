@@ -122,7 +122,7 @@ object MetalsClassBreakpointSuite extends TestSuite {
            |}
            |""".stripMargin,
         "a.b.Main$package$",
-        scalaVersion = ScalaVersion.`3`
+        scalaVersion = ScalaVersion.`3.0`
       )
     }
 
@@ -139,7 +139,7 @@ object MetalsClassBreakpointSuite extends TestSuite {
            |
            |""".stripMargin,
         "a.Main$package$Even$1$",
-        scalaVersion = ScalaVersion.`3`
+        scalaVersion = ScalaVersion.`3.0`
       )
     }
 
@@ -159,7 +159,7 @@ object MetalsClassBreakpointSuite extends TestSuite {
            |
            |""".stripMargin,
         "a.Main$package$",
-        scalaVersion = ScalaVersion.`3`
+        scalaVersion = ScalaVersion.`3.0`
       )
     }
 

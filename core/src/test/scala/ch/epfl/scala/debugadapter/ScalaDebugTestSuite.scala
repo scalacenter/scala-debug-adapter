@@ -8,7 +8,7 @@ import scala.concurrent.ExecutionContext
 
 object Scala212DebugTest extends ScalaDebugTestSuite(ScalaVersion.`2.12`)
 object Scala213DebugTest extends ScalaDebugTestSuite(ScalaVersion.`2.13`)
-object Scala3DebugTest extends ScalaDebugTestSuite(ScalaVersion.`3`)
+object Scala3DebugTest extends ScalaDebugTestSuite(ScalaVersion.`3.0`)
 
 class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
