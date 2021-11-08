@@ -80,14 +80,14 @@ object MainDebuggeeRunner {
     fromResource(
       "/scala-3/braceless.scala",
       "scaladebug.test.Example",
-      ScalaVersion.`3`
+      ScalaVersion.`3.0`
     )
 
   def scala3MainAnnotation(): MainDebuggeeRunner =
     fromResource(
       "/scala-3/main-annotation.scala",
       "scaladebug.test.app",
-      ScalaVersion.`3`
+      ScalaVersion.`3.0`
     )
 
   def fromResource(

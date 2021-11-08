@@ -1,7 +1,6 @@
 import sbt.CrossVersion
 import sbt.Keys.crossVersion
-
-import java.io.File
+import scala.collection.mutable
 
 def isRelease() =
   System.getenv("GITHUB_REPOSITORY") == "scalacenter/scala-debug-adapter" &&
@@ -104,11 +103,33 @@ lazy val sbtPlugin = project
   )
   .dependsOn(core)
 
+def isScala2(v: Option[(Long, Long)]): Boolean = v.exists(_._1 == 2)
+def isScala3(v: Option[(Long, Long)]): Boolean = v.exists(_._1 == 3)
+
+def multiScalaDirectories(root: File, scalaVersion: String) = {
+  val base = root / "src" / "main"
+  val result = mutable.ListBuffer.empty[File]
+  val partialVersion = CrossVersion.partialVersion(scalaVersion)
+  partialVersion.collect { case (major, minor) =>
+    result += base / s"scala-$major.$minor"
+  }
+  if (isScala2(partialVersion)) {
+    result += base / "scala-2"
+  }
+  if (isScala3(partialVersion)) {
+    result += base / "scala-3"
+  }
+  result += base / s"scala-$scalaVersion"
+  result.toList
+}
+
 lazy val expressionCompiler = project
   .in(file("expression-compiler"))
   .settings(
     name := "scala-expression-compiler",
     crossScalaVersions := Seq(
+      "3.1.1",
+      "3.1.0",
       "3.0.2",
       "3.0.1",
       "3.0.0",
@@ -131,10 +152,19 @@ lazy val expressionCompiler = project
     },
     crossTarget := target.value / s"scala-${scalaVersion.value}",
     crossVersion := CrossVersion.full,
+    Compile / unmanagedSourceDirectories ++= multiScalaDirectories(
+      (ThisBuild / baseDirectory).value / "expression-compiler",
+      scalaVersion.value
+    ),
+    Compile / doc / sources := Seq.empty,
     libraryDependencies ++= {
       CrossVersion.partialVersion(scalaVersion.value) match {
         case Some((2, _)) =>
           List("org.scala-lang" % "scala-compiler" % scalaVersion.value)
+        case Some((3, _)) =>
+          List(
+            "org.scala-lang" %% "scala3-compiler" % scalaVersion.value
+          )
         case _ => Nil
       }
     },

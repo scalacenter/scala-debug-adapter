@@ -52,7 +52,7 @@ private[internal] class ExpressionCompiler(
 }
 
 private[internal] object ExpressionCompiler {
-  def apply(evaluationClassLoader: ClassLoader): Option[ExpressionCompiler] =
+  def apply(evaluationClassLoader: ClassLoader): Option[ExpressionCompiler] = {
     for {
       expressionCompilerClass <- Try(
         Class.forName(
@@ -68,4 +68,5 @@ private[internal] object ExpressionCompiler {
         _.getName == "compile"
       )
     } yield new ExpressionCompiler(expressionCompilerInstance, compileMethod)
+  }
 }
