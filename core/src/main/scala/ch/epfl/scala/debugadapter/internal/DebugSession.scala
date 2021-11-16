@@ -224,11 +224,11 @@ private[debugadapter] final class DebugSession private (
   }
 
   private object Listener extends DebuggeeListener {
-    def onListening(address: InetSocketAddress): Unit = {
+    override def onListening(address: InetSocketAddress): Unit = {
       debuggeeAddress.trySuccess(address)
     }
 
-    def out(line: String): Unit = {
+    override def out(line: String): Unit = {
       val event = new OutputEvent(
         OutputEvent.Category.stdout,
         line + System.lineSeparator()
@@ -236,11 +236,16 @@ private[debugadapter] final class DebugSession private (
       sendEvent(event)
     }
 
-    def err(line: String): Unit = {
+    override def err(line: String): Unit = {
       val event = new OutputEvent(
         OutputEvent.Category.stderr,
         line + System.lineSeparator()
       )
+      sendEvent(event)
+    }
+
+    override def testResult(data: TestSuiteResult): Unit = {
+      val event = TestResultEvent(data)
       sendEvent(event)
     }
   }
