@@ -5,15 +5,16 @@ import com.microsoft.java.debug.core.protocol.Events.DebugEvent
 
 final class TestResultEvent private (
     val category: String,
-    val data: Object
+    val data: TestSuiteResult
 ) extends DebugEvent("testResult")
 object TestResultEvent {
-  def apply(data: Object): TestResultEvent =
+  def apply(data: TestSuiteResult): TestResultEvent =
     new TestResultEvent("testResult", data)
 }
 
 final case class TestSuiteResult(
     suiteName: String,
+    summary: String,
     duration: Long,
     tests: java.util.List[SingleTestResult]
 )
