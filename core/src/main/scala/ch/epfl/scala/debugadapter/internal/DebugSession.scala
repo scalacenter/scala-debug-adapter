@@ -1,6 +1,7 @@
 package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter._
+import ch.epfl.scala.debugadapter.testing.TestSuiteSummary
 import com.microsoft.java.debug.core.adapter.{
   IProviderContext,
   ProtocolServer => DapServer
@@ -244,7 +245,7 @@ private[debugadapter] final class DebugSession private (
       sendEvent(event)
     }
 
-    override def testResult(data: TestSuiteResult): Unit = {
+    override def testResult(data: TestSuiteSummary): Unit = {
       val event = TestResultEvent(data)
       sendEvent(event)
     }

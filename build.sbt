@@ -2,7 +2,6 @@ import sbt.CrossVersion
 import sbt.Keys.crossVersion
 
 import java.io.File
-import scala.collection.mutable
 
 def isRelease() =
   System.getenv("GITHUB_REPOSITORY") == "scalacenter/scala-debug-adapter" &&
@@ -35,7 +34,7 @@ inThisBuild(
 
 lazy val root = project
   .in(file("."))
-  .aggregate(core, sbtPlugin, testAgent, expressionCompiler)
+  .aggregate(core, sbtPlugin, expressionCompiler)
   .settings(
     PgpKeys.publishSigned := {},
     publishLocal := {}
@@ -50,6 +49,7 @@ lazy val core = project
       Dependencies.asm,
       Dependencies.asmUtil,
       Dependencies.javaDebug,
+      Dependencies.sbtTestAgent,
       Dependencies.utest % Test,
       Dependencies.coursier % Test,
       Dependencies.coursierJvm % Test
@@ -97,20 +97,9 @@ lazy val sbtPlugin = project
       publishLocal.value
       (core / publishLocal).value
       (testClient / publishLocal).value
-      (testAgent / publishLocal).value
     }
   )
-  .dependsOn(core, testAgent)
-
-// copy of https://github.com/sbt/sbt/tree/develop/testing/agent/src/main/java/sbt
-lazy val testAgent = project
-  .in(file("sbt/test-agent"))
-  .settings(
-    name := "sbt-debug-test-agent",
-    autoScalaLibrary := false,
-    crossPaths := false,
-    libraryDependencies += Dependencies.sbtTestInterface
-  )
+  .dependsOn(core)
 
 lazy val expressionCompiler = project
   .in(file("expression-compiler"))

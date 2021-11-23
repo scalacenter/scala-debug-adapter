@@ -1,18 +1,24 @@
 package ch.epfl.scala.debugadapter.sbtplugin.internal
 
-import ch.epfl.scala.debugadapter._
-import sbt.Def.Classpath
+import ch.epfl.scala.debugadapter.*
 import sbt.Tests.{Cleanup, Setup}
 import sbt.internal.bsp.BuildTargetIdentifier
 import sbt.io.IO
-import sbt.testing._
-import sbt.{ForkOptions, TestDefinition, TestFramework}
+import sbt.testing.*
+import sbt.{
+  ForkConfiguration,
+  ForkMain,
+  ForkOptions,
+  ForkTags,
+  TestDefinition,
+  TestFramework
+}
 
-import java.io.ObjectOutputStream
+import java.io.{ObjectInputStream, ObjectOutputStream}
 import java.net.{ServerSocket, Socket}
-import java.nio.file.Path
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
+import ch.epfl.scala.debugadapter.testing.TestSuiteEvent
 
 private[debugadapter] final class MainClassRunner(
     target: BuildTargetIdentifier,
@@ -45,18 +51,52 @@ private[debugadapter] final class TestSuitesRunner(
     val evaluationClassLoader: Option[ClassLoader]
 )(implicit executionContext: ExecutionContext)
     extends DebuggeeRunner {
+
   override def name: String =
     s"${getClass.getSimpleName}(${target.uri}, [${tests.mkString(", ")}])"
+
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] = {
+    val eventHandler = new SbtTestSuiteEventHandler(listener)
+
+    @annotation.tailrec
+    def receiveLogs(is: ObjectInputStream, os: ObjectOutputStream): Unit = {
+      is.readObject() match {
+        case Array(ForkTags.Error, s: String) =>
+          eventHandler.handle(TestSuiteEvent.Error(s))
+          receiveLogs(is, os)
+        case Array(ForkTags.Warn, s: String) =>
+          eventHandler.handle(TestSuiteEvent.Warn(s))
+          receiveLogs(is, os)
+        case Array(ForkTags.Info, s: String) =>
+          eventHandler.handle(TestSuiteEvent.Info(s))
+          receiveLogs(is, os)
+        case Array(ForkTags.Debug, s: String) =>
+          eventHandler.handle(TestSuiteEvent.Debug(s))
+          receiveLogs(is, os)
+        case t: Throwable =>
+          eventHandler.handle(TestSuiteEvent.Trace(t))
+          receiveLogs(is, os)
+        case Array(testSuite: String, events: Array[Event]) =>
+          eventHandler.handle(TestSuiteEvent.Results(testSuite, events.toList))
+          receiveLogs(is, os)
+        case ForkTags.Done =>
+          eventHandler.handle(TestSuiteEvent.Done)
+          os.writeObject(ForkTags.Done)
+          os.flush()
+      }
+    }
+
     object Acceptor extends Thread {
       val server = new ServerSocket(0)
       var socket: Socket = _
       var os: ObjectOutputStream = _
+      var is: ObjectInputStream = _
 
       override def run(): Unit = {
         try {
           socket = server.accept()
           os = new ObjectOutputStream(socket.getOutputStream)
+          is = new ObjectInputStream(socket.getInputStream)
 
           // Must flush the header that the constructor writes
           // otherwise the ObjectInputStream on the other end may block indefinitely
@@ -87,8 +127,9 @@ private[debugadapter] final class TestSuitesRunner(
             os.writeObject(mainRunner.remoteArgs)
           }
           os.flush()
+          receiveLogs(is, os)
         } catch {
-          case NonFatal(_) => close()
+          case NonFatal(e) => close()
         }
       }
 
@@ -105,8 +146,9 @@ private[debugadapter] final class TestSuitesRunner(
     val args = Seq(Acceptor.server.getLocalPort.toString)
 
     val fullClasspath = classPath ++ Seq(
-      IO.classLocationPath[ForkMain], // debug-test-agent
-      IO.classLocationPath[Framework] // test-interface
+      IO.classLocationPath[ForkMain], // test-agent
+      IO.classLocationPath[Framework], // test-interface
+      IO.classLocationPath[SubclassFingerscan] // debug-adapter-core
     )
 
     // can't provide the loader for test classes, which is in another jvm

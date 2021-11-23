@@ -10,7 +10,7 @@ import sbt.testing.AnnotatedFingerprint;
 
 import java.io.Serializable;
 
-final class AnnotatedFingerscan implements AnnotatedFingerprint, Serializable {
+public final class AnnotatedFingerscan implements AnnotatedFingerprint, Serializable {
     private final boolean isModule;
     private final String annotationName;
 

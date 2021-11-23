@@ -11,12 +11,12 @@ import sbt.testing.SubclassFingerprint;
 
 import java.io.Serializable;
 
-final class SubclassFingerscan implements SubclassFingerprint, Serializable {
+public final class SubclassFingerscan implements SubclassFingerprint, Serializable {
     private final boolean isModule;
     private final String superclassName;
     private final boolean requireNoArgConstructor;
 
-    SubclassFingerscan(final SubclassFingerprint print) {
+    public SubclassFingerscan(final SubclassFingerprint print) {
         isModule = print.isModule();
         superclassName = print.superclassName();
         requireNoArgConstructor = print.requireNoArgConstructor();
