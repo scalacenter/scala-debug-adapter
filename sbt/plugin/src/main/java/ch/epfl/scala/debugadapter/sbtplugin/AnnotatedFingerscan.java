@@ -4,7 +4,7 @@
  * Copyright 2008 - 2010, Mark Harrah
  * Licensed under Apache License 2.0 (see LICENSE)
  */
-package ch.epfl.scala.debugadapter.sbtplugin.internal;
+package ch.epfl.scala.debugadapter.sbtplugin;
 
 import sbt.testing.AnnotatedFingerprint;
 
