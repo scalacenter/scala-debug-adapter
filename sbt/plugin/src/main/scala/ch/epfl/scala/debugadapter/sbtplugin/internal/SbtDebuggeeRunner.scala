@@ -1,6 +1,10 @@
 package ch.epfl.scala.debugadapter.sbtplugin.internal
 
 import ch.epfl.scala.debugadapter.*
+import ch.epfl.scala.debugadapter.sbtplugin.{
+  AnnotatedFingerscan,
+  SubclassFingerscan
+}
 import sbt.Tests.{Cleanup, Setup}
 import sbt.internal.bsp.BuildTargetIdentifier
 import sbt.io.IO
@@ -148,7 +152,7 @@ private[debugadapter] final class TestSuitesRunner(
     val fullClasspath = classPath ++ Seq(
       IO.classLocationPath[ForkMain], // test-agent
       IO.classLocationPath[Framework], // test-interface
-      IO.classLocationPath[SubclassFingerscan] // debug-adapter-core
+      IO.classLocationPath[SubclassFingerscan] // sbt-plugin
     )
 
     // can't provide the loader for test classes, which is in another jvm
