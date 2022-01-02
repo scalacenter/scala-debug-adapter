@@ -160,8 +160,8 @@ private[nsc] class EvalGlobal(
                   List()
                 ) =>
               scala.toString == "scala" &&
-                annotation.toString() == "annotation" &&
-                tailrec.toString() == "tailrec"
+              annotation.toString() == "annotation" &&
+              tailrec.toString() == "tailrec"
             case _ => false
           }
         )
