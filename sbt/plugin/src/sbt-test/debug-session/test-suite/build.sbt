@@ -3,7 +3,7 @@ import ch.epfl.scala.debugadapter.testing.TestDebugClient
 
 val checkDebugSession = inputKey[Unit]("Check the test suite debug session")
 
-libraryDependencies += "com.lihaoyi" %% "utest" % "0.7.10" % Test
+libraryDependencies += "com.lihaoyi" %% "utest" % "0.7.11" % Test
 testFrameworks += new TestFramework("utest.runner.Framework")
 scalaVersion := "2.12.14"
 checkDebugSession := {

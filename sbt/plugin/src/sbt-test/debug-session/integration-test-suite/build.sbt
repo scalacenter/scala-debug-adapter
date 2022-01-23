@@ -10,7 +10,7 @@ val root = project
   .configs(IntegrationTest)
   .settings(
     scalaVersion := "2.12.14",
-    libraryDependencies += "com.lihaoyi" %% "utest" % "0.7.10" % IntegrationTest,
+    libraryDependencies += "com.lihaoyi" %% "utest" % "0.7.11" % IntegrationTest,
     testFrameworks += new TestFramework("utest.runner.Framework"),
     Defaults.itSettings,
     inConfig(IntegrationTest)(DebugAdapterPlugin.testSettings),
