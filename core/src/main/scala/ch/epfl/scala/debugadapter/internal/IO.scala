@@ -5,14 +5,17 @@ import java.nio.file.FileSystem
 import java.nio.file.FileSystems
 import java.nio.file.Path
 import java.util
+import scala.util.control.NonFatal
 
 private[debugadapter] object IO {
-  def withinJarFile[T](absolutePath: Path)(f: FileSystem => T): T = {
+  def withinJarFile[T](absolutePath: Path)(f: FileSystem => T): Option[T] = {
     val uri = URI.create(s"jar:${absolutePath.toUri}")
     val fileSystem =
       FileSystems.newFileSystem(uri, new util.HashMap[String, Any])
-    try f(fileSystem)
-    finally fileSystem.close()
+    try Some(f(fileSystem))
+    catch {
+      case NonFatal(e) => None
+    } finally fileSystem.close()
   }
 
   def withinJavaRuntimeFileSystem[T](classLoader: ClassLoader, javaHome: Path)(
@@ -27,8 +30,4 @@ private[debugadapter] object IO {
     finally fileSystem.close()
   }
 
-  private def withinFileSystem[T](fs: FileSystem)(f: FileSystem => T): T = {
-    try f(fs)
-    finally fs.close()
-  }
 }

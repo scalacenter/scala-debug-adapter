@@ -121,7 +121,7 @@ private class ClassEntryLookUp(
   }
 
   def getSourceContent(sourceUri: URI): Option[String] = {
-    sourceUriToSourceFile.get(sourceUri).map(readSourceContent)
+    sourceUriToSourceFile.get(sourceUri).flatMap(readSourceContent)
   }
 
   def getSourceFile(fqcn: String): Option[URI] = {
@@ -138,7 +138,9 @@ private object ClassEntryLookUp {
     if (sourceFiles.isEmpty) ClassEntryLookUp.empty
     else {
       val classFiles = entry.classSystems.flatMap { classSystem =>
-        classSystem.within(readAllClassFiles(classSystem))
+        classSystem
+          .within(readAllClassFiles(classSystem))
+          .getOrElse(Vector.empty)
       }
       val sourceUriToSourceFile = sourceFiles.map(f => (f.uri, f)).toMap
       val sourceNameToSourceFile = sourceFiles.groupBy(f => f.fileName)
@@ -224,7 +226,7 @@ private object ClassEntryLookUp {
       case SourceJar(jar) =>
         IO.withinJarFile(jar) { fileSystem =>
           getAllSourceFiles(entry, fileSystem, fileSystem.getPath("/")).toVector
-        }
+        }.getOrElse(Vector.empty)
       case SourceDirectory(directory) =>
         getAllSourceFiles(entry, FileSystems.getDefault, directory).toSeq
       case StandaloneSourceFile(absolutePath, relativePath) =>
@@ -307,11 +309,11 @@ private object ClassEntryLookUp {
     nestedPackages.exists { `package` =>
       val quotedPackage = Regex.quote(`package`)
       val matcher = s"package\\s+(object\\s+)?$quotedPackage(\\{|:|;|\\s+)".r
-      matcher.findFirstIn(sourceContent).isDefined
+      sourceContent.exists(matcher.findFirstIn(_).isDefined)
     }
   }
 
-  private def readSourceContent(sourceFile: SourceFile): String = {
+  private def readSourceContent(sourceFile: SourceFile): Option[String] = {
     withinSourceEntry(sourceFile.entry) { root =>
       val sourcePath = root.resolve(sourceFile.relativePath)
       new String(Files.readAllBytes(sourcePath))
@@ -320,11 +322,12 @@ private object ClassEntryLookUp {
 
   private def withinSourceEntry[T](
       sourceEntry: SourceEntry
-  )(f: Path => T): T = {
+  )(f: Path => T): Option[T] = {
     sourceEntry match {
       case SourceJar(jar) => IO.withinJarFile(jar)(fs => f(fs.getPath("/")))
-      case SourceDirectory(dir) => f(dir)
-      case StandaloneSourceFile(absolutePath, _) => f(absolutePath.getParent)
+      case SourceDirectory(dir) => Some(f(dir))
+      case StandaloneSourceFile(absolutePath, _) =>
+        Some(f(absolutePath.getParent))
     }
   }
 }
