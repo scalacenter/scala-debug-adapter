@@ -75,5 +75,16 @@ object ClassEntryLookUpSpec extends TestSuite {
       val contentSize = sourceFileContent.fold(0)(_.size)
       assert(contentSize == 8717)
     }
+
+    "should work in case of broken dependency jar" - {
+      val classPathEntry =
+        Coursier.fetchOnly("org.webjars", "swagger-ui", "4.2.1")
+      val lookUp = ClassEntryLookUp(classPathEntry)
+      val sourceJar = classPathEntry.sourceEntries.collectFirst {
+        case SourceJar(jar) => jar
+      }
+      assert(sourceJar.isDefined)
+      assert(lookUp.sources.isEmpty)
+    }
   }
 }
