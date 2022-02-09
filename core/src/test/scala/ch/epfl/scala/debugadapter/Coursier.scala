@@ -17,11 +17,7 @@ object Coursier {
     fetch(dependency)
   }
 
-  def fetch(dependency: Dependency): Seq[ClassPathEntry] = fetch(
-    Seq(dependency)
-  )
-
-  def fetch(dependencies: Seq[Dependency]): Seq[ClassPathEntry] = {
+  def fetch(dependencies: Dependency*): Seq[ClassPathEntry] = {
     coursier
       .Fetch()
       .addDependencies(dependencies: _*)
