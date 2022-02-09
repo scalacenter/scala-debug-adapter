@@ -19,7 +19,10 @@ inThisBuild(
     ),
     developers := Developers.list,
     scalaVersion := Dependencies.scala212,
-    scalacOptions ++= Seq("-Xsource:3"),
+    scalacOptions ++= Seq(
+      "-Xsource:3",
+      "-Ywarn-unused-import"
+    ),
     version ~= { dynVer =>
       if (isRelease) dynVer
       else "2.1.0-SNAPSHOT" // only for local publishing
@@ -134,5 +137,6 @@ lazy val expressionCompiler = project
           List("org.scala-lang" % "scala-compiler" % scalaVersion.value)
         case _ => Nil
       }
-    }
+    },
+    scalacOptions -= "-Ywarn-unused-import"
   )

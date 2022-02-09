@@ -6,9 +6,10 @@ import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
 import utest._
 
 import java.net.{ConnectException, SocketException, SocketTimeoutException}
-import java.util.concurrent.{Executors, TimeUnit, TimeoutException}
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext}
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeoutException
 
 object DebugServerSpec extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests

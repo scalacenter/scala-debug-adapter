@@ -1,13 +1,8 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter.Coursier
 import ch.epfl.scala.debugadapter.MainDebuggeeRunner
 import ch.epfl.scala.debugadapter.ScalaVersion
-import ch.epfl.scala.debugadapter.SourceJar
 import utest._
-
-import java.net.URI
-import ch.epfl.scala.debugadapter.Scala2
 
 object MetalsClassBreakpointSuite extends TestSuite {
   val tests = Tests {

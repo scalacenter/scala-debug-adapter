@@ -5,7 +5,6 @@ import utest._
 
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
-import java.io.File
 
 object Scala212DebugTest extends ScalaDebugTestSuite(ScalaVersion.`2.12`)
 object Scala213DebugTest extends ScalaDebugTestSuite(ScalaVersion.`2.13`)

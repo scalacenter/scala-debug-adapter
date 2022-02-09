@@ -2,8 +2,6 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi._
 
-import scala.util.Try
-
 private[evaluator] object JdiClassLoader {
   def apply(
       classLoader: ClassLoaderReference,

@@ -18,7 +18,6 @@ import sjsonnew.support.scalajson.unsafe.Converter
 import sjsonnew.support.scalajson.unsafe.{Parser => JsonParser}
 
 import java.io.File
-import java.net.URLClassLoader
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContextExecutor

@@ -1,6 +1,5 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import ch.epfl.scala.debugadapter.ClassPathEntry
 import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 import com.sun.jdi._
 
