@@ -1,12 +1,9 @@
 package ch.epfl.scala.debugadapter
 
-import ch.epfl.scala.debugadapter.internal.IO
-
 import java.net.URLClassLoader
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import scala.collection.JavaConverters._
 
 sealed trait JavaRuntime extends ClassEntry
 

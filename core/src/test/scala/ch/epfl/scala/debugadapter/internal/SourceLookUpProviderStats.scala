@@ -3,7 +3,6 @@ package ch.epfl.scala.debugadapter.internal
 import utest._
 import coursier._
 import ch.epfl.scala.debugadapter.Coursier
-import ch.epfl.scala.debugadapter.NoopLogger
 
 object SourceLookUpProviderStats extends TestSuite {
   def tests = Tests {

@@ -3,8 +3,6 @@ package ch.epfl.scala.debugadapter.testing
 import sbt.testing.{Event, Status}
 
 import scala.collection.JavaConverters.*
-import scala.collection.mutable
-import ch.epfl.scala.debugadapter.DebuggeeListener
 
 trait TestSuiteEventHandler {
   def handle(testSuiteEvent: TestSuiteEvent): Unit

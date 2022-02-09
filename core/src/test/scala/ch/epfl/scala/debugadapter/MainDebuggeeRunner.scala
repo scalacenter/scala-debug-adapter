@@ -1,16 +1,13 @@
 package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.MainDebuggeeRunner._
-import coursier.{Dependency, Module, ModuleName, Organization}
 
 import java.io.{BufferedReader, File, InputStream, InputStreamReader}
-import java.net.{InetSocketAddress, URLClassLoader}
 import java.nio.file.{Files, Path, Paths}
 import scala.concurrent.{Future, Promise}
 import scala.util.Properties
 import scala.util.control.NonFatal
-import utest.test
-import scala.concurrent.duration.Duration
+import java.net.InetSocketAddress
 
 case class MainDebuggeeRunner(
     source: Path,

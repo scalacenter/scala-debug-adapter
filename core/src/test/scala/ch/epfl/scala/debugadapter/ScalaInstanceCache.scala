@@ -3,7 +3,6 @@ package ch.epfl.scala.debugadapter
 import scala.collection.mutable
 import java.net.URLClassLoader
 import coursier._
-import java.net.URL
 import java.nio.file.Path
 import java.io.File
 

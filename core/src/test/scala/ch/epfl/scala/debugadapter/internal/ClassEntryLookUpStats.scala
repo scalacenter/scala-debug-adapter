@@ -1,15 +1,9 @@
 package ch.epfl.scala.debugadapter.internal
 
 import utest._
-import coursier._
 import coursier.jvm.JvmCache
-import coursier.params.ResolutionParams
-import scala.concurrent.duration.Duration
-import java.util.concurrent.TimeUnit
 
 import ch.epfl.scala.debugadapter.Coursier
-import ch.epfl.scala.debugadapter.ClassPathEntry
-import scala.util.Properties
 import ch.epfl.scala.debugadapter.JavaRuntime
 import ch.epfl.scala.debugadapter.ClassEntry
 

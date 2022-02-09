@@ -3,7 +3,6 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import com.sun.jdi.{ArrayReference, ObjectReference, ThreadReference, Value}
 
 import scala.collection.JavaConverters._
-import scala.util.Try
 
 object JdiArray {
   def apply(

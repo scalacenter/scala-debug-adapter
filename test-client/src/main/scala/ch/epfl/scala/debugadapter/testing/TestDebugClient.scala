@@ -14,10 +14,12 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.util.concurrent.{LinkedBlockingQueue, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicInteger
-import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.concurrent.duration._
 import scala.reflect._
 import scala.util.control.NonFatal
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Promise
+import scala.concurrent.Await
 
 class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     ec: ExecutionContext

@@ -6,10 +6,8 @@ import sbt.librarymanagement.DependencyResolution
 import sbt.librarymanagement.ScalaModuleInfo
 import sbt.librarymanagement.UnresolvedWarningConfiguration
 import sbt.librarymanagement.UpdateConfiguration
-import sbt.std.TaskExtra
 
 import java.net.URLClassLoader
-import java.nio.file.Files
 import scala.util.Properties
 
 private[sbtplugin] object InternalTasks {
