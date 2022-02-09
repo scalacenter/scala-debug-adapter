@@ -2,11 +2,9 @@ package ch.epfl.scala.debugadapter.internal
 
 import utest._
 import coursier._
-import ch.epfl.scala.debugadapter.Coursier
 import java.io.File
 import ch.epfl.scala.debugadapter.ClassPathEntry
 import ch.epfl.scala.debugadapter.SourceJar
-import ch.epfl.scala.debugadapter.ClassEntry
 
 object SourceLookUpProviderSpec extends TestSuite {
   def tests: Tests = Tests {
@@ -43,7 +41,7 @@ object SourceLookUpProviderSpec extends TestSuite {
         }
         .toSeq
 
-      for (_ <- 0 to 10) SourceLookUpProvider(classPath)
+      for (_ <- 0 until 10) SourceLookUpProvider(classPath)
     }
   }
 

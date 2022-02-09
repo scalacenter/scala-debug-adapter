@@ -5,7 +5,6 @@ import org.objectweb.asm._
 
 import java.net.URI
 import java.nio.file._
-import java.util
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import ClassEntryLookUp.readSourceContent
@@ -24,15 +23,6 @@ private case class ClassFile(
   def fullPackage: String = fullyQualifiedName.stripSuffix(s".$className")
   def fullPackageAsPath: String = fullPackage.replace(".", "/")
   def folderPath: String = relativePath.stripSuffix(s"/$className.class")
-}
-
-private case class SourceFile(
-    entry: SourceEntry,
-    relativePath: String,
-    uri: URI
-) {
-  def fileName: String = relativePath.split('/').last
-  def folderPath: String = relativePath.stripSuffix(s"/$fileName")
 }
 
 private class ClassEntryLookUp(
@@ -133,11 +123,19 @@ private object ClassEntryLookUp {
   private def empty: ClassEntryLookUp =
     new ClassEntryLookUp(Map.empty, Map.empty, Map.empty, Seq.empty, Seq.empty)
 
-  def apply(entry: ClassEntry): ClassEntryLookUp = {
-    val sourceFiles = entry.sourceEntries.flatMap(getAllSourceFiles)
+  private[internal] def apply(entry: ClassEntry): ClassEntryLookUp = {
+    val sourceFiles =
+      entry.sourceEntries.flatMap(SourceEntryLookUp.getAllSourceFiles)
+    ClassEntryLookUp(entry.classSystems, sourceFiles)
+  }
+
+  def apply(
+      classSystems: Seq[ClassSystem],
+      sourceFiles: Seq[SourceFile]
+  ): ClassEntryLookUp = {
     if (sourceFiles.isEmpty) ClassEntryLookUp.empty
     else {
-      val classFiles = entry.classSystems.flatMap { classSystem =>
+      val classFiles = classSystems.flatMap { classSystem =>
         classSystem
           .within(readAllClassFiles(classSystem))
           .getOrElse(Vector.empty)
@@ -219,38 +217,6 @@ private object ClassEntryLookUp {
         orphanClassFiles
       )
     }
-  }
-
-  private def getAllSourceFiles(entry: SourceEntry): Seq[SourceFile] = {
-    entry match {
-      case SourceJar(jar) =>
-        IO.withinJarFile(jar) { fileSystem =>
-          getAllSourceFiles(entry, fileSystem, fileSystem.getPath("/")).toVector
-        }.getOrElse(Vector.empty)
-      case SourceDirectory(directory) =>
-        getAllSourceFiles(entry, FileSystems.getDefault, directory).toSeq
-      case StandaloneSourceFile(absolutePath, relativePath) =>
-        Seq(SourceFile(entry, relativePath, absolutePath.toUri))
-    }
-  }
-
-  private def getAllSourceFiles(
-      entry: SourceEntry,
-      fileSystem: FileSystem,
-      root: Path
-  ): Iterator[SourceFile] = {
-    if (Files.exists(root)) {
-      val sourceMatcher = fileSystem.getPathMatcher("glob:**.{scala,java}")
-      Files
-        .walk(root: Path)
-        .filter(sourceMatcher.matches)
-        .iterator
-        .asScala
-        .map { path =>
-          val relativePath = root.relativize(path).toString.replace('\\', '/')
-          SourceFile(entry, relativePath, path.toUri)
-        }
-    } else Iterator.empty
   }
 
   private def readAllClassFiles(
