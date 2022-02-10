@@ -78,8 +78,8 @@ object ClassEntryLookUpStats extends TestSuite {
       )
     }
 
-    "zulu:1.17.0-0" - {
-      printAndCheck("zulu:1.17.0-0")(
+    "zulu:17.0.2" - {
+      printAndCheck("zulu:17.0.2")(
         classCount => classCount > 0,
         orphanClassCount => orphanClassCount == 0
       )
