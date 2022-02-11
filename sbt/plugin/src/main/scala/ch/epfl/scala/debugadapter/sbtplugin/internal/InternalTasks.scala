@@ -84,7 +84,9 @@ private[sbtplugin] object InternalTasks {
       .flatMap { module =>
         val sourceEntries = allSourceJars.getOrElse(module.module, Seq.empty)
         module.artifacts.collectFirst {
-          case (artifact, jar) if artifact.classifier.isEmpty =>
+          case (artifact, jar)
+              if !artifact.classifier
+                .exists(cls => cls == "sources" || cls == "javadoc") =>
             ClassPathEntry(jar.toPath, sourceEntries)
         }
       }
