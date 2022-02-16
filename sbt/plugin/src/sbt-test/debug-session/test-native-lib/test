@@ -1,2 +1,0 @@
-> 'checkDebugSession ["example.BugSpec"]'
-> stopDebugSession
