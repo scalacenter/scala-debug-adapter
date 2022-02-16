@@ -1,0 +1,2 @@
+> 'checkDebugSession {"class":"example.NativeCall","arguments":[],"jvmOptions":[]}'
+> stopDebugSession

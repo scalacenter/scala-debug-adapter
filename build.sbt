@@ -95,7 +95,7 @@ lazy val sbtPlugin = project
     scriptedSbt := "1.5.5",
     Compile / generateContrabands / contrabandFormatsForType := ContrabandConfig.getFormats,
     scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
-    // scriptedBufferLog := false,
+    scriptedBufferLog := false,
     scriptedDependencies := {
       publishLocal.value
       (core / publishLocal).value
