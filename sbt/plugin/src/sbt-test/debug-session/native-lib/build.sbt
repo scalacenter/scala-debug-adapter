@@ -5,7 +5,7 @@ import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
 val checkDebugSession = inputKey[Unit]("Check the test suite debug session")
 
 libraryDependencies += "org.lmdbjava" % "lmdbjava" % "0.8.2"
-scalaVersion := "2.12.15"
+scalaVersion := "2.13.7"
 
 checkDebugSession := {
   implicit val ec: ExecutionContext = ExecutionContext.global
