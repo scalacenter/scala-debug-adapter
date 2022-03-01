@@ -744,8 +744,19 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
            |  }
            |}""".stripMargin
 
-      val isScala2 =
-        scalaVersion == ScalaVersion.`2.12` || scalaVersion == ScalaVersion.`2.13`
+      val isScala31 = scalaVersion == ScalaVersion.`3.1`
+      assertIf(
+        assertEvaluationsInTestSuite(
+          source,
+          "MySuite",
+          ExpressionEvaluation(
+            5,
+            "1 + 1",
+            _.exists(_.toInt == 2)
+          )
+        ),
+        isScala31
+      )
       assertIf(
         assertEvaluationsInTestSuite(
           source,
@@ -764,19 +775,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
             stoppageNo = 1
           )
         ),
-        isScala2
-      )
-      assertIf(
-        assertEvaluationsInTestSuite(
-          source,
-          "MySuite",
-          ExpressionEvaluation(
-            5,
-            "1 + 1",
-            _.exists(_.toInt == 2)
-          )
-        ),
-        !isScala2
+        !isScala31
       )
     }
 
@@ -807,7 +806,7 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
         ExpressionEvaluation(
           6,
           "List(1, 2, 3).map(_ * 2).sum",
-          _.exists(_.toInt == 12)
+          _.exists(result => result.contains("\"12\"") || result.toInt == 12)
         )
       )
     }

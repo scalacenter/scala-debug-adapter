@@ -23,15 +23,18 @@ class ExtractDefs(using evalCtx: EvaluationContext) extends MiniPhase:
     super.transformTypeDef(tree)
 
   override def transformValDef(tree: ValDef)(using Context): Tree =
-    if tree.symbol.isField && evalCtx.defNames.contains(tree.name.toString) then
-      evalCtx.defTypes += (tree.name.toString -> tree.tpe)
+    if isCorrectOwner(tree) && evalCtx.defNames.contains(tree.name.toString)
+    then evalCtx.defTypes += (tree.name.toString -> tree.tpe)
     super.transformValDef(tree)
 
   override def transformDefDef(tree: DefDef)(using Context): Tree =
-    if evalCtx.expressionOwners.contains(tree.symbol.owner) && tree.symbol.owner
-        .is(Flags.Method)
-    then evalCtx.nestedMethods += tree.symbol.denot -> tree
+    // extract nested methods
+    if isCorrectOwner(tree) && tree.symbol.owner.is(Flags.Method) then
+      evalCtx.nestedMethods += tree.symbol.denot -> tree
     super.transformDefDef(tree)
+
+  private def isCorrectOwner(tree: Tree)(using Context): Boolean =
+    evalCtx.expressionOwners.contains(tree.symbol.maybeOwner)
 end ExtractDefs
 
 object ExtractDefs:
