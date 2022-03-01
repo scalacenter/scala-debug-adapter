@@ -103,9 +103,6 @@ lazy val sbtPlugin = project
   )
   .dependsOn(core)
 
-def isScala2(v: Option[(Long, Long)]): Boolean = v.exists(_._1 == 2)
-def isScala3(v: Option[(Long, Long)]): Boolean = v.exists(_._1 == 3)
-
 def multiScalaDirectories(root: File, scalaVersion: String) = {
   val base = root / "src" / "main"
   val result = mutable.ListBuffer.empty[File]
@@ -113,13 +110,6 @@ def multiScalaDirectories(root: File, scalaVersion: String) = {
   partialVersion.collect { case (major, minor) =>
     result += base / s"scala-$major.$minor"
   }
-  if (isScala2(partialVersion)) {
-    result += base / "scala-2"
-  }
-  if (isScala3(partialVersion)) {
-    result += base / "scala-3"
-  }
-  result += base / s"scala-$scalaVersion"
   result.toList
 }
 
