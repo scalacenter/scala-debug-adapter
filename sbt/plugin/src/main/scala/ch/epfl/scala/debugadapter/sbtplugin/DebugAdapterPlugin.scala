@@ -11,7 +11,8 @@ import sbt.internal.server.ServerHandler
 import sbt.internal.server.ServerIntent
 import sbt.internal.util.complete.Parser
 import sbt.internal.util.complete.Parsers
-import sjsonnew.BasicJsonProtocol
+import sbt.testing.Selector
+import sbt.testing.TestSelector
 import sjsonnew.shaded.scalajson.ast.unsafe.JValue
 import sjsonnew.support.scalajson.unsafe.CompactPrinter
 import sjsonnew.support.scalajson.unsafe.Converter
@@ -31,6 +32,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   private object DataKind {
     final val ScalaMainClass: String = "scala-main-class"
     final val ScalaTestSuites: String = "scala-test-suites"
+    final val ScalaTestSuitesSelection: String = "scala-test-suites-selection"
     final val ScalaAttachRemote: String = "scala-attach-remote"
   }
 
@@ -49,6 +51,9 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       "Start a debug session for running a scala main class"
     ).withRank(KeyRanks.DTask)
     val startTestSuitesDebugSession = inputKey[URI](
+      "Start a debug session for running test suites"
+    ).withRank(KeyRanks.DTask)
+    val startTestSuitesSelectionDebugSession = inputKey[URI](
       "Start a debug session for running test suites"
     ).withRank(KeyRanks.DTask)
     val startRemoteDebugSession = taskKey[URI](
@@ -84,6 +89,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     inConfig(Test)(testSettings),
     startMainClassDebugSession / Keys.aggregate := false,
     startTestSuitesDebugSession / Keys.aggregate := false,
+    startTestSuitesSelectionDebugSession / Keys.aggregate := false,
     startRemoteDebugSession / Keys.aggregate := false,
     stopDebugSession / Keys.aggregate := false
   )
@@ -107,6 +113,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
    */
   def testSettings: Seq[Def.Setting[_]] = Seq(
     startTestSuitesDebugSession := testSuitesSessionTask.evaluated,
+    startTestSuitesSelectionDebugSession := testSuitesSelectionSessionTask.evaluated,
     startRemoteDebugSession := remoteSessionTask.value,
     stopDebugSession := stopSessionTask.value
   )
@@ -153,6 +160,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           val task = dataKind match {
             case DataKind.ScalaMainClass => startMainClassDebugSession.key
             case DataKind.ScalaTestSuites => startTestSuitesDebugSession.key
+            case DataKind.ScalaTestSuitesSelection =>
+              startTestSuitesSelectionDebugSession.key
             case DataKind.ScalaAttachRemote => startRemoteDebugSession.key
           }
           val data = params.data.map(CompactPrinter.apply).getOrElse("")
@@ -239,7 +248,53 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       }
     }
 
-  private def testSuitesSessionTask: Def.Initialize[InputTask[URI]] =
+  /**
+   * Parses arguments for ScalaTestSuites request.
+   * @param json is expected to be an array of strings
+   */
+  private def testSuitesSessionTask(): Def.Initialize[InputTask[URI]] =
+    testSuitesSessionTaskImpl { json =>
+      Converter
+        .fromJson[Array[String]](json)
+        .toEither
+        .map { names =>
+          val testSelection = names
+            .map(name => ScalaTestSuiteSelection(name, Vector.empty))
+            .toVector
+          ScalaTestSuites(testSelection, Vector.empty, Vector.empty)
+        }
+        .left
+        .map { cause =>
+          Error.invalidParams(
+            s"expected data of kind ${DataKind.ScalaTestSuites}: ${cause.getMessage}"
+          )
+        }
+    }
+
+  /**
+   * Parses arguments for ScalaTestSuitesSelection request.
+   * @param json is expected to be an instance of ScalaTestSuites
+   */
+  private def testSuitesSelectionSessionTask(): Def.Initialize[InputTask[URI]] =
+    testSuitesSessionTaskImpl { json =>
+      Converter
+        .fromJson[ScalaTestSuites](json)
+        .toEither
+        .left
+        .map { cause =>
+          Error.invalidParams(
+            s"expected data of kind ${DataKind.ScalaTestSuitesSelection}: ${cause.getMessage}"
+          )
+        }
+    }
+
+  /**
+   * Handles debug request for both
+   * ScalaTestSuites and ScalaTestSuitesSelection kinds.
+   */
+  private def testSuitesSessionTaskImpl(
+      parseFn: JValue => Result[ScalaTestSuites]
+  ): Def.Initialize[InputTask[URI]] =
     Def.inputTask {
       val target = Keys.bspTargetIdentifier.value
       val testGrouping = (Keys.test / Keys.testGrouping).value
@@ -255,33 +310,43 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val evaluationClassLoader =
         InternalTasks.tryResolveEvaluationClassLoader.value
 
-      import BasicJsonProtocol._
       val runner = for {
         json <- jsonParser.parsed
-        testSuites <- Converter
-          .fromJson[Array[String]](json)
-          .toEither
-          .left
-          .map { cause =>
-            Error.invalidParams(
-              s"expected data of kind ${DataKind.ScalaTestSuites}: ${cause.getMessage}"
-            )
-          }
+        testSuites <- parseFn(json)
+        selectedTests = testSuites.suites
+          .map(suite => (suite.className, suite.tests))
+          .toMap
+        suiteNames = selectedTests.keySet
         testGroup <- testGrouping
           .find { g =>
             val testSet = g.tests.map(_.name).toSet
-            testSuites.forall(testSet.contains)
+            suiteNames.forall(testSet.contains)
           }
           .toRight {
             Error.invalidParams("no matching test group")
           }
       } yield {
-        val testDefinitions =
-          testGroup.tests.filter(test => testSuites.contains(test.name))
-        val forkOptions = testGroup.runPolicy match {
-          case InProcess => defaultForkOpts
-          case SubProcess(forkOpts) => forkOpts
-        }
+        val testDefinitions = testGroup.tests
+          .filter(test => suiteNames.contains(test.name))
+          .map { test =>
+            val selectors = selectedTests.getOrElse(test.name, Vector.empty)
+            if (selectors.isEmpty) test
+            else {
+              new TestDefinition(
+                test.name,
+                test.fingerprint,
+                test.explicitlySpecified,
+                selectors.map(new TestSelector(_)).toArray[Selector]
+              )
+            }
+          }
+
+        val forkOptions = getForkOptions(
+          testGroup,
+          defaultForkOpts,
+          testSuites.jvmOptions,
+          testSuites.environmentVariables
+        )
 
         val setups = testExec.options.collect { case setup @ Setup(_) => setup }
         val cleanups = testExec.options.collect { case cleanup @ Cleanup(_) =>
@@ -324,6 +389,36 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           startServer(state, target, runner, logger)
       }
     }
+
+  /**
+   * Get fork options for teh given test group taking into account
+   * additional jvm options and env variables.
+   */
+  private def getForkOptions(
+      testGroup: Group,
+      defaultForkOpts: ForkOptions,
+      jvmOptions: Vector[String],
+      environmentVariables: Vector[String]
+  ) = {
+    val forkOptions = testGroup.runPolicy match {
+      case InProcess => defaultForkOpts
+      case SubProcess(forkOpts) => forkOpts
+    }
+
+    val additionalEnv = environmentVariables
+      .foldLeft(Map.empty[String, String]) { case (env, line) =>
+        line.split('=') match {
+          case Array(key, value) => env + (key -> value)
+          case _ => env
+        }
+      }
+
+    forkOptions
+      .withRunJVMOptions(
+        forkOptions.runJVMOptions ++ jvmOptions
+      )
+      .withEnvVars(forkOptions.envVars ++ additionalEnv)
+  }
 
   private def remoteSessionTask: Def.Initialize[Task[URI]] = Def.task {
     val target = Keys.bspTargetIdentifier.value
