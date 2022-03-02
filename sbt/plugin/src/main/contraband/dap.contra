@@ -32,3 +32,23 @@ type ScalaMainClass {
   ## Additional environment variables for the application.
   environmentVariables: [String]
 }
+
+type ScalaTestSuites {
+  ## Test classes selected to be run.
+  suites: [ch.epfl.scala.debugadapter.sbtplugin.internal.ScalaTestSuiteSelection]
+
+  ##  Additional jvmOptions which will be passed to the forked JVM.
+  jvmOptions: [String]
+
+  ## Environment variables should be an array of strings in format KEY=VALUE
+  environmentVariables: [String]
+}
+
+type ScalaTestSuiteSelection {
+  ## Fully qualified name of the test suite class
+  className: String!
+
+  ## List of tests which should be run within this test suite.
+  ## Empty collection means that all of them are supposed to be executed.
+  tests: [String]
+}
