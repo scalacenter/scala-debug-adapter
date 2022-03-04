@@ -23,6 +23,9 @@ checkDebugSession := {
     client.configurationDone()
 
     val ignoredTest = client.outputed(_.category == Category.stdout)
+
+    assert(ignoredTest.output.contains("test2"))
+
     val outputEvent = client.outputed(_.category == Category.stdout)
 
     // Xmx is set to 1G
