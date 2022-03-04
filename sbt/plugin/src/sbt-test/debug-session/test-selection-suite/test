@@ -1,0 +1,2 @@
+> 'checkDebugSession {"suites":[{"className":"TestSuite","tests":["test1"]}],"jvmOptions":["-Xmx1G"],"environmentVariables":["KEY=VALUE"]}'
+> stopDebugSession
