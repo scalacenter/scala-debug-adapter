@@ -80,7 +80,7 @@ lazy val testClient = project
       Dependencies.asmUtil,
       Dependencies.javaDebug
     ),
-    scalacOptions ++= Seq("-Xsource:3", "-Ywarn-unused-import", "-feature")
+    scalacOptions ++= Seq("-Xsource:3", "-Ywarn-unused-import")
   )
 
 lazy val sbtPlugin = project
@@ -149,8 +149,10 @@ lazy val expressionCompiler = project
     },
     scalacOptions ++= {
       CrossVersion.partialVersion(scalaVersion.value) match {
-        case Some((2, _)) =>
-          Seq("-Xsource:3", "-Ywarn-unused-import")
+        case Some((2, 12)) =>
+          Seq("-Ywarn-unused-import")
+        case Some((2, 13)) =>
+          Seq("-Wunused:imports")
         case _ => Seq.empty
       }
     }

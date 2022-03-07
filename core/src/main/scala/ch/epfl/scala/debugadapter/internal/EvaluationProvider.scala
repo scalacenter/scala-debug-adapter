@@ -1,7 +1,7 @@
 package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter.DebuggeeRunner
-import ch.epfl.scala.debugadapter.internal.evaluator.ExpressionCompiler
+import ch.epfl.scala.debugadapter.internal.evaluator.EvaluationDriver
 import ch.epfl.scala.debugadapter.internal.evaluator.ExpressionEvaluator
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
 import ch.epfl.scala.debugadapter.internal.evaluator.MethodInvocationFailed
@@ -23,7 +23,7 @@ private[internal] object EvaluationProvider {
       sourceLookUpProvider: SourceLookUpProvider
   ): IEvaluationProvider = {
     val evaluator = runner.evaluationClassLoader
-      .flatMap(ExpressionCompiler(_))
+      .flatMap(EvaluationDriver(_))
       .map(
         new ExpressionEvaluator(
           runner.classPath,

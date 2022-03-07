@@ -8,11 +8,11 @@ import scala.collection.JavaConverters._
 import scala.util.Try
 import scala.concurrent.duration._
 
-private[internal] class ExpressionCompiler(
+private[internal] class EvaluationDriver(
     expressionCompilerInstance: Any,
     compileMethod: Method
 ) {
-  def compile(
+  def run(
       expressionDir: Path,
       expressionClassName: String,
       valuesByNameIdentName: String,
@@ -51,22 +51,20 @@ private[internal] class ExpressionCompiler(
   }
 }
 
-private[internal] object ExpressionCompiler {
-  def apply(evaluationClassLoader: ClassLoader): Option[ExpressionCompiler] = {
-    for {
-      expressionCompilerClass <- Try(
-        Class.forName(
-          "scala.tools.nsc.ExpressionCompiler",
-          true,
-          evaluationClassLoader
-        )
-      ).toOption
-      expressionCompilerInstance <- Try(
-        expressionCompilerClass.getDeclaredConstructor().newInstance()
-      ).toOption
-      compileMethod <- expressionCompilerClass.getMethods.find(
-        _.getName == "compile"
-      )
-    } yield new ExpressionCompiler(expressionCompilerInstance, compileMethod)
+private[internal] object EvaluationDriver {
+  def apply(classLoader: ClassLoader): Option[EvaluationDriver] = {
+    loadBridge(classLoader, "scala.tools.nsc.EvaluationBridge")
+      .orElse(loadBridge(classLoader, "dotty.tools.dotc.EvaluationBridge"))
+      .toOption
   }
+
+  private def loadBridge(
+      classLoader: ClassLoader,
+      className: String
+  ): Try[EvaluationDriver] =
+    for {
+      clazz <- Try(Class.forName(className, true, classLoader))
+      instance <- Try(clazz.getDeclaredConstructor().newInstance())
+      method <- Try(clazz.getMethods.find(_.getName == "run").get)
+    } yield new EvaluationDriver(instance, method)
 }
