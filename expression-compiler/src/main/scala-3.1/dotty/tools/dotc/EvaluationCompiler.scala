@@ -29,7 +29,7 @@ class EvaluationCompiler(
   )
 
   override protected def frontendPhases: List[List[Phase]] =
-    val parser :: typer :: other = super.frontendPhases
+    val parser :: typer :: others = super.frontendPhases
     parser
       :: List(InsertExpression())
       :: typer
@@ -38,7 +38,7 @@ class EvaluationCompiler(
       :: List(InsertExtracted())
       :: List(AdaptExpression())
       :: List(CleanUp())
-      :: other
+      :: others
 
   override protected def picklerPhases: List[List[Phase]] = List()
 end EvaluationCompiler

@@ -45,4 +45,3 @@ class EvaluationDriver(
       case e =>
         e.printStackTrace()
         throw e
-end EvaluationDriver

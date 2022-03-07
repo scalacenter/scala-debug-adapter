@@ -13,7 +13,7 @@ import scala.util.Try
 private[internal] class ExpressionEvaluator(
     classPath: Seq[Path],
     sourceLookUpProvider: ISourceLookUpProvider,
-    expressionCompiler: ExpressionCompiler
+    driver: EvaluationDriver
 ) {
   private val classPathString =
     classPath.mkString(File.pathSeparator)
@@ -46,8 +46,8 @@ private[internal] class ExpressionEvaluator(
       // must be called before any invocation otherwise
       // it throws an InvalidStackFrameException
       (names, values) <- extractValuesAndNames(frame, classLoader)
-      compiled = expressionCompiler
-        .compile(
+      compiled = driver
+        .run(
           expressionDir,
           expressionClassName,
           valuesByNameIdentName,

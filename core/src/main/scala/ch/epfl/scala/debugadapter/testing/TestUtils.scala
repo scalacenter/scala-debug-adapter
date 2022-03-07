@@ -1,6 +1,6 @@
 package ch.epfl.scala.debugadapter.testing
 
-import sbt.testing.*
+import sbt.testing._
 
 object TestUtils {
   def printSelector(selector: Selector): Option[String] = selector match {

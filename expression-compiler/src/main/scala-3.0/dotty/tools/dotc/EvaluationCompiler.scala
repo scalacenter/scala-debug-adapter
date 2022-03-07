@@ -30,14 +30,14 @@ class EvaluationCompiler(
   )
 
   override protected def frontendPhases: List[List[Phase]] =
-    val frontEnd :: other = super.frontendPhases
+    val frontEnd :: others = super.frontendPhases
     List(EvaluationFrontEnd())
       :: List(ExtractExpression())
       :: List(ExtractDefs())
       :: List(InsertExtracted())
       :: List(AdaptExpression())
       :: List(CleanUp())
-      :: other
+      :: others
 
   override protected def picklerPhases: List[List[Phase]] = List()
 end EvaluationCompiler

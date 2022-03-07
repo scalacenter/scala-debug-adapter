@@ -1,16 +1,13 @@
-package scala.tools.nsc
+package dotty.tools.dotc
 
-import dotty.tools.dotc.EvaluationDriver
-
-import java.net.URI
 import java.nio.file.Path
 import java.util.function.Consumer
 import java.{util => ju}
 import collection.JavaConverters._
 import scala.util.control.NonFatal
 
-final class ExpressionCompiler:
-  def compile(
+class EvaluationBridge:
+  def run(
       expressionDir: Path,
       expressionClassName: String,
       valuesByNameIdentName: String,
@@ -49,4 +46,3 @@ final class ExpressionCompiler:
         t.printStackTrace()
         errorConsumer.accept(t.getMessage)
         false
-end ExpressionCompiler

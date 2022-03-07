@@ -8,8 +8,8 @@ import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.reporters.StoreReporter
 import scala.util.control.NonFatal
 
-final class ExpressionCompiler {
-  def compile(
+final class EvaluationBridge {
+  def run(
       expressionDir: Path,
       expressionClassName: String,
       valuesByNameIdentName: String,
