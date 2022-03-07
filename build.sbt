@@ -18,10 +18,6 @@ inThisBuild(
     ),
     developers := Developers.list,
     scalaVersion := Dependencies.scala212,
-    scalacOptions ++= Seq(
-      "-Xsource:3",
-      "-Ywarn-unused-import"
-    ),
     version ~= { dynVer =>
       if (isRelease) dynVer
       else "2.1.0-SNAPSHOT" // only for local publishing
@@ -47,6 +43,7 @@ lazy val core = project
   .enablePlugins(SbtJdiTools, BuildInfoPlugin)
   .settings(
     name := "scala-debug-adapter",
+    scalacOptions ++= Seq("-Xsource:3", "-Ywarn-unused-import"),
     libraryDependencies ++= List(
       Dependencies.asm,
       Dependencies.asmUtil,
@@ -82,7 +79,8 @@ lazy val testClient = project
       Dependencies.asm,
       Dependencies.asmUtil,
       Dependencies.javaDebug
-    )
+    ),
+    scalacOptions ++= Seq("-Xsource:3", "-Ywarn-unused-import", "-feature")
   )
 
 lazy val sbtPlugin = project
@@ -102,16 +100,6 @@ lazy val sbtPlugin = project
     }
   )
   .dependsOn(core)
-
-def multiScalaDirectories(root: File, scalaVersion: String) = {
-  val base = root / "src" / "main"
-  val result = mutable.ListBuffer.empty[File]
-  val partialVersion = CrossVersion.partialVersion(scalaVersion)
-  partialVersion.collect { case (major, minor) =>
-    result += base / s"scala-$major.$minor"
-  }
-  result.toList
-}
 
 lazy val expressionCompiler = project
   .in(file("expression-compiler"))
@@ -142,21 +130,28 @@ lazy val expressionCompiler = project
     },
     crossTarget := target.value / s"scala-${scalaVersion.value}",
     crossVersion := CrossVersion.full,
-    Compile / unmanagedSourceDirectories ++= multiScalaDirectories(
-      (ThisBuild / baseDirectory).value / "expression-compiler",
-      scalaVersion.value
-    ),
+    Compile / unmanagedSourceDirectories ++= {
+      val sourceDir = (Compile / sourceDirectory).value
+      CrossVersion.partialVersion(scalaVersion.value).collect {
+        case (3, minor) =>
+          sourceDir / s"scala-3.$minor"
+      }
+    },
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= {
       CrossVersion.partialVersion(scalaVersion.value) match {
         case Some((2, _)) =>
-          List("org.scala-lang" % "scala-compiler" % scalaVersion.value)
+          Seq("org.scala-lang" % "scala-compiler" % scalaVersion.value)
         case Some((3, _)) =>
-          List(
-            "org.scala-lang" %% "scala3-compiler" % scalaVersion.value
-          )
-        case _ => Nil
+          Seq("org.scala-lang" %% "scala3-compiler" % scalaVersion.value)
+        case _ => Seq.empty
       }
     },
-    scalacOptions -= "-Ywarn-unused-import"
+    scalacOptions ++= {
+      CrossVersion.partialVersion(scalaVersion.value) match {
+        case Some((2, _)) =>
+          Seq("-Xsource:3", "-Ywarn-unused-import")
+        case _ => Seq.empty
+      }
+    }
   )
