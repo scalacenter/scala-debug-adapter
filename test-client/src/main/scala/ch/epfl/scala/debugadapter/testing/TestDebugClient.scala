@@ -33,7 +33,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     socket.close()
   }
 
-  def initialize(timeout: Duration = 8 seconds): Messages.Response = {
+  def initialize(timeout: Duration = 8.seconds): Messages.Response = {
     val args = new InitializeArguments()
     args.linesStartAt1 = true
     args.columnsStartAt1 = true
@@ -41,7 +41,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     sendRequest(request, timeout)
   }
 
-  def launch(timeout: Duration = 1 second): Messages.Response = {
+  def launch(timeout: Duration = 1.second): Messages.Response = {
     val request = createRequest(Command.LAUNCH, new LaunchArguments())
     sendRequest(request, timeout)
   }
@@ -49,7 +49,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
   def attach(
       hostName: String,
       port: Int,
-      timeout: Duration = 1 second
+      timeout: Duration = 1.second
   ): Messages.Response = {
     val arguments = new AttachArguments()
     arguments.hostName = hostName
@@ -58,7 +58,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     sendRequest(request, timeout)
   }
 
-  def configurationDone(timeout: Duration = 1 second): Messages.Response = {
+  def configurationDone(timeout: Duration = 1.second): Messages.Response = {
     val request =
       createRequest(Command.CONFIGURATIONDONE, new ConfigurationDoneArguments())
     sendRequest(request, timeout)
@@ -66,7 +66,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
 
   def continue(
       threadId: Long,
-      timeout: Duration = 1 second
+      timeout: Duration = 1.second
   ): Messages.Response = {
     val args = new ContinueArguments()
     args.threadId = threadId
@@ -77,7 +77,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
   def setBreakpoints(
       source: Path,
       lines: Array[Int],
-      timeout: Duration = 1 second
+      timeout: Duration = 1.second
   ): Array[Breakpoint] = {
     val args = new SetBreakpointArguments()
     args.source = new Types.Source(source.toString, 0)
@@ -90,7 +90,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
   def setBreakpointsInClass(
       className: String,
       lines: Array[Int],
-      timeout: Duration = 1 second
+      timeout: Duration = 1.second
   ): Array[Breakpoint] = {
     val args = new SetBreakpointArguments()
     val source = new Types.Source()
@@ -106,7 +106,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
 
   def stackTrace(
       threadId: Long,
-      timeout: Duration = 1 second
+      timeout: Duration = 1.second
   ): StackTraceResponseBody = {
     val args = new StackTraceArguments()
     args.threadId = threadId
@@ -115,7 +115,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     getBody[StackTraceResponseBody](response)
   }
 
-  def scopes(frameId: Int, timeout: Duration = 1 second): Array[Scope] = {
+  def scopes(frameId: Int, timeout: Duration = 1.second): Array[Scope] = {
     val args = new ScopesArguments()
     args.frameId = frameId
     val request = createRequest(Command.SCOPES, args)
@@ -125,7 +125,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
 
   def variables(
       variablesReference: Int,
-      timeout: Duration = 1 second
+      timeout: Duration = 1.second
   ): Array[Variable] = {
     val args = new VariablesArguments()
     args.variablesReference = variablesReference
@@ -134,7 +134,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     getBody[VariablesResponseBody](response).variables
   }
 
-  def stepIn(threadId: Long, timeout: Duration = 1 second): Unit = {
+  def stepIn(threadId: Long, timeout: Duration = 1.second): Unit = {
     val args = new StepInArguments()
     args.threadId = threadId
     val request = createRequest(Command.STEPIN, args)
@@ -144,7 +144,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
   def evaluate(
       expression: String,
       frameId: Int,
-      timeout: Duration = 15 seconds
+      timeout: Duration = 15.seconds
   ): Either[Message, String] = {
     val args = new EvaluateArguments()
     args.expression = expression
@@ -159,7 +159,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
 
   def disconnect(
       restart: Boolean,
-      timeout: Duration = 1 second
+      timeout: Duration = 1.second
   ): Messages.Response = {
     val args = new DisconnectArguments()
     args.restart = restart
@@ -167,24 +167,24 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     sendRequest(request, timeout)
   }
 
-  def initialized(timeout: Duration = 1 second): InitializedEvent = {
+  def initialized(timeout: Duration = 1.second): InitializedEvent = {
     val event = receiveEvent(timeout)(e => e.event == "initialized")
     getBody[InitializedEvent](event)
   }
 
-  def terminated(timeout: Duration = 1 second): TerminatedEvent = {
+  def terminated(timeout: Duration = 1.second): TerminatedEvent = {
     val event = receiveEvent(timeout)(e => e.event == "terminated")
     getBody[TerminatedEvent](event)
   }
 
-  def exited(timeout: Duration = 1 second): ExitedEvent = {
+  def exited(timeout: Duration = 1.second): ExitedEvent = {
     val event = receiveEvent(timeout)(e => e.event == "exited")
     getBody[ExitedEvent](event)
   }
 
   def outputed(
       f: OutputEvent => Boolean,
-      timeout: Duration = 1 second
+      timeout: Duration = 1.second
   ): OutputEvent = {
     val event = receiveEvent(timeout) { e =>
       if (e.event == "output") {
@@ -195,7 +195,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     getBody[OutputEvent](event)
   }
 
-  def stopped(timeout: Duration = 1 second): StoppedEvent = {
+  def stopped(timeout: Duration = 1.second): StoppedEvent = {
     val event = receiveEvent(timeout)(e => e != null && e.event == "stopped")
     getBody[StoppedEvent](event)
   }
@@ -222,7 +222,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
 object TestDebugClient {
   def connect(
       uri: URI,
-      timeout: Duration = 2 seconds,
+      timeout: Duration = 2.seconds,
       debug: String => Unit = _ => ()
   )(implicit ec: ExecutionContext): TestDebugClient = {
     val socket = new Socket()

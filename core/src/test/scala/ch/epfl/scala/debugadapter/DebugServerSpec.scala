@@ -115,7 +115,7 @@ object DebugServerSpec extends TestSuite {
       val client = TestDebugClient.connect(server.uri)
       try {
         val session = server.connect()
-        Await.result(session.getDebugeeAddress, 2 seconds)
+        Await.result(session.getDebugeeAddress, 2.seconds)
       } finally {
         server.close()
         client.close()
@@ -283,7 +283,7 @@ object DebugServerSpec extends TestSuite {
         client.initialize()
         client.disconnect(restart = false)
 
-        Await.result(runner.currentProcess.future, 2 seconds)
+        Await.result(runner.currentProcess.future, 2.seconds)
       } finally {
         server.close()
         client.close()
@@ -325,7 +325,7 @@ object DebugServerSpec extends TestSuite {
         var client2: TestDebugClient = null
         try {
           client2 = TestDebugClient.connect(handler.uri)
-          client2.initialize(1 second)
+          client2.initialize(1.second)
           assert(false) // it should not accept a second connection
         } catch {
           case _: TimeoutException => ()

@@ -58,7 +58,7 @@ private[internal] class ExpressionEvaluator(
           expression,
           names.map(_.value()).toSet,
           errorMessage => error = Some(errorMessage),
-          5 seconds
+          5.seconds
         )
       _ = {
         if (!compiled)
