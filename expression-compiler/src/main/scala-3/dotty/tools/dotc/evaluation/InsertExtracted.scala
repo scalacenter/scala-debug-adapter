@@ -8,17 +8,17 @@ import dotty.tools.dotc.transform.MegaPhase.MiniPhase
 import dotty.tools.dotc.transform.SymUtils.isField
 
 class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
-  thisPhase =>
   override def phaseName: String = InsertExtracted.name
 
   override def transformDefDef(tree: DefDef)(using Context): Tree =
-    if tree.name.toString == "evaluate" then
+    if tree.name.toString == "evaluate" && tree.symbol.owner == evalCtx.expressionThis
+    then
       evalCtx.evaluateMethod = tree.symbol
-      val transformedExpression = ExpressionTransformer().transform(
+      val transformedExpression = ExpressionTransformer.transform(
         evalCtx.expressionValDef
       )
       val transformedNestedMethods = evalCtx.nestedMethods.values
-        .map(nestedMethod => ExpressionTransformer().transform(nestedMethod))
+        .map(nestedMethod => ExpressionTransformer.transform(nestedMethod))
         .toList
       val expressionBlock =
         Block(
@@ -33,7 +33,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
       )
     else super.transformDefDef(tree)
 
-  class ExpressionTransformer extends TreeMap:
+  object ExpressionTransformer extends TreeMap:
     override def transform(tree: Tree)(using Context): Tree =
       tree match
         case tree @ This(Ident(name)) =>

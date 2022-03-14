@@ -21,8 +21,6 @@ class AdaptExpression(using
 )(using Context)
     extends MiniPhase
     with DenotTransformer:
-  thisPhase =>
-
   private var evaluateMethodSymbol: Symbol = _
 
   override def phaseName: String = AdaptExpression.name

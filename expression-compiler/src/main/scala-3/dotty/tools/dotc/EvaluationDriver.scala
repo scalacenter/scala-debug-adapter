@@ -8,7 +8,6 @@ import dotty.tools.dotc.util.SourceFile
 class EvaluationDriver(
     settings: List[String],
     expressionClassName: String,
-    valuesByNameIdentName: String,
     breakpointLine: Int,
     expression: String,
     defNames: Set[String]
@@ -32,7 +31,6 @@ class EvaluationDriver(
       EvaluationCompiler(
         sourceFile,
         expressionClassName,
-        valuesByNameIdentName,
         breakpointLine,
         expression,
         defNames

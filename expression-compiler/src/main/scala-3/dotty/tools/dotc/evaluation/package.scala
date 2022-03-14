@@ -12,18 +12,14 @@ import dotty.tools.dotc.util.Property
 val ExpressionProperty = new Property.Key[Unit]
 
 def mkIdent(name: String)(using evalCtx: EvaluationContext)(using Context) =
-  val actualName =
-    if name.startsWith("$this") then "$this"
-    else if name.startsWith("$outer") then "$outer"
-    else name
   val tree = Apply(
     Select(
       Select(This(evalCtx.expressionThis), termName("valuesByName")),
       termName("apply")
     ),
-    List(Literal(Constant(actualName)))
+    List(Literal(Constant(name)))
   )
-  mkCast(tree, evalCtx.defTypes(actualName))
+  mkCast(tree, evalCtx.defTypes(name))
 
 private def mkCast(tree: Tree, tpe: Type)(using Context): Tree =
   TypeApply(
@@ -45,7 +41,7 @@ def mkCallPrivate(tree: Apply)(using evalCtx: EvaluationContext)(using
       Literal(Constant(paramTypeName))
     )
   val paramTypeNamesArray =
-    JavaSeqLiteral(paramTypeNames, TypeTree(ctx.definitions.ObjectType))
+    JavaSeqLiteral(paramTypeNames, TypeTree(ctx.definitions.StringType))
   val argsArray =
     JavaSeqLiteral(tree.args, TypeTree(ctx.definitions.ObjectType))
 

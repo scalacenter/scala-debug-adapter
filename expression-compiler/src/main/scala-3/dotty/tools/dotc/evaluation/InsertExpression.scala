@@ -30,7 +30,7 @@ class InsertExpression(using
        |  def evaluate(): Unit =
        |    ()
        |
-       |  def callPrivate(obj: Any, methodName: String, paramTypeNames: Array[Object], args: Array[Object]) =
+       |  def callPrivate(obj: Any, methodName: String, paramTypeNames: Array[String], args: Array[Object]) =
        |    val expectedParamTypeNames = paramTypeNames.map(paramTypeName => paramTypeName.asInstanceOf[String])
        |    val parameterTypes = args.map(parameterType => parameterType.getClass)
        |    val method = obj
@@ -62,50 +62,50 @@ class InsertExpression(using
       )
     val tree = ctx.compilationUnit.untpdTree
     ctx.compilationUnit.untpdTree =
-      treeMap(parsedExpression, parsedExpressionClass)
+      TreeInserter(parsedExpression, parsedExpressionClass)
         .transform(tree)
 
-  private def treeMap(expression: Tree, expressionClass: Seq[Tree]) =
-    new UntypedTreeMap:
-      private var expressionInserted = false
+  class TreeInserter(expression: Tree, expressionClass: Seq[Tree])
+      extends UntypedTreeMap:
+    private var expressionInserted = false
 
-      override def transform(tree: Tree)(using Context): Tree =
-        tree match
-          case tree: PackageDef =>
-            val transformed = super.transform(tree).asInstanceOf[PackageDef]
-            if (expressionInserted)
-              // set to `false` to prevent inserting `Expression` class in other `PackageDef`s
-              expressionInserted = false
-              cpy.PackageDef(transformed)(
-                transformed.pid,
-                transformed.stats ++ expressionClass.map(
-                  _.withSpan(tree.span)
-                )
+    override def transform(tree: Tree)(using Context): Tree =
+      tree match
+        case tree: PackageDef =>
+          val transformed = super.transform(tree).asInstanceOf[PackageDef]
+          if (expressionInserted)
+            // set to `false` to prevent inserting `Expression` class in other `PackageDef`s
+            expressionInserted = false
+            cpy.PackageDef(transformed)(
+              transformed.pid,
+              transformed.stats ++ expressionClass.map(
+                _.withSpan(tree.span)
               )
-            else transformed
-          case tree: Template if isOnBreakpoint(tree) =>
-            expressionInserted = true
-            val exprBlock = mkExprBlock(expression, Literal(Constant(())))
-            val newTemplate = cpy.Template(tree)(body = tree.body :+ exprBlock)
-            super.transform(newTemplate)
-          case tree @ DefDef(name, paramss, tpt, _) if isOnBreakpoint(tree) =>
-            expressionInserted = true
-            cpy.DefDef(tree)(
-              name,
-              paramss,
-              tpt,
-              mkExprBlock(expression, tree.rhs)
             )
-          case tree @ ValDef(name, tpt, _) if isOnBreakpoint(tree) =>
-            expressionInserted = true
-            cpy.ValDef(tree)(name, tpt, mkExprBlock(expression, tree.rhs))
-          case tree if isOnBreakpoint(tree) =>
-            expressionInserted = true
-            val expr = mkExprBlock(expression, tree)
-              .asInstanceOf[Block]
-            expr
-          case tree =>
-            super.transform(tree)
+          else transformed
+        case tree: Template if isOnBreakpoint(tree) =>
+          expressionInserted = true
+          val exprBlock = mkExprBlock(expression, Literal(Constant(())))
+          val newTemplate = cpy.Template(tree)(body = tree.body :+ exprBlock)
+          super.transform(newTemplate)
+        case tree @ DefDef(name, paramss, tpt, _) if isOnBreakpoint(tree) =>
+          expressionInserted = true
+          cpy.DefDef(tree)(
+            name,
+            paramss,
+            tpt,
+            mkExprBlock(expression, tree.rhs)
+          )
+        case tree @ ValDef(name, tpt, _) if isOnBreakpoint(tree) =>
+          expressionInserted = true
+          cpy.ValDef(tree)(name, tpt, mkExprBlock(expression, tree.rhs))
+        case tree if isOnBreakpoint(tree) =>
+          expressionInserted = true
+          val expr = mkExprBlock(expression, tree)
+            .asInstanceOf[Block]
+          expr
+        case tree =>
+          super.transform(tree)
 
   private def parseExpression(expression: String)(using Context): Tree =
     val expressionSource =
