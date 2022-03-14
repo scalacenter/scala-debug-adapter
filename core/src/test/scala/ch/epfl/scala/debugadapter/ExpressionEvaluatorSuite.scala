@@ -22,6 +22,10 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
   private implicit val ec =
     ExecutionContext.fromExecutorService(executorService)
 
+  private val isScala3 =
+    scalaVersion == ScalaVersion.`3.0` || scalaVersion == ScalaVersion.`3.1`
+  private val isScala31 = scalaVersion == ScalaVersion.`3.1`
+
   def tests: Tests = Tests {
     "should evaluate expression with primitives" - {
       val source =
@@ -744,7 +748,6 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
            |  }
            |}""".stripMargin
 
-      val isScala31 = scalaVersion == ScalaVersion.`3.1`
       assertIf(
         assertEvaluationsInTestSuite(
           source,
@@ -845,6 +848,47 @@ abstract class ExpressionEvaluatorSuite(scalaVersion: ScalaVersion)
           "List(1, 2, 3).map(_ * a * b * c).sum",
           _.exists(result => result.contains("\"36\"") || result.toInt == 36)
         )
+      )
+    }
+
+    "should evaluate shadowed variable properly" - {
+      val source =
+        """|object EvaluateTest {
+           |  def main(args: Array[String]): Unit = {
+           |    val foo = "foo"
+           |    {
+           |      val foo = "bar"
+           |      println(foo)
+           |    }
+           |  }
+           |}
+           |""".stripMargin
+      assertIf(
+        assertEvaluationInMainClass(source, "EvaluateTest", 6, "foo")(
+          _.exists(_ == "\"bar\"")
+        ),
+        isScala3
+      )
+    }
+
+    "should evaluate variable shadowed in other scope properly" - {
+      val source =
+        """|object EvaluateTest {
+           |  def main(args: Array[String]): Unit = {
+           |    val foo = "foo"
+           |    {
+           |      val foo = "bar"
+           |      println(foo)
+           |    }
+           |    println(foo)
+           |  }
+           |}
+           |""".stripMargin
+      assertIf(
+        assertEvaluationInMainClass(source, "EvaluateTest", 8, "foo")(
+          _.exists(_ == "\"foo\"")
+        ),
+        isScala3
       )
     }
   }

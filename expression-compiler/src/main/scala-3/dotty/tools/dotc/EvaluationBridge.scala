@@ -31,7 +31,6 @@ class EvaluationBridge:
       EvaluationDriver(
         settings,
         expressionClassName,
-        valuesByNameIdentName,
         line,
         expression,
         defNames.asScala.toSet

@@ -15,7 +15,6 @@ import dotty.tools.dotc.util.SourceFile
 class EvaluationCompiler(
     sourceFile: SourceFile,
     expressionClassName: String,
-    valuesByNameIdentName: String,
     breakpointLine: Int,
     expression: String,
     defNames: Set[String]
