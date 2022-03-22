@@ -145,8 +145,7 @@ class InsertExpression(using
     val exprTermName = termName(evalCtx.expressionClassName.toLowerCase)
     val ident = Ident(exprTermName)
     val valDef = ValDef(exprTermName, TypeTree(), expr)
-    if tree.isDef then Block(List(valDef, ident, tree), Literal(Constant(())))
-    else Block(List(valDef, ident), tree)
+    Block(List(valDef, ident), tree)
 end InsertExpression
 
 object InsertExpression:
