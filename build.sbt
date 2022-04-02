@@ -30,8 +30,8 @@ inThisBuild(
     libraryDependencies ++= {
       if (isCI) Nil
       else List(Dependencies.pprint)
-    }
-    // resolvers += Resolver.mavenLocal
+    },
+    resolvers += Resolver.mavenLocal
   )
 )
 
@@ -49,6 +49,7 @@ lazy val core = project
   .settings(
     name := "scala-debug-adapter",
     libraryDependencies ++= List(
+      Dependencies.scalaReflect,
       Dependencies.asm,
       Dependencies.asmUtil,
       Dependencies.javaDebug,
@@ -97,7 +98,7 @@ lazy val sbtPlugin = project
     scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
     scriptedBufferLog := false,
     scriptedDependencies := {
-      publishLocal.value
+      (publishLocal).value
       (core / publishLocal).value
       (testClient / publishLocal).value
     }

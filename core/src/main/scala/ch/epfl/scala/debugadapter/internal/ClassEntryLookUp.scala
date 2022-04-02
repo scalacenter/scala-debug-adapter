@@ -17,6 +17,8 @@ private case class ClassFile(
     fullyQualifiedName: String,
     sourceName: Option[String],
     relativePath: String,
+    // within => (filesystem) => get path => readAllBytes
+    // ajouter methode getClassBytes(classname : String)
     classSystem: ClassSystem
 ) {
   def className: String = fullyQualifiedName.split('.').last
