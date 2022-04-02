@@ -2,6 +2,7 @@ package ch.epfl.scala.debugadapter
 
 import java.nio.file.Path
 import java.net.URL
+import java.nio.file.Files
 
 case class ClassPathEntry(absolutePath: Path, sourceEntries: Seq[SourceEntry])
     extends ClassEntry {
@@ -13,4 +14,12 @@ case class ClassPathEntry(absolutePath: Path, sourceEntries: Seq[SourceEntry])
   def name: String =
     absolutePath.getFileName.toString.stripSuffix(".jar")
   private def isJar: Boolean = absolutePath.toString.endsWith(".jar")
+
+  // TODO: Move to classFile
+  def readBytes(classFile: String): Seq[Array[Byte]] = {
+    for (c <- classSystems)
+      yield (c
+        .within((_, path) => Files.readAllBytes(path.resolve(classFile)))
+        .get)
+  }
 }

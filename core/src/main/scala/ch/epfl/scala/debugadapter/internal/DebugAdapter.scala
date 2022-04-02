@@ -11,6 +11,9 @@ import java.util
 import java.util.Collections
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
+import com.microsoft.java.debug.core.protocol.Requests.CustomStepFilter
+import ch.epfl.scala.debugadapter.internal.decompiler.Decompiler
+import ch.epfl.scala.debugadapter.internal.decompiler.scalasig.ScalaSig
 
 private[debugadapter] object DebugAdapter {
 
@@ -20,13 +23,53 @@ private[debugadapter] object DebugAdapter {
    */
   DebugSettings.getCurrent.showStaticVariables = true
 
-  def context(runner: DebuggeeRunner, logger: Logger): IProviderContext =
+  def context(runner: DebuggeeRunner, logger: Logger): IProviderContext = {
     TimeUtils.logTime(logger, "Configured debugger") {
       val context = new ProviderContext
       val sourceLookUpProvider = SourceLookUpProvider(
-        runner.classPathEntries ++ runner.javaRuntime,
+        runner.classPathEntries ++ runner.javaRuntime, 
         logger
       )
+      DebugSettings.getCurrent().stepFilters.customStepFilter =
+        new CustomStepFilter {
+          override def skip(method: Method): Boolean = {
+            // TODO: Check name, return type, arguments number and types
+            // If sure => skip
+            // Else step in
+            val sig = method.signature()
+
+            // Check wether the signature looks like a lambda
+            if (method.name().contains("$anonfun$")) {
+              false
+            }
+
+            val className = method.getClass().getCanonicalName()
+
+            // val sourceUri = sourceLookUpProvider.getSourceFile(className).get
+            // val sourceFile = sourceLookUpProvider.getSourceContents(sourceUri)
+
+            val sourceContent = sourceLookUpProvider.getClassFile(
+              className
+            ) // Is it what we are looking for?
+
+            val bytes: Array[Byte] =
+              ??? // sourceLookUpProvider.getBytes(className)
+
+            val optScalaSig =
+              ??? // Decompiler.decompileMethodSymbol(bytes, className)
+
+            if (optScalaSig == None) {
+              false
+            }
+
+            val scalaSig: ScalaSig = ??? // optScalaSig.get
+
+            // TODO Checks
+
+            true
+          }
+        }
+
       context.registerProvider(
         classOf[IHotCodeReplaceProvider],
         HotCodeReplaceProvider
@@ -43,12 +86,10 @@ private[debugadapter] object DebugAdapter {
         classOf[IEvaluationProvider],
         EvaluationProvider(runner, sourceLookUpProvider, logger)
       )
-      context.registerProvider(
-        classOf[ICompletionsProvider],
-        CompletionsProvider
-      )
+      context.registerProvider(classOf[ICompletionsProvider], CompletionsProvider)
       context
     }
+  }
 
   object CompletionsProvider extends ICompletionsProvider {
     override def codeComplete(

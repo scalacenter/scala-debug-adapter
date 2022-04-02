@@ -17,6 +17,8 @@ private case class ClassFile(
     fullyQualifiedName: String,
     sourceName: Option[String],
     relativePath: String,
+    // within => (filesystem) => get path => readAllBytes
+    // ajouter methode getClassBytes(classname : String)
     classSystem: ClassSystem
 ) {
   def className: String = fullyQualifiedName.split('.').last
@@ -116,6 +118,10 @@ private class ClassEntryLookUp(
 
   def getSourceFile(fqcn: String): Option[URI] = {
     classNameToSourceFile.get(fqcn).map(_.uri)
+  }
+
+  def getClassFile(sourceUri: URI): Option[Seq[ClassFile]] = {
+    sourceUriToClassFiles.get(sourceUri)
   }
 }
 
