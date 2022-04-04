@@ -2,7 +2,7 @@ import sbt._
 
 object Dependencies {
   val scala212 = "2.12.15"
-  val asmVersion = "9.2"
+  val asmVersion = "9.3"
   val coursierVersion = "2.1.0-M5"
 
   val asm = "org.ow2.asm" % "asm" % asmVersion
