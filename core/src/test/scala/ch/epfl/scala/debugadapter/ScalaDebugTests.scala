@@ -6,11 +6,11 @@ import utest._
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 
-object Scala212DebugTest extends ScalaDebugTestSuite(ScalaVersion.`2.12`)
-object Scala213DebugTest extends ScalaDebugTestSuite(ScalaVersion.`2.13`)
-object Scala3DebugTest extends ScalaDebugTestSuite(ScalaVersion.`3.0`)
+object Scala212DebugTest extends ScalaDebugTests(ScalaVersion.`2.12`)
+object Scala213DebugTest extends ScalaDebugTests(ScalaVersion.`2.13`)
+object Scala3DebugTest extends ScalaDebugTests(ScalaVersion.`3.0`)
 
-class ScalaDebugTestSuite(scalaVersion: ScalaVersion) extends TestSuite {
+class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
   val executorService = Executors.newFixedThreadPool(1)
   implicit val ec = ExecutionContext.fromExecutorService(executorService)

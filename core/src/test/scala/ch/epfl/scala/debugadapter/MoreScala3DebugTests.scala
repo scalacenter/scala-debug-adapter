@@ -6,7 +6,7 @@ import utest._
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 
-object MoreScala3DebugTest extends TestSuite {
+object MoreScala3DebugTests extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
   val executorService = Executors.newFixedThreadPool(1)
   implicit val ec = ExecutionContext.fromExecutorService(executorService)
