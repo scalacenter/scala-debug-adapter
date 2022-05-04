@@ -740,15 +740,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      val evaluation =
-        if (isScala3)
-          ExpressionEvaluation.success("List(1, 2, 3).map(_ * 2).sum", 12)
-        else
-          ExpressionEvaluation.success("List(1, 2, 3).map(_ * 2).sum")(
-            _.contains("12")
-          )
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(6)(evaluation)
+        Breakpoint(6)(
+          ExpressionEvaluation.success("List(1, 2, 3).map(_ * 2).sum", 12)
+        )
       )
     }
 
@@ -774,15 +769,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |}
           |""".stripMargin
       val evaluation =
-        if (isScala3)
-          ExpressionEvaluation.success(
-            "List(1, 2, 3).map(_ * a * b * c).sum",
-            36
-          )
-        else
-          ExpressionEvaluation.success("List(1, 2, 3).map(_ * a * b * c).sum")(
-            _.contains("36")
-          )
+        ExpressionEvaluation.success("List(1, 2, 3).map(_ * a * b * c).sum", 36)
       assertInMainClass(source, "EvaluateTest")(
         Breakpoint(6)(evaluation),
         Breakpoint(15)(evaluation)
@@ -800,15 +787,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |  }
            |}
            |""".stripMargin
-      if (isScala3)
-        println("TODO fix")
-      else {
-        assertInMainClass(source, "example.Main")(
-          Breakpoint(6)(
-            ExpressionEvaluation.success("f(\"foo\")")(_.contains("3"))
-          )
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(6)(
+          ExpressionEvaluation.success("f(\"foo\")")(_.contains("3"))
         )
-      }
+      )
     }
 
     "evaluate call to method of generic class" - {
@@ -828,17 +811,13 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |  }
            |}
            |""".stripMargin
-      if (isScala3) {
-        println("TODO fix")
-      } else {
-        assertInMainClass(source, "example.Main")(
-          Breakpoint(5)(
-            ExpressionEvaluation.success("write(value)", ()),
-            // TODO should it work without casting
-            ExpressionEvaluation.success("write(\"Hello\".asInstanceOf[T])", ())
-          )
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(5)(
+          ExpressionEvaluation.success("write(value)", ()),
+          // TODO should it work without casting
+          ExpressionEvaluation.success("write(\"Hello\".asInstanceOf[T])", ())
         )
-      }
+      )
     }
 
     "evaluate call to anonymous polymorphic function" - {
@@ -857,15 +836,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |  }
            |}
            |""".stripMargin
-      if (isScala3) {
-        println("TODO fix")
-      } else {
-        assertInMainClass(source, "example.Main")(
-          Breakpoint(5)(
-            ExpressionEvaluation.success("f(\"foo\")", "oof")
-          )
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(5)(
+          ExpressionEvaluation.success("f(\"foo\")", "oof")
         )
-      }
+      )
     }
   }
 }

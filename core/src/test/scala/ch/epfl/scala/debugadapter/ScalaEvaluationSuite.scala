@@ -7,44 +7,6 @@ import scala.concurrent.duration._
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 
-class Breakpoint(val line: Int, val evaluations: Seq[ExpressionEvaluation])
-
-object Breakpoint {
-  def apply(line: Int)(evaluations: ExpressionEvaluation*): Breakpoint = {
-    new Breakpoint(line, evaluations)
-  }
-}
-
-class ExpressionEvaluation(
-    val expression: String,
-    val assertion: Either[Message, String] => Unit
-)
-
-object ExpressionEvaluation {
-  def failed(expression: String)(assertion: Message => Boolean) = {
-    new ExpressionEvaluation(
-      expression,
-      resp => assert(resp.left.exists(assertion))
-    )
-  }
-
-  def success(expression: String, result: Any) = {
-    val expected = result match {
-      case str: String => '"' + str + '"'
-      case () => "<void value>"
-      case _ => result.toString
-    }
-    new ExpressionEvaluation(
-      expression,
-      resp => assert(resp == Right(expected))
-    )
-  }
-
-  def success(expression: String)(assertion: String => Boolean) = {
-    new ExpressionEvaluation(expression, resp => assert(resp.exists(assertion)))
-  }
-}
-
 abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
     extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
@@ -54,6 +16,70 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
 
   val isScala31 = scalaVersion == ScalaVersion.`3.1`
   val isScala3 = scalaVersion.binaryVersion.startsWith("3")
+
+  class Breakpoint(val line: Int, val evaluations: Seq[ExpressionEvaluation])
+
+  object Breakpoint {
+    def apply(line: Int)(evaluations: ExpressionEvaluation*): Breakpoint = {
+      new Breakpoint(line, evaluations)
+    }
+  }
+
+  class ExpressionEvaluation(
+      val expression: String,
+      val assertion: Either[Message, String] => Unit
+  )
+
+  object ExpressionEvaluation {
+    def failed(expression: String)(assertion: Message => Boolean) = {
+      new ExpressionEvaluation(
+        expression,
+        resp => assert(resp.left.exists(assertion))
+      )
+    }
+
+    def success(expression: String, result: Any) = {
+      result match {
+        case str: String =>
+          new ExpressionEvaluation(
+            expression,
+            resp => assert(resp == Right('"' + str + '"'))
+          )
+        case () if isScala3 =>
+          new ExpressionEvaluation(
+            expression,
+            resp => assert(resp.exists(_.endsWith("\"()\"")))
+          )
+        case () =>
+          new ExpressionEvaluation(
+            expression,
+            resp => assert(resp == Right("<void value>"))
+          )
+        case n: Int =>
+          new ExpressionEvaluation(
+            expression,
+            resp =>
+              assertMatch(resp) {
+                case Right(m) if m == n.toString => ()
+                case Right(m: String) if m.endsWith('"' + n.toString + '"') =>
+                  ()
+              }
+          )
+        case _ =>
+          new ExpressionEvaluation(
+            expression,
+            resp => assert(resp == Right(result.toString))
+          )
+      }
+    }
+
+    def success(expression: String)(assertion: String => Boolean) = {
+      new ExpressionEvaluation(
+        expression,
+        resp => assert(resp.exists(assertion))
+      )
+    }
+  }
 
   def assertInMainClass(
       source: String,

@@ -46,5 +46,5 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MiniPhase:
 end ExtractExpression
 
 object ExtractExpression:
-  val name: String = "eval-extractExpression"
+  val name: String = "extract-expression"
 end ExtractExpression
