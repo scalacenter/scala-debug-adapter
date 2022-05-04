@@ -1,7 +1,6 @@
 package ch.epfl.scala.debugadapter
 
 import utest._
-import java.beans.Expression
 
 object Scala212EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.12`)
 object Scala213EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.13`)
@@ -93,6 +92,32 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       assertInMainClass(source, "EvaluateTest", 6, "x1 + x2")(
         _.exists(_.toDouble == 3.3)
       )
+    }
+
+    "evaluate field from class's constructor" - {
+      val source =
+        """|package example
+           |
+           |class A(x: String) {
+           |  def get: String = {
+           |    x
+           |  }
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A("hello")
+           |    println(a.get) 
+           |  }
+           |}
+           |""".stripMargin
+      if (!isScala3) {
+        println("TODO fix")
+      } else {
+        assertInMainClass(source, "example.Main")(
+          Breakpoint(5)(ExpressionEvaluation.success("x", "hello"))
+        )
+      }
     }
 
     "evaluate expression with class's public fields" - {
@@ -340,7 +365,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |}
           |""".stripMargin
       if (isScala3) {
-        println("TODO fix") // TODO fix
+        println("TODO fix")
       } else
         assertInMainClass(source, "EvaluateTest")(
           Breakpoint(4)(ExpressionEvaluation.success("n", 1))
@@ -762,6 +787,85 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
         Breakpoint(6)(evaluation),
         Breakpoint(15)(evaluation)
       )
+    }
+
+    "evaluate call to anonymous function" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val f = (s: String) => s.size
+           |    println(f("Hello world"))
+           |  }
+           |}
+           |""".stripMargin
+      if (isScala3)
+        println("TODO fix")
+      else {
+        assertInMainClass(source, "example.Main")(
+          Breakpoint(6)(
+            ExpressionEvaluation.success("f(\"foo\")")(_.contains("3"))
+          )
+        )
+      }
+    }
+
+    "evaluate call to method of generic class" - {
+      val source =
+        """|package example
+           |
+           |class Writer[T](f: T => Unit) {
+           |  def write(value: T): Unit = {
+           |    f(value)
+           |  }
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val writer = new Writer[String](println(_))
+           |    writer.write("Hello, World!")
+           |  }
+           |}
+           |""".stripMargin
+      if (isScala3) {
+        println("TODO fix")
+      } else {
+        assertInMainClass(source, "example.Main")(
+          Breakpoint(5)(
+            ExpressionEvaluation.success("write(value)", ()),
+            // TODO should it work without casting
+            ExpressionEvaluation.success("write(\"Hello\".asInstanceOf[T])", ())
+          )
+        )
+      }
+    }
+
+    "evaluate call to anonymous polymorphic function" - {
+      val source =
+        """|package example
+           |
+           |object Foo {
+           |  def foo[A](f: String => A): A = {
+           |    f("foo")
+           |  }
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    Foo.foo(_.reverse)
+           |  }
+           |}
+           |""".stripMargin
+      if (isScala3) {
+        println("TODO fix")
+      } else {
+        assertInMainClass(source, "example.Main")(
+          Breakpoint(5)(
+            ExpressionEvaluation.success("f(\"foo\")", "oof")
+          )
+        )
+      }
     }
   }
 }
