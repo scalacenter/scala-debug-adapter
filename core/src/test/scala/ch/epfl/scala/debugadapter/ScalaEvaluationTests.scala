@@ -1,6 +1,7 @@
 package ch.epfl.scala.debugadapter
 
 import utest._
+import java.beans.Expression
 
 object Scala212EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.12`)
 object Scala213EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.13`)
@@ -70,11 +71,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 10, "x1 + x2")(
-        _.exists(_.toDouble == 3.3)
-      )
-      assertInMainClass(source, "EvaluateTest", 10, "A.x1")(
-        _.exists(_ == "\"x1\"")
+      assertInMainClass(source, "EvaluateTest")(
+        Breakpoint(10)(
+          ExpressionEvaluation.success("x1 + x2")(_.startsWith("3.3")),
+          ExpressionEvaluation.success("A.x1", "x1")
+        )
       )
     }
 
@@ -328,6 +329,24 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "evaluate expression inside of a lambda - 2" - {
+      val source =
+        """object EvaluateTest {
+          |  def main(args: Array[String]): Unit = {
+          |    List(1).foreach { n =>
+          |      println(n)
+          |    }
+          |  }
+          |}
+          |""".stripMargin
+      if (isScala3) {
+        println("TODO fix") // TODO fix
+      } else
+        assertInMainClass(source, "EvaluateTest")(
+          Breakpoint(4)(ExpressionEvaluation.success("n", 1))
+        )
+    }
+
     "evaluate expression a object's method call inside of a lambda" - {
       val source =
         """object EvaluateTest {
@@ -441,28 +460,16 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertInMainClass(
-        source,
-        "EvaluateTest",
-        4,
-        """val b = 2
-          |val c = 3
-          |a + b + c
-          |""".stripMargin
-      )(
-        _.exists(_.toInt == 6)
-      )
-      assertInMainClass(
-        source,
-        "EvaluateTest",
-        4,
-        """{
-          |val b = 2
-          |val c = 3
-          |a + b + c
-          |}""".stripMargin
-      )(
-        _.exists(_.toInt == 6)
+      assertInMainClass(source, "EvaluateTest")(
+        Breakpoint(4)(
+          ExpressionEvaluation.success(
+            """val b = 2
+              |val c = 3
+              |a + b + c
+              |""".stripMargin,
+            6
+          )
+        )
       )
     }
 
@@ -493,35 +500,14 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |  }
           |}
           |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 5, "this.p(\"foo\")")(
-        _.exists(_ == "\"foo\"")
-      )
-      assertInMainClass(source, "EvaluateTest", 5, "foo.p(\"foo\")")(
-        _.exists(_ == "\"foo\"")
-      )
-      assertInMainClass(
-        source,
-        "EvaluateTest",
-        5,
-        "getFoo().p(\"foo\")"
-      )(
-        _.exists(_ == "\"foo\"")
-      )
-      assertInMainClass(
-        source,
-        "EvaluateTest",
-        5,
-        "getFoo().getFoo().p(\"foo\")"
-      )(
-        _.exists(_ == "\"foo\"")
-      )
-      assertInMainClass(
-        source,
-        "EvaluateTest",
-        5,
-        "A.getFoo().p(\"foo\")"
-      )(
-        _.exists(_ == "\"foo\"")
+      assertInMainClass(source, "EvaluateTest")(
+        Breakpoint(5)(
+          ExpressionEvaluation.success("this.p(\"foo\")", "foo"),
+          ExpressionEvaluation.success("foo.p(\"foo\")", "foo"),
+          ExpressionEvaluation.success("getFoo().p(\"foo\")", "foo"),
+          ExpressionEvaluation.success("getFoo().getFoo().p(\"foo\")", "foo"),
+          ExpressionEvaluation.success("A.getFoo().p(\"foo\")", "foo")
+        )
       )
     }
 
@@ -702,8 +688,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
         )
       } else {
         assertInTestSuite(source, "MySuite")(
-          Breakpoint(5)(ExpressionEvaluation.success("1 + 1", 2)),
-          // evaluating twice because the program stops twice at the same breakpoint...
+          Breakpoint(5)(), // the program stops twice...
           Breakpoint(5)(ExpressionEvaluation.success("1 + 1", 2))
         )
       }
