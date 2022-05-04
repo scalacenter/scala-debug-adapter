@@ -38,5 +38,5 @@ class ExtractDefs(using evalCtx: EvaluationContext) extends MiniPhase:
 end ExtractDefs
 
 object ExtractDefs:
-  val name: String = "eval-extractDefs"
+  val name: String = "extract-defs"
 end ExtractDefs

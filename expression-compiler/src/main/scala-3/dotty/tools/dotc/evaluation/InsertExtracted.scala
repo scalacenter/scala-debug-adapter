@@ -6,6 +6,9 @@ import dotty.tools.dotc.core.Contexts._
 import dotty.tools.dotc.core.Symbols.TermSymbol
 import dotty.tools.dotc.transform.MegaPhase.MiniPhase
 import dotty.tools.dotc.transform.SymUtils.isField
+import dotty.tools.dotc.core.Names
+import dotty.tools.dotc.core.Constants.Constant
+import dotty.tools.dotc.ast.tpd
 
 class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
   override def phaseName: String = InsertExtracted.name
@@ -39,16 +42,12 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
         case tree @ This(Ident(name)) =>
           val thisOrOuter =
             if tree.symbol == evalCtx.originalThis then "$this" else "$outer"
-          if (evalCtx.defTypes.contains(thisOrOuter)) mkIdent(thisOrOuter)
+          if evalCtx.defTypes.contains(thisOrOuter) then mkIdent(thisOrOuter)
           else super.transform(tree)
         case tree @ Select(This(_), name)
             if tree.qualifier.symbol == evalCtx.originalThis && tree.symbol.isField =>
           mkIdent(name.toString)
-        case Ident(name)
-            if evalCtx.defTypes
-              .contains(name.toString) && evalCtx.defTypes.contains(
-              name.toString
-            ) =>
+        case Ident(name) if evalCtx.defTypes.contains(name.toString) =>
           mkIdent(name.toString)
         case tree: Apply
             if tree.fun.isInstanceOf[Select] && tree.fun.symbol.isPrivate =>
@@ -56,9 +55,50 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
           super.transform(privateCall)
         case _ =>
           super.transform(tree)
-  end ExpressionTransformer
+
+  def mkIdent(name: String)(using Context) =
+    val tree = Apply(
+      Select(
+        Select(This(evalCtx.expressionThis), Names.termName("valuesByName")),
+        Names.termName("apply")
+      ),
+      List(Literal(Constant(name)))
+    )
+
+    val tpe = evalCtx.defTypes(name)
+    TypeApply(
+      Select(tree, Names.termName("asInstanceOf")),
+      List(tpd.TypeTree(tpe))
+    )
+
+  def mkCallPrivate(tree: Apply)(using Context) =
+    val fun = tree.fun.asInstanceOf[Select]
+    val paramTypeNames = tree.args
+      .map(arg =>
+        val tpeSymbol = arg.tpe.typeSymbol
+        val paramTypeName =
+          if (tpeSymbol.isPrimitiveValueClass) then
+            tpeSymbol.fullName.toString.stripPrefix("scala.").toLowerCase()
+          else tpeSymbol.fullName.toString
+        Literal(Constant(paramTypeName))
+      )
+    val paramTypeNamesArray =
+      JavaSeqLiteral(paramTypeNames, TypeTree(ctx.definitions.StringType))
+    val argsArray =
+      JavaSeqLiteral(tree.args, TypeTree(ctx.definitions.ObjectType))
+
+    val app = Apply(
+      Select(This(evalCtx.expressionThis), Names.termName("callPrivate")),
+      List(
+        fun.qualifier,
+        Literal(Constant(tree.fun.asInstanceOf[Select].name.toString)),
+        paramTypeNamesArray,
+        argsArray
+      )
+    )
+    app.cast(tree.tpe)
+
 end InsertExtracted
 
 object InsertExtracted:
-  val name: String = "eval-insertExtracted"
-end InsertExtracted
+  val name: String = "insert-extracted"

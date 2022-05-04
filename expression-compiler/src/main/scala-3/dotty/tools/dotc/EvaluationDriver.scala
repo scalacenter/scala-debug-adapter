@@ -38,6 +38,7 @@ class EvaluationDriver(
     try
       val run = compiler.newRun(using ctx)
       run.compileSources(List(sourceFile))
+      // reporter.pendingMessages(using ctx).foreach(d => println(d.msg))
       reporter.allErrors
     catch
       case e =>
