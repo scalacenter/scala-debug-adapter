@@ -20,7 +20,7 @@ inThisBuild(
     scalaVersion := Dependencies.scala212,
     version ~= { dynVer =>
       if (isRelease) dynVer
-      else "2.1.0-SNAPSHOT" // only for local publishing
+      else "2.2.0-SNAPSHOT" // only for local publishing
     },
     libraryDependencies ++= {
       if (isCI) Nil
