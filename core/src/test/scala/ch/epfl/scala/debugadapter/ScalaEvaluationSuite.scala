@@ -17,24 +17,31 @@ object Breakpoint {
 
 class ExpressionEvaluation(
     val expression: String,
-    val assertion: Either[Message, String] => Boolean
+    val assertion: Either[Message, String] => Unit
 )
 
 object ExpressionEvaluation {
   def failed(expression: String)(assertion: Message => Boolean) = {
-    new ExpressionEvaluation(expression, _.left.exists(assertion))
+    new ExpressionEvaluation(
+      expression,
+      resp => assert(resp.left.exists(assertion))
+    )
   }
 
   def success(expression: String, result: Any) = {
     val expected = result match {
       case str: String => '"' + str + '"'
+      case () => "<void value>"
       case _ => result.toString
     }
-    new ExpressionEvaluation(expression, _.exists(_ == expected))
+    new ExpressionEvaluation(
+      expression,
+      resp => assert(resp == Right(expected))
+    )
   }
 
   def success(expression: String)(assertion: String => Boolean) = {
-    new ExpressionEvaluation(expression, _.exists(assertion))
+    new ExpressionEvaluation(expression, resp => assert(resp.exists(assertion)))
   }
 }
 
@@ -55,7 +62,9 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
       expression: String
   )(assertion: Either[Message, String] => Boolean): Unit = {
     assertInMainClass(source, mainClass)(
-      Breakpoint(line)(new ExpressionEvaluation(expression, assertion))
+      Breakpoint(line)(
+        new ExpressionEvaluation(expression, resp => assert(assertion(resp)))
+      )
     )
   }
 
@@ -101,7 +110,7 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
         val topFrame = stackTrace.stackFrames.head
         breakpoint.evaluations.foreach { evaluation =>
           val result = client.evaluate(evaluation.expression, topFrame.id)
-          assert(evaluation.assertion(result))
+          evaluation.assertion(result)
         }
         client.continue(threadId)
       }
