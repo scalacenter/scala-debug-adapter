@@ -49,5 +49,5 @@ class AdaptExpression(using
 end AdaptExpression
 
 object AdaptExpression:
-  val name: String = "evaluation-adaptExpression"
+  val name: String = "adapt-expression"
 end AdaptExpression

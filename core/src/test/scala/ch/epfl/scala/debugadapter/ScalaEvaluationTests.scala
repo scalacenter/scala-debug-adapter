@@ -365,11 +365,15 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |}
           |""".stripMargin
       if (isScala3) {
-        println("TODO fix")
-      } else
+        assertInMainClass(source, "EvaluateTest")(
+          Breakpoint(4)(),
+          Breakpoint(4)(ExpressionEvaluation.success("n", 1))
+        )
+      } else {
         assertInMainClass(source, "EvaluateTest")(
           Breakpoint(4)(ExpressionEvaluation.success("n", 1))
         )
+      }
     }
 
     "evaluate expression a object's method call inside of a lambda" - {
@@ -814,7 +818,9 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       assertInMainClass(source, "example.Main")(
         Breakpoint(5)(
           ExpressionEvaluation.success("write(value)", ()),
-          // TODO should it work without casting
+          // Should it work without casting?
+          // In contravariant case, we could find what's the expected type
+          // In the covariant case, it is not possible to know what the precise return type is at runtime
           ExpressionEvaluation.success("write(\"Hello\".asInstanceOf[T])", ())
         )
       )
