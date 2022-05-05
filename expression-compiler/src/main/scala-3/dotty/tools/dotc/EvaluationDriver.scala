@@ -42,5 +42,6 @@ class EvaluationDriver(
       reporter.allErrors
     catch
       case e =>
+        // reporter.pendingMessages(using ctx).foreach(d => println(d.msg))
         e.printStackTrace()
         throw e

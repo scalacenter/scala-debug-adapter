@@ -14,5 +14,5 @@ class CleanUp(using evalCtx: EvaluationContext) extends MiniPhase:
 end CleanUp
 
 object CleanUp:
-  val name: String = "eval-cleanUp"
+  val name: String = "cleanup"
 end CleanUp
