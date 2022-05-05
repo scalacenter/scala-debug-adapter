@@ -6,7 +6,6 @@ import dotty.tools.dotc.ast.untpd._
 import dotty.tools.dotc.core.Constants.Constant
 import dotty.tools.dotc.core.Contexts.Context
 import dotty.tools.dotc.core.Contexts.ctx
-import dotty.tools.dotc.core.Names.termName
 import dotty.tools.dotc.core.Phases.Phase
 import dotty.tools.dotc.parsing.Parsers
 import dotty.tools.dotc.transform.MegaPhase.MiniPhase
@@ -142,9 +141,8 @@ class InsertExpression(using
   private def mkExprBlock(expr: Tree, tree: Tree)(using
       Context
   ): Tree =
-    val exprTermName = termName(evalCtx.expressionClassName.toLowerCase)
-    val ident = Ident(exprTermName)
-    val valDef = ValDef(exprTermName, TypeTree(), expr)
+    val ident = Ident(evalCtx.expressionTermName)
+    val valDef = ValDef(evalCtx.expressionTermName, TypeTree(), expr)
     Block(List(valDef, ident), tree)
 end InsertExpression
 
