@@ -23,10 +23,11 @@ final class EvaluationBridge {
       timeoutMillis: Long
   ): Boolean = {
     val settings = new Settings
+    // settings.Xprint.value = List("insert-expression", "typer", "generate-expression")
     settings.classpath.value = classPath
     settings.outputDirs.setSingleOutput(expressionDir.toString)
     val reporter = new StoreReporter
-    val global = new EvalGlobal(
+    val global = new EvaluationGlobal(
       settings,
       reporter,
       line,
