@@ -11,87 +11,108 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
     extends ScalaEvaluationSuite(scalaVersion) {
 
   def tests: Tests = Tests {
-    "evaluate expression with primitives" - {
+    "evaluate expressions with local variables" - {
       val source =
-        """object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    val helloWorld = "Hello, World!"
-          |    println(helloWorld)
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 4, "1 + 2")(
-        _.exists(_.toInt == 3)
-      )
-    }
-
-    "evaluate expression with primitive local variables" - {
-      val source =
-        """object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    val x1 = 1.1
-          |    val x2 = 2.2
-          |    println("Hello, World!")
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 5, "x1 + x2")(
-        _.exists(_.toDouble == 3.3)
-      )
-    }
-
-    "evaluate expression with non-primitive local variables" - {
-      val source =
-        """object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    val x1 = "foo"
-          |    val x2 = "bar"
-          |    println("Hello, World!")
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 5, "x1 + x2")(
-        _.exists(_ == "\"foobar\"")
-      )
-    }
-
-    "evaluate expression with object's public fields" - {
-      val source =
-        """object A {
-          |  val x1 = "x1"
-          |}
-          |
-          |object EvaluateTest {
-          |  val x1 = 1.1
-          |  val x2 = 2.2
-          |
-          |  def main(args: Array[String]): Unit = {
-          |    println("Hello, World!")
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(10)(
-          ExpressionEvaluation.success("x1 + x2")(_.startsWith("3.3")),
-          ExpressionEvaluation.success("A.x1", "x1")
+        """|package example
+           |object App {
+           |  def main(args: Array[String]): Unit = {
+           |    val str = "hello"
+           |    val x1 = 1
+           |    println("Hello, World!")
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.App")(
+        Breakpoint(6)(
+          ExpressionEvaluation.success("x1 + 2", 3),
+          ExpressionEvaluation.success("str.reverse", "olleh")
         )
       )
     }
 
-    "evaluate expression with object's private fields" - {
+    "evaluate expression with object's fields" - {
       val source =
-        """object EvaluateTest {
-          |  private val x1 = 1.1
-          |  private val x2 = 2.2
-          |
-          |  def main(args: Array[String]): Unit = {
-          |    println(s"x1 + x2 = $x1 + $x2")
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 6, "x1 + x2")(
-        _.exists(_.toDouble == 3.3)
-      )
+        """|package example
+           |
+           |object A {
+           |  def main(args: Array[String]): Unit = {
+           |    println("Hello, World!")
+           |  }
+           |
+           |  val a1 = "a1"
+           |  private val a2 = "a2"
+           |  private[this] val a3 = "a3"
+           |  private[example] val a4 = "a4"
+           |
+           |  object B {
+           |    val b1 = "b1"
+           |    private val b2 = "b2"
+           |    private[A] val b3 = "b3"
+           |    private[example] val b4 = "b4"
+           |  }
+           |
+           |  private object C
+           |  private[this] object D
+           |  private[example] object E
+           |}
+           |
+           |object F {
+           |  val f1 = "f1"
+           |  private[example] val f2 = "f2"
+           |
+           |  object G
+           |  private[example] object H
+           |}
+           |""".stripMargin
+
+      val scala3 =
+        Breakpoint(5)(
+          ExpressionEvaluation.success("a1", "a1"),
+          ExpressionEvaluation.success("this.a1", "a1"),
+          ExpressionEvaluation.success("A.this.a1", "a1"),
+          // ExpressionEvaluation.success("a2", "a2"),
+          // ExpressionEvaluation.success("a3", "a3"),
+          ExpressionEvaluation.success("a4", "a4"),
+          // ExpressionEvaluation.success("B.b1", "b1"),
+          // ExpressionEvaluation.success("this.B.b1", "b1"),
+          ExpressionEvaluation.success("A.B.b1", "b1"),
+          // ExpressionEvaluation.success("A.this.B.b1", "b1"),
+          ExpressionEvaluation.failed("B.b2")(_ => true),
+          // ExpressionEvaluation.success("B.b3", "b3"),
+          ExpressionEvaluation.success("A.B.b3", "b3"),
+          // ExpressionEvaluation.success("B.b4", "b4"),
+          // ExpressionEvaluation.success("C")(_.startsWith("A$C$@")),
+          // ExpressionEvaluation.success("D")(_.startsWith("A$D$@")),
+          ExpressionEvaluation.success("F.f1", "f1"),
+          ExpressionEvaluation.success("F.f2", "f2"),
+          ExpressionEvaluation.success("F.G")(_.startsWith("F$G$@")),
+          ExpressionEvaluation.success("F.H")(_.startsWith("F$H$@"))
+        )
+      val scala2 =
+        Breakpoint(5)(
+          ExpressionEvaluation.success("a1", "a1"),
+          ExpressionEvaluation.success("this.a1", "a1"),
+          ExpressionEvaluation.success("A.this.a1", "a1"),
+          ExpressionEvaluation.success("a2", "a2"),
+          // ExpressionEvaluation.success("a3", "a3"),
+          ExpressionEvaluation.success("a4", "a4"),
+          ExpressionEvaluation.success("B.b1", "b1"),
+          ExpressionEvaluation.success("this.B.b1", "b1"),
+          ExpressionEvaluation.success("A.B.b1", "b1"),
+          ExpressionEvaluation.success("A.this.B.b1", "b1"),
+          ExpressionEvaluation.failed("B.b2")(_ => true),
+          ExpressionEvaluation.success("B.b3", "b3"),
+          ExpressionEvaluation.success("A.B.b3", "b3"),
+          ExpressionEvaluation.success("B.b4", "b4"),
+          ExpressionEvaluation.success("C")(_.startsWith("A$C$@")),
+          ExpressionEvaluation.success("D")(_.startsWith("A$D$@")),
+          ExpressionEvaluation.success("F.f1", "f1"),
+          ExpressionEvaluation.success("F.f2", "f2"),
+          ExpressionEvaluation.success("F.G")(_.startsWith("F$G$@")),
+          ExpressionEvaluation.success("F.H")(_.startsWith("F$H$@"))
+        )
+      println("TODO fix Scala 2 and Scala 3")
+      assertInMainClass(source, "example.A")(if (isScala3) scala3 else scala2)
     }
 
     "evaluate field from class's constructor" - {
