@@ -32,8 +32,7 @@ class AdaptExpression(using
       case ref: SymDenotation if isEvaluateMethod(ref) =>
         // set return type of the `evaluate` method to the return type of the expression
         ref.copySymDenotation(info = evalCtx.expressionType)
-      case ref: SymDenotation
-          if ref.name.toString == evalCtx.expressionIdentName =>
+      case ref: SymDenotation if ref.name == evalCtx.expressionTermName =>
         // update owner of the extracted expression,
         // after it was inserted to `evaluate` method
         ref.copySymDenotation(owner = evalCtx.evaluateMethod)

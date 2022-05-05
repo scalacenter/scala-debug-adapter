@@ -21,7 +21,6 @@ class EvaluationCompiler(
 )(using Context)
     extends Compiler:
   private given evalCtx: EvaluationContext = EvaluationContext(
-    sourceFile,
     expressionClassName,
     breakpointLine,
     expression,

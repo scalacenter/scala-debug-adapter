@@ -38,11 +38,11 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MiniPhase:
 
   // TODO: check expression owner
   private def shouldExtractValDef(tree: ValDef)(using Context): Boolean =
-    tree.name.toString == evalCtx.expressionIdentName && evalCtx.expressionValDef == null
+    tree.name == evalCtx.expressionTermName && evalCtx.expressionValDef == null
 
   // TODO: check expression owner
   private def shouldExtractIdent(tree: Ident)(using Context): Boolean =
-    tree.name.toString == evalCtx.expressionIdentName && evalCtx.expressionIdent == null
+    tree.name == evalCtx.expressionTermName && evalCtx.expressionIdent == null
 end ExtractExpression
 
 object ExtractExpression:

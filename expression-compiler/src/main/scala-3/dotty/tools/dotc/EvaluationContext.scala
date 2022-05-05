@@ -8,15 +8,17 @@ import dotty.tools.dotc.util.SourceFile
 
 import scala.collection.mutable
 import dotty.tools.dotc.core.SymDenotations.SymDenotation
+import dotty.tools.dotc.core.Names
+import dotty.tools.dotc.core.Names.TermName
 
 class EvaluationContext(
-    val sourceFile: SourceFile,
     val expressionClassName: String,
     val breakpointLine: Int,
     val expression: String,
     val defNames: Set[String]
 ):
-  val expressionIdentName: String = expressionClassName.toLowerCase
+  val expressionTermName: TermName =
+    Names.termName(expressionClassName.toLowerCase.toString)
 
   var expressionOwners: List[Symbol] = _
   var expressionValDef: ValDef = _
