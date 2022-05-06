@@ -162,9 +162,8 @@ class GenerateExpression(override val global: EvaluationGlobal)
         }
         super.transform(derivedClass)
       case tree: Ident
-          if tree.name == TermName(
-            valuesByNameIdentName
-          ) && valuesByNameIdent == null =>
+          if tree.name == TermName("valuesByName") &&
+            valuesByNameIdent == null =>
         valuesByNameIdent = tree
         EmptyTree
       case tree: DefDef if tree.name == TermName("evaluate") =>
@@ -241,7 +240,7 @@ class GenerateExpression(override val global: EvaluationGlobal)
       val app = Apply(
         Select(
           Apply(
-            Select(This(thisSym), TermName(valuesByNameIdentName)),
+            Select(This(thisSym), TermName("valuesByName")),
             List()
           ),
           TermName("apply")
@@ -288,10 +287,10 @@ class GenerateExpression(override val global: EvaluationGlobal)
         Literal(Constant(paramTypeName))
       }
     val paramTypeNamesArray =
-      ArrayValue(TypeTree(definitions.ObjectTpe), paramTypeNames)
+      ArrayValue(TypeTree(definitions.StringTpe), paramTypeNames)
     val argsArray = ArrayValue(TypeTree(definitions.ObjectTpe), tree.args)
     val app = Apply(
-      Select(Ident(expressionClassName), TermName(callPrivateMethodName)),
+      Select(Ident(expressionClassName), TermName("callPrivateMethod")),
       List(
         fun.qualifier,
         Literal(Constant(tree.fun.asInstanceOf[Select].name.decode)),

@@ -10,8 +10,6 @@ class EvaluationBridge:
   def run(
       expressionDir: Path,
       expressionClassName: String,
-      valuesByNameIdentName: String,
-      callPrivateMethodName: String,
       classPath: String,
       code: String,
       line: Int,

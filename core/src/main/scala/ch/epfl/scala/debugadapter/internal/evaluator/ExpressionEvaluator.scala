@@ -35,8 +35,6 @@ private[internal] class ExpressionEvaluator(
     val expressionDir =
       Files.createTempDirectory(s"scala-debug-adapter-$randomId")
     val expressionClassName = s"Expression$randomId"
-    val valuesByNameIdentName = s"valuesByName$randomId"
-    val callPrivateMethodName = s"callPrivate$randomId"
 
     val expressionFqcn =
       (fqcn.split("\\.").dropRight(1) :+ expressionClassName).mkString(".")
@@ -50,8 +48,6 @@ private[internal] class ExpressionEvaluator(
         .run(
           expressionDir,
           expressionClassName,
-          valuesByNameIdentName,
-          callPrivateMethodName,
           classPathString,
           content,
           breakpointLine,

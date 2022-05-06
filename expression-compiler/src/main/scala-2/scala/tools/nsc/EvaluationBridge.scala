@@ -12,8 +12,6 @@ final class EvaluationBridge {
   def run(
       expressionDir: Path,
       expressionClassName: String,
-      valuesByNameIdentName: String,
-      callPrivateMethodName: String,
       classPath: String,
       code: String,
       line: Int,
@@ -33,9 +31,7 @@ final class EvaluationBridge {
       line,
       expression,
       defNames.asScala.toSet,
-      expressionClassName,
-      valuesByNameIdentName,
-      callPrivateMethodName
+      expressionClassName
     )
     val source = new BatchSourceFile("<source>", code)
 

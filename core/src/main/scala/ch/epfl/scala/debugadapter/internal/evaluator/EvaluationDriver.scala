@@ -15,8 +15,6 @@ private[internal] class EvaluationDriver(
   def run(
       expressionDir: Path,
       expressionClassName: String,
-      valuesByNameIdentName: String,
-      callPrivateMethodName: String,
       classPath: String,
       code: String,
       line: Int,
@@ -31,8 +29,6 @@ private[internal] class EvaluationDriver(
           expressionCompilerInstance,
           expressionDir,
           expressionClassName,
-          valuesByNameIdentName,
-          callPrivateMethodName,
           classPath,
           code,
           Integer.valueOf(line),
