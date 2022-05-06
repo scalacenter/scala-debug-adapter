@@ -29,7 +29,7 @@ class InsertExpression(override val global: EvaluationGlobal)
   class InsExprTransformer extends Transformer {
     private val expressionClassSource =
       s"""class $expressionClassName(names: Array[String], values: Array[Object]) {
-         |  val $valuesByNameIdentName = names.map(_.asInstanceOf[String]).zip(values).toMap
+         |  val valuesByName = names.map(_.asInstanceOf[String]).zip(values).toMap
          |
          |  def evaluate() = {
          |    ()
@@ -37,23 +37,12 @@ class InsertExpression(override val global: EvaluationGlobal)
          |}
          |
          |object $expressionClassName {
-         |  def $callPrivateMethodName(obj: Any, methodName: String, paramTypeNames: Array[Object], args: Array[Object]) = {
-         |    val expectedParamTypeNames = paramTypeNames.map(_.asInstanceOf[String])
-         |    val parameterTypes = args.map(_.getClass)
-         |    val method = obj
-         |      .getClass()
-         |      .getDeclaredMethods()
-         |      .filter(_.getName() == methodName)
-         |      .find(method => {
-         |        val paramTypeNames = method.getParameterTypes().map(_.getName())
-         |        val paramTypeNamesMatch = expectedParamTypeNames
-         |          .zip(paramTypeNames)
-         |          .forall {
-         |            case (expectedParamTypeName, paramTypeName) =>
-         |              expectedParamTypeName == paramTypeName
-         |          }
-         |        method.getParameterTypes.size == paramTypeNames.size && paramTypeNamesMatch
-         |      })
+         |  def callPrivateMethod(obj: Any, methodName: String, paramTypeNames: Array[String], args: Array[Object]) = {
+         |    val methods = obj.getClass.getDeclaredMethods
+         |    val method = methods
+         |      .find { m =>
+         |        m.getName == methodName && m.getParameterTypes.map(_.getName).toSeq == paramTypeNames.toSeq
+         |      }
          |      .get
          |    method.setAccessible(true)
          |    method.invoke(obj, args: _*)

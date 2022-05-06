@@ -30,24 +30,11 @@ class InsertExpression(using
        |    ()
        |
        |  def callPrivate(obj: Any, methodName: String, paramTypeNames: Array[String], args: Array[Object]) =
-       |    val expectedParamTypeNames = paramTypeNames.map(paramTypeName => paramTypeName.asInstanceOf[String])
-       |    val parameterTypes = args.map(parameterType => parameterType.getClass)
-       |    val method = obj
-       |      .getClass()
-       |      .getDeclaredMethods()
-       |      .filter(declaredMethod => declaredMethod.getName() == methodName)
-       |      .find(method => {
-       |        val paramTypeNames = method
-       |          .getParameterTypes()
-       |          .map(parameterType => parameterType.getName())
-       |        val paramTypeNamesMatch = expectedParamTypeNames
-       |          .zip(paramTypeNames)
-       |          .forall {
-       |            case (expectedParamTypeName, paramTypeName) =>
-       |              expectedParamTypeName == paramTypeName
-       |          }
-       |        method.getParameterTypes().size == paramTypeNames.size && paramTypeNamesMatch
-       |      })
+       |    val methods = obj.getClass.getDeclaredMethods
+       |    val method = methods
+       |      .find { m => 
+       |        m.getName == methodName && m.getParameterTypes.map(_.getName).toSeq == paramTypeNames.toSeq
+       |      }
        |      .get
        |    method.setAccessible(true)
        |    method.invoke(obj, args: _*)
