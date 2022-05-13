@@ -21,6 +21,7 @@ final class EvaluationBridge {
       timeoutMillis: Long
   ): Boolean = {
     val settings = new Settings
+    // Debugging: Print the tree after each phases of the debugger
     // settings.Xprint.value = List("insert-expression", "typer", "generate-expression")
     settings.classpath.value = classPath
     settings.outputDirs.setSingleOutput(expressionDir.toString)

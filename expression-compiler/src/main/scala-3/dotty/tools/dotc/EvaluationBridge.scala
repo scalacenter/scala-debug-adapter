@@ -24,6 +24,7 @@ class EvaluationBridge:
       "-classpath",
       classPath,
       "-Yskip:pureStats"
+      // Debugging: Print the tree after each phases of the debugger
       // "-Vprint:adapt-expression"
     )
     val evaluationDriver =
