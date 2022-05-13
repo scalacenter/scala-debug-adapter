@@ -60,7 +60,7 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
         Breakpoint(9)(
-          ExpressionEvaluation.success("x1 + x2")(_.startsWith("3.3")),
+          ExpressionEvaluation.success("x1 + x2")(_.contains("3.3")),
           ExpressionEvaluation.success("A.x1", "x1")
         )
       )
@@ -112,8 +112,8 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
           |    def main(args: Array[String]): Unit =
           |      println("Hello, World!")
           |""".stripMargin
-      assertInMainClass(source, "debug.EvaluateTest", 4, "1 + 2")(
-        _.exists(_.toInt == 3)
+      assertInMainClass(source, "debug.EvaluateTest")(
+        Breakpoint(4)(ExpressionEvaluation.success("1 + 2", 3))
       )
     }
 
@@ -126,8 +126,8 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
           |  def main(args: Array[String]): Unit =
           |    new Foo().bar()
           |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 2, "1 + 2")(
-        _.exists(_.toInt == 3)
+      assertInMainClass(source, "EvaluateTest")(
+        Breakpoint(2)(ExpressionEvaluation.success("1 + 2", 3))
       )
     }
 

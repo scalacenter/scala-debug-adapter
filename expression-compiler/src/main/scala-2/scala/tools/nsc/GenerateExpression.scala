@@ -255,7 +255,7 @@ class GenerateExpression(override val global: EvaluationGlobal)
           tpe
       }
 
-      val tpt = TypeTree().setType(tpe)
+      val tpt = TypeTree(tpe)
       val cast = mkCast(app, tpt)
       typer.typed(cast)
     }
