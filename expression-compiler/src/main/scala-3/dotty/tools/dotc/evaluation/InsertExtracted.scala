@@ -37,20 +37,15 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
     override def transform(tree: Tree)(using Context): Tree =
       super.transform(tree) match
         // static object
-        case tree: Ident
-            if tree.symbol.is(
-              Module
-            ) && tree.symbol.isStatic && !tree.symbol.isRoot =>
+        case tree: Ident if isStaticObject(tree.symbol) =>
           getStaticObject(tree.symbol)
-        case tree: Select if tree.symbol.is(Module) && tree.symbol.isStatic =>
+        case tree: Select if isStaticObject(tree.symbol) =>
           getStaticObject(tree.symbol)
 
         // private field
-        case tree @ Ident(name)
-            if tree.symbol.isField && tree.symbol.isPrivate =>
+        case tree @ Ident(name) if isPrivateField(tree.symbol) =>
           getPrivateField(mkIdent("$this"), name, tree.tpe)
-        case tree @ Select(qualifier, name)
-            if tree.symbol.isField && tree.symbol.isPrivate =>
+        case tree @ Select(qualifier, name) if isPrivateField(tree.symbol) =>
           getPrivateField(tree.qualifier, tree.name, tree.tpe)
 
         case tree @ This(Ident(name)) =>
@@ -60,9 +55,17 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
           else tree
         case Ident(name) if evalCtx.defTypes.contains(name.toString) =>
           mkIdent(name.toString)
-        case tree: Apply
-            if tree.fun.isInstanceOf[Select] && tree.fun.symbol.isPrivate =>
-          callPrivateMethod(tree)
+
+        // private methods
+        case tree @ Apply(fun @ Select(qualifier, name), args)
+            if isPrivateMethod(fun.symbol) =>
+          callPrivateMethod(qualifier, name, args, tree.tpe)
+        case tree @ Apply(fun @ Ident(name), args)
+            if isPrivateMethod(fun.symbol) =>
+          if fun.symbol.owner == evalCtx.originalThis
+          then callPrivateMethod(mkIdent("$this"), name, args, tree.tpe)
+          else tree
+
         case tree => tree
 
   def mkIdent(name: String)(using Context) =
@@ -104,9 +107,13 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
       List(Literal(Constant(name)))
     )
 
-  private def callPrivateMethod(tree: Apply)(using Context): Tree =
-    val fun = tree.fun.asInstanceOf[Select]
-    val paramTypeNames = tree.args
+  private def callPrivateMethod(
+      qualifier: Tree,
+      name: Name,
+      args: List[Tree],
+      tpe: Type
+  )(using Context): Tree =
+    val paramTypeNames = args
       .map(arg =>
         val tpeSymbol = arg.tpe.typeSymbol
         val paramTypeName =
@@ -118,18 +125,27 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
     val paramTypeNamesArray =
       JavaSeqLiteral(paramTypeNames, TypeTree(ctx.definitions.StringType))
     val argsArray =
-      JavaSeqLiteral(tree.args, TypeTree(ctx.definitions.ObjectType))
+      JavaSeqLiteral(args, TypeTree(ctx.definitions.ObjectType))
 
     val app = Apply(
       Select(This(evalCtx.expressionThis), termName("callPrivateMethod")),
       List(
-        fun.qualifier,
-        Literal(Constant(tree.fun.asInstanceOf[Select].name.toString)),
+        qualifier,
+        Literal(Constant(name.toString)),
         paramTypeNamesArray,
         argsArray
       )
     )
-    app.cast(tree.tpe)
+    app.cast(tpe)
+
+  private def isStaticObject(symbol: Symbol)(using Context): Boolean =
+    symbol.is(Module) && symbol.isStatic && !symbol.isRoot
+
+  private def isPrivateField(symbol: Symbol)(using Context): Boolean =
+    symbol.isField && symbol.isPrivate
+
+  private def isPrivateMethod(symbol: Symbol)(using Context): Boolean =
+    symbol.isRealMethod && (symbol.isPrivate || symbol.owner.isPrivate)
 
 end InsertExtracted
 
