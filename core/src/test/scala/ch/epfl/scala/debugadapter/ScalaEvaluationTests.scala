@@ -133,6 +133,52 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "evaluate in private static object" - {
+      val source =
+        """|package example
+           |
+           |object A {
+           |  val a1 = "a1"
+           |  private def a2(str: String): String = {
+           |    s"a2: $str"
+           |  }
+           |  
+           |  private object B {
+           |    val b1 = "b1"
+           |    def b2(str: String): String = {
+           |      s"b2: $str"
+           |    }
+           |  }
+           |
+           |  def main(args: Array[String]): Unit = {
+           |    println(B.b2("foo"))
+           |  }
+           |}
+           |
+           |object C {
+           |  def c1(str: String) = s"c1: $str"
+           |  private def c2(str: String) = s"c2: $str"
+           |}
+        """.stripMargin
+      val evaluations =
+        if (isScala3)
+          Breakpoint(12)(
+            ExpressionEvaluation.success("b1", "b1"),
+            // ExpressionEvaluation.success("b2(\"foo\")", "b2: foo"),
+            ExpressionEvaluation.success("a1", "a1")
+            // ExpressionEvaluation.success("a2(\"foo\")", "a2: foo")
+          )
+        else
+          Breakpoint(12)(
+            ExpressionEvaluation.success("b1", "b1"),
+            ExpressionEvaluation.success("b2(\"foo\")", "b2: foo"),
+            ExpressionEvaluation.success("a1", "a1")
+            // ExpressionEvaluation.success("a2(\"foo\")", "a2: foo")
+          )
+      println("TODO fix Scala 2 and Scala 3")
+      assertInMainClass(source, "example.A")(evaluations)
+    }
+
     "evaluate field from class's constructor" - {
       val source =
         """|package example
