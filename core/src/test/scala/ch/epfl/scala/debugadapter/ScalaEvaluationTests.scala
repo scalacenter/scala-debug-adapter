@@ -69,30 +69,31 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |""".stripMargin
 
       val evaluations =
+        Seq(
+          ExpressionEvaluation.success("a1", "a1"),
+          ExpressionEvaluation.success("this.a1", "a1"),
+          ExpressionEvaluation.success("A.this.a1", "a1"),
+          ExpressionEvaluation.success("a2", "a2")
+        ) ++
+          (if (isScala3) Some(ExpressionEvaluation.success("a3", "a3"))
+           else None) ++
           Seq(
-            ExpressionEvaluation.success("a1", "a1"),
-            ExpressionEvaluation.success("this.a1", "a1"),
-            ExpressionEvaluation.success("A.this.a1", "a1"),
-            ExpressionEvaluation.success("a2", "a2")
-          ) ++
-            (if (isScala3) Some(ExpressionEvaluation.success("a3", "a3")) else None) ++
-            Seq(
-              ExpressionEvaluation.success("a4", "a4"),
-              ExpressionEvaluation.success("B.b1", "b1"),
-              ExpressionEvaluation.success("this.B.b1", "b1"),
-              ExpressionEvaluation.success("A.B.b1", "b1"),
-              ExpressionEvaluation.success("A.this.B.b1", "b1"),
-              ExpressionEvaluation.failed("B.b2")(_ => true),
-              ExpressionEvaluation.success("B.b3", "b3"),
-              ExpressionEvaluation.success("A.B.b3", "b3"),
-              ExpressionEvaluation.success("B.b4", "b4"),
-              ExpressionEvaluation.success("C")(_.startsWith("A$C$@")),
-              ExpressionEvaluation.success("D")(_.startsWith("A$D$@")),
-              ExpressionEvaluation.success("F.f1", "f1"),
-              ExpressionEvaluation.success("F.f2", "f2"),
-              ExpressionEvaluation.success("F.G")(_.startsWith("F$G$@")),
-              ExpressionEvaluation.success("F.H")(_.startsWith("F$H$@"))
-            )
+            ExpressionEvaluation.success("a4", "a4"),
+            ExpressionEvaluation.success("B.b1", "b1"),
+            ExpressionEvaluation.success("this.B.b1", "b1"),
+            ExpressionEvaluation.success("A.B.b1", "b1"),
+            ExpressionEvaluation.success("A.this.B.b1", "b1"),
+            ExpressionEvaluation.failed("B.b2")(_ => true),
+            ExpressionEvaluation.success("B.b3", "b3"),
+            ExpressionEvaluation.success("A.B.b3", "b3"),
+            ExpressionEvaluation.success("B.b4", "b4"),
+            ExpressionEvaluation.success("C")(_.startsWith("A$C$@")),
+            ExpressionEvaluation.success("D")(_.startsWith("A$D$@")),
+            ExpressionEvaluation.success("F.f1", "f1"),
+            ExpressionEvaluation.success("F.f2", "f2"),
+            ExpressionEvaluation.success("F.G")(_.startsWith("F$G$@")),
+            ExpressionEvaluation.success("F.H")(_.startsWith("F$H$@"))
+          )
       println("TODO fix Scala 2")
       assertInMainClass(source, "example.A")(Breakpoint(5)(evaluations: _*))
     }
@@ -120,27 +121,16 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |  private def c2(str: String) = s"c2: $str"
            |}
         """.stripMargin
-      val evaluations =
-        if (isScala3)
-          Breakpoint(5)(
-            ExpressionEvaluation.success("a1(\"foo\")", "a1: foo"),
-            // ExpressionEvaluation.success("a2(\"foo\")", "a2: foo"),
-            // ExpressionEvaluation.success("B.b1(\"foo\")", "b1: foo"),
-            // ExpressionEvaluation.success("B.b2(\"foo\")", "b2: foo"),
-            ExpressionEvaluation.success("C.c1(\"foo\")", "c1: foo"),
-            ExpressionEvaluation.failed("C.c2(\"foo\")")(_ => true)
-          )
-        else
-          Breakpoint(5)(
-            ExpressionEvaluation.success("a1(\"foo\")", "a1: foo"),
-            ExpressionEvaluation.success("a2(\"foo\")", "a2: foo"),
-            ExpressionEvaluation.success("B.b1(\"foo\")", "b1: foo"),
-            ExpressionEvaluation.success("B.b2(\"foo\")", "b2: foo"),
-            ExpressionEvaluation.success("C.c1(\"foo\")", "c1: foo"),
-            ExpressionEvaluation.failed("C.c2(\"foo\")")(_ => true)
-          )
-      println("TODO fix Scala 3")
-      assertInMainClass(source, "example.A")(evaluations)
+      assertInMainClass(source, "example.A")(
+        Breakpoint(5)(
+          ExpressionEvaluation.success("a1(\"foo\")", "a1: foo"),
+          ExpressionEvaluation.success("a2(\"foo\")", "a2: foo"),
+          ExpressionEvaluation.success("B.b1(\"foo\")", "b1: foo"),
+          ExpressionEvaluation.success("B.b2(\"foo\")", "b2: foo"),
+          ExpressionEvaluation.success("C.c1(\"foo\")", "c1: foo"),
+          ExpressionEvaluation.failed("C.c2(\"foo\")")(_ => true)
+        )
+      )
     }
 
     "evaluate field from class's constructor" - {
