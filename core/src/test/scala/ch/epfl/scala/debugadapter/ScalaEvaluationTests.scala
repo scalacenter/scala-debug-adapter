@@ -138,10 +138,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
         """|package example
            |
            |object A {
-           |  val a1 = "a1"
+           |  private val a1 = "a1"
            |  private def a2(str: String): String = {
            |    s"a2: $str"
            |  }
+           |  override def toString(): String = a1
            |  
            |  private object B {
            |    val b1 = "b1"
@@ -160,23 +161,21 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |  private def c2(str: String) = s"c2: $str"
            |}
         """.stripMargin
-      val evaluations =
+      val evaluations = Seq(
+        ExpressionEvaluation.success("b1", "b1"),
+        ExpressionEvaluation.success("b2(\"foo\")", "b2: foo")
+      ) ++ {
         if (isScala3)
-          Breakpoint(12)(
-            ExpressionEvaluation.success("b1", "b1"),
-            // ExpressionEvaluation.success("b2(\"foo\")", "b2: foo"),
-            ExpressionEvaluation.success("a1", "a1")
-            // ExpressionEvaluation.success("a2(\"foo\")", "a2: foo")
+          Seq(
+            ExpressionEvaluation.success("a1", "a1"),
+            ExpressionEvaluation.success("a2(\"foo\")", "a2: foo")
           )
-        else
-          Breakpoint(12)(
-            ExpressionEvaluation.success("b1", "b1"),
-            ExpressionEvaluation.success("b2(\"foo\")", "b2: foo"),
-            ExpressionEvaluation.success("a1", "a1")
-            // ExpressionEvaluation.success("a2(\"foo\")", "a2: foo")
-          )
-      println("TODO fix Scala 2 and Scala 3")
-      assertInMainClass(source, "example.A")(evaluations)
+        else Seq.empty
+      }
+      println("TODO fix Scala 2")
+      assertInMainClass(source, "example.A")(
+        Breakpoint(13)(evaluations: _*)
+      )
     }
 
     "evaluate field from class's constructor" - {

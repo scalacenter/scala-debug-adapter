@@ -44,7 +44,11 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
 
         // private field
         case tree @ Ident(name) if isPrivateField(tree.symbol) =>
-          getPrivateField(mkIdent("$this"), name, tree.tpe)
+          val qualifier =
+            if isStaticObject(tree.symbol.owner)
+            then getStaticObject(tree.symbol.owner)
+            else mkIdent("$this")
+          getPrivateField(qualifier, name, tree.tpe)
         case tree @ Select(qualifier, name) if isPrivateField(tree.symbol) =>
           getPrivateField(tree.qualifier, tree.name, tree.tpe)
 
@@ -62,9 +66,10 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
           callPrivateMethod(qualifier, name, args, tree.tpe)
         case tree @ Apply(fun @ Ident(name), args)
             if isPrivateMethod(fun.symbol) =>
-          if fun.symbol.owner == evalCtx.originalThis
-          then callPrivateMethod(mkIdent("$this"), name, args, tree.tpe)
-          else tree
+          val owner = tree.fun.symbol.owner
+          if isStaticObject(owner)
+          then callPrivateMethod(getStaticObject(owner), name, args, tree.tpe)
+          else callPrivateMethod(mkIdent("$this"), name, args, tree.tpe)
 
         case tree => tree
 
@@ -76,12 +81,10 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
       ),
       List(Literal(Constant(name)))
     )
-
     val tpe = evalCtx.defTypes(name)
-    TypeApply(
-      Select(tree, termName("asInstanceOf")),
-      List(TypeTree(tpe.widen))
-    )
+    if tpe.typeSymbol.isAccessibleFrom(evalCtx.expressionThis.thisType)
+    then tree.cast(tpe)
+    else tree
 
   private def getPrivateField(qualifier: Tree, name: Name, tpe: Type)(using
       Context
@@ -98,13 +101,15 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
 
   private def getStaticObject(symbol: Symbol)(using ctx: Context): Tree =
     val packageClass = symbol.enclosingPackageClass
-    val name =
+    val flatName = symbol.flatName.toString
+    val className = if flatName.endsWith("$") then flatName else flatName + "$"
+    val fullName =
       if packageClass.isEmptyPackage
-      then symbol.flatName.toString + "$"
-      else s"${packageClass.fullName}.${symbol.flatName}$$"
+      then className
+      else s"${packageClass.fullName}.$className"
     Apply(
       Select(This(evalCtx.expressionThis), termName("getStaticObject")),
-      List(Literal(Constant(name)))
+      List(Literal(Constant(fullName)))
     )
 
   private def callPrivateMethod(
