@@ -24,7 +24,7 @@ class EvaluationBridge:
       "-classpath",
       classPath,
       "-Yskip:pureStats"
-      // "-Vprint:insert-expression,typer,extract-expression,extract-defs,insert-extracted,adapt-expression,cleanup"
+      // "-Vprint:adapt-expression"
     )
     val evaluationDriver =
       EvaluationDriver(

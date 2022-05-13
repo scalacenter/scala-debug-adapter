@@ -32,9 +32,9 @@ class EvaluationCompiler(
     List(EvaluationFrontEnd())
       :: List(ExtractExpression())
       :: List(ExtractDefs())
+      :: List(CleanUp())
       :: List(InsertExtracted())
       :: List(AdaptExpression())
-      :: List(CleanUp())
       :: others
 
   override protected def picklerPhases: List[List[Phase]] = List()

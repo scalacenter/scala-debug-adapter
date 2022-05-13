@@ -9,12 +9,9 @@ import dotty.tools.dotc.core.SymDenotations.SymDenotation
 import dotty.tools.dotc.core.Symbols.Symbol
 
 /**
- * At this stage of the compilation, the `Expression` class contains a method with a name `evaluate` and a return type `Unit`.
- * Its goal is to return a value of an expression that is being evaluated. This phase changes a return type of a method `evaluate`
- * to the type of that expression.
- *
- * The second goal of this phase is to update owner of the extracted expression and extrated nested methods
- * after they were inserted to `evalaute` method.
+ * At this stage of the compilation, the `Expression` class contains a method with a name `evaluate` and a return type `Any`.
+ * The goal of this phase is to change the return type of the `evaluate` method
+ * and to update the owner of the extracted symDenotations after they were inserted into the `evaluate` method.
  */
 class AdaptExpression(using
     evalCtx: EvaluationContext
@@ -29,11 +26,14 @@ class AdaptExpression(using
       Context
   ): SingleDenotation =
     ref match
-      case ref: SymDenotation if isEvaluateMethod(ref) =>
+      case ref: SymDenotation
+          if ref.owner.name.toString == evalCtx.expressionClassName && ref.name.toString == "evaluate" =>
         // set return type of the `evaluate` method to the return type of the expression
-        ref.copySymDenotation(info = evalCtx.expressionType)
-      case ref: SymDenotation if ref.name == evalCtx.expressionTermName =>
-        // update owner of the extracted expression,
+        if evalCtx.expressionType.typeSymbol.isPublic then
+          ref.copySymDenotation(info = evalCtx.expressionType)
+        else ref
+      case ref: SymDenotation if ref.maybeOwner == evalCtx.expressionSymbol =>
+        // update owner of the symDenotation
         // after it was inserted to `evaluate` method
         ref.copySymDenotation(owner = evalCtx.evaluateMethod)
       case ref: SymDenotation if evalCtx.nestedMethods.contains(ref) =>
@@ -43,10 +43,5 @@ class AdaptExpression(using
       case _ =>
         ref
 
-  private def isEvaluateMethod(ref: SymDenotation)(using Context): Boolean =
-    ref.isRealMethod && ref.owner.name.toString == evalCtx.expressionClassName && ref.name.toString == "evaluate"
-end AdaptExpression
-
 object AdaptExpression:
   val name: String = "adapt-expression"
-end AdaptExpression

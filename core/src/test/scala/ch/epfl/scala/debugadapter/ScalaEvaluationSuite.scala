@@ -136,6 +136,8 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
         val topFrame = stackTrace.stackFrames.head
         breakpoint.evaluations.foreach { evaluation =>
           val result = client.evaluate(evaluation.expression, topFrame.id)
+          println(s"$$ ${evaluation.expression}")
+          println("> " + result.left.map(_.format).merge)
           evaluation.assertion(result)
         }
         client.continue(threadId)

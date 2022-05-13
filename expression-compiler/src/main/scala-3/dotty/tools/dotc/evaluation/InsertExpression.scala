@@ -26,10 +26,10 @@ class InsertExpression(using
     s"""class ${evalCtx.expressionClassName}(names: Array[String], values: Array[Object]):
        |  val valuesByName = names.zip(values).toMap
        |
-       |  def evaluate(): Unit =
+       |  def evaluate(): Any =
        |    ()
        |
-       |  def callPrivate(obj: Any, methodName: String, paramTypeNames: Array[String], args: Array[Object]) =
+       |  def callPrivateMethod(obj: Any, methodName: String, paramTypeNames: Array[String], args: Array[Object]): Any =
        |    val methods = obj.getClass.getDeclaredMethods
        |    val method = methods
        |      .find { m => 
@@ -38,6 +38,17 @@ class InsertExpression(using
        |      .get
        |    method.setAccessible(true)
        |    method.invoke(obj, args: _*)
+       |
+       |  def getPrivateField(obj: Any, name: String): Any =
+       |    val field = obj.getClass.getDeclaredField(name)
+       |    field.setAccessible(true)
+       |    field.get(obj)
+       |
+       |  def getStaticObject(className: String): Any =
+       |    val clazz = getClass.getClassLoader.loadClass(className)
+       |    val field = clazz.getDeclaredField("MODULE$$")
+       |    field.setAccessible(true)
+       |    field.get(null)
        |""".stripMargin
 
   override def run(using Context): Unit =

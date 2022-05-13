@@ -21,8 +21,8 @@ class EvaluationContext(
     Names.termName(expressionClassName.toLowerCase.toString)
 
   var expressionOwners: List[Symbol] = _
-  var expressionValDef: ValDef = _
-  var expressionIdent: Ident = _
+  var expressionTree: Tree = _
+  var expressionSymbol: Symbol = _
   var expressionType: Type = _
   var expressionThis: ClassSymbol = _
   var evaluateMethod: Symbol = _
