@@ -14,10 +14,20 @@ object DecompilerSuite extends TestSuite {
       val source = """|
                       |package foo
                       |
-                      |class Foo{
-                      |  val value = "hello"
+                      |trait A {
+                      |  def foo: String = {
+                      |   val x: Int = 0
+                      |   return x.asInstanceOf[String]
+                      | }
+                      |}
                       |
-                      |  def hello: String = value
+                      |class B () extends A
+                      |
+                      |object Main2 {
+                      |  def main(args: Array[String]): Unit = {
+                      |    val b = new B
+                      |    println(b.foo)
+                      |  }
                       |}
                       |""".stripMargin
 
@@ -27,49 +37,49 @@ object DecompilerSuite extends TestSuite {
         ScalaVersion.`2.12`
       )
 
-      val bytes = runner.projectEntry.readBytes("foo/Foo.class")
+      val bytes = runner.projectEntry.readBytes("foo/B.class")
 
       println(bytes.size)
+      val text =
+        for (b <- bytes)
+          yield (Decompiler.sourceNameAndText("A.class", "Foo", b))
 
-      val text = Decompiler.sourceNameAndText("Foo.class", "Foo", bytes)
-      
-      println(text)
+      for (t <- text) print(t.get)
     }
 
-    // "should decompile my setter" - {
+//     "should decompile my setter" - {
 
-    //   val source = """|
+//       val source = """|
 
-    //                   |package foo
-    //                   |
-    //                   |class Foo2{
-    //                   |   val value = "hello"
-    //                   |}
-    //                   |
-    //                   |class Main2 extends App{
-    //                   |
-    //                   |   val foo2 = new Foo
-    //                   |   foo2.value = "how are you"
-    //                   |}
-    //                   |
-    //                   |""".stripMargin
+//                       |package foo
+//                       |
+//                       |class Foo2{
+//                       |   var value = "hello"
+//                       |}
+//                       |
+//                       |class Main2 extends App{
+//                       |
+//                       |   val foo2 = new Foo2
+//                       |   foo2.value = "how are you"
+//                       |}
+//                       |
+//                       |""".stripMargin
 
-    //   val runner = MainDebuggeeRunner.mainClassRunner(
-    //     source,
-    //     "foo.Main2",
-    //     ScalaVersion.`2.12`
-    //   )
+//       val runner = MainDebuggeeRunner.mainClassRunner(
+//         source,
+//         "foo.Main2",
+//         ScalaVersion.`2.12`
+//       )
 
-    //   val bytes = runner.projectEntry.readBytes("foo/Main2.class")
+//       val bytes = runner.projectEntry.readBytes("foo/Main2.class")
 
-    // }
+//       val text = for(b <- bytes) yield(Decompiler.sourceNameAndText("Foo.class", "Foo", b))
 
-  }
+//       for(t <- text) print(t)
+//     }
 
-  // Mixin
-//   val test3: Tests = Tests {
-
-//     "should decompile my class" - {
+//   // Mixin
+//   "should decompile my mixin" - {
 
 //       val source = """|
 
@@ -98,13 +108,14 @@ object DecompilerSuite extends TestSuite {
 
 //       val bytes = runner.projectEntry.readBytes("foo/Main3.class")
 
+//       val text = for(b <- bytes) yield(Decompiler.sourceNameAndText("Foo.class", "Foo", b))
+
+//       for(t <- text) print(t)
 //     }
 
-//   }
+// //   }
 
-//   // Bridge
-//   val test4: Tests = Tests {
-
+// //   // Bridge
 //     "should decompile my class" - {
 
 //       val source = """|
@@ -122,7 +133,7 @@ object DecompilerSuite extends TestSuite {
 //                       |class Main4 extends App{
 //                       |
 //                       |   val a = new D
-//                       |   val d = D.value
+//                       |   val d = a.value
 //                       |
 //                       |}
 //                       |
@@ -136,7 +147,9 @@ object DecompilerSuite extends TestSuite {
 
 //       val bytes = runner.projectEntry.readBytes("foo/Main4.class")
 
-//     }
+//       val text = for(b <- bytes) yield(Decompiler.sourceNameAndText("Foo.class", "Foo", b))
 
-//   }
+//       for(t <- text) print(t)
+//     }
+  }
 }

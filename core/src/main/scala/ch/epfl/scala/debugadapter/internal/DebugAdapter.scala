@@ -15,12 +15,12 @@ import com.microsoft.java.debug.core.protocol.Requests.CustomStepFilter
 
 private[debugadapter] object DebugAdapter {
 
-  
-  DebugSettings.getCurrent().stepFilters.customStepFilter = new CustomStepFilter {
-    //TODO: CHECK INTELLIJ
-    override def skip(method: Method): Boolean = ???
-  }
-  
+  DebugSettings.getCurrent().stepFilters.customStepFilter =
+    new CustomStepFilter {
+      // TODO: CHECK INTELLIJ
+      override def skip(method: Method): Boolean = ???
+    }
+
   /**
    * Since Scala 2.13, object fields are represented by static fields in JVM byte code.
    * See https://github.com/scala/scala/pull/7270

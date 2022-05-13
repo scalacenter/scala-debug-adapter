@@ -15,7 +15,11 @@ case class ClassPathEntry(absolutePath: Path, sourceEntries: Seq[SourceEntry])
     absolutePath.getFileName.toString.stripSuffix(".jar")
   private def isJar: Boolean = absolutePath.toString.endsWith(".jar")
 
-  def   readBytes(classFile: String): Array[Byte] = {
-    classSystems.head.within((_, path) => Files.readAllBytes(path.resolve(classFile))).get
+  def readBytes(classFile: String): Seq[Array[Byte]] = {
+    print("classSystems ", classSystems.length)
+    for (c <- classSystems)
+      yield (c
+        .within((_, path) => Files.readAllBytes(path.resolve(classFile)))
+        .get)
   }
 }

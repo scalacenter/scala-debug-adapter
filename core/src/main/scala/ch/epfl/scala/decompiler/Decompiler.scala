@@ -24,27 +24,22 @@ object Decompiler {
       bytes: Array[Byte]
   ): Option[String] = {
 
-    /**
-     * ClassReader(file)
-     * =>>> new visitor = new ClassVisitor(){
-     *   new AnnotationVisitor():{
-     * }
-     * }
-     */
-
     if (fileName.endsWith(".sig")) {
       return tryDecompileSigFile(fileName, bytes)
     }
-
+    println("Decompiling\n")
     if (!containsMarker(bytes)) return None
 
     // Parse the file
     val reader = new ClassReader(bytes)
+
     val scalaAnnotations = scala.collection.mutable.Buffer[String]()
+
     val emptyVisitor = new AnnotationVisitor(Opcodes.ASM9) {}
     val scalaVisitor = new AnnotationVisitor(Opcodes.ASM9) {
 
       override def visitArray(name: String): AnnotationVisitor = {
+        println("visitArray\n")
         if (name == "bytes") {
           new AnnotationVisitor(Opcodes.ASM9) {
             override def visit(name: String, value: Any): Unit = {
@@ -56,8 +51,8 @@ object Decompiler {
         }
       }
 
-
       override def visit(name: String, value: Any): Unit = {
+        println("visit\n")
         if (name == "bytes") {
           scalaAnnotations += value.asInstanceOf[String]
         }
@@ -81,7 +76,9 @@ object Decompiler {
       }
     }
 
-    if(scalaAnnotations.isEmpty) None
+    reader.accept(visitor, 256)
+
+    if (scalaAnnotations.isEmpty) None
     else {
       val decoded = decode(scalaAnnotations.toList.map(_.getBytes()))
       val signature = Parser.parseScalaSig(decoded, fileName)
@@ -169,6 +166,10 @@ object Decompiler {
       }
 
       val symbols = scalaSig.topLevelClasses ++ scalaSig.topLevelObjects
+
+      // Check flags work
+      for (s <- symbols) println(s.isTrait)
+
       // Print package with special treatment for package objects
 
       for {

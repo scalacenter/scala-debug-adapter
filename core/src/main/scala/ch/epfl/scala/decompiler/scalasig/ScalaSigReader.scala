@@ -2,11 +2,10 @@ package ch.epfl.scala.debugadapter.internal.decompiler.scalasig
 
 import java.nio.charset.StandardCharsets
 
-
 /**
-  * Nikolay.Tropin
-  * 19-Jul-17
-  */
+ * Nikolay.Tropin
+ * 19-Jul-17
+ */
 
 //Based on scala.reflect.internal.pickling.PickleBuffer
 class ScalaSigReader(bytes: Array[Byte]) {
@@ -19,8 +18,10 @@ class ScalaSigReader(bytes: Array[Byte]) {
     val x = bytes(readIndex).toInt; readIndex += 1; x
   }
 
-  /** Read a natural number in big endian format, base 128.
-    *  All but the last digits have bit 0x80 set.*/
+  /**
+   * Read a natural number in big endian format, base 128.
+   *  All but the last digits have bit 0x80 set.
+   */
   def readNat(): Int = readLongNat().toInt
 
   def readLongNat(): Long = {
@@ -62,14 +63,15 @@ class ScalaSigReader(bytes: Array[Byte]) {
     }
   }
 
-  /** Pickle = majorVersion_Nat minorVersion_Nat nbEntries_Nat {Entry}
-    *  Entry  = type_Nat length_Nat [actual entries]
-    *
-    *  Assumes that the ..Version_Nat are already consumed.
-    *
-    *  @return an array mapping entry numbers to locations in
-    *  the byte array where the entries start.
-    */
+  /**
+   * Pickle = majorVersion_Nat minorVersion_Nat nbEntries_Nat {Entry}
+   *  Entry  = type_Nat length_Nat [actual entries]
+   *
+   *  Assumes that the ..Version_Nat are already consumed.
+   *
+   *  @return an array mapping entry numbers to locations in
+   *  the byte array where the entries start.
+   */
   def createIndex(): Array[Int] = {
     val size = readNat()
     val index = new Array[Int](size) // nbEntries_Nat

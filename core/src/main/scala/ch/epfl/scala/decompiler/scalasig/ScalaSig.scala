@@ -5,9 +5,9 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 /**
-  * Nikolay.Tropin
-  * 19-Jul-17
-  */
+ * Nikolay.Tropin
+ * 19-Jul-17
+ */
 class ScalaSig(val entries: Array[Entry]) {
   private var initialized: Boolean = false
 
@@ -53,7 +53,8 @@ class ScalaSig(val entries: Array[Entry]) {
 
   def addChild(parent: Option[Ref[Symbol]], child: Symbol): Unit = {
     parent.foreach { ref =>
-      val children = parentToChildren.getOrElseUpdate(ref.index, ArrayBuffer.empty)
+      val children =
+        parentToChildren.getOrElseUpdate(ref.index, ArrayBuffer.empty)
       children += child
     }
   }
@@ -62,7 +63,8 @@ class ScalaSig(val entries: Array[Entry]) {
     case Some(_: ExternalSymbol) => true
     case _ => false
   }
-  private def isTopLevelClass(symbol: Symbol): Boolean = !symbol.isModule && isTopLevel(symbol)
+  private def isTopLevelClass(symbol: Symbol): Boolean =
+    !symbol.isModule && isTopLevel(symbol)
 
   private def equiv(m1: MethodSymbol, m2: MethodSymbol) = {
     def unwrapType(t: Type) = t match {
@@ -71,9 +73,9 @@ class ScalaSig(val entries: Array[Entry]) {
     }
 
     m1.name == m2.name && m1.parent == m2.parent &&
-      unwrapType(m1.infoType) == unwrapType(m2.infoType)
+    unwrapType(m1.infoType) == unwrapType(m2.infoType)
   }
-  
-  def syntheticSymbols(): Seq[Symbol] = 
+
+  def syntheticSymbols(): Seq[Symbol] =
     parentToChildren.valuesIterator.flatten.filter(_.isSynthetic).toList
 }

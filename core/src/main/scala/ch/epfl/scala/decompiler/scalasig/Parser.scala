@@ -11,9 +11,9 @@ import scala.reflect.ClassTag
 import scala.reflect.internal.pickling.PickleFormat._
 
 /**
-  * Nikolay.Tropin
-  * 18-Jul-17
-  */
+ * Nikolay.Tropin
+ * 18-Jul-17
+ */
 
 //Some parts of scala.reflect.internal.pickling.UnPickler used
 object Parser {
@@ -54,63 +54,65 @@ object Parser {
       val tag = readByte()
 
       (tag: @switch) match {
-        case TERMname          => readName()
-        case TYPEname          => readName()
-        case NONEsym           => NoSymbol
-        case TYPEsym           => readSymbol(tag)
-        case ALIASsym          => readSymbol(tag)
-        case CLASSsym          => readSymbol(tag)
-        case MODULEsym         => readSymbol(tag)
-        case VALsym            => readSymbol(tag)
-        case EXTref            => readExtSymbol(tag)
-        case EXTMODCLASSref    => readExtSymbol(tag)
-        case NOtpe             => NoType
-        case NOPREFIXtpe       => NoPrefixType
-        case THIStpe           => readType(tag)
-        case SINGLEtpe         => readType(tag)
-        case CONSTANTtpe       => readType(tag)
-        case TYPEREFtpe        => readType(tag)
-        case TYPEBOUNDStpe     => readType(tag)
-        case REFINEDtpe        => readType(tag)
-        case CLASSINFOtpe      => readType(tag)
-        case METHODtpe         => readType(tag)
-        case POLYtpe           => readType(tag)
+        case TERMname => readName()
+        case TYPEname => readName()
+        case NONEsym => NoSymbol
+        case TYPEsym => readSymbol(tag)
+        case ALIASsym => readSymbol(tag)
+        case CLASSsym => readSymbol(tag)
+        case MODULEsym => readSymbol(tag)
+        case VALsym => readSymbol(tag)
+        case EXTref => readExtSymbol(tag)
+        case EXTMODCLASSref => readExtSymbol(tag)
+        case NOtpe => NoType
+        case NOPREFIXtpe => NoPrefixType
+        case THIStpe => readType(tag)
+        case SINGLEtpe => readType(tag)
+        case CONSTANTtpe => readType(tag)
+        case TYPEREFtpe => readType(tag)
+        case TYPEBOUNDStpe => readType(tag)
+        case REFINEDtpe => readType(tag)
+        case CLASSINFOtpe => readType(tag)
+        case METHODtpe => readType(tag)
+        case POLYtpe => readType(tag)
         case IMPLICITMETHODtpe => readType(tag)
-        case LITERALunit       => readLiteral(tag)
-        case LITERALboolean    => readLiteral(tag)
-        case LITERALbyte       => readLiteral(tag)
-        case LITERALshort      => readLiteral(tag)
-        case LITERALchar       => readLiteral(tag)
-        case LITERALint        => readLiteral(tag)
-        case LITERALlong       => readLiteral(tag)
-        case LITERALfloat      => readLiteral(tag)
-        case LITERALdouble     => readLiteral(tag)
-        case LITERALstring     => readLiteral(tag)
-        case LITERALnull       => readLiteral(tag)
-        case LITERALclass      => readLiteral(tag)
-        case LITERALenum       => readLiteral(tag)
+        case LITERALunit => readLiteral(tag)
+        case LITERALboolean => readLiteral(tag)
+        case LITERALbyte => readLiteral(tag)
+        case LITERALshort => readLiteral(tag)
+        case LITERALchar => readLiteral(tag)
+        case LITERALint => readLiteral(tag)
+        case LITERALlong => readLiteral(tag)
+        case LITERALfloat => readLiteral(tag)
+        case LITERALdouble => readLiteral(tag)
+        case LITERALstring => readLiteral(tag)
+        case LITERALnull => readLiteral(tag)
+        case LITERALclass => readLiteral(tag)
+        case LITERALenum => readLiteral(tag)
 
         // TODO: what symbol is it? does it pose problem?
-        //case LITERALsymbol     => readLiteral(tag)
-        case SYMANNOT          => readSymbolAnnotation()
-        case CHILDREN          => Children
-        case ANNOTATEDtpe      => readType(tag)
-        case ANNOTINFO         => AnnotInfo
-        case ANNOTARGARRAY     => readAnnotArgArray()
-        case SUPERtpe          => readType(tag)
-        case DEBRUIJNINDEXtpe  => readType(tag)
-        case EXISTENTIALtpe    => readType(tag)
-        case TREE              => Tree
-        case MODIFIERS         => readModifiers()
-        case SUPERtpe2         => readType(tag)
+        // case LITERALsymbol     => readLiteral(tag)
+        case SYMANNOT => readSymbolAnnotation()
+        case CHILDREN => Children
+        case ANNOTATEDtpe => readType(tag)
+        case ANNOTINFO => AnnotInfo
+        case ANNOTARGARRAY => readAnnotArgArray()
+        case SUPERtpe => readType(tag)
+        case DEBRUIJNINDEXtpe => readType(tag)
+        case EXISTENTIALtpe => readType(tag)
+        case TREE => Tree
+        case MODIFIERS => readModifiers()
+        case SUPERtpe2 => readType(tag)
       }
     }
 
     def tagAt(i: Int): Byte = bytes(index(i))
 
-    def tryReadRef[T <: Entry : ClassTag](tagCondition: Int => Boolean,
-                                          constructor: Int => Ref[T],
-                                          entryEnd: Int): Option[Ref[T]] = {
+    def tryReadRef[T <: Entry: ClassTag](
+        tagCondition: Int => Boolean,
+        constructor: Int => Ref[T],
+        entryEnd: Int
+    ): Option[Ref[T]] = {
       if (readIndex >= entryEnd) return None
 
       val savedIdx = readIndex
@@ -122,16 +124,20 @@ object Parser {
       }
     }
 
-    def readNameRef(): Ref[Name]                      = Ref.to[Name](readNat())
-    def readSymbolRef(): Ref[Symbol]                  = Ref.to[Symbol](readNat())
-    def readTypeRef(): Ref[Type]                      = Ref.to[Type](readNat())
-    def readConstantRef(): Ref[Constant]              = Ref.to[Constant](readNat())
-    def readConstantAnnotArgRef(): Ref[ConstAnnotArg] = Ref.to[ConstAnnotArg](readNat())
+    def readNameRef(): Ref[Name] = Ref.to[Name](readNat())
+    def readSymbolRef(): Ref[Symbol] = Ref.to[Symbol](readNat())
+    def readTypeRef(): Ref[Type] = Ref.to[Type](readNat())
+    def readConstantRef(): Ref[Constant] = Ref.to[Constant](readNat())
+    def readConstantAnnotArgRef(): Ref[ConstAnnotArg] =
+      Ref.to[ConstAnnotArg](readNat())
 
-    def readScalaSymbol(): Ref[ScalaSymbol] = readNameRef().map(n => ScalaSymbol(n.value))
+    def readScalaSymbol(): Ref[ScalaSymbol] =
+      readNameRef().map(n => ScalaSymbol(n.value))
 
-    def tryReadTypeRef(end: Int): Option[Ref[Type]]     = tryReadRef(isTypeTag, Ref.to[Type], end)
-    def tryReadSymbolRef(end: Int): Option[Ref[Symbol]] = tryReadRef(isSymbolTag, Ref.to[Symbol], end)
+    def tryReadTypeRef(end: Int): Option[Ref[Type]] =
+      tryReadRef(isTypeTag, Ref.to[Type], end)
+    def tryReadSymbolRef(end: Int): Option[Ref[Symbol]] =
+      tryReadRef(isSymbolTag, Ref.to[Symbol], end)
 
     def readSymbolInfo(end: Int): SymbolInfo = {
       val name = readNameRef()
@@ -180,59 +186,71 @@ object Parser {
     def readType(tag: Int): Type = {
       val end = readEnd()
 
-      def polyOrNullaryType(restpe: Ref[Type], tparams: List[Ref[Symbol]]): Type = tparams match {
+      def polyOrNullaryType(
+          restpe: Ref[Type],
+          tparams: List[Ref[Symbol]]
+      ): Type = tparams match {
         case Nil => NullaryMethodType(restpe)
-        case _   => PolyType(restpe, tparams)
+        case _ => PolyType(restpe, tparams)
       }
 
       (tag: @switch) match {
-        case NOtpe            => NoType
-        case NOPREFIXtpe      => NoPrefixType
-        case THIStpe          => ThisType(readSymbolRef())
-        case SINGLEtpe        => SingleType(readTypeRef(), readSymbolRef()) // SI-7596 account for overloading
-        case SUPERtpe         => SuperType(readTypeRef(), readTypeRef())
-        case CONSTANTtpe      => ConstantType(readConstantRef())
-        case TYPEREFtpe       => TypeRefType(readTypeRef(), readSymbolRef(), readTypes(end))
-        case TYPEBOUNDStpe    => TypeBoundsType(readTypeRef(), readTypeRef())
-        case REFINEDtpe       => RefinedType(readSymbolRef(), readTypes(end))
-        case CLASSINFOtpe     => ClassInfoType(readSymbolRef(), readTypes(end))
-        case METHODtpe        => MethodType(readTypeRef(), readSymbols(end))
-        case POLYtpe          => polyOrNullaryType(readTypeRef(), readSymbols(end))
+        case NOtpe => NoType
+        case NOPREFIXtpe => NoPrefixType
+        case THIStpe => ThisType(readSymbolRef())
+        case SINGLEtpe =>
+          SingleType(
+            readTypeRef(),
+            readSymbolRef()
+          ) // SI-7596 account for overloading
+        case SUPERtpe => SuperType(readTypeRef(), readTypeRef())
+        case CONSTANTtpe => ConstantType(readConstantRef())
+        case TYPEREFtpe =>
+          TypeRefType(readTypeRef(), readSymbolRef(), readTypes(end))
+        case TYPEBOUNDStpe => TypeBoundsType(readTypeRef(), readTypeRef())
+        case REFINEDtpe => RefinedType(readSymbolRef(), readTypes(end))
+        case CLASSINFOtpe => ClassInfoType(readSymbolRef(), readTypes(end))
+        case METHODtpe => MethodType(readTypeRef(), readSymbols(end))
+        case POLYtpe => polyOrNullaryType(readTypeRef(), readSymbols(end))
         case DEBRUIJNINDEXtpe => DeBruijnIndexType(readNat(), readNat())
-        case EXISTENTIALtpe   => ExistentialType(readTypeRef(), readSymbols(end))
-        case ANNOTATEDtpe     => AnnotatedType(readTypeRef())
-        case _                => errorBadSignature("bad type tag: " + tag)
+        case EXISTENTIALtpe => ExistentialType(readTypeRef(), readSymbols(end))
+        case ANNOTATEDtpe => AnnotatedType(readTypeRef())
+        case _ => errorBadSignature("bad type tag: " + tag)
       }
     }
 
     def readLiteral(tag: Int): Constant = {
       val len = readNat()
       (tag: @switch) match {
-        case LITERALunit       => Constant(())
-        case LITERALboolean    => Constant(readLong(len) != 0L)
-        case LITERALbyte       => Constant(readLong(len).toByte)
-        case LITERALshort      => Constant(readLong(len).toShort)
-        case LITERALchar       => Constant(readLong(len).toChar)
-        case LITERALint        => Constant(readLong(len).toInt)
-        case LITERALlong       => Constant(readLong(len))
-        case LITERALfloat      => Constant(intBitsToFloat(readLong(len).toInt))
-        case LITERALdouble     => Constant(longBitsToDouble(readLong(len)))
-        case LITERALstring     => Constant(readNameRef())
-        case LITERALnull       => Constant(null)
-        case LITERALclass      => Constant(readTypeRef())
-        case LITERALenum       => Constant(readSymbolRef())
+        case LITERALunit => Constant(())
+        case LITERALboolean => Constant(readLong(len) != 0L)
+        case LITERALbyte => Constant(readLong(len).toByte)
+        case LITERALshort => Constant(readLong(len).toShort)
+        case LITERALchar => Constant(readLong(len).toChar)
+        case LITERALint => Constant(readLong(len).toInt)
+        case LITERALlong => Constant(readLong(len))
+        case LITERALfloat => Constant(intBitsToFloat(readLong(len).toInt))
+        case LITERALdouble => Constant(longBitsToDouble(readLong(len)))
+        case LITERALstring => Constant(readNameRef())
+        case LITERALnull => Constant(null)
+        case LITERALclass => Constant(readTypeRef())
+        case LITERALenum => Constant(readSymbolRef())
         // TODO: what symbol is it? does it pose problem?
-        //case LITERALsymbol     => Constant(readScalaSymbol())
-        case _                 => errorBadSignature("bad constant tag: " + tag)
+        // case LITERALsymbol     => Constant(readScalaSymbol())
+        case _ => errorBadSignature("bad constant tag: " + tag)
       }
     }
 
     protected def readSymbolAnnotation(): SymAnnot = {
-      val end       = readEnd()
-      val sym       = readSymbolRef()
-      val info      = readTypeRef()
-      val args      = until(end, () => tryReadRef(isConstAnnotArgTag, Ref.to[ConstAnnotArg], end)).flatten
-      val namedArgs = until(end, () => (readNameRef(), readConstantAnnotArgRef()))
+      val end = readEnd()
+      val sym = readSymbolRef()
+      val info = readTypeRef()
+      val args = until(
+        end,
+        () => tryReadRef(isConstAnnotArgTag, Ref.to[ConstAnnotArg], end)
+      ).flatten
+      val namedArgs =
+        until(end, () => (readNameRef(), readConstantAnnotArgRef()))
       val annot = SymAnnot(sym, info, args, namedArgs)
       scalaSig.addAttribute(annot)
       annot
@@ -244,8 +262,7 @@ object Parser {
       AnnotArgArray(args)
     }
 
-
-    //implementation from scala.reflect.internal.pickling.UnPickler.Scan.readModifiers
+    // implementation from scala.reflect.internal.pickling.UnPickler.Scan.readModifiers
     def readModifiers(): Modifiers = {
       readEnd()
       val pflagsHi = readNat()
@@ -259,7 +276,9 @@ object Parser {
     private def readEnd() = readNat() + readIndex
 
     protected def errorBadSignature(msg: String) =
-      throw new RuntimeException(s"malformed Scala signature " + " at " + readIndex + "; " + msg)
+      throw new RuntimeException(
+        s"malformed Scala signature " + " at " + readIndex + "; " + msg
+      )
 
   }
 }

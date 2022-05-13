@@ -3,17 +3,21 @@ package ch.epfl.scala.debugadapter.internal.decompiler.scalasig
 import scala.reflect.internal.pickling.PickleFormat._
 
 /**
-  * Nikolay.Tropin
-  * 19-Jul-17
-  */
+ * Nikolay.Tropin
+ * 19-Jul-17
+ */
 object TagGroups {
-  def isSymbolTag(tag: Int): Boolean = firstSymTag <= tag && tag <= lastExtSymTag
+  def isSymbolTag(tag: Int): Boolean =
+    firstSymTag <= tag && tag <= lastExtSymTag
 
-  def isConstantTag(tag: Int): Boolean = tag >= LITERALunit && tag <= LITERALenum
+  def isConstantTag(tag: Int): Boolean =
+    tag >= LITERALunit && tag <= LITERALenum
 
   def isAnnotArgTag(tag: Int): Boolean = tag == TREE || isConstantTag(tag)
 
-  def isConstAnnotArgTag(tag: Int): Boolean = isConstantTag(tag) || tag == TREE || tag == ANNOTINFO || tag == ANNOTATEDtree
+  def isConstAnnotArgTag(tag: Int): Boolean = isConstantTag(
+    tag
+  ) || tag == TREE || tag == ANNOTINFO || tag == ANNOTATEDtree
 
   def isTypeTag(tag: Int): Boolean =
     tag >= NOtpe && tag <= IMPLICITMETHODtpe ||
@@ -22,5 +26,5 @@ object TagGroups {
 
   def isNameTag(tag: Int): Boolean = tag == TERMname || tag == TYPEname
 
-  final val SUPERtpe2 = 52 //There is an inconsistency in PicklerFormat
+  final val SUPERtpe2 = 52 // There is an inconsistency in PicklerFormat
 }

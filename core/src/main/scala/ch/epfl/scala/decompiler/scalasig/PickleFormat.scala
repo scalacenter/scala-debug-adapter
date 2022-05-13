@@ -1,13 +1,13 @@
 package ch.epfl.scala.debugadapter.internal.decompiler.scalasig
 
 /**
-  * Nikolay.Tropin
-  * 19-Jul-17
-  */
+ * Nikolay.Tropin
+ * 19-Jul-17
+ */
 
 object PickleFormat {
-  //37 LITERALsymbol len_Nat name_Ref
-  final val LITERALsymbol = 37 //is added to PickleFormat in scala 2.13
+  // 37 LITERALsymbol len_Nat name_Ref
+  final val LITERALsymbol = 37 // is added to PickleFormat in scala 2.13
 }
 
 //Literal implementation of scala.reflect.internal.pickling.PickleFormat
@@ -23,7 +23,7 @@ trait Symbol extends Flags with Entry {
   def attributes: Iterable[SymAnnot]
 
   def isType: Boolean = this match {
-    case _: ClassSymbol if !isModule=> true
+    case _: ClassSymbol if !isModule => true
     case _: TypeSymbol => true
     case _ if isTrait => true
     case _ => false
@@ -41,12 +41,12 @@ trait Symbol extends Flags with Entry {
       case Some(sym) =>
         (sym.isStable ||
           (sym.isModule && sym.name == "package")) &&
-          loop(sym.parent)
+        loop(sym.parent)
     }
 
-    if (isStable)       true
+    if (isStable) true
     else if (!isModule) false
-    else                loop(parent)
+    else loop(parent)
   }
 }
 
@@ -55,7 +55,8 @@ abstract class ScalaSigSymbol(protected val scalaSig: ScalaSig) extends Symbol {
   override def attributes: Iterable[SymAnnot] = scalaSig.attributes(this)
 }
 
-abstract class SymbolInfoSymbol(val symbolInfo: SymbolInfo) extends ScalaSigSymbol(symbolInfo.name.scalaSig) {
+abstract class SymbolInfoSymbol(val symbolInfo: SymbolInfo)
+    extends ScalaSigSymbol(symbolInfo.name.scalaSig) {
   override lazy val name: String = symbolInfo.name.get.value.trim
   override def parentRef: Option[Ref[Symbol]] = Some(symbolInfo.owner)
   override def hasFlag(flag: Long): Boolean = (symbolInfo.flags & flag) != 0L
@@ -79,16 +80,21 @@ case class TypeSymbol(info: SymbolInfo) extends SymbolInfoSymbol(info)
 
 case class AliasSymbol(info: SymbolInfo) extends SymbolInfoSymbol(info)
 
-case class ClassSymbol(info: SymbolInfo, thisTypeRef: Option[Ref[Type]]) extends SymbolInfoSymbol(info)
+case class ClassSymbol(info: SymbolInfo, thisTypeRef: Option[Ref[Type]])
+    extends SymbolInfoSymbol(info)
 
 case class ObjectSymbol(info: SymbolInfo) extends SymbolInfoSymbol(info) {
   def companionClass: Option[ClassSymbol] = scalaSig.findCompanionClass(this)
 }
 
-case class MethodSymbol(info: SymbolInfo, aliasRef: Option[Ref[Symbol]]) extends SymbolInfoSymbol(info)
+case class MethodSymbol(info: SymbolInfo, aliasRef: Option[Ref[Symbol]])
+    extends SymbolInfoSymbol(info)
 
-case class ExternalSymbol(nameRef: Ref[Name], ownerRef: Option[Ref[Symbol]], isObject: Boolean)
-  extends ScalaSigSymbol(nameRef.scalaSig) {
+case class ExternalSymbol(
+    nameRef: Ref[Name],
+    ownerRef: Option[Ref[Symbol]],
+    isObject: Boolean
+) extends ScalaSigSymbol(nameRef.scalaSig) {
 
   override def toString: String = path
 
@@ -99,7 +105,13 @@ case class ExternalSymbol(nameRef: Ref[Name], ownerRef: Option[Ref[Symbol]], isO
   override def parentRef: Option[Ref[Symbol]] = ownerRef
 }
 
-case class SymbolInfo(name: Ref[Name], owner: Ref[Symbol], flags: Int, privateWithin: Option[Ref[Symbol]], info: Ref[Type]) {
+case class SymbolInfo(
+    name: Ref[Name],
+    owner: Ref[Symbol],
+    flags: Int,
+    privateWithin: Option[Ref[Symbol]],
+    info: Ref[Type]
+) {
   override def toString: String = s"SymbolInfo(${name.value})"
 }
 
@@ -114,7 +126,12 @@ case class Constant(value: Any) extends ConstAnnotArg
 //  override def toString: String = "AnnotInfoBody"
 //}
 
-case class SymAnnot(symbol: Ref[Symbol], infoRef: Ref[Type], annotArgs: Seq[Ref[ConstAnnotArg]], named: Seq[(Ref[Name], Ref[ConstAnnotArg])]) extends Entry {
+case class SymAnnot(
+    symbol: Ref[Symbol],
+    infoRef: Ref[Type],
+    annotArgs: Seq[Ref[ConstAnnotArg]],
+    named: Seq[(Ref[Name], Ref[ConstAnnotArg])]
+) extends Entry {
   def typeRef: Type = infoRef.get
 
   def args: Seq[ConstAnnotArg] = annotArgs.collect {
@@ -122,7 +139,8 @@ case class SymAnnot(symbol: Ref[Symbol], infoRef: Ref[Type], annotArgs: Seq[Ref[
   }
 
   def namedArgs: Seq[(String, ConstAnnotArg)] = named.collect {
-    case (refName, refArg) if refArg.get != Tree => (refName.get.value, refArg.get)
+    case (refName, refArg) if refArg.get != Tree =>
+      (refName.get.value, refArg.get)
   }
 
   def hasArgs: Boolean = args.size + namedArgs.size > 0
@@ -160,35 +178,65 @@ case class SingleType(typeRef: Ref[Type], symbol: Ref[Symbol]) extends Type
 
 case class ConstantType(constant: Ref[Constant]) extends Type
 
-case class TypeRefType(prefix: Ref[Type], symbol: Ref[Symbol], typeArgs: Seq[Ref[Type]]) extends Type
+case class TypeRefType(
+    prefix: Ref[Type],
+    symbol: Ref[Symbol],
+    typeArgs: Seq[Ref[Type]]
+) extends Type
 
 case class TypeBoundsType(lower: Ref[Type], upper: Ref[Type]) extends Type
 
-case class RefinedType(classSym: Ref[Symbol], typeRefs: Seq[Ref[Type]]) extends Type
+case class RefinedType(classSym: Ref[Symbol], typeRefs: Seq[Ref[Type]])
+    extends Type
 
-case class ClassInfoType(symbol: Ref[Symbol], typeRefs: Seq[Ref[Type]]) extends Type
+case class ClassInfoType(symbol: Ref[Symbol], typeRefs: Seq[Ref[Type]])
+    extends Type
 
-case class ClassInfoTypeWithCons(symbol: Ref[Symbol], typeRefs: Seq[Ref[Type]], cons: String) extends Type
+case class ClassInfoTypeWithCons(
+    symbol: Ref[Symbol],
+    typeRefs: Seq[Ref[Type]],
+    cons: String
+) extends Type
 
-case class MethodType(override val resultType: Ref[Type], override val paramRefs: Seq[Ref[Symbol]]) extends FunctionType
+case class MethodType(
+    override val resultType: Ref[Type],
+    override val paramRefs: Seq[Ref[Symbol]]
+) extends FunctionType
 
 case class NullaryMethodType(resultType: Ref[Type]) extends Type
 
-case class PolyType(typeRef: Ref[Type], override val paramRefs: Seq[Ref[Symbol]]) extends TypeWithParams
+case class PolyType(
+    typeRef: Ref[Type],
+    override val paramRefs: Seq[Ref[Symbol]]
+) extends TypeWithParams
 
-case class PolyTypeWithCons(typeRef: Ref[Type], override val paramRefs: Seq[Ref[Symbol]], cons: String) extends TypeWithParams
+case class PolyTypeWithCons(
+    typeRef: Ref[Type],
+    override val paramRefs: Seq[Ref[Symbol]],
+    cons: String
+) extends TypeWithParams
 
-case class ImplicitMethodType(override val resultType: Ref[Type], override val paramRefs: Seq[Ref[Symbol]]) extends FunctionType
+case class ImplicitMethodType(
+    override val resultType: Ref[Type],
+    override val paramRefs: Seq[Ref[Symbol]]
+) extends FunctionType
 
 //case class AnnotatedType(typeRef: Ref[Type], attribTreeRefs: Seq[Ref[AnnotInfo]]) extends Type
 //we don't use AnnotInfos, and they seem inconsistent
 case class AnnotatedType(typeRef: Ref[Type]) extends Type
 
-case class AnnotatedWithSelfType(typeRef: Ref[Type], symbol: Ref[Symbol], attribTreeRefs: Seq[Int]) extends Type
+case class AnnotatedWithSelfType(
+    typeRef: Ref[Type],
+    symbol: Ref[Symbol],
+    attribTreeRefs: Seq[Int]
+) extends Type
 
 case class DeBruijnIndexType(typeLevel: Int, typeIndex: Int) extends Type
 
-case class ExistentialType(typeRef: Ref[Type], override val paramRefs: Seq[Ref[Symbol]]) extends TypeWithParams
+case class ExistentialType(
+    typeRef: Ref[Type],
+    override val paramRefs: Seq[Ref[Symbol]]
+) extends TypeWithParams
 
 //todo: should we use it somehow?
 case class Modifiers(flags: Long, privateWithin: Ref[Name]) extends Entry
