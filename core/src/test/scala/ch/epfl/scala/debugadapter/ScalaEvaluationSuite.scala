@@ -18,22 +18,22 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
   val isScala3 = scalaVersion.binaryVersion.startsWith("3")
   val isScala2 = scalaVersion.binaryVersion.startsWith("2")
 
-  class Breakpoint(val line: Int, val evaluations: Seq[ExpressionEvaluation])
+  class Breakpoint(val line: Int, val evaluations: Seq[Evaluation])
 
   object Breakpoint {
-    def apply(line: Int)(evaluations: ExpressionEvaluation*): Breakpoint = {
+    def apply(line: Int)(evaluations: Evaluation*): Breakpoint = {
       new Breakpoint(line, evaluations)
     }
   }
 
-  class ExpressionEvaluation(
+  class Evaluation(
       val expression: String,
       val assertion: Either[Message, String] => Unit
   )
 
-  object ExpressionEvaluation {
+  object Evaluation {
     def failed(expression: String)(assertion: Message => Boolean) = {
-      new ExpressionEvaluation(
+      new Evaluation(
         expression,
         resp => assert(resp.left.exists(assertion))
       )
@@ -47,7 +47,7 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
     }
 
     def ignore(expression: String, expected: Either[Message, String]) = {
-      new ExpressionEvaluation(
+      new Evaluation(
         expression,
         { resp =>
           println(s"TODO fix in ${scalaVersion.version}")
@@ -59,22 +59,22 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
     def success(expression: String, result: Any) = {
       result match {
         case str: String =>
-          new ExpressionEvaluation(
+          new Evaluation(
             expression,
             resp => assert(resp == Right('"' + str + '"'))
           )
         case () if isScala3 =>
-          new ExpressionEvaluation(
+          new Evaluation(
             expression,
             resp => assert(resp.exists(_.endsWith("\"()\"")))
           )
         case () =>
-          new ExpressionEvaluation(
+          new Evaluation(
             expression,
             resp => assert(resp == Right("<void value>"))
           )
         case n: Int =>
-          new ExpressionEvaluation(
+          new Evaluation(
             expression,
             resp =>
               assertMatch(resp) {
@@ -84,7 +84,7 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
               }
           )
         case _ =>
-          new ExpressionEvaluation(
+          new Evaluation(
             expression,
             resp => assert(resp == Right(result.toString))
           )
@@ -92,7 +92,7 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
     }
 
     def success(expression: String)(assertion: String => Boolean) = {
-      new ExpressionEvaluation(
+      new Evaluation(
         expression,
         resp => assert(resp.exists(assertion))
       )
@@ -107,7 +107,7 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
   )(assertion: Either[Message, String] => Boolean): Unit = {
     assertInMainClass(source, mainClass)(
       Breakpoint(line)(
-        new ExpressionEvaluation(expression, resp => assert(assertion(resp)))
+        new Evaluation(expression, resp => assert(assertion(resp)))
       )
     )
   }

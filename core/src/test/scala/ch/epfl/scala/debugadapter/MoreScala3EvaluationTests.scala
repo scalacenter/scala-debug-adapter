@@ -24,7 +24,7 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
            |}
            |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(6)(ExpressionEvaluation.success("foo", "bar"))
+        Breakpoint(6)(Evaluation.success("foo", "bar"))
       )
     }
 
@@ -42,7 +42,7 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
            |}
            |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(8)(ExpressionEvaluation.success("foo", "foo"))
+        Breakpoint(8)(Evaluation.success("foo", "foo"))
       )
     }
 
@@ -60,8 +60,8 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
         Breakpoint(9)(
-          ExpressionEvaluation.success("x1 + x2")(_.contains("3.3")),
-          ExpressionEvaluation.success("A.x1", "x1")
+          Evaluation.success("x1 + x2")(_.contains("3.3")),
+          Evaluation.success("A.x1", "x1")
         )
       )
     }
@@ -101,7 +101,7 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
         Breakpoint(7)(), // Stops once in the constructor of B
-        Breakpoint(7)(ExpressionEvaluation.success("x1 + x2 + x3", "x1x2x3"))
+        Breakpoint(7)(Evaluation.success("x1 + x2 + x3", "x1x2x3"))
       )
     }
 
@@ -113,7 +113,7 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
           |      println("Hello, World!")
           |""".stripMargin
       assertInMainClass(source, "debug.EvaluateTest")(
-        Breakpoint(4)(ExpressionEvaluation.success("1 + 2", 3))
+        Breakpoint(4)(Evaluation.success("1 + 2", 3))
       )
     }
 
@@ -127,7 +127,7 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
           |    new Foo().bar()
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(2)(ExpressionEvaluation.success("1 + 2", 3))
+        Breakpoint(2)(Evaluation.success("1 + 2", 3))
       )
     }
 
@@ -164,11 +164,11 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
         Breakpoint(5)(
-          ExpressionEvaluation.success("this.p(\"foo\")", "foo"),
-          ExpressionEvaluation.success("foo.p(\"foo\")", "foo"),
-          ExpressionEvaluation.success("getFoo().p(\"foo\")", "foo"),
-          ExpressionEvaluation.success("getFoo().getFoo().p(\"foo\")", "foo"),
-          ExpressionEvaluation.success("A.getFoo().p(\"foo\")", "foo")
+          Evaluation.success("this.p(\"foo\")", "foo"),
+          Evaluation.success("foo.p(\"foo\")", "foo"),
+          Evaluation.success("getFoo().p(\"foo\")", "foo"),
+          Evaluation.success("getFoo().getFoo().p(\"foo\")", "foo"),
+          Evaluation.success("A.getFoo().p(\"foo\")", "foo")
         )
       )
     }
@@ -210,9 +210,9 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
         Breakpoint(12)(
-          ExpressionEvaluation.success("msg(\"Alice\")", "Hello, Alice!"),
-          ExpressionEvaluation.success("msg1(1)", "Hello, 1!"),
-          ExpressionEvaluation.success("msg2(new Foo)", "Hello, foo!")
+          Evaluation.success("msg(\"Alice\")", "Hello, Alice!"),
+          Evaluation.success("msg1(1)", "Hello, 1!"),
+          Evaluation.success("msg2(new Foo)", "Hello, foo!")
         )
       )
     }
@@ -230,7 +230,7 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
            |    val result = f(2)
            |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(5)(ExpressionEvaluation.success("f(x)", 2))
+        Breakpoint(5)(Evaluation.success("f(x)", 2))
       )
     }
   }
