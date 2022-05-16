@@ -178,71 +178,68 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
-    "evaluate field from class's constructor" - {
+    "evaluate class public and private fields" - {
       val source =
         """|package example
            |
-           |class A(x: String) {
-           |  override def toString: String = {
-           |    x
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A("a")
+           |    println(a)
            |  }
            |}
            |
-           |object Main {
-           |  def main(args: Array[String]): Unit = {
-           |    println(new A("hello"))
+           |class A(name: String) {
+           |  val a1 = s"$name.a1"
+           |  private val a2 = s"$name.a2"
+           |  
+           |  object B {
+           |    val  b1 = s"$name.B.b1"
+           |  }
+           |
+           |  private object C  {
+           |    val c1 = s"$name.C.c1"
+           |  }
+           |
+           |  override def toString: String = {
+           |    name + a2
            |  }
            |}
            |""".stripMargin
-      if (!isScala3) {
-        println("TODO fix")
-      } else {
-        assertInMainClass(source, "example.Main")(
-          Breakpoint(5)(ExpressionEvaluation.success("x", "hello"))
-        )
-      }
-    }
-
-    "evaluate expression with class's public fields" - {
-      val source =
-        """class A {
-          |  val x1 = "x1"
-          |
-          |  def m1(): Unit = {
-          |    println("m1")
-          |  }
-          |}
-          |
-          |object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    new A().m1()
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(11)(ExpressionEvaluation.success("new A().x1", "x1")),
-        Breakpoint(5)(ExpressionEvaluation.success("x1", "x1"))
-      )
-    }
-
-    "evaluate expression with class's private fields" - {
-      val source =
-        """class A {
-          |  private val x1 = "x1"
-          |
-          |  def m1(): Unit = {
-          |    println(x1)
-          |  }
-          |}
-          |
-          |object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    new A().m1()
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 5, "x1")(
-        _.exists(_ == "\"x1\"")
+      val breakpoint23 =
+        if (isScala3)
+          Breakpoint(23)(
+            // ExpressionEvaluation.success("name", "a"),
+            // ExpressionEvaluation.success("this.name", "a"),
+            ExpressionEvaluation.success("a1", "a.a1"),
+            ExpressionEvaluation.success("a2", "a.a2"),
+            // ExpressionEvaluation.success("new A(\"aa\").name", "aa"),
+            ExpressionEvaluation.success("B.b1", "a.B.b1"),
+            ExpressionEvaluation.success("this.B.b1", "a.B.b1")
+            // ExpressionEvaluation.success("C.c1", "a.C.c1"),
+            // ExpressionEvaluation.success("new A(\"aa\").C.c1", "aa.C.c1"),
+          )
+        else
+          Breakpoint(23)(
+            ExpressionEvaluation.success("name", "a"),
+            ExpressionEvaluation.success("this.name", "a"),
+            ExpressionEvaluation.success("a1", "a.a1"),
+            ExpressionEvaluation.success("a2", "a.a2"),
+            // ExpressionEvaluation.success("new A(\"aa\").name", "aa"),
+            ExpressionEvaluation.success("B.b1", "a.B.b1"),
+            ExpressionEvaluation.success("this.B.b1", "a.B.b1"),
+            ExpressionEvaluation.success("C.c1", "a.C.c1"),
+            ExpressionEvaluation.success("new A(\"aa\").C.c1", "aa.C.c1")
+          )
+      println("Fix Scala 2 and Scala 3")
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(6)(
+          ExpressionEvaluation.success("a.a1", "a.a1"),
+          ExpressionEvaluation.success("a.B.b1", "a.B.b1"),
+          ExpressionEvaluation.success("new A(\"aa\").a1", "aa.a1"),
+          ExpressionEvaluation.success("new A(\"aa\").B.b1", "aa.B.b1")
+        ),
+        breakpoint23
       )
     }
 
