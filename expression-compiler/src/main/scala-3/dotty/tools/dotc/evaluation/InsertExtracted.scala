@@ -11,13 +11,13 @@ import dotty.tools.dotc.core.Phases.*
 import dotty.tools.dotc.core.Symbols.*
 import dotty.tools.dotc.core.Types.Type
 import dotty.tools.dotc.transform.MegaPhase.MiniPhase
-import dotty.tools.dotc.transform.SymUtils.isField
+import dotty.tools.dotc.transform.SymUtils.*
 
 class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
   override def phaseName: String = InsertExtracted.name
 
   override def transformDefDef(tree: DefDef)(using Context): Tree =
-    if tree.name.toString == "evaluate" && tree.symbol.owner == evalCtx.expressionThis
+    if tree.name.toString == "evaluate" && tree.symbol.owner == evalCtx.expressionClass
     then
       evalCtx.evaluateMethod = tree.symbol
       val transformedExpression =
@@ -44,7 +44,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
 
         // non-static object
         case tree: Ident if isNonStaticObject(tree.symbol) =>
-          val qualifier = getLocalValue("$this")
+          val qualifier = getLocalValue("$this", evalCtx.originalThis.thisType)
           getNonStaticObject(qualifier, tree.symbol, tree.tpe)
         case tree: Select if isNonStaticObject(tree.symbol) =>
           val qualifier = transform(tree.qualifier)
@@ -55,7 +55,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
           val qualifier =
             if isStaticObject(tree.symbol.owner)
             then getStaticObject(tree.symbol.owner)
-            else getLocalValue("$this")
+            else getLocalValue("$this", evalCtx.originalThis.thisType)
           getPrivateField(qualifier, tree.symbol.asTerm, tree.tpe)
         case tree @ Select(qualifier, name) if isPrivateField(tree.symbol) =>
           val qualifier = transform(tree.qualifier)
@@ -65,11 +65,9 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
         case tree @ This(Ident(name)) =>
           val thisOrOuter =
             if tree.symbol == evalCtx.originalThis then "$this" else "$outer"
-          if evalCtx.defTypes.contains(thisOrOuter) then
-            getLocalValue(thisOrOuter)
-          else tree
-        case Ident(name) if evalCtx.defTypes.contains(name.toString) =>
-          getLocalValue(name.toString)
+          getLocalValue(thisOrOuter, tree.tpe)
+        case tree @ Ident(name) if isLocalVal(tree.symbol) =>
+          getLocalValue(name.toString, tree.tpe)
 
         // private method
         case tree @ Apply(fun: Select, _) if isPrivateMethod(fun.symbol) =>
@@ -81,21 +79,20 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
           val qualifier =
             if isStaticObject(owner)
             then getStaticObject(owner)
-            else getLocalValue("$this")
+            else getLocalValue("$this", owner.info)
           val args = tree.args.map(transform)
           callPrivateMethod(qualifier, fun.name, args, tree.tpe)
 
         case tree => super.transform(tree)
 
-  private def getLocalValue(name: String)(using Context) =
+  private def getLocalValue(name: String, tpe: Type)(using Context) =
     val tree = Apply(
       Select(
-        Select(This(evalCtx.expressionThis), termName("valuesByName")),
+        Select(This(evalCtx.expressionClass), termName("valuesByName")),
         termName("apply")
       ),
       List(Literal(Constant(name)))
     )
-    val tpe = evalCtx.defTypes(name)
     cast(tree, tpe)
 
   private def getPrivateField(qualifier: Tree, field: TermSymbol, tpe: Type)(
@@ -103,7 +100,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
   ): Tree =
     val tree =
       Apply(
-        Select(This(evalCtx.expressionThis), termName("getPrivateField")),
+        Select(This(evalCtx.expressionClass), termName("getPrivateField")),
         List(
           qualifier,
           Literal(Constant(field.name.toString)),
@@ -121,7 +118,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
       then className
       else s"${packageClass.fullName}.$className"
     Apply(
-      Select(This(evalCtx.expressionThis), termName("getStaticObject")),
+      Select(This(evalCtx.expressionClass), termName("getStaticObject")),
       List(Literal(Constant(fullName)))
     )
 
@@ -129,7 +126,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
       Context
   ): Tree =
     val tree = Apply(
-      Select(This(evalCtx.expressionThis), termName("callPrivateMethod")),
+      Select(This(evalCtx.expressionClass), termName("callPrivateMethod")),
       List(
         qualifier,
         Literal(Constant(obj.name.toString)),
@@ -160,7 +157,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
       JavaSeqLiteral(args, TypeTree(ctx.definitions.ObjectType))
 
     val tree = Apply(
-      Select(This(evalCtx.expressionThis), termName("callPrivateMethod")),
+      Select(This(evalCtx.expressionClass), termName("callPrivateMethod")),
       List(
         qualifier,
         Literal(Constant(name.toString)),
@@ -188,6 +185,12 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
   private def isPrivateMethod(symbol: Symbol)(using Context): Boolean =
     symbol.isRealMethod && !isAccessible(symbol)
 
+  private def isLocalVal(symbol: Symbol)(using Context): Boolean =
+    !symbol.is(Method) &&
+      symbol.isLocalToBlock &&
+      symbol.ownersIterator.forall(_ != evalCtx.expressionSymbol) &&
+      evalCtx.expressionOwners.contains(symbol.maybeOwner)
+
   /**
    * Check if a symbol is accessible from the expression class
    * It is not accessible is the symbol is private, e.g. a private field or method,
@@ -195,10 +198,8 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
    */
   private def isAccessible(symbol: Symbol)(using Context): Boolean =
     !symbol.isPrivate && symbol.owner.isAccessibleFrom(
-      evalCtx.expressionThis.thisType
+      evalCtx.expressionClass.thisType
     )
-
-end InsertExtracted
 
 object InsertExtracted:
   val name: String = "insert-extracted"

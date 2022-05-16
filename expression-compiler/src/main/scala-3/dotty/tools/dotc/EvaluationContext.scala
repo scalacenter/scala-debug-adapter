@@ -24,8 +24,7 @@ class EvaluationContext(
   var expressionTree: Tree = _
   var expressionSymbol: Symbol = _
   var expressionType: Type = _
-  var expressionThis: ClassSymbol = _
+  var expressionClass: ClassSymbol = _
   var evaluateMethod: Symbol = _
   var originalThis: ClassSymbol = _
-  var defTypes: mutable.Map[String, Type] = mutable.Map()
-  var nestedMethods: mutable.Map[SymDenotation, DefDef] = mutable.Map()
+  val nestedMethods: mutable.Map[SymDenotation, DefDef] = mutable.Map()
