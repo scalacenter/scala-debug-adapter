@@ -24,8 +24,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |""".stripMargin
       assertInMainClass(source, "example.App")(
         Breakpoint(6)(
-          ExpressionEvaluation.success("x1 + 2", 3),
-          ExpressionEvaluation.success("str.reverse", "olleh")
+          Evaluation.success("x1 + 2", 3),
+          Evaluation.success("str.reverse", "olleh")
         )
       )
     }
@@ -69,26 +69,26 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |""".stripMargin
       assertInMainClass(source, "example.A")(
         Breakpoint(5)(
-          ExpressionEvaluation.success("a1", "a1"),
-          ExpressionEvaluation.success("this.a1", "a1"),
-          ExpressionEvaluation.success("A.this.a1", "a1"),
-          ExpressionEvaluation.success("a2", "a2"),
-          ExpressionEvaluation.successOrIgnore("a3", "a3", ignore = isScala2),
-          ExpressionEvaluation.success("a4", "a4"),
-          ExpressionEvaluation.success("B.b1", "b1"),
-          ExpressionEvaluation.success("this.B.b1", "b1"),
-          ExpressionEvaluation.success("A.B.b1", "b1"),
-          ExpressionEvaluation.success("A.this.B.b1", "b1"),
-          ExpressionEvaluation.failed("B.b2")(_ => true),
-          ExpressionEvaluation.success("B.b3", "b3"),
-          ExpressionEvaluation.success("A.B.b3", "b3"),
-          ExpressionEvaluation.success("B.b4", "b4"),
-          ExpressionEvaluation.success("C")(_.startsWith("A$C$@")),
-          ExpressionEvaluation.success("D")(_.startsWith("A$D$@")),
-          ExpressionEvaluation.success("F.f1", "f1"),
-          ExpressionEvaluation.success("F.f2", "f2"),
-          ExpressionEvaluation.success("F.G")(_.startsWith("F$G$@")),
-          ExpressionEvaluation.success("F.H")(_.startsWith("F$H$@"))
+          Evaluation.success("a1", "a1"),
+          Evaluation.success("this.a1", "a1"),
+          Evaluation.success("A.this.a1", "a1"),
+          Evaluation.success("a2", "a2"),
+          Evaluation.successOrIgnore("a3", "a3", ignore = isScala2),
+          Evaluation.success("a4", "a4"),
+          Evaluation.success("B.b1", "b1"),
+          Evaluation.success("this.B.b1", "b1"),
+          Evaluation.success("A.B.b1", "b1"),
+          Evaluation.success("A.this.B.b1", "b1"),
+          Evaluation.failed("B.b2")(_ => true),
+          Evaluation.success("B.b3", "b3"),
+          Evaluation.success("A.B.b3", "b3"),
+          Evaluation.success("B.b4", "b4"),
+          Evaluation.success("C")(_.startsWith("A$C$@")),
+          Evaluation.success("D")(_.startsWith("A$D$@")),
+          Evaluation.success("F.f1", "f1"),
+          Evaluation.success("F.f2", "f2"),
+          Evaluation.success("F.G")(_.startsWith("F$G$@")),
+          Evaluation.success("F.H")(_.startsWith("F$H$@"))
         )
       )
     }
@@ -118,12 +118,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
         """.stripMargin
       assertInMainClass(source, "example.A")(
         Breakpoint(5)(
-          ExpressionEvaluation.success("a1(\"foo\")", "a1: foo"),
-          ExpressionEvaluation.success("a2(\"foo\")", "a2: foo"),
-          ExpressionEvaluation.success("B.b1(\"foo\")", "b1: foo"),
-          ExpressionEvaluation.success("B.b2(\"foo\")", "b2: foo"),
-          ExpressionEvaluation.success("C.c1(\"foo\")", "c1: foo"),
-          ExpressionEvaluation.failed("C.c2(\"foo\")")(_ => true)
+          Evaluation.success("a1(\"foo\")", "a1: foo"),
+          Evaluation.success("a2(\"foo\")", "a2: foo"),
+          Evaluation.success("B.b1(\"foo\")", "b1: foo"),
+          Evaluation.success("B.b2(\"foo\")", "b2: foo"),
+          Evaluation.success("C.c1(\"foo\")", "c1: foo"),
+          Evaluation.failed("C.c2(\"foo\")")(_ => true)
         )
       )
     }
@@ -158,10 +158,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
         """.stripMargin
       assertInMainClass(source, "example.A")(
         Breakpoint(13)(
-          ExpressionEvaluation.success("b1", "b1"),
-          ExpressionEvaluation.success("b2(\"foo\")", "b2: foo"),
-          ExpressionEvaluation.successOrIgnore("a1", "a1", ignore = isScala2),
-          ExpressionEvaluation.successOrIgnore(
+          Evaluation.success("b1", "b1"),
+          Evaluation.success("b2(\"foo\")", "b2: foo"),
+          Evaluation.successOrIgnore("a1", "a1", ignore = isScala2),
+          Evaluation.successOrIgnore(
             "a2(\"foo\")",
             "a2: foo",
             ignore = isScala2
@@ -198,30 +198,85 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |  }
            |}
            |""".stripMargin
-      println("TODO fix Scala 2")
       assertInMainClass(source, "example.Main")(
         Breakpoint(6)(
-          ExpressionEvaluation.success("a.a1", "a.a1"),
-          ExpressionEvaluation.success("a.B.b1", "a.B.b1"),
-          ExpressionEvaluation.success("new A(\"aa\").a1", "aa.a1"),
-          ExpressionEvaluation.success("new A(\"aa\").B.b1", "aa.B.b1")
+          Evaluation.success("a.a1", "a.a1"),
+          Evaluation.success("a.B.b1", "a.B.b1"),
+          Evaluation.success("new A(\"aa\").a1", "aa.a1"),
+          Evaluation.success("new A(\"aa\").B.b1", "aa.B.b1")
         ),
         Breakpoint(23)(
-          ExpressionEvaluation.success("name", "a"),
-          ExpressionEvaluation.success("this.name", "a"),
-          ExpressionEvaluation.success("a1", "a.a1"),
-          ExpressionEvaluation.success("a2", "a.a2"),
-          ExpressionEvaluation
-            .successOrIgnore("new A(\"aa\").a2", "aa.a2", isScala2),
-          ExpressionEvaluation.success("B.b1", "a.B.b1"),
-          ExpressionEvaluation.success("this.B.b1", "a.B.b1"),
-          ExpressionEvaluation.success("C.c1", "a.C.c1"),
-          ExpressionEvaluation.success("new A(\"aa\").C.c1", "aa.C.c1")
+          Evaluation.success("name", "a"),
+          Evaluation.success("this.name", "a"),
+          Evaluation.success("a1", "a.a1"),
+          Evaluation.success("a2", "a.a2"),
+          Evaluation.successOrIgnore("new A(\"aa\").a2", "aa.a2", isScala2),
+          Evaluation.success("B.b1", "a.B.b1"),
+          Evaluation.success("this.B.b1", "a.B.b1"),
+          Evaluation.success("C.c1", "a.C.c1"),
+          Evaluation.success("new A(\"aa\").C.c1", "aa.C.c1")
         )
       )
     }
 
-    "evaluate expression with inner class's public fields" - {
+    "evaluate private overloaded method" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    println("Hello, World!")
+           |  }
+           |  
+           |  private trait A {
+           |    override def toString = "a"
+           |  }
+           |  private class B extends A {
+           |    override def toString = "b"
+           |  }
+           |  
+           |  private def m(): String = "m"
+           |  private def m(n: Int): String = s"m($n: Int)"
+           |  private def m(b: Boolean): String = s"m($b: Boolean)"
+           |  private def m(str: String): String = s"m($str: String)"
+           |  private def m(a: A): String = s"m(a: A)"
+           |  private def m(b: B): String = s"m(b: B)"
+           |  private def m(xs: Array[Int]): String = s"m(xs: Array[Int])"
+           |  private def m(xs: Array[A]): String = s"m(xs: Array[A])"
+           |  private def m(xs: Array[Array[Int]]): String = s"m(xs: Array[Array[Int]])"
+           |
+           |  private def m1(xs: Seq[Int]): String = xs.toString
+           |  private def m1(xs: Seq[Boolean]): Int = xs.count(identity)
+           |}
+           |
+           |
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(5)(
+          Evaluation.success("m()", "m"),
+          Evaluation.success("m(5)", "m(5: Int)"),
+          Evaluation.success("m(true)", "m(true: Boolean)"),
+          Evaluation.success("m(\"foo\")", "m(foo: String)"),
+          Evaluation.successOrIgnore("m(new B)", "m(b: B)", true),
+          Evaluation.successOrIgnore("m(new B: A)", "m(a: A)", true),
+          Evaluation
+            .successOrIgnore("m(Array(1, 2))", "m(xs: Array[Int])", true),
+          Evaluation
+            .successOrIgnore("m(Array[A](new B))", "m(xs: Array[A])", true),
+          Evaluation.successOrIgnore(
+            "m(Array(Array(1), Array(2)))",
+            "m(xs: Array[Array[Int]]",
+            true
+          ),
+          Evaluation.successOrIgnore("m1(Seq(1, 2, 3))", "List(1, 2, 3)", true),
+          Evaluation
+            .successOrIgnore("m1(Vector(1, 2, 3))", "Vector(1, 2, 3)", true),
+          Evaluation.successOrIgnore("m1(Seq(true, false, true))", 2, true)
+        )
+      )
+    }
+
+    "evaluate public and private fields of private inner class" - {
       val source =
         """class A {
           |  class B {
@@ -242,8 +297,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |}
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(15)(ExpressionEvaluation.success("b.x1", "x1")),
-        Breakpoint(6)(ExpressionEvaluation.success("x1", "x1"))
+        Breakpoint(15)(Evaluation.success("b.x1", "x1")),
+        Breakpoint(6)(Evaluation.success("x1", "x1"))
       )
     }
 
@@ -321,7 +376,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |""".stripMargin
 
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(5)(ExpressionEvaluation.success("m2()", 1))
+        Breakpoint(5)(Evaluation.success("m2()", 1))
       )
     }
 
@@ -362,7 +417,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |}
           |""".stripMargin
       assertInMainClass(source, "debug.EvaluateTest")(
-        Breakpoint(4)(ExpressionEvaluation.success("1 + 2", 3))
+        Breakpoint(4)(Evaluation.success("1 + 2", 3))
       )
     }
 
@@ -408,7 +463,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |}
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(4)(ExpressionEvaluation.success("n", 1))
+        Breakpoint(4)(Evaluation.success("n", 1))
       )
     }
 
@@ -425,11 +480,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       if (isScala3) {
         assertInMainClass(source, "EvaluateTest")(
           Breakpoint(4)(),
-          Breakpoint(4)(ExpressionEvaluation.success("n", 1))
+          Breakpoint(4)(Evaluation.success("n", 1))
         )
       } else {
         assertInMainClass(source, "EvaluateTest")(
-          Breakpoint(4)(ExpressionEvaluation.success("n", 1))
+          Breakpoint(4)(Evaluation.success("n", 1))
         )
       }
     }
@@ -447,7 +502,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |}
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(4)(ExpressionEvaluation.success("m1()", 9))
+        Breakpoint(4)(Evaluation.success("m1()", 9))
       )
     }
 
@@ -471,7 +526,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |}
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(4)(ExpressionEvaluation.success("m2()", 10))
+        Breakpoint(4)(Evaluation.success("m2()", 10))
       )
     }
 
@@ -485,7 +540,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |}
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(3)(ExpressionEvaluation.success("1 + 2", 3))
+        Breakpoint(3)(Evaluation.success("1 + 2", 3))
       )
     }
 
@@ -504,7 +559,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |}
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(3)(ExpressionEvaluation.success("a + 2", 3))
+        Breakpoint(3)(Evaluation.success("a + 2", 3))
       )
     }
 
@@ -521,7 +576,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |}
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(2)(ExpressionEvaluation.success("1 + 2", 3))
+        Breakpoint(2)(Evaluation.success("1 + 2", 3))
       )
     }
 
@@ -549,7 +604,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
         Breakpoint(4)(
-          ExpressionEvaluation.success(
+          Evaluation.success(
             """val b = 2
               |val c = 3
               |a + b + c
@@ -589,12 +644,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
         Breakpoint(5)(
-          ExpressionEvaluation.success("p(\"foo\")", "foo"),
-          ExpressionEvaluation.success("this.p(\"foo\")", "foo"),
-          ExpressionEvaluation.success("foo.p(\"foo\")", "foo"),
-          ExpressionEvaluation.success("getFoo().p(\"foo\")", "foo"),
-          ExpressionEvaluation.success("getFoo().getFoo().p(\"foo\")", "foo"),
-          ExpressionEvaluation.success("A.getFoo().p(\"foo\")", "foo")
+          Evaluation.success("p(\"foo\")", "foo"),
+          Evaluation.success("this.p(\"foo\")", "foo"),
+          Evaluation.success("foo.p(\"foo\")", "foo"),
+          Evaluation.success("getFoo().p(\"foo\")", "foo"),
+          Evaluation.success("getFoo().getFoo().p(\"foo\")", "foo"),
+          Evaluation.success("A.getFoo().p(\"foo\")", "foo")
         )
       )
     }
@@ -613,7 +668,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |}
            |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(6)(ExpressionEvaluation.success("x + 1", 4))
+        Breakpoint(6)(Evaluation.success("x + 1", 4))
       )
     }
 
@@ -657,14 +712,14 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
         Breakpoint(15)(
-          ExpressionEvaluation.success("msg(\"Alice\")", "Hello, Alice!"),
-          ExpressionEvaluation.success("msg1(1)", "Hello, 1!"),
-          ExpressionEvaluation.success("msg2(new Foo)", "Hello, foo!")
+          Evaluation.success("msg(\"Alice\")", "Hello, Alice!"),
+          Evaluation.success("msg1(1)", "Hello, 1!"),
+          Evaluation.success("msg2(new Foo)", "Hello, foo!")
         ),
         Breakpoint(32)(
-          ExpressionEvaluation.success("msg(\"Alice\")", "Hello, Alice!"),
-          ExpressionEvaluation.success("msg1(1)", "Hello, 1!"),
-          ExpressionEvaluation.success("msg2(new Foo)", "Hello, foo!")
+          Evaluation.success("msg(\"Alice\")", "Hello, Alice!"),
+          Evaluation.success("msg1(1)", "Hello, 1!"),
+          Evaluation.success("msg2(new Foo)", "Hello, foo!")
         )
       )
     }
@@ -684,7 +739,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |}
            |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(5)(ExpressionEvaluation.success("f(x)", 2))
+        Breakpoint(5)(Evaluation.success("f(x)", 2))
       )
     }
 
@@ -700,9 +755,9 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |}
            |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(4)(ExpressionEvaluation.success("result + 1", 3)),
-        Breakpoint(5)(ExpressionEvaluation.failed("resulterror")(_ => true)),
-        Breakpoint(6)(ExpressionEvaluation.success("result + 2", 4))
+        Breakpoint(4)(Evaluation.success("result + 1", 3)),
+        Breakpoint(5)(Evaluation.failed("resulterror")(_ => true)),
+        Breakpoint(6)(Evaluation.success("result + 2", 4))
       )
     }
 
@@ -734,7 +789,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |}
            |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(4)(ExpressionEvaluation.success("1 + 1", 2))
+        Breakpoint(4)(Evaluation.success("1 + 1", 2))
       )
     }
 
@@ -772,12 +827,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
 
       if (isScala31) {
         assertInTestSuite(source, "MySuite")(
-          Breakpoint(5)(ExpressionEvaluation.success("1 + 1", 2))
+          Breakpoint(5)(Evaluation.success("1 + 1", 2))
         )
       } else {
         assertInTestSuite(source, "MySuite")(
           Breakpoint(5)(), // the program stops twice...
-          Breakpoint(5)(ExpressionEvaluation.success("1 + 1", 2))
+          Breakpoint(5)(Evaluation.success("1 + 1", 2))
         )
       }
     }
@@ -805,7 +860,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
         Breakpoint(6)(
-          ExpressionEvaluation.success("List(1, 2, 3).map(_ * 2).sum", 12)
+          Evaluation.success("List(1, 2, 3).map(_ * 2).sum", 12)
         )
       )
     }
@@ -832,7 +887,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |}
           |""".stripMargin
       val evaluation =
-        ExpressionEvaluation.success("List(1, 2, 3).map(_ * a * b * c).sum", 36)
+        Evaluation.success("List(1, 2, 3).map(_ * a * b * c).sum", 36)
       assertInMainClass(source, "EvaluateTest")(
         Breakpoint(6)(evaluation),
         Breakpoint(15)(evaluation)
@@ -852,7 +907,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
         Breakpoint(6)(
-          ExpressionEvaluation.success("f(\"foo\")")(_.contains("3"))
+          Evaluation.success("f(\"foo\")")(_.contains("3"))
         )
       )
     }
@@ -876,11 +931,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
         Breakpoint(5)(
-          ExpressionEvaluation.success("write(value)", ()),
+          Evaluation.success("write(value)", ()),
           // Should it work without casting?
           // In contravariant case, we could find what's the expected type
           // In the covariant case, it is not possible to know what the precise return type is at runtime
-          ExpressionEvaluation.success("write(\"Hello\".asInstanceOf[T])", ())
+          Evaluation.success("write(\"Hello\".asInstanceOf[T])", ())
         )
       )
     }
@@ -903,7 +958,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
         Breakpoint(5)(
-          ExpressionEvaluation.success("f(\"foo\")", "oof")
+          Evaluation.success("f(\"foo\")", "oof")
         )
       )
     }
