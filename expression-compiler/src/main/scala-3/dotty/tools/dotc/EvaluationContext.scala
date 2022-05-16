@@ -29,4 +29,3 @@ class EvaluationContext(
   var originalThis: ClassSymbol = _
   var defTypes: mutable.Map[String, Type] = mutable.Map()
   var nestedMethods: mutable.Map[SymDenotation, DefDef] = mutable.Map()
-end EvaluationContext

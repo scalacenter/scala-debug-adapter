@@ -39,8 +39,11 @@ class InsertExpression(using
        |    method.setAccessible(true)
        |    method.invoke(obj, args: _*)
        |
-       |  def getPrivateField(obj: Any, name: String): Any =
-       |    val field = obj.getClass.getDeclaredField(name)
+       |  def getPrivateField(obj: Any, name: String, expandedName: String): Any =
+       |    import scala.util.Try
+       |    val clazz = obj.getClass
+       |    val field = Try(clazz.getDeclaredField(name))
+       |      .getOrElse(clazz.getDeclaredField(expandedName))
        |    field.setAccessible(true)
        |    field.get(obj)
        |

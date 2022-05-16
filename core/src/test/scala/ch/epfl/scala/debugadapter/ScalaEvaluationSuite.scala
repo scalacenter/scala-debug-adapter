@@ -16,6 +16,7 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
 
   val isScala31 = scalaVersion == ScalaVersion.`3.1`
   val isScala3 = scalaVersion.binaryVersion.startsWith("3")
+  val isScala2 = scalaVersion.binaryVersion.startsWith("2")
 
   class Breakpoint(val line: Int, val evaluations: Seq[ExpressionEvaluation])
 
@@ -35,6 +36,23 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
       new ExpressionEvaluation(
         expression,
         resp => assert(resp.left.exists(assertion))
+      )
+    }
+
+    def successOrIgnore(expression: String, result: Any, ignore: Boolean) = {
+      if (ignore) {
+        this.ignore(expression, Right(result.toString))
+      } else
+        success(expression, result)
+    }
+
+    def ignore(expression: String, expected: Either[Message, String]) = {
+      new ExpressionEvaluation(
+        expression,
+        { resp =>
+          println(s"TODO fix in ${scalaVersion.version}")
+          println(s"expected: $expected")
+        }
       )
     }
 
