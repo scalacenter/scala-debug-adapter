@@ -18,18 +18,10 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MiniPhase:
     then
       evalCtx.expressionOwners = tree.symbol.ownersIterator.toList
       evalCtx.originalThis =
-        tree.symbol.ownersIterator.find(_.isClass).get.asInstanceOf[ClassSymbol]
+        tree.symbol.ownersIterator.find(_.isClass).get.asClass
       evalCtx.expressionTree = tree.rhs
       evalCtx.expressionSymbol = tree.symbol
       evalCtx.expressionType = tree.tpe
-
-      evalCtx.defTypes += "$this" -> evalCtx.originalThis.thisType
-      evalCtx.originalThis.ownersIterator
-        .find(owner =>
-          owner != evalCtx.originalThis && owner.isClass && !owner.isEmptyPackage && !owner.isRoot
-        )
-        .map(_.thisType)
-        .foreach(outerType => evalCtx.defTypes += "$outer" -> outerType)
       tree
     else super.transformValDef(tree)
 

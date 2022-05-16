@@ -16,16 +16,9 @@ class ExtractDefs(using evalCtx: EvaluationContext) extends MiniPhase:
 
   override def transformTypeDef(tree: TypeDef)(using Context): Tree =
     val isExpressionClass =
-      tree.name.toString == evalCtx.expressionClassName && tree.symbol
-        .isInstanceOf[ClassSymbol]
-    if isExpressionClass then
-      evalCtx.expressionThis = tree.symbol.asInstanceOf[ClassSymbol]
+      tree.name.toString == evalCtx.expressionClassName && tree.symbol.isClass
+    if isExpressionClass then evalCtx.expressionClass = tree.symbol.asClass
     super.transformTypeDef(tree)
-
-  override def transformValDef(tree: ValDef)(using Context): Tree =
-    if isCorrectOwner(tree) && evalCtx.defNames.contains(tree.name.toString)
-    then evalCtx.defTypes += (tree.name.toString -> tree.tpe)
-    super.transformValDef(tree)
 
   override def transformDefDef(tree: DefDef)(using Context): Tree =
     // extract nested methods
