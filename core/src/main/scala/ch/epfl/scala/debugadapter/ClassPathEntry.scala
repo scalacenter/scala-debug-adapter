@@ -15,6 +15,7 @@ case class ClassPathEntry(absolutePath: Path, sourceEntries: Seq[SourceEntry])
     absolutePath.getFileName.toString.stripSuffix(".jar")
   private def isJar: Boolean = absolutePath.toString.endsWith(".jar")
 
+  // TODO: Move to classFile
   def readBytes(classFile: String): Seq[Array[Byte]] = {
     print("classSystems ", classSystems.length)
     for (c <- classSystems)

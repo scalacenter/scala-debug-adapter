@@ -12,21 +12,23 @@ object DecompilerSuite extends TestSuite {
     "should decompile my class" - {
 
       val source = """|
-                      |package foo
+                      |package ex
                       |
                       |trait A {
-                      |  def foo: String = {
+                      |  def foo(): String = {
                       |   val x: Int = 0
                       |   return x.asInstanceOf[String]
                       | }
                       |}
                       |
-                      |class B () extends A
+                      |class B () extends A {
+                      |   def foo(i: Int): String = "Hello"
+                      |}
                       |
                       |object Main2 {
                       |  def main(args: Array[String]): Unit = {
                       |    val b = new B
-                      |    println(b.foo)
+                      |    println(b.foo())
                       |  }
                       |}
                       |""".stripMargin
@@ -37,14 +39,14 @@ object DecompilerSuite extends TestSuite {
         ScalaVersion.`2.12`
       )
 
-      val bytes = runner.projectEntry.readBytes("foo/B.class")
+      val bytes = runner.projectEntry.readBytes("ex/B.class")
 
       println(bytes.size)
       val text =
         for (b <- bytes)
-          yield (Decompiler.sourceNameAndText("A.class", "Foo", b))
-
-      for (t <- text) print(t.get)
+          yield (Decompiler.sourceNameAndText("", "", b))
+      
+      for(t <- text) print(t)
     }
 
 //     "should decompile my setter" - {

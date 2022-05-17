@@ -18,6 +18,71 @@ object Decompiler {
 
   private val ScalaSigBytes = "ScalaSig".getBytes(UTF_8)
 
+
+  def decompileMethodSymbol(bytes: Array[Byte], fileName: String): Option[ScalaSig] = {
+
+    if (fileName.endsWith(".sig")) {
+      return Some(Parser.parseScalaSig(bytes, fileName))
+    }
+
+    println("Decompiling\n")
+    if (!containsMarker(bytes)) return None
+
+    // Parse the file
+    val reader = new ClassReader(bytes)
+
+    val scalaAnnotations = scala.collection.mutable.Buffer[String]()
+
+    val emptyVisitor = new AnnotationVisitor(Opcodes.ASM9) {}
+    val scalaVisitor = new AnnotationVisitor(Opcodes.ASM9) {
+
+      override def visitArray(name: String): AnnotationVisitor = {
+        println("visitArray\n")
+        if (name == "bytes") {
+          new AnnotationVisitor(Opcodes.ASM9) {
+            override def visit(name: String, value: Any): Unit = {
+              scalaAnnotations += value.asInstanceOf[String]
+            }
+          }
+        } else {
+          emptyVisitor
+        }
+      }
+
+      override def visit(name: String, value: Any): Unit = {
+        println("visit\n")
+        if (name == "bytes") {
+          scalaAnnotations += value.asInstanceOf[String]
+        }
+      }
+
+    }
+
+    val visitor = new ClassVisitor(Opcodes.ASM9) {
+      override def visitAnnotation(
+          descriptor: String,
+          visible: Boolean
+      ): AnnotationVisitor = {
+        descriptor match {
+          case SCALA_SIG_ANNOTATION |
+              SCALA_LONG_SIG_ANNOTATION=>
+            scalaVisitor
+
+          case _ => emptyVisitor
+        }
+
+      }
+    }
+
+    reader.accept(visitor, 256)
+
+    if (scalaAnnotations.isEmpty) None
+    else {
+      val decoded = decode(scalaAnnotations.toList.map(_.getBytes()))
+      Some(Parser.parseScalaSig(decoded, fileName))
+    }
+
+  }
   def sourceNameAndText(
       fileName: String,
       className: String,
@@ -27,6 +92,7 @@ object Decompiler {
     if (fileName.endsWith(".sig")) {
       return tryDecompileSigFile(fileName, bytes)
     }
+
     println("Decompiling\n")
     if (!containsMarker(bytes)) return None
 
@@ -82,7 +148,7 @@ object Decompiler {
     else {
       val decoded = decode(scalaAnnotations.toList.map(_.getBytes()))
       val signature = Parser.parseScalaSig(decoded, fileName)
-
+      signature.entries.collect{case s: MethodSymbol => s.infoType}.collect{case s: MethodType => s}.foreach(s => println(s))
       decompiledText(signature, className, fileName == "package.class")
     }
 
@@ -168,7 +234,7 @@ object Decompiler {
       val symbols = scalaSig.topLevelClasses ++ scalaSig.topLevelObjects
 
       // Check flags work
-      for (s <- symbols) println(s.isTrait)
+      for (s <- symbols) println(s)
 
       // Print package with special treatment for package objects
 

@@ -12,14 +12,12 @@ import java.util.Collections
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 import com.microsoft.java.debug.core.protocol.Requests.CustomStepFilter
+import ch.epfl.scala.debugadapter.internal.decompiler.Decompiler
+import ch.epfl.scala.debugadapter.internal.decompiler.scalasig.ScalaSig
 
 private[debugadapter] object DebugAdapter {
 
-  DebugSettings.getCurrent().stepFilters.customStepFilter =
-    new CustomStepFilter {
-      // TODO: CHECK INTELLIJ
-      override def skip(method: Method): Boolean = ???
-    }
+  
 
   /**
    * Since Scala 2.13, object fields are represented by static fields in JVM byte code.
@@ -32,6 +30,39 @@ private[debugadapter] object DebugAdapter {
     val sourceLookUpProvider = SourceLookUpProvider(
       runner.classPathEntries ++ runner.javaRuntime
     )
+    DebugSettings.getCurrent().stepFilters.customStepFilter =
+      new CustomStepFilter {
+        override def skip(method: Method): Boolean = {
+        //TODO: Check name, return type, arguments number and types
+        // If sure => skip
+        // Else step in
+          println(method.signature())
+
+          // Check wether the signature looks like a lambda
+          if(method.name().contains("%anonfunc%")){
+            false
+          }
+
+          val className = method.getClass().getCanonicalName()
+          
+          // How to access fqcnToClassPathEntry?
+          val classPathEntry = sourceLookUpProvider
+
+          val bytes: Array[Byte] = ??? // sourceLookUpProvider.getBytes(className)
+
+          val optScalaSig = ??? //Decompiler.decompileMethodSymbol(bytes, className)
+          if(optScalaSig == None){
+            false
+          }
+
+          val scalaSig: ScalaSig = ??? //optScalaSig.get
+
+          //TODO Checks
+
+          true
+        }
+      }
+
     context.registerProvider(
       classOf[IHotCodeReplaceProvider],
       HotCodeReplaceProvider
