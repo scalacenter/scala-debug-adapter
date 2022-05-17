@@ -18,8 +18,10 @@ object Decompiler {
 
   private val ScalaSigBytes = "ScalaSig".getBytes(UTF_8)
 
-
-  def decompileMethodSymbol(bytes: Array[Byte], fileName: String): Option[ScalaSig] = {
+  def decompileMethodSymbol(
+      bytes: Array[Byte],
+      fileName: String
+  ): Option[ScalaSig] = {
 
     if (fileName.endsWith(".sig")) {
       return Some(Parser.parseScalaSig(bytes, fileName))
@@ -64,8 +66,7 @@ object Decompiler {
           visible: Boolean
       ): AnnotationVisitor = {
         descriptor match {
-          case SCALA_SIG_ANNOTATION |
-              SCALA_LONG_SIG_ANNOTATION=>
+          case SCALA_SIG_ANNOTATION | SCALA_LONG_SIG_ANNOTATION =>
             scalaVisitor
 
           case _ => emptyVisitor
@@ -148,7 +149,10 @@ object Decompiler {
     else {
       val decoded = decode(scalaAnnotations.toList.map(_.getBytes()))
       val signature = Parser.parseScalaSig(decoded, fileName)
-      signature.entries.collect{case s: MethodSymbol => s.infoType}.collect{case s: MethodType => s}.foreach(s => println(s))
+      signature.entries
+        .collect { case s: MethodSymbol => s.infoType }
+        .collect { case s: MethodType => s }
+        .foreach(s => println(s))
       decompiledText(signature, className, fileName == "package.class")
     }
 

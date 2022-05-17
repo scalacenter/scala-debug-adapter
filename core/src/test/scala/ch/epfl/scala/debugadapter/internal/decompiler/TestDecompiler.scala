@@ -45,8 +45,8 @@ object DecompilerSuite extends TestSuite {
       val text =
         for (b <- bytes)
           yield (Decompiler.sourceNameAndText("", "", b))
-      
-      for(t <- text) print(t)
+
+      for (t <- text) print(t)
     }
 
 //     "should decompile my setter" - {

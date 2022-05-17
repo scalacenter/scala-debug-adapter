@@ -17,8 +17,6 @@ import ch.epfl.scala.debugadapter.internal.decompiler.scalasig.ScalaSig
 
 private[debugadapter] object DebugAdapter {
 
-  
-
   /**
    * Since Scala 2.13, object fields are represented by static fields in JVM byte code.
    * See https://github.com/scala/scala/pull/7270
@@ -33,31 +31,33 @@ private[debugadapter] object DebugAdapter {
     DebugSettings.getCurrent().stepFilters.customStepFilter =
       new CustomStepFilter {
         override def skip(method: Method): Boolean = {
-        //TODO: Check name, return type, arguments number and types
-        // If sure => skip
-        // Else step in
+          // TODO: Check name, return type, arguments number and types
+          // If sure => skip
+          // Else step in
           println(method.signature())
 
           // Check wether the signature looks like a lambda
-          if(method.name().contains("%anonfunc%")){
+          if (method.name().contains("%anonfunc%")) {
             false
           }
 
           val className = method.getClass().getCanonicalName()
-          
+
           // How to access fqcnToClassPathEntry?
           val classPathEntry = sourceLookUpProvider
 
-          val bytes: Array[Byte] = ??? // sourceLookUpProvider.getBytes(className)
+          val bytes: Array[Byte] =
+            ??? // sourceLookUpProvider.getBytes(className)
 
-          val optScalaSig = ??? //Decompiler.decompileMethodSymbol(bytes, className)
-          if(optScalaSig == None){
+          val optScalaSig =
+            ??? // Decompiler.decompileMethodSymbol(bytes, className)
+          if (optScalaSig == None) {
             false
           }
 
-          val scalaSig: ScalaSig = ??? //optScalaSig.get
+          val scalaSig: ScalaSig = ??? // optScalaSig.get
 
-          //TODO Checks
+          // TODO Checks
 
           true
         }

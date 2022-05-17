@@ -7,12 +7,11 @@ import java.nio.file.FileSystems
 import java.nio.file.Path
 import java.nio.file.Files
 
-
 sealed trait ClassSystem {
   def within[T](f: (FileSystem, Path) => T): Option[T]
 
   def bytes(classFile: String): Array[Byte] = {
-      this.within((_, path) => Files.readAllBytes(path.resolve(classFile))).get
+    this.within((_, path) => Files.readAllBytes(path.resolve(classFile))).get
   }
 }
 
