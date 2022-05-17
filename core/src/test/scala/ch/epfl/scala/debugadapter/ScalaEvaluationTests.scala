@@ -228,12 +228,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |    println("Hello, World!")
            |  }
            |  
-           |  private trait A {
-           |    override def toString = "a"
-           |  }
-           |  private class B extends A {
-           |    override def toString = "b"
-           |  }
+           |  trait A
+           |  class B extends A
            |  
            |  private def m(): String = "m"
            |  private def m(n: Int): String = s"m($n: Int)"
@@ -257,21 +253,25 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           Evaluation.success("m(5)", "m(5: Int)"),
           Evaluation.success("m(true)", "m(true: Boolean)"),
           Evaluation.success("m(\"foo\")", "m(foo: String)"),
-          Evaluation.successOrIgnore("m(new B)", "m(b: B)", true),
-          Evaluation.successOrIgnore("m(new B: A)", "m(a: A)", true),
+          Evaluation.successOrIgnore("m(new B)", "m(b: B)", isScala2),
+          Evaluation.successOrIgnore("m(new B: A)", "m(a: A)", isScala2),
           Evaluation
-            .successOrIgnore("m(Array(1, 2))", "m(xs: Array[Int])", true),
+            .successOrIgnore("m(Array(1, 2))", "m(xs: Array[Int])", isScala2),
           Evaluation
-            .successOrIgnore("m(Array[A](new B))", "m(xs: Array[A])", true),
+            .successOrIgnore("m(Array[A](new B))", "m(xs: Array[A])", isScala2),
           Evaluation.successOrIgnore(
             "m(Array(Array(1), Array(2)))",
-            "m(xs: Array[Array[Int]]",
-            true
+            "m(xs: Array[Array[Int]])",
+            isScala2
           ),
-          Evaluation.successOrIgnore("m1(Seq(1, 2, 3))", "List(1, 2, 3)", true),
           Evaluation
-            .successOrIgnore("m1(Vector(1, 2, 3))", "Vector(1, 2, 3)", true),
-          Evaluation.successOrIgnore("m1(Seq(true, false, true))", 2, true)
+            .successOrIgnore("m1(Seq(1, 2, 3))", "List(1, 2, 3)", isScala2),
+          Evaluation.successOrIgnore(
+            "m1(Vector(1, 2, 3))",
+            "Vector(1, 2, 3)",
+            isScala2
+          ),
+          Evaluation.successOrIgnore("m1(Seq(true, false, true))", 2, isScala2)
         )
       )
     }
