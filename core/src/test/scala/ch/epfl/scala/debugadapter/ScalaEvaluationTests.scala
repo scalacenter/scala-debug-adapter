@@ -276,54 +276,57 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
-    "evaluate public and private fields of private inner class" - {
+    "evaluate private inner class" - {
       val source =
-        """class A {
-          |  class B {
-          |    val x1 = "x1"
-          |
-          |    def m1(): Unit = {
-          |      println("m1")
-          |    }
-          |  }
-          |}
-          |
-          |object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    val a = new A()
-          |    val b = new a.B()
-          |    b.m1()
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(15)(Evaluation.success("b.x1", "x1")),
-        Breakpoint(6)(Evaluation.success("x1", "x1"))
-      )
-    }
-
-    "evaluate expression with inner class's private fields" - {
-      val source =
-        """class A {
-          |  class B {
-          |    private val x1 = "x1"
-          |
-          |    def m1(): Unit = {
-          |      println(x1)
-          |    }
-          |  }
-          |}
-          |
-          |object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    val a = new A()
-          |    val b = new a.B()
-          |    b.m1()
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 6, "x1")(
-        _.exists(_ == "\"x1\"")
+        """|package example
+           |
+           |object A {
+           |  def main(args: Array[String]): Unit = {
+           |    val c = new C
+           |    c.c1()
+           |  }
+           |
+           |  private def a1(): B = new B
+           |  private def a2(b: B): String = "a2"
+           |
+           |  private class B {
+           |    val b1: String = "b1"
+           |    def b2(): String = "b2"
+           |  }
+           |}
+           |
+           |class C {
+           |  def c1(): Unit =
+           |    println("Hello, World!")
+           |  
+           |  private def c2(): D = new D
+           |  private def c3(d: D): String = "c3"
+           |
+           |  private class D {
+           |    val d1: String = "d1"
+           |    def d2(): String = "d2"
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.A")(
+        Breakpoint(5)(
+          Evaluation.success("a1().b1", "b1"),
+          Evaluation.successOrIgnore("(new B).b2()", "b2", isScala3),
+          Evaluation.successOrIgnore("(new A.B).b1", "b1", isScala3),
+          Evaluation.successOrIgnore("a2(new B)", "a2", isScala3),
+          Evaluation.successOrIgnore(
+            """|val b: B = new B
+               |b.b1""".stripMargin,
+            "b1",
+            isScala3
+          )
+        ),
+        Breakpoint(20)(
+          Evaluation.success("c2().d1", "d1"),
+          Evaluation.successOrIgnore("(new D).d2()", "d2", isScala3),
+          Evaluation.successOrIgnore("(new this.D).d1", "d1", isScala3),
+          Evaluation.successOrIgnore("c3(new D)", "c3", isScala3)
+        )
       )
     }
 
@@ -350,33 +353,6 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest", 7, "x1 + x2 + x3")(
         _.exists(_ == "\"x1x2x3\"")
-      )
-    }
-
-    "evaluate expression with a public method call" - {
-      val source =
-        """class B
-          |class A {
-          |  val x1 = new B()
-          |  def m1(): Unit = {
-          |    println("m1")
-          |  }
-          |
-          |  def m2(): Int = {
-          |    1
-          |  }
-          |}
-          |
-          |object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    val a = new A()
-          |    a.m1()
-          |  }
-          |}
-          |""".stripMargin
-
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(5)(Evaluation.success("m2()", 1))
       )
     }
 
