@@ -29,11 +29,13 @@ class InsertExpression(using
        |  def evaluate(): Any =
        |    ()
        |
-       |  def callPrivateMethod(obj: Any, methodName: String, paramTypeNames: Array[String], args: Array[Object]): Any =
+       |  def callPrivateMethod(obj: Any, methodName: String, paramTypeNames: Array[String], returnTypeName: String, args: Array[Object]): Any =
        |    val methods = obj.getClass.getDeclaredMethods
        |    val method = methods
        |      .find { m => 
-       |        m.getName == methodName && m.getParameterTypes.map(_.getName).toSeq == paramTypeNames.toSeq
+       |        m.getName == methodName &&
+       |          m.getReturnType.getName == returnTypeName &&
+       |          m.getParameterTypes.map(_.getName).toSeq == paramTypeNames.toSeq
        |      }
        |      .get
        |    method.setAccessible(true)

@@ -28,8 +28,6 @@ class ExtractDefs(using evalCtx: EvaluationContext) extends MiniPhase:
 
   private def isCorrectOwner(tree: Tree)(using Context): Boolean =
     evalCtx.expressionOwners.contains(tree.symbol.maybeOwner)
-end ExtractDefs
 
 object ExtractDefs:
   val name: String = "extract-defs"
-end ExtractDefs

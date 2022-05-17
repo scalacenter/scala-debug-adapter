@@ -12,6 +12,7 @@ import dotty.tools.dotc.core.Symbols.*
 import dotty.tools.dotc.core.Types.Type
 import dotty.tools.dotc.transform.MegaPhase.MiniPhase
 import dotty.tools.dotc.transform.SymUtils.*
+import dotty.tools.dotc.core.Types.MethodType
 
 class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
   override def phaseName: String = InsertExtracted.name
@@ -45,10 +46,10 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
         // non-static object
         case tree: Ident if isNonStaticObject(tree.symbol) =>
           val qualifier = getLocalValue("$this", evalCtx.originalThis.thisType)
-          getNonStaticObject(qualifier, tree.symbol, tree.tpe)
+          callPrivateMethod(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
         case tree: Select if isNonStaticObject(tree.symbol) =>
           val qualifier = transform(tree.qualifier)
-          getNonStaticObject(qualifier, tree.symbol, tree.tpe)
+          callPrivateMethod(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
 
         // private field
         case tree @ Ident(name) if isPrivateField(tree.symbol) =>
@@ -73,7 +74,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
         case tree @ Apply(fun: Select, _) if isPrivateMethod(fun.symbol) =>
           val qualifier = transform(fun.qualifier)
           val args = tree.args.map(transform)
-          callPrivateMethod(qualifier, fun.name, args, tree.tpe)
+          callPrivateMethod(qualifier, fun.symbol.asTerm, args, tree.tpe)
         case tree @ Apply(fun: Ident, _) if isPrivateMethod(fun.symbol) =>
           val owner = fun.symbol.owner
           val qualifier =
@@ -81,7 +82,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
             then getStaticObject(owner)
             else getLocalValue("$this", owner.info)
           val args = tree.args.map(transform)
-          callPrivateMethod(qualifier, fun.name, args, tree.tpe)
+          callPrivateMethod(qualifier, fun.symbol.asTerm, args, tree.tpe)
 
         case tree => super.transform(tree)
 
@@ -122,37 +123,23 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
       List(Literal(Constant(fullName)))
     )
 
-  private def getNonStaticObject(qualifier: Tree, obj: Symbol, tpe: Type)(using
-      Context
-  ): Tree =
-    val tree = Apply(
-      Select(This(evalCtx.expressionClass), termName("callPrivateMethod")),
-      List(
-        qualifier,
-        Literal(Constant(obj.name.toString)),
-        JavaSeqLiteral(List.empty, TypeTree(ctx.definitions.StringType)),
-        JavaSeqLiteral(List.empty, TypeTree(ctx.definitions.ObjectType))
-      )
-    )
-    cast(tree, tpe)
-
   private def callPrivateMethod(
       qualifier: Tree,
-      name: Name,
+      fun: TermSymbol,
       args: List[Tree],
       tpe: Type
   )(using Context): Tree =
-    val paramTypeNames = args
-      .map(arg =>
-        val tpeSymbol = arg.tpe.typeSymbol
-        val paramTypeName =
-          if (tpeSymbol.isPrimitiveValueClass) then
-            tpeSymbol.fullName.toString.stripPrefix("scala.").toLowerCase()
-          else tpeSymbol.fullName.toString
-        Literal(Constant(paramTypeName))
+    val (paramTypesNames, returnTypeName) = atPhase(genBCodePhase) {
+      val methodType = fun.info.asInstanceOf[MethodType]
+      (
+        methodType.paramInfos.map(JavaEncoding.encode),
+        JavaEncoding.encode(methodType.resType)
       )
-    val paramTypeNamesArray =
-      JavaSeqLiteral(paramTypeNames, TypeTree(ctx.definitions.StringType))
+    }
+    val paramTypesArray = JavaSeqLiteral(
+      paramTypesNames.map(t => Literal(Constant(t))),
+      TypeTree(ctx.definitions.StringType)
+    )
     val argsArray =
       JavaSeqLiteral(args, TypeTree(ctx.definitions.ObjectType))
 
@@ -160,8 +147,9 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
       Select(This(evalCtx.expressionClass), termName("callPrivateMethod")),
       List(
         qualifier,
-        Literal(Constant(name.toString)),
-        paramTypeNamesArray,
+        Literal(Constant(fun.name.toString)),
+        paramTypesArray,
+        Literal(Constant(returnTypeName)),
         argsArray
       )
     )
