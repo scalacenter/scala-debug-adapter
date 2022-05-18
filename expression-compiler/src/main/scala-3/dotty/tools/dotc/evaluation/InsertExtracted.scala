@@ -51,6 +51,10 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
           val qualifier = transform(tree.qualifier)
           callPrivateMethod(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
 
+        // local value
+        case tree @ Ident(name) if isLocalVal(tree.symbol) =>
+          getLocalValue(name.toString, tree.tpe)
+
         // private field
         case tree @ Ident(name) if isPrivateField(tree.symbol) =>
           val qualifier =
@@ -74,10 +78,6 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
             .foldLeft(innerThis) { (innerObj, outerSym) =>
               getOuter(innerObj, outerSym.thisType)
             }
-
-        // local value
-        case tree @ Ident(name) if isLocalVal(tree.symbol) =>
-          getLocalValue(name.toString, tree.tpe)
 
         // private method
         case tree @ Apply(fun: Select, _) if isPrivateMethod(fun.symbol) =>
@@ -207,7 +207,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
 
   private def cast(tree: Tree, tpe: Type)(using Context): Tree =
     val widenDealiasTpe = tpe.widenDealias
-    if isAccessible(widenDealiasTpe.typeSymbol.asType)
+    if isTypeAccessible(widenDealiasTpe.typeSymbol.asType)
     then tree.cast(widenDealiasTpe)
     else tree
 
@@ -218,10 +218,16 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
     symbol.is(Module) && !symbol.isStatic && !symbol.isRoot
 
   private def isPrivateField(symbol: Symbol)(using Context): Boolean =
-    symbol.isField && !isAccessible(symbol)
+    symbol.isField && symbol.owner.isType && !isTermAccessible(
+      symbol.asTerm,
+      symbol.owner.asType
+    )
 
   private def isPrivateMethod(symbol: Symbol)(using Context): Boolean =
-    symbol.isRealMethod && !isAccessible(symbol)
+    symbol.isRealMethod && symbol.owner.isType && !isTermAccessible(
+      symbol.asTerm,
+      symbol.owner.asType
+    )
 
   private def isLocalVal(symbol: Symbol)(using Context): Boolean =
     !symbol.is(Method) &&
@@ -229,15 +235,15 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
       symbol.ownersIterator.forall(_ != evalCtx.expressionSymbol) &&
       evalCtx.expressionOwners.contains(symbol.maybeOwner)
 
-  /**
-   * Check if a symbol is accessible from the expression class
-   * It is not accessible if the symbol is private, e.g. a private field or method,
-   * or if it's owner type is not accessible from the expression class, e.g. a private class or object.
-   */
-  private def isAccessible(symbol: Symbol)(using Context): Boolean =
-    !symbol.isPrivate && symbol.owner.isAccessibleFrom(
-      evalCtx.expressionClass.thisType
-    )
+  // Check if a term is accessible from the expression class
+  private def isTermAccessible(symbol: TermSymbol, owner: TypeSymbol)(using
+      Context
+  ): Boolean =
+    !symbol.isPrivate && isTypeAccessible(owner)
+
+  // Check if a type is accessible from the expression class
+  private def isTypeAccessible(symbol: TypeSymbol)(using Context): Boolean =
+    symbol.isAccessibleFrom(evalCtx.expressionClass.thisType) && !symbol.isLocal
 
 object InsertExtracted:
   val name: String = "insert-extracted"

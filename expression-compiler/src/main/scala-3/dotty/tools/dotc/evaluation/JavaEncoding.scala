@@ -13,15 +13,16 @@ object JavaEncoding:
     tpe.widenDealias match
       // Array type such as Array[Int] (kept by erasure)
       case JavaArrayType(el) => s"[${binaryName(el)}"
-      case tpe: TypeRef =>
-        val sym = tpe.symbol
-        /* When compiling Array.scala, the type parameter T is not erased and shows up in method
-         * signatures, e.g. `def apply(i: Int): T`. A TypeRef to T is replaced by ObjectReference.
-         */
-        if !sym.isClass then "java.lang.Object"
-        else if sym.isPrimitiveValueClass then primitiveName(sym)
-        else className(sym)
+      case tpe: TypeRef => encode(tpe.symbol)
       case AnnotatedType(t, _) => encode(t)
+
+  def encode(sym: Symbol)(using Context): String =
+    /* When compiling Array.scala, the type parameter T is not erased and shows up in method
+     * signatures, e.g. `def apply(i: Int): T`. A TypeRef to T is replaced by ObjectReference.
+     */
+    if !sym.isClass then "java.lang.Object"
+    else if sym.isPrimitiveValueClass then primitiveName(sym)
+    else className(sym)
 
   private def binaryName(tpe: Type)(using Context): String =
     tpe match
