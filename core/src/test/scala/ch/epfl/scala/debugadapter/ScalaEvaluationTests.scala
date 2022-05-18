@@ -361,6 +361,42 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "fail evaluation of the outer class of a private final class" - {
+      val source =
+        """|package example
+           |
+           |class A {
+           |  val a1 = "a1"
+           |  private final class B {
+           |    def b1(): Unit = {
+           |      println("b1")
+           |    }
+           |  }
+           |  def a2(): Unit = {
+           |    val b = new B
+           |    b.b1()
+           |  }
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A
+           |    a.a2()
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(7)(
+          Evaluation.success(
+            "a1",
+            if (isScala3)
+              new Exception("the outer class of example.A$B is not accessible")
+            else new NoSuchFieldError("$outer")
+          )
+        )
+      )
+    }
+
     "evaluate expression in package" - {
       val source =
         """package debug {

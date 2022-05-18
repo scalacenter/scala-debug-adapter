@@ -23,51 +23,54 @@ class InsertExpression(using
   override def isCheckable: Boolean = false
 
   private val expressionClassSource =
-    s"""class ${evalCtx.expressionClassName}(names: Array[String], values: Array[Object]):
-       |  val valuesByName = names.zip(values).toMap
-       |
-       |  def evaluate(): Any =
-       |    ()
-       |
-       |  def callPrivateMethod(obj: Any, methodName: String, paramTypesNames: Array[String], returnTypeName: String, args: Array[Object]): Any =
-       |    val methods = obj.getClass.getDeclaredMethods
-       |    val method = methods
-       |      .find { m => 
-       |        m.getName == methodName &&
-       |          m.getReturnType.getName == returnTypeName &&
-       |          m.getParameterTypes.map(_.getName).toSeq == paramTypesNames.toSeq
-       |      }
-       |      .get
-       |    method.setAccessible(true)
-       |    method.invoke(obj, args*)
-       |
-       |  def callPrivateConstructor(className: String, paramTypesNames: Array[String], args: Array[Object]): Any =
-       |    val classLoader = getClass.getClassLoader
-       |    val clazz = getClass.getClassLoader.loadClass(className)
-       |    val paramClasses = paramTypesNames.map(classLoader.loadClass)
-       |    val constructor = clazz.getConstructor(paramClasses*)
-       |    constructor.setAccessible(true)
-       |    constructor.newInstance(args*)
-       |
-       |  def getOuter(obj: Any): Any =
-       |    val field = obj.getClass.getDeclaredField("$$outer")
-       |    field.setAccessible(true)
-       |    field.get(obj)
-       |
-       |  def getPrivateField(obj: Any, name: String, expandedName: String): Any =
-       |    import scala.util.Try
-       |    val clazz = obj.getClass
-       |    val field = Try(clazz.getDeclaredField(name))
-       |      .getOrElse(clazz.getDeclaredField(expandedName))
-       |    field.setAccessible(true)
-       |    field.get(obj)
-       |
-       |  def getStaticObject(className: String): Any =
-       |    val clazz = getClass.getClassLoader.loadClass(className)
-       |    val field = clazz.getDeclaredField("MODULE$$")
-       |    field.setAccessible(true)
-       |    field.get(null)
-       |""".stripMargin
+    s"""|class ${evalCtx.expressionClassName}(names: Array[String], values: Array[Object]):
+        |  import scala.util.Try
+        |
+        |  val valuesByName = names.zip(values).toMap
+        |
+        |  def evaluate(): Any =
+        |    ()
+        |
+        |  def callPrivateMethod(obj: Any, methodName: String, paramTypesNames: Array[String], returnTypeName: String, args: Array[Object]): Any =
+        |    val methods = obj.getClass.getDeclaredMethods
+        |    val method = methods
+        |      .find { m => 
+        |        m.getName == methodName &&
+        |          m.getReturnType.getName == returnTypeName &&
+        |          m.getParameterTypes.map(_.getName).toSeq == paramTypesNames.toSeq
+        |      }
+        |      .get
+        |    method.setAccessible(true)
+        |    method.invoke(obj, args*)
+        |
+        |  def callPrivateConstructor(className: String, paramTypesNames: Array[String], args: Array[Object]): Any =
+        |    val classLoader = getClass.getClassLoader
+        |    val clazz = getClass.getClassLoader.loadClass(className)
+        |    val paramClasses = paramTypesNames.map(classLoader.loadClass)
+        |    val constructor = clazz.getConstructor(paramClasses*)
+        |    constructor.setAccessible(true)
+        |    constructor.newInstance(args*)
+        |
+        |  def getOuter(obj: Any): Any =
+        |    val clazz = obj.getClass
+        |    val field = Try(clazz.getDeclaredField("$$outer"))
+        |      .getOrElse(throw new Exception(s"the outer class of $${clazz.getName} is not accessible"))
+        |    field.setAccessible(true)
+        |    field.get(obj)
+        |
+        |  def getPrivateField(obj: Any, name: String, expandedName: String): Any =
+        |    val clazz = obj.getClass
+        |    val field = Try(clazz.getDeclaredField(name))
+        |      .getOrElse(clazz.getDeclaredField(expandedName))
+        |    field.setAccessible(true)
+        |    field.get(obj)
+        |
+        |  def getStaticObject(className: String): Any =
+        |    val clazz = getClass.getClassLoader.loadClass(className)
+        |    val field = clazz.getDeclaredField("MODULE$$")
+        |    field.setAccessible(true)
+        |    field.get(null)
+        |""".stripMargin
 
   override def run(using Context): Unit =
     val parsedExpression = parseExpression(evalCtx.expression)
