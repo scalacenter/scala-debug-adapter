@@ -62,11 +62,20 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
           val qualifier = transform(tree.qualifier)
           getPrivateField(qualifier, tree.symbol.asTerm, tree.tpe)
 
-        // local value
+        // this or outer this
         case tree @ This(Ident(name)) =>
-          val thisOrOuter =
-            if tree.symbol == evalCtx.originalThis then "$this" else "$outer"
-          getLocalValue(thisOrOuter, tree.tpe)
+          val innerThis = getLocalValue("$this", evalCtx.originalThis.thisType)
+          val owners =
+            evalCtx.originalThis.ownersIterator.filter(_.isClass).toSeq
+          val target = owners.indexOf(tree.symbol)
+          owners
+            .take(target + 1)
+            .drop(1)
+            .foldLeft(innerThis) { (innerObj, outerSym) =>
+              getOuter(innerObj, outerSym.thisType)
+            }
+
+        // local value
         case tree @ Ident(name) if isLocalVal(tree.symbol) =>
           getLocalValue(name.toString, tree.tpe)
 
@@ -96,6 +105,15 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
         termName("apply")
       ),
       List(Literal(Constant(name)))
+    )
+    cast(tree, tpe)
+
+  private def getOuter(qualifier: Tree, tpe: Type)(using
+      Context
+  ): Tree =
+    val tree = Apply(
+      Select(This(evalCtx.expressionClass), termName("getOuter")),
+      List(qualifier)
     )
     cast(tree, tpe)
 

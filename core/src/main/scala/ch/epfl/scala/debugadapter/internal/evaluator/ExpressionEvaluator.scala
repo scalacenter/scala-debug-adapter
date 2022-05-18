@@ -148,6 +148,7 @@ private[internal] class ExpressionEvaluator(
       Safe.join(variableNames, variableValues)
     }
 
+    // Only useful in Scala 2
     def extractFieldsFromThisObject(
         thisObject: ObjectReference
     ): Safe[(List[StringReference], List[Value])] = {
@@ -172,8 +173,8 @@ private[internal] class ExpressionEvaluator(
         case None => Safe.lift(None)
       }
     } yield {
-      val names = variableNames ++ fieldNames ++ thisObjectName
-      val values = variableValues ++ fieldValues ++ thisObjectOpt
+      val names = fieldNames ++ variableNames ++ thisObjectName
+      val values = fieldValues ++ variableValues ++ thisObjectOpt
       (names, values)
     }
   }
