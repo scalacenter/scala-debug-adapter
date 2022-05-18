@@ -424,112 +424,56 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
 
     "evaluate expression inside of a lambda" - {
       val source =
-        """object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    List(1).foreach(n => {
-          |      println(n)
-          |    })
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(4)(Evaluation.success("n", 1))
-      )
-    }
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    List(1).foreach(n => {
+           |      println(n)
+           |    })
+           |    List(1).foreach { n =>
+           |      println(n)
+           |    }
+           |  }
+           |
+           |  def m1(): Int = 9
+           |}
+           |""".stripMargin
+      val evaluations =
+        Seq(
+          Breakpoint(6)(
+            Evaluation.success("n", 1),
+            Evaluation.success("m1()", 9)
+          )
+        ) ++
+          (if (isScala3) Some(Breakpoint(9)()) else None) :+
+          Breakpoint(9)(
+            Evaluation.success("n", 1),
+            Evaluation.success("m1()", 9)
+          )
 
-    "evaluate expression inside of a lambda - 2" - {
-      val source =
-        """object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    List(1).foreach { n =>
-          |      println(n)
-          |    }
-          |  }
-          |}
-          |""".stripMargin
-      if (isScala3) {
-        assertInMainClass(source, "EvaluateTest")(
-          Breakpoint(4)(),
-          Breakpoint(4)(Evaluation.success("n", 1))
-        )
-      } else {
-        assertInMainClass(source, "EvaluateTest")(
-          Breakpoint(4)(Evaluation.success("n", 1))
-        )
-      }
-    }
-
-    "evaluate expression a object's method call inside of a lambda" - {
-      val source =
-        """object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    List(1).foreach(n => {
-          |      println(n)
-          |    })
-          |  }
-          |
-          |  def m1(): Int = 9
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(4)(Evaluation.success("m1()", 9))
-      )
-    }
-
-    "evaluate expression a class's method call inside of a lambda" - {
-      val source =
-        """class A {
-          |  def m1(): Unit = {
-          |    List(1).foreach(n => {
-          |      println(n)
-          |      println(m2())
-          |    })
-          |  }
-          |
-          |  def m2(): Int = 10
-          |}
-          |
-          |object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    new A().m1()
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(4)(Evaluation.success("m2()", 10))
-      )
+      assertInMainClass(source, "example.Main")(evaluations: _*)
     }
 
     "evaluate expression with breakpoint on an assignment" - {
       val source =
-        """object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    val a = "Hello, World!"
-          |    println(a)
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(3)(Evaluation.success("1 + 2", 3))
-      )
-    }
-
-    "evaluate expression with breakpoint on a field's assignment" - {
-      val source =
-        """class Foo {
-          |  val a = 1
-          |  val b = 2
-          |  def bar() = a + b
-          |}
-          |
-          |object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    new Foo()
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(3)(Evaluation.success("a + 2", 3))
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val foo = new Foo
+           |    println(foo.toString)
+           |  }
+           |}
+           |
+           |class Foo {
+           |  val a = 1
+           |  val b = 2
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(5)(Evaluation.success("1 + 2", 3)),
+        Breakpoint(12)(Evaluation.success("a + 2", 3))
       )
     }
 
@@ -558,8 +502,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 3, "val x = 123")(
-        _.exists(result => result == "<void value>" || result.contains("()"))
+      assertInMainClass(source, "EvaluateTest")(
+        Breakpoint(3)(Evaluation.success("val x = 123", ()))
       )
     }
 
@@ -585,7 +529,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
-    "evaluate expression with private method call" - {
+    "evaluate private method call in class" - {
       val source =
         """class Foo {
           |  val foo = this
@@ -822,7 +766,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |  val a = 1
           |  private val b = 2
           |  def main(args: Array[String]): Unit = {
-          |    val c = 1
+          |    val c = 3
           |    println(a + b + c)
           |    new Foo().bar()
           |  }
@@ -830,37 +774,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
         Breakpoint(6)(
-          Evaluation.success("List(1, 2, 3).map(_ * 2).sum", 12)
+          Evaluation.success("List(1, 2, 3).map(_ * 2).sum", 12),
+          Evaluation.success("List(1, 2, 3).map(_ * a * b * c).sum", 36)
+        ),
+        Breakpoint(15)(
+          Evaluation.success("List(1, 2, 3).map(_ * a * b * c).sum", 36)
         )
-      )
-    }
-
-    "evaluate closures" - {
-      val source =
-        """class Foo {
-          |  val a = 1
-          |  private val b = 2
-          |  def bar() = {
-          |    val c = 3
-          |    println(s"a + b + c = ${a + b + c}")
-          |  }
-          |}
-          |
-          |object EvaluateTest {
-          |  val a = 1
-          |  private val b = 2
-          |  def main(args: Array[String]): Unit = {
-          |    val c = 3
-          |    println(a + b + c)
-          |    new Foo().bar()
-          |  }
-          |}
-          |""".stripMargin
-      val evaluation =
-        Evaluation.success("List(1, 2, 3).map(_ * a * b * c).sum", 36)
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(6)(evaluation),
-        Breakpoint(15)(evaluation)
       )
     }
 
