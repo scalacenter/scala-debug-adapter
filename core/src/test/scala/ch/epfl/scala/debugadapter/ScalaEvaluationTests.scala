@@ -397,6 +397,46 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "evaluate from an inner class of a method" - {
+      val source =
+        """|package example
+           |
+           |class A {
+           |  val x1 = "ax1"
+           |  def m(): Unit = {
+           |    val x1 = "x1"
+           |    class B {
+           |      val x2 = "bx2"
+           |      def m(): Unit = {
+           |        val x2 = "x2"
+           |        println(x1 + A.this.x1)
+           |      }
+           |    }
+           |    val b = new B
+           |    b.m()
+           |  }
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A
+           |    a.m()
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(11)(
+          // we don't get the correct binary name for class B
+          Evaluation.successOrIgnore("new B", "", true),
+          // we try to access x1 as a local value rather than a field of class B
+          Evaluation.successOrIgnore("x1", "x1", true),
+          Evaluation.success("x2", "x2"),
+          Evaluation.successOrIgnore("A.this.x1", "ax1", isScala2),
+          Evaluation.successOrIgnore("this.x2", "bx2", isScala2)
+        )
+      )
+    }
+
     "evaluate expression in package" - {
       val source =
         """package debug {
