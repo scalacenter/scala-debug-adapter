@@ -49,6 +49,11 @@ class InsertExpression(using
        |    constructor.setAccessible(true)
        |    constructor.newInstance(args*)
        |
+       |  def getOuter(obj: Any): Any =
+       |    val field = obj.getClass.getDeclaredField("$$outer")
+       |    field.setAccessible(true)
+       |    field.get(obj)
+       |
        |  def getPrivateField(obj: Any, name: String, expandedName: String): Any =
        |    import scala.util.Try
        |    val clazz = obj.getClass

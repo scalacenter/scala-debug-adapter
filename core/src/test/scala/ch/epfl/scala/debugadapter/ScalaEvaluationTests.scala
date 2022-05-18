@@ -352,7 +352,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       assertInMainClass(source, "example.Main")(
         Breakpoint(11)(
           Evaluation.success("x1 + x2 + x3", "ax1bx2x3"),
-          Evaluation.success("x1 + A.this.x2 + this.x3", "ax1ax2bx3")
+          Evaluation.successOrIgnore(
+            "x1 + A.this.x2 + this.x3",
+            "ax1ax2bx3",
+            isScala2
+          )
         )
       )
     }
