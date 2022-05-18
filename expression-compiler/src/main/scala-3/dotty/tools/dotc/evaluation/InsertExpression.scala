@@ -29,17 +29,25 @@ class InsertExpression(using
        |  def evaluate(): Any =
        |    ()
        |
-       |  def callPrivateMethod(obj: Any, methodName: String, paramTypeNames: Array[String], returnTypeName: String, args: Array[Object]): Any =
+       |  def callPrivateMethod(obj: Any, methodName: String, paramTypesNames: Array[String], returnTypeName: String, args: Array[Object]): Any =
        |    val methods = obj.getClass.getDeclaredMethods
        |    val method = methods
        |      .find { m => 
        |        m.getName == methodName &&
        |          m.getReturnType.getName == returnTypeName &&
-       |          m.getParameterTypes.map(_.getName).toSeq == paramTypeNames.toSeq
+       |          m.getParameterTypes.map(_.getName).toSeq == paramTypesNames.toSeq
        |      }
        |      .get
        |    method.setAccessible(true)
-       |    method.invoke(obj, args: _*)
+       |    method.invoke(obj, args*)
+       |
+       |  def callPrivateConstructor(className: String, paramTypesNames: Array[String], args: Array[Object]): Any =
+       |    val classLoader = getClass.getClassLoader
+       |    val clazz = getClass.getClassLoader.loadClass(className)
+       |    val paramClasses = paramTypesNames.map(classLoader.loadClass)
+       |    val constructor = clazz.getConstructor(paramClasses*)
+       |    constructor.setAccessible(true)
+       |    constructor.newInstance(args*)
        |
        |  def getPrivateField(obj: Any, name: String, expandedName: String): Any =
        |    import scala.util.Try

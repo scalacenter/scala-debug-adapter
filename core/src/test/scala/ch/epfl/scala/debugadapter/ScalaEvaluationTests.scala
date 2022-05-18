@@ -310,22 +310,16 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |""".stripMargin
       assertInMainClass(source, "example.A")(
         Breakpoint(5)(
-          Evaluation.success("a1().b1", "b1"),
-          Evaluation.successOrIgnore("(new B).b2()", "b2", isScala3),
-          Evaluation.successOrIgnore("(new A.B).b1", "b1", isScala3),
-          Evaluation.successOrIgnore("a2(new B)", "a2", isScala3),
-          Evaluation.successOrIgnore(
-            """|val b: B = new B
-               |b.b1""".stripMargin,
-            "b1",
-            isScala3
-          )
+          Evaluation.success("a1()")(_.startsWith("A$B@")),
+          Evaluation.success("(new B).b1", "b1"),
+          Evaluation.success("(new A.B).b2()", "b2"),
+          Evaluation.success("a2(new B)", "a2")
         ),
         Breakpoint(20)(
-          Evaluation.success("c2().d1", "d1"),
-          Evaluation.successOrIgnore("(new D).d2()", "d2", isScala3),
-          Evaluation.successOrIgnore("(new this.D).d1", "d1", isScala3),
-          Evaluation.successOrIgnore("c3(new D)", "c3", isScala3)
+          Evaluation.success("c2()")(_.startsWith("C$D@")),
+          Evaluation.success("(new D).d1", "d1"),
+          Evaluation.success("(new this.D).d2()", "d2"),
+          Evaluation.success("c3(new D)", "c3")
         )
       )
     }

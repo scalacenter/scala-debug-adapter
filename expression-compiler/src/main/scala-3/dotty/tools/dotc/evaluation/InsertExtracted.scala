@@ -72,9 +72,12 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
 
         // private method
         case tree @ Apply(fun: Select, _) if isPrivateMethod(fun.symbol) =>
-          val qualifier = transform(fun.qualifier)
           val args = tree.args.map(transform)
-          callPrivateMethod(qualifier, fun.symbol.asTerm, args, tree.tpe)
+          if fun.symbol.isClassConstructor
+          then callPrivateConstructor(fun.symbol.asTerm, args, tree.tpe)
+          else
+            val qualifier = transform(fun.qualifier)
+            callPrivateMethod(qualifier, fun.symbol.asTerm, args, tree.tpe)
         case tree @ Apply(fun: Ident, _) if isPrivateMethod(fun.symbol) =>
           val owner = fun.symbol.owner
           val qualifier =
@@ -155,6 +158,35 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
     )
     cast(tree, tpe)
 
+  private def callPrivateConstructor(
+      ctr: TermSymbol,
+      args: List[Tree],
+      tpe: Type
+  )(using Context): Tree =
+    val (paramTypesNames, clazzName) = atPhase(genBCodePhase) {
+      val methodType = ctr.info.asInstanceOf[MethodType]
+      (
+        methodType.paramInfos.map(JavaEncoding.encode),
+        JavaEncoding.encode(methodType.resType)
+      )
+    }
+    val paramTypesArray = JavaSeqLiteral(
+      paramTypesNames.map(t => Literal(Constant(t))),
+      TypeTree(ctx.definitions.StringType)
+    )
+    val argsArray =
+      JavaSeqLiteral(args, TypeTree(ctx.definitions.ObjectType))
+
+    val tree = Apply(
+      Select(This(evalCtx.expressionClass), termName("callPrivateConstructor")),
+      List(
+        Literal(Constant(clazzName)),
+        paramTypesArray,
+        argsArray
+      )
+    )
+    cast(tree, tpe)
+
   private def cast(tree: Tree, tpe: Type)(using Context): Tree =
     val widenDealiasTpe = tpe.widenDealias
     if isAccessible(widenDealiasTpe.typeSymbol.asType)
@@ -181,7 +213,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
 
   /**
    * Check if a symbol is accessible from the expression class
-   * It is not accessible is the symbol is private, e.g. a private field or method,
+   * It is not accessible if the symbol is private, e.g. a private field or method,
    * or if it's owner type is not accessible from the expression class, e.g. a private class or object.
    */
   private def isAccessible(symbol: Symbol)(using Context): Boolean =
