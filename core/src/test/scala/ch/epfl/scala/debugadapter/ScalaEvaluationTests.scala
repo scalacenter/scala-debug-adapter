@@ -324,55 +324,36 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
-    "evaluate expression with outer class's public fields" - {
+    "evaluate shaded fields and values" - {
       val source =
-        """class A {
-          |  val x1 = "x1"
-          |  class B {
-          |    val x2 = "x2"
-          |    def m1(): Unit = {
-          |      val x3 = "x3"
-          |      println(x1 + x2 + x3)
-          |    }
-          |  }
-          |}
-          |
-          |object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    val a = new A()
-          |    val b = new a.B()
-          |    b.m1()
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 7, "x1 + x2 + x3")(
-        _.exists(_ == "\"x1x2x3\"")
-      )
-    }
-
-    "evaluate expression with inner class's overridden fields" - {
-      val source =
-        """class A {
-          |  val x1 = "x1"
-          |  class B {
-          |    val x1 = "x1x1"
-          |
-          |    def m1(): Unit = {
-          |      println("m1")
-          |    }
-          |  }
-          |}
-          |
-          |object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    val a = new A()
-          |    val b = new a.B()
-          |    b.m1()
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 7, "x1")(
-        _.exists(_ == "\"x1x1\"")
+        """|package example
+           |
+           |class A {
+           |  val x1 = "ax1"
+           |  val x2 = "ax2"
+           |  class B {
+           |    val x2 = "bx2"
+           |    val x3 = "bx3"
+           |    def m1(): Unit = {
+           |      val x3 = "x3"
+           |      println(x1 + x2 + x3)
+           |    }
+           |  }
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A()
+           |    val b = new a.B()
+           |    b.m1()
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(11)(
+          Evaluation.success("x1 + x2 + x3", "ax1bx2x3"),
+          Evaluation.success("x1 + A.this.x2 + this.x3", "ax1ax2bx3")
+        )
       )
     }
 
