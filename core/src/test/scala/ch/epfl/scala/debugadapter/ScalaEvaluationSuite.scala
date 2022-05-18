@@ -56,39 +56,25 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
       )
     }
 
-    def success(expression: String, result: Any) = {
-      result match {
+    def success(expression: String, result: Any): Evaluation = {
+      val assertion: Either[Message, String] => Unit = result match {
         case str: String =>
-          new Evaluation(
-            expression,
-            resp => assert(resp == Right('"' + str + '"'))
-          )
+          resp => assert(resp == Right('"' + str + '"'))
         case () if isScala3 =>
-          new Evaluation(
-            expression,
-            resp => assert(resp.exists(_.endsWith("\"()\"")))
-          )
+          resp => assert(resp.exists(_.endsWith("\"()\"")))
         case () =>
-          new Evaluation(
-            expression,
-            resp => assert(resp == Right("<void value>"))
-          )
+          resp => assert(resp == Right("<void value>"))
         case n: Int =>
-          new Evaluation(
-            expression,
-            resp =>
-              assertMatch(resp) {
-                case Right(m) if m == n.toString => ()
-                case Right(m: String) if m.endsWith('"' + n.toString + '"') =>
-                  ()
-              }
-          )
-        case _ =>
-          new Evaluation(
-            expression,
-            resp => assert(resp == Right(result.toString))
-          )
+          resp =>
+            assertMatch(resp) {
+              case Right(m) if m == n.toString => ()
+              case Right(m: String) if m.endsWith('"' + n.toString + '"') =>
+                ()
+            }
+        case r =>
+          resp => assert(resp.exists(_.endsWith("\"" + r.toString + "\"")))
       }
+      new Evaluation(expression, assertion)
     }
 
     def success(expression: String)(assertion: String => Boolean) = {
