@@ -647,7 +647,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
-    "evaluate nested method" - {
+    "evaluate nested methods" - {
       val source =
         """|package example
            |
@@ -677,7 +677,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |  private class D {
            |    override def toString(): String = "d"
            |  }
-           |  def m(): Unit = {=
+           |  def m(): Unit = {
            |    def m1(name: String): String = {
            |      s"m$x1($name)"
            |    }

@@ -29,7 +29,7 @@ class AdaptExpression(using
   ): SingleDenotation =
     ref match
       case ref: SymDenotation
-          if ref.owner.name.toString == evalCtx.expressionClassName && ref.name.toString == "evaluate" =>
+          if ref.name == evalCtx.evaluateName && ref.owner == evalCtx.expressionClass =>
         // set return type of the `evaluate` method to the return type of the expression
         // this is only useful to avoid boxing of primitive types
         if evalCtx.expressionType.typeSymbol.isPrimitiveValueClass then
