@@ -324,6 +324,34 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "evaluate constructor of inner class (with captured outer)" - {
+      val source =
+        """|package example
+           |
+           |object A {
+           |  def main(args: Array[String]): Unit = {
+           |    val b = new B
+           |    b.m()
+           |  }
+           |}
+           |
+           |class B {
+           |  class C
+           |  def m(): Unit = {
+           |    println("m")
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.A")(
+        Breakpoint(6)(
+          Evaluation.success("new b.C")(_.startsWith("B$C@"))
+        ),
+        Breakpoint(13)(
+          Evaluation.success("new C")(_.startsWith("B$C@"))
+        )
+      )
+    }
+
     "evaluate shaded fields and values" - {
       val source =
         """|package example

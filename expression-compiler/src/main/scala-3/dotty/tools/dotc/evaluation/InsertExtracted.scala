@@ -13,6 +13,7 @@ import dotty.tools.dotc.core.Types.Type
 import dotty.tools.dotc.transform.MegaPhase.MiniPhase
 import dotty.tools.dotc.transform.SymUtils.*
 import dotty.tools.dotc.core.Types.MethodType
+import dotty.tools.dotc.ast.tpd
 
 class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
   override def phaseName: String = InsertExtracted.name
@@ -59,7 +60,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
           val qualifier =
             if isStaticObject(tree.symbol.owner)
             then getStaticObject(tree.symbol.owner)
-            else getLocalValue("$this", evalCtx.originalThis.thisType)
+            else thisValue
           getPrivateField(qualifier, tree.symbol.asTerm, tree.tpe)
         case tree @ Select(qualifier, name)
             if isInaccessibleField(tree.symbol) =>
@@ -68,22 +69,18 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
 
         // this or outer this
         case tree @ This(Ident(name)) =>
-          val innerThis = getLocalValue("$this", evalCtx.originalThis.thisType)
-          val owners =
-            evalCtx.originalThis.ownersIterator.filter(_.isClass).toSeq
-          val target = owners.indexOf(tree.symbol)
-          owners
-            .take(target + 1)
-            .drop(1)
-            .foldLeft(innerThis) { (innerObj, outerSym) =>
-              getOuter(innerObj, outerSym.thisType)
-            }
+          thisOrOuterValue(tree.symbol)
 
         // inaccessible constructors
-        case tree @ Apply(fun: Select, _)
+        case tree @ Apply(fun @ Select(New(classTree), _), _)
             if isInaccessibleConstructor(fun.symbol) =>
           val args = tree.args.map(transform)
-          callConstructor(fun.symbol.asTerm, args, tree.tpe)
+          // the qualifier can be captured by the constructor
+          val qualifier = classTree match
+            case Select(qualifier, _) => transform(qualifier)
+            case tree @ Ident(_) => thisOrOuterValue(tree.symbol)
+            case _ => tpd.EmptyTree
+          callConstructor(qualifier, fun.symbol.asTerm, args, tree.tpe)
 
         // inaccessible methods
         case tree @ Apply(fun: Select, _) if isInaccessibleMethod(fun.symbol) =>
@@ -95,13 +92,26 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
           val qualifier =
             if isStaticObject(owner)
             then getStaticObject(owner)
-            else getLocalValue("$this", owner.info)
+            else thisValue
           val args = tree.args.map(transform)
           callMethod(qualifier, fun.symbol.asTerm, args, tree.tpe)
 
         case tree => super.transform(tree)
 
-  private def getLocalValue(name: String, tpe: Type)(using Context) =
+  private def thisOrOuterValue(symbol: Symbol)(using Context): Tree =
+    val owners = evalCtx.originalThis.ownersIterator.filter(_.isClass).toSeq
+    val target = owners.indexOf(symbol)
+    owners
+      .take(target + 1)
+      .drop(1)
+      .foldLeft(thisValue) { (innerObj, outerSym) =>
+        getOuter(innerObj, outerSym.thisType)
+      }
+
+  private def thisValue(using Context): Tree =
+    getLocalValue("$this", evalCtx.originalThis.thisType)
+
+  private def getLocalValue(name: String, tpe: Type)(using Context): Tree =
     val tree = Apply(
       Select(
         Select(This(evalCtx.expressionClass), termName("valuesByName")),
@@ -175,23 +185,33 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
     cast(tree, tpe)
 
   private def callConstructor(
+      qualifier: Tree,
       ctr: TermSymbol,
       args: List[Tree],
       tpe: Type
   )(using Context): Tree =
-    val (paramTypesNames, clazzName) = atPhase(genBCodePhase) {
+    val (paramNames, paramTypesNames, clazzName) = atPhase(genBCodePhase) {
       val methodType = ctr.info.asInstanceOf[MethodType]
       (
+        methodType.paramNames.map(_.toString),
         methodType.paramInfos.map(JavaEncoding.encode),
         JavaEncoding.encode(methodType.resType)
       )
     }
+    val capturedArgs =
+      paramNames.dropRight(args.size).map {
+        case "$outer" => qualifier
+        case other =>
+          // we should probably fail here
+          getLocalValue(other, defn.ObjectType)
+      }
+
     val paramTypesArray = JavaSeqLiteral(
       paramTypesNames.map(t => Literal(Constant(t))),
       TypeTree(ctx.definitions.StringType)
     )
     val argsArray =
-      JavaSeqLiteral(args, TypeTree(ctx.definitions.ObjectType))
+      JavaSeqLiteral(capturedArgs ++ args, TypeTree(ctx.definitions.ObjectType))
 
     val tree = Apply(
       Select(This(evalCtx.expressionClass), termName("callConstructor")),
