@@ -243,7 +243,9 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
 
   // Check if a type is accessible from the expression class
   private def isTypeAccessible(symbol: TypeSymbol)(using Context): Boolean =
-    symbol.isAccessibleFrom(evalCtx.expressionClass.thisType) && !symbol.isLocal
+    !symbol.isPrivate && symbol.isAccessibleFrom(
+      evalCtx.expressionClass.thisType
+    ) && !symbol.isLocal
 
 object InsertExtracted:
   val name: String = "insert-extracted"
