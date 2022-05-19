@@ -18,9 +18,8 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
   override def phaseName: String = InsertExtracted.name
 
   override def transformDefDef(tree: DefDef)(using Context): Tree =
-    if tree.name.toString == "evaluate" && tree.symbol.owner == evalCtx.expressionClass
+    if tree.name == evalCtx.evaluateName && tree.symbol.owner == evalCtx.expressionClass
     then
-      evalCtx.evaluateMethod = tree.symbol
       val transformedExpression =
         ExpressionTransformer.transform(evalCtx.expressionTree)
       val transformedNestedMethods = evalCtx.nestedMethods.values
@@ -39,30 +38,31 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
       tree match
         // static object
         case tree: Ident if isStaticObject(tree.symbol) =>
-          getStaticObject(tree.symbol)
+          getStaticObject(tree.symbol.moduleClass)
         case tree: Select if isStaticObject(tree.symbol) =>
-          getStaticObject(tree.symbol)
+          getStaticObject(tree.symbol.moduleClass)
 
         // non-static object
         case tree: Ident if isNonStaticObject(tree.symbol) =>
           val qualifier = getLocalValue("$this", evalCtx.originalThis.thisType)
-          callPrivateMethod(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
+          callMethod(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
         case tree: Select if isNonStaticObject(tree.symbol) =>
           val qualifier = transform(tree.qualifier)
-          callPrivateMethod(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
+          callMethod(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
 
         // local value
         case tree @ Ident(name) if isLocalVal(tree.symbol) =>
           getLocalValue(name.toString, tree.tpe)
 
-        // private field
-        case tree @ Ident(name) if isPrivateField(tree.symbol) =>
+        // inaccessible fields
+        case tree @ Ident(name) if isInaccessibleField(tree.symbol) =>
           val qualifier =
             if isStaticObject(tree.symbol.owner)
             then getStaticObject(tree.symbol.owner)
             else getLocalValue("$this", evalCtx.originalThis.thisType)
           getPrivateField(qualifier, tree.symbol.asTerm, tree.tpe)
-        case tree @ Select(qualifier, name) if isPrivateField(tree.symbol) =>
+        case tree @ Select(qualifier, name)
+            if isInaccessibleField(tree.symbol) =>
           val qualifier = transform(tree.qualifier)
           getPrivateField(qualifier, tree.symbol.asTerm, tree.tpe)
 
@@ -79,22 +79,25 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
               getOuter(innerObj, outerSym.thisType)
             }
 
-        // private method
-        case tree @ Apply(fun: Select, _) if isPrivateMethod(fun.symbol) =>
+        // inaccessible constructors
+        case tree @ Apply(fun: Select, _)
+            if isInaccessibleConstructor(fun.symbol) =>
           val args = tree.args.map(transform)
-          if fun.symbol.isClassConstructor
-          then callPrivateConstructor(fun.symbol.asTerm, args, tree.tpe)
-          else
-            val qualifier = transform(fun.qualifier)
-            callPrivateMethod(qualifier, fun.symbol.asTerm, args, tree.tpe)
-        case tree @ Apply(fun: Ident, _) if isPrivateMethod(fun.symbol) =>
+          callConstructor(fun.symbol.asTerm, args, tree.tpe)
+
+        // inaccessible methods
+        case tree @ Apply(fun: Select, _) if isInaccessibleMethod(fun.symbol) =>
+          val args = tree.args.map(transform)
+          val qualifier = transform(fun.qualifier)
+          callMethod(qualifier, fun.symbol.asTerm, args, tree.tpe)
+        case tree @ Apply(fun: Ident, _) if isInaccessibleMethod(fun.symbol) =>
           val owner = fun.symbol.owner
           val qualifier =
             if isStaticObject(owner)
             then getStaticObject(owner)
             else getLocalValue("$this", owner.info)
           val args = tree.args.map(transform)
-          callPrivateMethod(qualifier, fun.symbol.asTerm, args, tree.tpe)
+          callMethod(qualifier, fun.symbol.asTerm, args, tree.tpe)
 
         case tree => super.transform(tree)
 
@@ -132,19 +135,14 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
     cast(tree, tpe)
 
   private def getStaticObject(obj: Symbol)(using ctx: Context): Tree =
-    val packageClass = obj.enclosingPackageClass
-    val flatName = obj.flatName.toString
-    val className = if flatName.endsWith("$") then flatName else flatName + "$"
-    val fullName =
-      if packageClass.isEmptyPackage
-      then className
-      else s"${packageClass.fullName}.$className"
+    assert(obj.isClass)
+    val className = atPhase(genBCodePhase)(JavaEncoding.encode(obj))
     Apply(
       Select(This(evalCtx.expressionClass), termName("getStaticObject")),
-      List(Literal(Constant(fullName)))
+      List(Literal(Constant(className)))
     )
 
-  private def callPrivateMethod(
+  private def callMethod(
       qualifier: Tree,
       fun: TermSymbol,
       args: List[Tree],
@@ -165,7 +163,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
       JavaSeqLiteral(args, TypeTree(ctx.definitions.ObjectType))
 
     val tree = Apply(
-      Select(This(evalCtx.expressionClass), termName("callPrivateMethod")),
+      Select(This(evalCtx.expressionClass), termName("callMethod")),
       List(
         qualifier,
         Literal(Constant(fun.name.toString)),
@@ -176,7 +174,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
     )
     cast(tree, tpe)
 
-  private def callPrivateConstructor(
+  private def callConstructor(
       ctr: TermSymbol,
       args: List[Tree],
       tpe: Type
@@ -196,7 +194,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
       JavaSeqLiteral(args, TypeTree(ctx.definitions.ObjectType))
 
     val tree = Apply(
-      Select(This(evalCtx.expressionClass), termName("callPrivateConstructor")),
+      Select(This(evalCtx.expressionClass), termName("callConstructor")),
       List(
         Literal(Constant(clazzName)),
         paramTypesArray,
@@ -217,17 +215,35 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
   private def isNonStaticObject(symbol: Symbol)(using Context): Boolean =
     symbol.is(Module) && !symbol.isStatic && !symbol.isRoot
 
-  private def isPrivateField(symbol: Symbol)(using Context): Boolean =
+  /**
+   * The symbol is a field and the expression class cannot access it
+   * either because it is private or it belongs to an inacessible type
+   */
+  private def isInaccessibleField(symbol: Symbol)(using Context): Boolean =
     symbol.isField && symbol.owner.isType && !isTermAccessible(
       symbol.asTerm,
       symbol.owner.asType
     )
 
-  private def isPrivateMethod(symbol: Symbol)(using Context): Boolean =
+  /**
+   * The symbol is a real method and the expression class cannot access it
+   * either because it is private or it belongs to an inaccessible type
+   */
+  private def isInaccessibleMethod(symbol: Symbol)(using Context): Boolean =
     symbol.isRealMethod && symbol.owner.isType && !isTermAccessible(
       symbol.asTerm,
       symbol.owner.asType
     )
+
+  /**
+   * The symbol is a constructor and the expression class cannot access it
+   * either because it is an inaccessible method or it belong to a nested type (not static)
+   */
+  private def isInaccessibleConstructor(symbol: Symbol)(using
+      Context
+  ): Boolean =
+    symbol.isConstructor &&
+      (isInaccessibleMethod(symbol) || !symbol.owner.isStatic)
 
   private def isLocalVal(symbol: Symbol)(using Context): Boolean =
     !symbol.is(Method) &&
@@ -243,9 +259,9 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
 
   // Check if a type is accessible from the expression class
   private def isTypeAccessible(symbol: TypeSymbol)(using Context): Boolean =
-    !symbol.isPrivate && symbol.isAccessibleFrom(
-      evalCtx.expressionClass.thisType
-    ) && !symbol.isLocal
+    !symbol.isLocal && symbol.ownersIterator.forall(sym =>
+      sym.isPublic || sym.privateWithin.is(PackageClass)
+    )
 
 object InsertExtracted:
   val name: String = "insert-extracted"

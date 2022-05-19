@@ -31,7 +31,7 @@ class InsertExpression(using
         |  def evaluate(): Any =
         |    ()
         |
-        |  def callPrivateMethod(obj: Any, methodName: String, paramTypesNames: Array[String], returnTypeName: String, args: Array[Object]): Any =
+        |  def callMethod(obj: Any, methodName: String, paramTypesNames: Array[String], returnTypeName: String, args: Array[Object]): Any =
         |    val methods = obj.getClass.getDeclaredMethods
         |    val method = methods
         |      .find { m => 
@@ -43,7 +43,7 @@ class InsertExpression(using
         |    method.setAccessible(true)
         |    method.invoke(obj, args*)
         |
-        |  def callPrivateConstructor(className: String, paramTypesNames: Array[String], args: Array[Object]): Any =
+        |  def callConstructor(className: String, paramTypesNames: Array[String], args: Array[Object]): Any =
         |    val classLoader = getClass.getClassLoader
         |    val clazz = getClass.getClassLoader.loadClass(className)
         |    val paramClasses = paramTypesNames.map(classLoader.loadClass)

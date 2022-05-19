@@ -1,15 +1,12 @@
 package dotty.tools.dotc
 
-import dotty.tools.dotc.ast.tpd._
-import dotty.tools.dotc.core.Symbols.ClassSymbol
-import dotty.tools.dotc.core.Symbols.Symbol
-import dotty.tools.dotc.core.Types.Type
-import dotty.tools.dotc.util.SourceFile
-
+import dotty.tools.dotc.ast.tpd.*
+import dotty.tools.dotc.core.Symbols.*
+import dotty.tools.dotc.core.Types.*
 import scala.collection.mutable
 import dotty.tools.dotc.core.SymDenotations.SymDenotation
-import dotty.tools.dotc.core.Names
-import dotty.tools.dotc.core.Names.TermName
+import dotty.tools.dotc.core.Names.*
+import dotty.tools.dotc.core.Contexts.*
 
 class EvaluationContext(
     val expressionClassName: String,
@@ -18,13 +15,16 @@ class EvaluationContext(
     val defNames: Set[String]
 ):
   val expressionTermName: TermName =
-    Names.termName(expressionClassName.toLowerCase.toString)
+    termName(expressionClassName.toLowerCase.toString)
+  val evaluateName = termName("evaluate")
 
   var expressionOwners: List[Symbol] = _
   var expressionTree: Tree = _
   var expressionSymbol: Symbol = _
   var expressionType: Type = _
   var expressionClass: ClassSymbol = _
-  var evaluateMethod: Symbol = _
   var originalThis: ClassSymbol = _
   val nestedMethods: mutable.Map[SymDenotation, DefDef] = mutable.Map()
+
+  def evaluateMethod(using Context): Symbol =
+    expressionClass.info.decl(evaluateName).symbol
