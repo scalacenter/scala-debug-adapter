@@ -656,8 +656,9 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |    override def toString(): String = "b"
            |  }
            |  def main(args: Array[String]): Unit = {
+           |    val x1 = 1
            |    def m1(name: String): String = {
-           |      s"m1($name)"
+           |      s"m$x1($name)"
            |    }
            |    def m2(b: B): String = {
            |      s"m2($b)"
@@ -672,12 +673,13 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |}
            |
            |class C {
+           |  val x1 = 1
            |  private class D {
            |    override def toString(): String = "d"
            |  }
-           |  def m(): Unit = {
+           |  def m(): Unit = {=
            |    def m1(name: String): String = {
-           |      s"m1($name)"
+           |      s"m$x1($name)"
            |    }
            |    def m2(d: D): String = {
            |      s"m2($d)"
@@ -690,12 +692,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |}
            |""".stripMargin
       assertInMainClass(source, "example.A")(
-        Breakpoint(17)(
+        Breakpoint(18)(
           Evaluation.success("m1(\"x\")", "m1(x)"),
           Evaluation.success("m3()")(_.startsWith("A$B@")),
           Evaluation.success("m2(new B)", "m2(b)")
         ),
-        Breakpoint(37)(
+        Breakpoint(39)(
           Evaluation.success("m1(\"x\")", "m1(x)"),
           Evaluation.success("m3()")(_.startsWith("C$D@")),
           Evaluation.success("m2(new D)", "m2(d)")
