@@ -649,52 +649,56 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
 
     "evaluate nested method" - {
       val source =
-        """class Foo {
-          |  private val hello = "Hello"
-          |  override def toString() = "foo"
-          |  def bar() = {
-          |    val sign = "!"
-          |    def msg(name: String): String = {
-          |      s"$hello, $name$sign"
-          |    }
-          |    def msg1(name: Int): String = {
-          |      s"$hello, $name$sign"
-          |    }
-          |    def msg2(name: Foo): String = {
-          |      s"$hello, $name$sign"
-          |    }
-          |    println(msg("World"))
-          |  }
-          |}
-          |
-          |object EvaluateTest {
-          |  private val hello = "Hello"
-          |  def main(args: Array[String]): Unit = {
-          |    val sign = "!"
-          |    def msg(name: String): String = {
-          |      s"$hello, $name$sign"
-          |    }
-          |    def msg1(name: Int): String = {
-          |      s"$hello, $name$sign"
-          |    }
-          |    def msg2(name: Foo): String = {
-          |      s"$hello, $name$sign"
-          |    }
-          |    println(msg("World"))
-          |    new Foo().bar()
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(15)(
-          Evaluation.success("msg(\"Alice\")", "Hello, Alice!"),
-          Evaluation.success("msg1(1)", "Hello, 1!"),
-          Evaluation.success("msg2(new Foo)", "Hello, foo!")
+        """|package example
+           |
+           |object A {
+           |  private class B {
+           |    override def toString(): String = "b"
+           |  }
+           |  def main(args: Array[String]): Unit = {
+           |    def m1(name: String): String = {
+           |      s"m1($name)"
+           |    }
+           |    def m2(b: B): String = {
+           |      s"m2($b)"
+           |    }
+           |    def m3(): B = {
+           |      new B
+           |    }
+           |    println(m1("m") + m2(m3()))
+           |    val c = new C
+           |    c.m()
+           |  }
+           |}
+           |
+           |class C {
+           |  private class D {
+           |    override def toString(): String = "d"
+           |  }
+           |  def m(): Unit = {
+           |    def m1(name: String): String = {
+           |      s"m1($name)"
+           |    }
+           |    def m2(d: D): String = {
+           |      s"m2($d)"
+           |    }
+           |    def m3(): D = {
+           |      new D
+           |    }
+           |    println(m1("m") + m2(m3()))
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.A")(
+        Breakpoint(17)(
+          Evaluation.success("m1(\"x\")", "m1(x)"),
+          Evaluation.success("m3()")(_.startsWith("A$B@")),
+          Evaluation.success("m2(new B)", "m2(b)")
         ),
-        Breakpoint(32)(
-          Evaluation.success("msg(\"Alice\")", "Hello, Alice!"),
-          Evaluation.success("msg1(1)", "Hello, 1!"),
-          Evaluation.success("msg2(new Foo)", "Hello, foo!")
+        Breakpoint(37)(
+          Evaluation.success("m1(\"x\")", "m1(x)"),
+          Evaluation.success("m3()")(_.startsWith("C$D@")),
+          Evaluation.success("m2(new D)", "m2(d)")
         )
       )
     }
