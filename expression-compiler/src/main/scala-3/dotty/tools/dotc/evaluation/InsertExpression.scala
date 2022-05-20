@@ -103,7 +103,7 @@ class InsertExpression(using
           else transformed
         case tree: Template if isOnBreakpoint(tree) =>
           expressionInserted = true
-          val exprBlock = mkExprBlock(expression, Literal(Constant(())))
+          val exprBlock = mkExprBlock(expression, unitLiteral)
           val newTemplate = cpy.Template(tree)(body = tree.body :+ exprBlock)
           super.transform(newTemplate)
         case tree @ DefDef(name, paramss, tpt, _) if isOnBreakpoint(tree) =>
@@ -120,7 +120,6 @@ class InsertExpression(using
         case tree if isOnBreakpoint(tree) =>
           expressionInserted = true
           val expr = mkExprBlock(expression, tree)
-            .asInstanceOf[Block]
           expr
         case tree =>
           super.transform(tree)
@@ -159,10 +158,9 @@ class InsertExpression(using
 
   private def mkExprBlock(expr: Tree, tree: Tree)(using
       Context
-  ): Tree =
-    val ident = Ident(evalCtx.expressionTermName)
+  ): Block =
     val valDef = ValDef(evalCtx.expressionTermName, TypeTree(), expr)
-    Block(List(valDef, ident), tree)
+    Block(List(valDef), tree)
 end InsertExpression
 
 object InsertExpression:

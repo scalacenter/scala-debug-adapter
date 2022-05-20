@@ -22,7 +22,7 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MiniPhase:
       evalCtx.expressionTree = tree.rhs
       evalCtx.expressionSymbol = tree.symbol
       evalCtx.expressionType = tree.tpe
-      tree
+      unitLiteral
     else super.transformValDef(tree)
 
 object ExtractExpression:

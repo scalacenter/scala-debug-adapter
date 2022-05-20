@@ -733,6 +733,30 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "evaluate inside nested method" - {
+      val source =
+        """|package example
+           |
+           |object A {
+           |  def main(args: Array[String]): Unit = {
+           |    val x1 = 1
+           |    def m1(name: String): String = {
+           |      s"m$x1($name)"
+           |    }
+           |    def m2(): String = {
+           |      s"m2()"
+           |    }
+           |    println(m1("foo"))
+           |  }
+           |}""".stripMargin
+      assertInMainClass(source, "example.A")(
+        Breakpoint(7)(
+          Evaluation.successOrIgnore("m1(\"bar\")", "m1(bar)", isScala3),
+          Evaluation.success("m2()", "m2()")
+        )
+      )
+    }
+
     "evaluate tail-rec function" - {
       val source =
         """|object EvaluateTest {
