@@ -34,23 +34,26 @@ private[debugadapter] object DebugAdapter {
           // TODO: Check name, return type, arguments number and types
           // If sure => skip
           // Else step in
-          println(method.signature())
+          val sig = method.signature()
 
           // Check wether the signature looks like a lambda
-          if (method.name().contains("%anonfunc%")) {
+          if (method.name().contains("$anonfun$")) {
             false
           }
 
           val className = method.getClass().getCanonicalName()
-
-          // How to access fqcnToClassPathEntry?
-          val classPathEntry = sourceLookUpProvider
+          
+          // val sourceUri = sourceLookUpProvider.getSourceFile(className).get
+          // val sourceFile = sourceLookUpProvider.getSourceContents(sourceUri)
+          
+          val sourceContent = sourceLookUpProvider.getClassFile(className) // Is it what we are looking for?
 
           val bytes: Array[Byte] =
             ??? // sourceLookUpProvider.getBytes(className)
 
           val optScalaSig =
             ??? // Decompiler.decompileMethodSymbol(bytes, className)
+
           if (optScalaSig == None) {
             false
           }
@@ -58,7 +61,7 @@ private[debugadapter] object DebugAdapter {
           val scalaSig: ScalaSig = ??? // optScalaSig.get
 
           // TODO Checks
-
+          
           true
         }
       }

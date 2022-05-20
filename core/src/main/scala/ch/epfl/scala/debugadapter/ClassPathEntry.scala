@@ -17,7 +17,6 @@ case class ClassPathEntry(absolutePath: Path, sourceEntries: Seq[SourceEntry])
 
   // TODO: Move to classFile
   def readBytes(classFile: String): Seq[Array[Byte]] = {
-    print("classSystems ", classSystems.length)
     for (c <- classSystems)
       yield (c
         .within((_, path) => Files.readAllBytes(path.resolve(classFile)))

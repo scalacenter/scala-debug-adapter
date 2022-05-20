@@ -119,6 +119,10 @@ private class ClassEntryLookUp(
   def getSourceFile(fqcn: String): Option[URI] = {
     classNameToSourceFile.get(fqcn).map(_.uri)
   }
+
+  def getClassFile(sourceUri: URI): Option[Seq[ClassFile]] = {
+    sourceUriToClassFiles.get(sourceUri)
+  }
 }
 
 private object ClassEntryLookUp {

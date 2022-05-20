@@ -10,6 +10,7 @@ import java.nio.file.Files
 sealed trait ClassSystem {
   def within[T](f: (FileSystem, Path) => T): Option[T]
 
+  // Not sure, I have the classFiles but I don't know if I can read the like that
   def bytes(classFile: String): Array[Byte] = {
     this.within((_, path) => Files.readAllBytes(path.resolve(classFile))).get
   }
