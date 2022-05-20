@@ -55,13 +55,13 @@ private[debugadapter] final class SourceLookUpProvider(
     classPathEntries.flatMap(_.orphanClassFiles)
 
   private[internal] def getClassFile(className: String): Option[String] = {
-     val classEntryLookup = fqcnToClassPathEntry.get(className).get
-     val uri = classEntryLookup.getSourceFile(className).get
-     
-     //classEntryLookup.getClassFile(uri) Doe we want classfiles?
+    val classEntryLookup = fqcnToClassPathEntry.get(className).get
+    val uri = classEntryLookup.getSourceFile(className).get
 
-     classEntryLookup.getSourceContent(uri)
-     
+    // classEntryLookup.getClassFile(uri) Doe we want classfiles?
+
+    classEntryLookup.getSourceContent(uri)
+
   }
 }
 

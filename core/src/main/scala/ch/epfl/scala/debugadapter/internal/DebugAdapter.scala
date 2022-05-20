@@ -42,11 +42,13 @@ private[debugadapter] object DebugAdapter {
           }
 
           val className = method.getClass().getCanonicalName()
-          
+
           // val sourceUri = sourceLookUpProvider.getSourceFile(className).get
           // val sourceFile = sourceLookUpProvider.getSourceContents(sourceUri)
-          
-          val sourceContent = sourceLookUpProvider.getClassFile(className) // Is it what we are looking for?
+
+          val sourceContent = sourceLookUpProvider.getClassFile(
+            className
+          ) // Is it what we are looking for?
 
           val bytes: Array[Byte] =
             ??? // sourceLookUpProvider.getBytes(className)
@@ -61,7 +63,7 @@ private[debugadapter] object DebugAdapter {
           val scalaSig: ScalaSig = ??? // optScalaSig.get
 
           // TODO Checks
-          
+
           true
         }
       }
