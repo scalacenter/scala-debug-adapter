@@ -168,7 +168,8 @@ object MainDebuggeeRunner {
     val classDir = tempDir.resolve("classes")
     Files.createDirectory(classDir)
 
-    val sourceFile = srcDir.resolve(s"$mainClass.scala")
+    val className = mainClass.split("\\.").last
+    val sourceFile = srcDir.resolve(s"$className.scala")
     Files.write(sourceFile, source.getBytes())
 
     val scalaInstance = ScalaInstanceCache.get(scalaVersion)
