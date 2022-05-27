@@ -91,7 +91,7 @@ class InsertExpression(using
       tree match
         case tree: PackageDef =>
           val transformed = super.transform(tree).asInstanceOf[PackageDef]
-          if (expressionInserted)
+          if expressionInserted then
             // set to `false` to prevent inserting `Expression` class in other `PackageDef`s
             expressionInserted = false
             cpy.PackageDef(transformed)(
@@ -105,7 +105,7 @@ class InsertExpression(using
           expressionInserted = true
           val exprBlock = mkExprBlock(expression, unitLiteral)
           val newTemplate = cpy.Template(tree)(body = tree.body :+ exprBlock)
-          super.transform(newTemplate)
+          super.transform(newTemplate) // TODO remove
         case tree @ DefDef(name, paramss, tpt, _) if isOnBreakpoint(tree) =>
           expressionInserted = true
           cpy.DefDef(tree)(
@@ -119,8 +119,7 @@ class InsertExpression(using
           cpy.ValDef(tree)(name, tpt, mkExprBlock(expression, tree.rhs))
         case tree if isOnBreakpoint(tree) =>
           expressionInserted = true
-          val expr = mkExprBlock(expression, tree)
-          expr
+          mkExprBlock(expression, tree)
         case tree =>
           super.transform(tree)
 
@@ -165,4 +164,3 @@ end InsertExpression
 
 object InsertExpression:
   val name: String = "insert-expression"
-end InsertExpression
