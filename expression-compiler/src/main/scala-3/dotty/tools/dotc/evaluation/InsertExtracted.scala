@@ -9,14 +9,54 @@ import dotty.tools.dotc.core.NameKinds
 import dotty.tools.dotc.core.Names.*
 import dotty.tools.dotc.core.Phases.*
 import dotty.tools.dotc.core.Symbols.*
-import dotty.tools.dotc.core.Types.Type
+import dotty.tools.dotc.core.Types.*
 import dotty.tools.dotc.transform.MegaPhase.MiniPhase
 import dotty.tools.dotc.transform.SymUtils.*
-import dotty.tools.dotc.core.Types.MethodType
-import dotty.tools.dotc.ast.tpd
+import dotty.tools.dotc.core.DenotTransformers.DenotTransformer
+import dotty.tools.dotc.core.Denotations.SingleDenotation
+import dotty.tools.dotc.core.SymDenotations.SymDenotation
 
-class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
+class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase with DenotTransformer:
   override def phaseName: String = InsertExtracted.name
+
+  /**
+   * Change the return type of the `evaluate` method
+   * and to update the owner and types of the symDenotations inserted into `evaluate`.
+   */
+  override def transform(ref: SingleDenotation)(using
+      Context
+  ): SingleDenotation =
+    ref match
+      case ref: SymDenotation
+          if ref.name == evalCtx.evaluateName && ref.owner.name.toString == evalCtx.expressionClassName =>
+        // set return type of the `evaluate` method to the return type of the expression
+        // this is only useful to avoid boxing of primitive types
+        if evalCtx.expressionType.typeSymbol.isPrimitiveValueClass then
+          val info = MethodType(Nil)(_ => Nil, _ => evalCtx.expressionType)
+          ref.copySymDenotation(info = info)
+        else ref
+      case ref: SymDenotation if ref.maybeOwner == evalCtx.expressionSymbol =>
+        // update owner of the symDenotation, e.g. local vals
+        // after it was inserted to `evaluate` method
+        ref.copySymDenotation(owner = evalCtx.evaluateMethod)
+      case ref: SymDenotation if evalCtx.nestedMethods.contains(ref) =>
+        // update owner and type of the nested method
+        val info = ref.info.asInstanceOf[MethodType]
+        val paramsInfos =
+          info.paramInfos.map { info =>
+            if isTypeAccessible(info.typeSymbol.asType) then info
+            else defn.ObjectType
+          }
+        val resType =
+          if isTypeAccessible(info.resType.typeSymbol.asType) then info.resType
+          else defn.ObjectType
+
+        ref.copySymDenotation(
+          owner = evalCtx.evaluateMethod,
+          info = MethodType(info.paramNames)(_ => paramsInfos, _ => resType)
+        )
+      case _ =>
+        ref
 
   override def transformDefDef(tree: DefDef)(using Context): Tree =
     if tree.name == evalCtx.evaluateName && tree.symbol.owner == evalCtx.expressionClass
@@ -45,8 +85,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
 
         // non-static object
         case tree: Ident if isNonStaticObject(tree.symbol) =>
-          val qualifier = getLocalValue("$this", evalCtx.originalThis.thisType)
-          callMethod(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
+          callMethod(thisValue, tree.symbol.asTerm, List.empty, tree.tpe)
         case tree: Select if isNonStaticObject(tree.symbol) =>
           val qualifier = transform(tree.qualifier)
           callMethod(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
@@ -79,7 +118,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
           val qualifier = classTree match
             case Select(qualifier, _) => transform(qualifier)
             case tree @ Ident(_) => thisOrOuterValue(tree.symbol)
-            case _ => tpd.EmptyTree
+            case _ => EmptyTree
           callConstructor(qualifier, fun.symbol.asTerm, args, tree.tpe)
 
         // inaccessible methods
@@ -269,7 +308,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
     !symbol.is(Method) &&
       symbol.isLocalToBlock &&
       symbol.ownersIterator.forall(_ != evalCtx.expressionSymbol) &&
-      evalCtx.expressionOwners.contains(symbol.maybeOwner)
+      evalCtx.expressionOwners.contains(symbol.owner)
 
   // Check if a term is accessible from the expression class
   private def isTermAccessible(symbol: TermSymbol, owner: TypeSymbol)(using
@@ -277,7 +316,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase:
   ): Boolean =
     !symbol.isPrivate && isTypeAccessible(owner)
 
-  // Check if a type is accessible from the expression class
+    // Check if a type is accessible from the expression class
   private def isTypeAccessible(symbol: TypeSymbol)(using Context): Boolean =
     !symbol.isLocal && symbol.ownersIterator.forall(sym =>
       sym.isPublic || sym.privateWithin.is(PackageClass)
