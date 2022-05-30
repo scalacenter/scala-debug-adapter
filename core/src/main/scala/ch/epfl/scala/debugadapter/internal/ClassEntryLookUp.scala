@@ -17,17 +17,22 @@ private case class ClassFile(
     fullyQualifiedName: String,
     sourceName: Option[String],
     relativePath: String,
-    // within => (filesystem) => get path => readAllBytes
-    // ajouter methode getClassBytes(classname : String)
     classSystem: ClassSystem
 ) {
   def className: String = fullyQualifiedName.split('.').last
   def fullPackage: String = fullyQualifiedName.stripSuffix(s".$className")
   def fullPackageAsPath: String = fullPackage.replace(".", "/")
   def folderPath: String = relativePath.stripSuffix(s"/$className.class")
+
+  def getBytes(): Array[Byte] = {
+    println(fullyQualifiedName.replaceAll(".", "/"))
+    Console.flush()
+    classSystem.bytes(fullyQualifiedName.replaceAll(".", "/"))
+  }
 }
 
 private class ClassEntryLookUp(
+    classNameToClassFile: Map[String, ClassFile],
     sourceUriToSourceFile: Map[URI, SourceFile],
     sourceUriToClassFiles: Map[URI, Seq[ClassFile]],
     classNameToSourceFile: Map[String, SourceFile],
@@ -120,14 +125,21 @@ private class ClassEntryLookUp(
     classNameToSourceFile.get(fqcn).map(_.uri)
   }
 
-  def getClassFile(sourceUri: URI): Option[Seq[ClassFile]] = {
-    sourceUriToClassFiles.get(sourceUri)
+  def getClassFile(className: String): Option[ClassFile] = {
+    classNameToClassFile.get(className)
   }
 }
 
 private object ClassEntryLookUp {
   private def empty: ClassEntryLookUp =
-    new ClassEntryLookUp(Map.empty, Map.empty, Map.empty, Seq.empty, Seq.empty)
+    new ClassEntryLookUp(
+      Map.empty,
+      Map.empty,
+      Map.empty,
+      Map.empty,
+      Seq.empty,
+      Seq.empty
+    )
 
   private[internal] def apply(
       entry: ClassEntry,
@@ -150,6 +162,16 @@ private object ClassEntryLookUp {
           .within(readAllClassFiles(classSystem))
           .getOrElse(Vector.empty)
       }
+
+      // println("Qualif name : " + classFiles.head.fullyQualifiedName + "\nName: " + classFiles.head.className + "\nPath: " + classFiles.head.relativePath)
+      // Console.flush()
+      for (c <- classFiles if c.fullyQualifiedName.contains("example"))
+        println(c.fullyQualifiedName)
+
+      // println(classFiles.forall(c => !c.fullyQualifiedName.contains("com.sun.tools")))
+      val classNameToClassFile =
+        classFiles.map(c => (c.fullyQualifiedName, c)).toMap
+
       val sourceUriToSourceFile = sourceFiles.map(f => (f.uri, f)).toMap
       val sourceNameToSourceFile = sourceFiles.groupBy(f => f.fileName)
 
@@ -225,6 +247,7 @@ private object ClassEntryLookUp {
         )
 
       new ClassEntryLookUp(
+        classNameToClassFile,
         sourceUriToSourceFile,
         sourceUriToClassFiles.toMap,
         classNameToSourceFile.toMap,

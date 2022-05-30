@@ -14,6 +14,8 @@ import java.util.function.Consumer
 import com.microsoft.java.debug.core.protocol.Requests.CustomStepFilter
 import ch.epfl.scala.debugadapter.internal.decompiler.Decompiler
 import ch.epfl.scala.debugadapter.internal.decompiler.scalasig.ScalaSig
+import ch.epfl.scala.debugadapter.internal.decompiler.scalasig.MethodType
+import ch.epfl.scala.debugadapter.internal.decompiler.scalasig.MethodSymbol
 
 private[debugadapter] object DebugAdapter {
 
@@ -27,46 +29,86 @@ private[debugadapter] object DebugAdapter {
     TimeUtils.logTime(logger, "Configured debugger") {
       val context = new ProviderContext
       val sourceLookUpProvider = SourceLookUpProvider(
-        runner.classPathEntries ++ runner.javaRuntime, 
+        runner.classPathEntries ++ runner.javaRuntime,
         logger
       )
       DebugSettings.getCurrent().stepFilters.customStepFilter =
         new CustomStepFilter {
           override def skip(method: Method): Boolean = {
-            // TODO: Check name, return type, arguments number and types
-            // If sure => skip
-            // Else step in
+
             val sig = method.signature()
 
-            // Check wether the signature looks like a lambda
-            if (method.name().contains("$anonfun$")) {
-              false
+              // Check wether the signature looks like a lambda
+              if (method.name().contains("$anonfun$")) {
+                false
+              }
+
+              // Get the name of the class
+            val methodName = method.name()
+            val classReturn = method.returnTypeName()
+            val className = method
+              .location()
+              .sourcePath()
+              .replaceAll("/", ".")
+              .replace(".scala", "")
+
+            println("getName: " + methodName)
+            println("Returns: " + classReturn)
+            println("sig: " + sig)
+            println("Path: " + className)
+            Console.flush()
+
+            val res: Option[Boolean] = for {
+              classFile <- sourceLookUpProvider.getClassFile(className)
+              bytes = classFile.getBytes()
+              scalaSig <- Decompiler.decompileMethodSymbol(bytes, className)
+            } yield skip(method, scalaSig)
+
+            res.getOrElse(false)
+          }
+
+          def skip(method: Method, scalaSig: ScalaSig): Boolean = {
+            scalaSig.entries.find {
+              case m: MethodSymbol => {
+                println("method name: " + method.name())
+                println("mSymbol name: " + m.info.name.get)
+
+                // Check names
+                print("names " + (method.name() == m.info.name.get))
+
+                val methodAttrType = method.argumentTypes()
+
+                val symbolAttr = m.attributes
+
+                  // Check return type
+                  val methodRetType = method.returnType()
+                  val symRetType = m.info
+
+                  // Check number of args
+                  print("Attr num " + (methodAttrType.size == symbolAttr.size))
+
+                  // Check attribute type
+                print(
+                    "Attr type " + (symbolAttr.foldLeft(true)((cond, a) =>
+                    cond && methodAttrType.contains(a.symbol.name)
+                  ))
+                )
+
+                    false
+    
+              }
+              // Similar vut with MethodType
+              // case m: MethodType =>
+              //   m.paramRefs.foreach(r => r.get.attributes.foreach(a => a.infoRef.get))
+
+              //   print(m.resultType.get)
+
+                //   false
+
+                case _ => false
             }
 
-            val className = method.getClass().getCanonicalName()
-
-            // val sourceUri = sourceLookUpProvider.getSourceFile(className).get
-            // val sourceFile = sourceLookUpProvider.getSourceContents(sourceUri)
-
-            val sourceContent = sourceLookUpProvider.getClassFile(
-              className
-            ) // Is it what we are looking for?
-
-            val bytes: Array[Byte] =
-              ??? // sourceLookUpProvider.getBytes(className)
-
-            val optScalaSig =
-              ??? // Decompiler.decompileMethodSymbol(bytes, className)
-
-            if (optScalaSig == None) {
-              false
-            }
-
-            val scalaSig: ScalaSig = ??? // optScalaSig.get
-
-            // TODO Checks
-
-            true
+            false
           }
         }
 
