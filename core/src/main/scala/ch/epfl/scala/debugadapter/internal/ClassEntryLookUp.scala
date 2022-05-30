@@ -24,7 +24,11 @@ private case class ClassFile(
   def fullPackageAsPath: String = fullPackage.replace(".", "/")
   def folderPath: String = relativePath.stripSuffix(s"/$className.class")
 
-  def getBytes(): Array[Byte] = classSystem.bytes(fullyQualifiedName)
+  def getBytes(): Array[Byte] = {
+  println(fullyQualifiedName.replaceAll(".", "/"))
+  Console.flush()
+  classSystem.bytes(fullyQualifiedName.replaceAll(".", "/"))
+}
 }
 
 private class ClassEntryLookUp(
@@ -157,7 +161,7 @@ private object ClassEntryLookUp {
 
       // println("Qualif name : " + classFiles.head.fullyQualifiedName + "\nName: " + classFiles.head.className + "\nPath: " + classFiles.head.relativePath)
       // Console.flush()
-      for (c <- classFiles if c.fullyQualifiedName.contains("com.sun.tools"))
+      for (c <- classFiles if c.fullyQualifiedName.contains("example"))
         println(c.fullyQualifiedName)
 
       // println(classFiles.forall(c => !c.fullyQualifiedName.contains("com.sun.tools")))

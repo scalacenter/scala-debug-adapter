@@ -42,18 +42,23 @@ private[debugadapter] object DebugAdapter {
           }
 
           // Get the name of the class
-          val className = method.getClass().getName()
-          println("getName: " + className)
-          println("canonical: " + method.getClass().getCanonicalName())
+          val methodName = method.name()
+          val classReturn = method.returnTypeName()
+          val className = method.location().sourcePath().replaceAll("/", ".").replace(".scala", "")
+
+          println("getName: " + methodName)
+          println("Returns: " + classReturn)
+          println("sig: " + sig)
+          println("Path: " + className)
           Console.flush()
 
           val res: Option[Boolean] = for {
-            classFile <- sourceLookUpProvider.getClassFile(className)
+            classFile <- sourceLookUpProvider.getClassFile(className)            
             bytes = classFile.getBytes()
             scalaSig <- Decompiler.decompileMethodSymbol(bytes, className)
           } yield skip(method, scalaSig)
 
-          res.getOrElse(true)
+          res.getOrElse(false)
         }
 
         def skip(method: Method, scalaSig: ScalaSig): Boolean = {
