@@ -40,10 +40,15 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
     }
 
     def successOrIgnore(expression: String, result: Any, ignore: Boolean) = {
-      if (ignore) {
-        this.ignore(expression, Right(result.toString))
-      } else
-        success(expression, result)
+      if (ignore) this.ignore(expression, Right(result.toString))
+      else success(expression, result)
+    }
+
+    def successOrIgnore(expression: String, ignore: Boolean)(
+        assertion: String => Boolean
+    ) = {
+      if (ignore) this.ignore(expression, Right("???"))
+      else success(expression)(assertion)
     }
 
     def ignore(expression: String, expected: Either[Message, String]) = {
@@ -57,23 +62,34 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
     }
 
     def success(expression: String, result: Any): Evaluation = {
-      val assertion: Either[Message, String] => Unit = result match {
-        case str: String =>
-          resp => assert(resp == Right('"' + str + '"'))
-        case () if isScala3 =>
-          resp => assert(resp.exists(_.endsWith("\"()\"")))
-        case () =>
-          resp => assert(resp == Right("<void value>"))
-        case n: Int =>
-          resp =>
+      val assertion: Either[Message, String] => Unit = resp =>
+        result match {
+          case str: String =>
+            assert(resp == Right('"' + str + '"'))
+          case () if isScala3 =>
+            assert(resp.exists(_.endsWith("\"()\"")))
+          case () =>
+            assert(resp == Right("<void value>"))
+          case n: Int =>
             assertMatch(resp) {
               case Right(m) if m == n.toString => ()
               case Right(m: String) if m.endsWith('"' + n.toString + '"') =>
                 ()
             }
-        case r =>
-          resp => assert(resp.exists(_.endsWith("\"" + r.toString + "\"")))
-      }
+          case expected: NoSuchFieldException =>
+            if (isScala3)
+              assert(resp.exists(res => res.endsWith("\"" + expected + "\"")))
+            else
+              assert(
+                resp.exists(res =>
+                  res.endsWith(
+                    "\"" + new NoSuchFieldError(expected.getMessage) + "\""
+                  )
+                )
+              )
+          case expected =>
+            assert(resp.exists(_.endsWith("\"" + expected + "\"")))
+        }
       new Evaluation(expression, assertion)
     }
 

@@ -5,9 +5,7 @@ import dotty.tools.dotc.ast.tpd.*
 import dotty.tools.dotc.core.Constants.Constant
 import dotty.tools.dotc.core.Contexts.*
 import dotty.tools.dotc.core.Flags.*
-import dotty.tools.dotc.core.NameKinds
 import dotty.tools.dotc.core.Names.*
-import dotty.tools.dotc.core.Phases.*
 import dotty.tools.dotc.core.Symbols.*
 import dotty.tools.dotc.core.Types.*
 import dotty.tools.dotc.transform.MegaPhase.MiniPhase
@@ -16,7 +14,9 @@ import dotty.tools.dotc.core.DenotTransformers.DenotTransformer
 import dotty.tools.dotc.core.Denotations.SingleDenotation
 import dotty.tools.dotc.core.SymDenotations.SymDenotation
 
-class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase with DenotTransformer:
+class InsertExtracted(using evalCtx: EvaluationContext)
+    extends MiniPhase
+    with DenotTransformer:
   override def phaseName: String = InsertExtracted.name
 
   /**
@@ -27,8 +27,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase with D
       Context
   ): SingleDenotation =
     ref match
-      case ref: SymDenotation
-          if ref.name == evalCtx.evaluateName && ref.owner.name.toString == evalCtx.expressionClassName =>
+      case ref: SymDenotation if ref.symbol == evalCtx.evaluateMethod =>
         // set return type of the `evaluate` method to the return type of the expression
         // this is only useful to avoid boxing of primitive types
         if evalCtx.expressionType.typeSymbol.isPrimitiveValueClass then
@@ -39,38 +38,19 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase with D
         // update owner of the symDenotation, e.g. local vals
         // after it was inserted to `evaluate` method
         ref.copySymDenotation(owner = evalCtx.evaluateMethod)
-      case ref: SymDenotation if evalCtx.nestedMethods.contains(ref) =>
-        // update owner and type of the nested method
-        val info = ref.info.asInstanceOf[MethodType]
-        val paramsInfos =
-          info.paramInfos.map { info =>
-            if isTypeAccessible(info.typeSymbol.asType) then info
-            else defn.ObjectType
-          }
-        val resType =
-          if isTypeAccessible(info.resType.typeSymbol.asType) then info.resType
-          else defn.ObjectType
-
-        ref.copySymDenotation(
-          owner = evalCtx.evaluateMethod,
-          info = MethodType(info.paramNames)(_ => paramsInfos, _ => resType)
-        )
       case _ =>
         ref
 
   override def transformDefDef(tree: DefDef)(using Context): Tree =
-    if tree.name == evalCtx.evaluateName && tree.symbol.owner == evalCtx.expressionClass
+    if tree.symbol == evalCtx.evaluateMethod
     then
       val transformedExpression =
         ExpressionTransformer.transform(evalCtx.expressionTree)
-      val transformedNestedMethods = evalCtx.nestedMethods.values
-        .map(nestedMethod => ExpressionTransformer.transform(nestedMethod))
-        .toList
       DefDef(
         tree.symbol.asInstanceOf[TermSymbol],
         List(),
         tree.tpt.tpe,
-        Block(transformedNestedMethods, transformedExpression)
+        transformedExpression
       )
     else super.transformDefDef(tree)
 
@@ -85,26 +65,39 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase with D
 
         // non-static object
         case tree: Ident if isNonStaticObject(tree.symbol) =>
-          callMethod(thisValue, tree.symbol.asTerm, List.empty, tree.tpe)
+          callMethod(getThis, tree.symbol.asTerm, List.empty, tree.tpe)
         case tree: Select if isNonStaticObject(tree.symbol) =>
           val qualifier = transform(tree.qualifier)
           callMethod(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
 
         // local value
         case tree @ Ident(name) if isLocalVal(tree.symbol) =>
-          getLocalValue(name.toString, tree.tpe)
+          // a local value can be captured by a class or method
+          val owner = tree.symbol.owner
+          val candidates = evalCtx.expressionSymbol.ownersIterator
+            .takeWhile(_ != owner)
+            .filter(s => s.isClass || s.is(Method))
+            .toSeq
+          val capturer = candidates
+            .findLast(_.isClass)
+            .orElse(candidates.find(_.is(Method)))
+          capturer match
+            case Some(cls) if cls.isClass =>
+              getClassCapture(tree.symbol, cls, tree.tpe)
+            case Some(method) => getMethodCapture(tree.symbol, method, tree.tpe)
+            case None => getLocalValue(tree.symbol, tree.tpe)
 
         // inaccessible fields
         case tree @ Ident(name) if isInaccessibleField(tree.symbol) =>
           val qualifier =
             if isStaticObject(tree.symbol.owner)
             then getStaticObject(tree.symbol.owner)
-            else thisValue
-          getPrivateField(qualifier, tree.symbol.asTerm, tree.tpe)
+            else getThis
+          getField(qualifier, tree.symbol.asTerm, tree.tpe)
         case tree @ Select(qualifier, name)
             if isInaccessibleField(tree.symbol) =>
           val qualifier = transform(tree.qualifier)
-          getPrivateField(qualifier, tree.symbol.asTerm, tree.tpe)
+          getField(qualifier, tree.symbol.asTerm, tree.tpe)
 
         // this or outer this
         case tree @ This(Ident(name)) =>
@@ -117,7 +110,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase with D
           // the qualifier can be captured by the constructor
           val qualifier = classTree match
             case Select(qualifier, _) => transform(qualifier)
-            case tree @ Ident(_) => thisOrOuterValue(tree.symbol)
+            case tree @ Ident(_) => thisOrOuterValue(tree.symbol.owner)
             case _ => EmptyTree
           callConstructor(qualifier, fun.symbol.asTerm, args, tree.tpe)
 
@@ -131,64 +124,86 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase with D
           val qualifier =
             if isStaticObject(owner)
             then getStaticObject(owner)
-            else thisValue
+            else thisOrOuterValue(owner)
           val args = tree.args.map(transform)
           callMethod(qualifier, fun.symbol.asTerm, args, tree.tpe)
 
         case tree => super.transform(tree)
 
+  // symbol can be a class or a method
   private def thisOrOuterValue(symbol: Symbol)(using Context): Tree =
+    val cls = symbol.ownersIterator.find(_.isClass).get
     val owners = evalCtx.originalThis.ownersIterator.filter(_.isClass).toSeq
-    val target = owners.indexOf(symbol)
+    val target = owners.indexOf(cls)
     owners
       .take(target + 1)
       .drop(1)
-      .foldLeft(thisValue) { (innerObj, outerSym) =>
+      .foldLeft(getThis) { (innerObj, outerSym) =>
         getOuter(innerObj, outerSym.thisType)
       }
 
-  private def thisValue(using Context): Tree =
-    getLocalValue("$this", evalCtx.originalThis.thisType)
-
-  private def getLocalValue(name: String, tpe: Type)(using Context): Tree =
-    val tree = Apply(
-      Select(
-        Select(This(evalCtx.expressionClass), termName("valuesByName")),
-        termName("apply")
-      ),
-      List(Literal(Constant(name)))
+  private def getThis(using Context): Tree =
+    reflectEval(
+      None,
+      EvaluationStrategy.This,
+      List.empty,
+      Some(evalCtx.originalThis.thisType)
     )
-    cast(tree, tpe)
 
   private def getOuter(qualifier: Tree, tpe: Type)(using
       Context
   ): Tree =
-    val tree = Apply(
-      Select(This(evalCtx.expressionClass), termName("getOuter")),
-      List(qualifier)
+    reflectEval(
+      Some(qualifier),
+      EvaluationStrategy.Outer,
+      List.empty,
+      Some(tpe)
     )
-    cast(tree, tpe)
 
-  private def getPrivateField(qualifier: Tree, field: TermSymbol, tpe: Type)(
-      using Context
+  private def getLocalValue(value: Symbol, tpe: Type)(using Context): Tree =
+    reflectEval(
+      None,
+      EvaluationStrategy.LocalValue(value.asTerm),
+      List.empty,
+      Some(tpe)
+    )
+
+  private def getClassCapture(value: Symbol, cls: Symbol, tpe: Type)(using
+      Context
   ): Tree =
-    val tree =
-      Apply(
-        Select(This(evalCtx.expressionClass), termName("getPrivateField")),
-        List(
-          qualifier,
-          Literal(Constant(field.name.toString)),
-          Literal(Constant(field.expandedName.toString))
-        )
-      )
-    cast(tree, tpe)
+    reflectEval(
+      Some(thisOrOuterValue(cls)),
+      EvaluationStrategy.ClassCapture(value.asTerm, cls.asClass),
+      List.empty,
+      Some(tpe)
+    )
+
+  private def getMethodCapture(value: Symbol, method: Symbol, tpe: Type)(using
+      Context
+  ): Tree =
+    reflectEval(
+      None,
+      EvaluationStrategy.MethodCapture(value.asTerm, method.asTerm),
+      List.empty,
+      Some(tpe)
+    )
 
   private def getStaticObject(obj: Symbol)(using ctx: Context): Tree =
-    assert(obj.isClass)
-    val className = atPhase(genBCodePhase)(JavaEncoding.encode(obj))
-    Apply(
-      Select(This(evalCtx.expressionClass), termName("getStaticObject")),
-      List(Literal(Constant(className)))
+    reflectEval(
+      None,
+      EvaluationStrategy.StaticObject(obj.asClass),
+      List.empty,
+      None
+    )
+
+  private def getField(qualifier: Tree, field: TermSymbol, tpe: Type)(using
+      Context
+  ): Tree =
+    reflectEval(
+      Some(qualifier),
+      EvaluationStrategy.Field(field),
+      List.empty,
+      Some(tpe)
     )
 
   private def callMethod(
@@ -197,31 +212,12 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase with D
       args: List[Tree],
       tpe: Type
   )(using Context): Tree =
-    val (paramTypesNames, returnTypeName) = atPhase(genBCodePhase) {
-      val methodType = fun.info.asInstanceOf[MethodType]
-      (
-        methodType.paramInfos.map(JavaEncoding.encode),
-        JavaEncoding.encode(methodType.resType)
-      )
-    }
-    val paramTypesArray = JavaSeqLiteral(
-      paramTypesNames.map(t => Literal(Constant(t))),
-      TypeTree(ctx.definitions.StringType)
+    reflectEval(
+      Some(qualifier),
+      EvaluationStrategy.MethodCall(fun),
+      args,
+      Some(tpe)
     )
-    val argsArray =
-      JavaSeqLiteral(args, TypeTree(ctx.definitions.ObjectType))
-
-    val tree = Apply(
-      Select(This(evalCtx.expressionClass), termName("callMethod")),
-      List(
-        qualifier,
-        Literal(Constant(fun.name.toString)),
-        paramTypesArray,
-        Literal(Constant(returnTypeName)),
-        argsArray
-      )
-    )
-    cast(tree, tpe)
 
   private def callConstructor(
       qualifier: Tree,
@@ -229,38 +225,36 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase with D
       args: List[Tree],
       tpe: Type
   )(using Context): Tree =
-    val (paramNames, paramTypesNames, clazzName) = atPhase(genBCodePhase) {
-      val methodType = ctr.info.asInstanceOf[MethodType]
-      (
-        methodType.paramNames.map(_.toString),
-        methodType.paramInfos.map(JavaEncoding.encode),
-        JavaEncoding.encode(methodType.resType)
-      )
-    }
-    val capturedArgs =
-      paramNames.dropRight(args.size).map {
-        case "$outer" => qualifier
-        case other =>
-          // we should probably fail here
-          getLocalValue(other, defn.ObjectType)
-      }
-
-    val paramTypesArray = JavaSeqLiteral(
-      paramTypesNames.map(t => Literal(Constant(t))),
-      TypeTree(ctx.definitions.StringType)
+    reflectEval(
+      Some(qualifier),
+      EvaluationStrategy.ConstructorCall(ctr, ctr.owner.asClass),
+      args,
+      Some(tpe)
     )
-    val argsArray =
-      JavaSeqLiteral(capturedArgs ++ args, TypeTree(ctx.definitions.ObjectType))
 
-    val tree = Apply(
-      Select(This(evalCtx.expressionClass), termName("callConstructor")),
-      List(
-        Literal(Constant(clazzName)),
-        paramTypesArray,
-        argsArray
+  private def reflectEval(
+      qualifier: Option[Tree],
+      strategy: EvaluationStrategy,
+      args: List[Tree],
+      tpe: Option[Type]
+  )(using
+      Context
+  ): Tree =
+    val reflectEval =
+      Select(This(evalCtx.evaluationClass), termName("reflectEval"))
+    // We put the attachment on the fun of the apply.
+    // On the apply itself, it would be lost after the erasure phase.
+    reflectEval.putAttachment(EvaluationStrategy, strategy)
+    val tree =
+      Apply(
+        reflectEval,
+        List(
+          qualifier.getOrElse(nullLiteral),
+          Literal(Constant(strategy.toString)),
+          JavaSeqLiteral(args, TypeTree(ctx.definitions.ObjectType))
+        )
       )
-    )
-    cast(tree, tpe)
+    tpe.map(cast(tree, _)).getOrElse(tree)
 
   private def cast(tree: Tree, tpe: Type)(using Context): Tree =
     val widenDealiasTpe = tpe.widenDealias
@@ -289,9 +283,9 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase with D
    * either because it is private or it belongs to an inaccessible type
    */
   private def isInaccessibleMethod(symbol: Symbol)(using Context): Boolean =
-    symbol.isRealMethod && symbol.owner.isType && !isTermAccessible(
-      symbol.asTerm,
-      symbol.owner.asType
+    symbol.isRealMethod && (
+      !symbol.owner.isType ||
+        !isTermAccessible(symbol.asTerm, symbol.owner.asType)
     )
 
   /**
@@ -307,8 +301,7 @@ class InsertExtracted(using evalCtx: EvaluationContext) extends MiniPhase with D
   private def isLocalVal(symbol: Symbol)(using Context): Boolean =
     !symbol.is(Method) &&
       symbol.isLocalToBlock &&
-      symbol.ownersIterator.forall(_ != evalCtx.expressionSymbol) &&
-      evalCtx.expressionOwners.contains(symbol.owner)
+      symbol.ownersIterator.forall(_ != evalCtx.evaluateMethod)
 
   // Check if a term is accessible from the expression class
   private def isTermAccessible(symbol: TermSymbol, owner: TypeSymbol)(using

@@ -27,8 +27,10 @@ class EvaluationCompiler(
       typer ::
       List(ExtractExpression()) ::
       List(ExtractDefs()) ::
-      List(CleanUp()) ::
       List(InsertExtracted()) ::
       others
 
   override protected def picklerPhases: List[List[Phase]] = List()
+
+  override protected def transformPhases: List[List[Phase]] =
+    super.transformPhases :+ List(ResolveReflectEval())

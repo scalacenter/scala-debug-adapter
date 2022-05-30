@@ -22,12 +22,13 @@ class EvaluationCompiler(
 
   override protected def frontendPhases: List[List[Phase]] =
     val frontEnd :: others = super.frontendPhases
-    List(EvaluationFrontEnd()) :: 
+    List(EvaluationFrontEnd()) ::
       List(ExtractExpression()) ::
       List(ExtractDefs()) ::
-      List(CleanUp()) ::
       List(InsertExtracted()) ::
       others
 
   override protected def picklerPhases: List[List[Phase]] = List()
-end EvaluationCompiler
+
+  override protected def transformPhases: List[List[Phase]] =
+    super.transformPhases :+ List(ResolveReflectEval())

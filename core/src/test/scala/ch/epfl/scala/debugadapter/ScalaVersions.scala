@@ -27,7 +27,7 @@ final case class Scala3(version: String) extends ScalaVersion {
   def library: Dependency =
     Dependency(Module(organization, name"scala3-library_3"), version)
   def compilerMain: String = "dotty.tools.dotc.Main"
-  def binaryVersion: String = 
+  def binaryVersion: String =
     if (version.endsWith("-bin-SNAPSHOT"))
       version.stripSuffix("-bin-SNAPSHOT")
     else "3"

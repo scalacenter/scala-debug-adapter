@@ -19,17 +19,22 @@ import dotty.tools.dotc.util.SourceFile
 class InsertExpression(using
     evalCtx: EvaluationContext
 ) extends Phase:
+  private var expressionInserted = false
+
   override def phaseName: String = InsertExpression.name
   override def isCheckable: Boolean = false
 
-  private val expressionClassSource =
-    s"""|class ${evalCtx.expressionClassName}(names: Array[String], values: Array[Object]):
+  private val evaluationClassSource =
+    s"""|class ${evalCtx.evaluationClassName}(names: Array[String], values: Array[Object]):
         |  import scala.util.Try
         |
         |  val valuesByName = names.zip(values).toMap
         |
         |  def evaluate(): Any =
         |    ()
+        |
+        |  def getLocalValue(name: String): Any =
+        |    valuesByName(name)
         |
         |  def callMethod(obj: Any, methodName: String, paramTypesNames: Array[String], returnTypeName: String, args: Array[Object]): Any =
         |    val methods = obj.getClass.getDeclaredMethods
@@ -51,17 +56,9 @@ class InsertExpression(using
         |    constructor.setAccessible(true)
         |    constructor.newInstance(args*)
         |
-        |  def getOuter(obj: Any): Any =
+        |  def getField(obj: Any, name: String): Any =
         |    val clazz = obj.getClass
-        |    val field = Try(clazz.getDeclaredField("$$outer"))
-        |      .getOrElse(throw new Exception(s"the outer class of $${clazz.getName} is not accessible"))
-        |    field.setAccessible(true)
-        |    field.get(obj)
-        |
-        |  def getPrivateField(obj: Any, name: String, expandedName: String): Any =
-        |    val clazz = obj.getClass
-        |    val field = Try(clazz.getDeclaredField(name))
-        |      .getOrElse(clazz.getDeclaredField(expandedName))
+        |    val field = clazz.getDeclaredField(name)
         |    field.setAccessible(true)
         |    field.get(obj)
         |
@@ -70,23 +67,23 @@ class InsertExpression(using
         |    val field = clazz.getDeclaredField("MODULE$$")
         |    field.setAccessible(true)
         |    field.get(null)
+        |
+        |  // a fake method that is used internally of the expression compiler, in Apply nodes, 
+        |  // until it transform them to calls of one of the methods defined above.
+        |  def reflectEval(qualifier: Object, term: String, args: Array[Object]): Any = ???
+        |
         |""".stripMargin
 
   override def run(using Context): Unit =
     val parsedExpression = parseExpression(evalCtx.expression)
-    val parsedExpressionClass =
-      parseExpressionClass(
-        expressionClassSource
-      )
+    val parsedEvaluationClass = parseEvaluationClass(evaluationClassSource)
     val tree = ctx.compilationUnit.untpdTree
     ctx.compilationUnit.untpdTree =
-      TreeInserter(parsedExpression, parsedExpressionClass)
+      Inserter(parsedExpression, parsedEvaluationClass)
         .transform(tree)
 
-  class TreeInserter(expression: Tree, expressionClass: Seq[Tree])
+  class Inserter(expression: Tree, expressionClass: Seq[Tree])
       extends UntypedTreeMap:
-    private var expressionInserted = false
-
     override def transform(tree: Tree)(using Context): Tree =
       tree match
         case tree: PackageDef =>
@@ -101,13 +98,8 @@ class InsertExpression(using
               )
             )
           else transformed
-        case tree: Template if isOnBreakpoint(tree) =>
-          expressionInserted = true
-          val exprBlock = mkExprBlock(expression, unitLiteral)
-          val newTemplate = cpy.Template(tree)(body = tree.body :+ exprBlock)
-          super.transform(newTemplate) // TODO remove
-        case tree @ DefDef(name, paramss, tpt, _) if isOnBreakpoint(tree) =>
-          expressionInserted = true
+        case tree @ DefDef(name, paramss, tpt, rhs)
+            if rhs != EmptyTree && isOnBreakpoint(tree) =>
           cpy.DefDef(tree)(
             name,
             paramss,
@@ -115,10 +107,9 @@ class InsertExpression(using
             mkExprBlock(expression, tree.rhs)
           )
         case tree @ ValDef(name, tpt, _) if isOnBreakpoint(tree) =>
-          expressionInserted = true
           cpy.ValDef(tree)(name, tpt, mkExprBlock(expression, tree.rhs))
-        case tree if isOnBreakpoint(tree) =>
-          expressionInserted = true
+        case tree: (Ident | Select | GenericApply | Literal | This | New |
+              InterpolatedString | OpTree | Tuple) if isOnBreakpoint(tree) =>
           mkExprBlock(expression, tree)
         case tree =>
           super.transform(tree)
@@ -138,12 +129,11 @@ class InsertExpression(using
       .body
       .head
 
-  private def parseExpressionClass(
-      expressionClassSource: String
+  private def parseEvaluationClass(
+      evaluationClassSource: String
   )(using Context): Seq[Tree] =
     val parsedExpressionClass =
-      parseSource("source", expressionClassSource)
-        .asInstanceOf[PackageDef]
+      parseSource("source", evaluationClassSource).asInstanceOf[PackageDef]
     parsedExpressionClass.stats
 
   private def parseSource(name: String, source: String)(using Context): Tree =
@@ -158,9 +148,12 @@ class InsertExpression(using
   private def mkExprBlock(expr: Tree, tree: Tree)(using
       Context
   ): Block =
+    if expressionInserted then
+      // TODO replace with warning
+      throw new Exception("expression already inserted")
+    expressionInserted = true
     val valDef = ValDef(evalCtx.expressionTermName, TypeTree(), expr)
     Block(List(valDef), tree)
-end InsertExpression
 
 object InsertExpression:
   val name: String = "insert-expression"

@@ -219,6 +219,36 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "evaluate private method call in class" - {
+      val source =
+        """|package example
+           |
+           |class A {
+           |  val a = this
+           |
+           |  def foo(): String = {
+           |    m("foo") // breakpoint
+           |  }
+           |
+           |  private def m(x: String) = x
+           |}
+           |
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    new A().foo()
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(7)(
+          Evaluation.success("m(\"foo\")", "foo"),
+          Evaluation.success("this.m(\"bar\")", "bar"),
+          Evaluation.success("a.m(\"fizz\")", "fizz")
+        )
+      )
+    }
+
     "evaluate private overloaded method" - {
       val source =
         """|package example
@@ -389,6 +419,36 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "evaluate field of two-level deep outer class" - {
+      val source =
+        """|package example
+           |
+           |class A {
+           |  private val a = "a"
+           |  class B {
+           |    class C {
+           |      def m(): Unit = {
+           |        println(a)
+           |      }
+           |    }
+           |  }
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A
+           |    val b = new a.B
+           |    val c = new b.C
+           |    println(c.m())
+           |  }
+           |}
+           |
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(8)(Evaluation.success("a", "a"))
+      )
+    }
+
     "fail evaluation of the outer class of a private final class" - {
       val source =
         """|package example
@@ -415,17 +475,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
         Breakpoint(7)(
-          Evaluation.success(
-            "a1",
-            if (isScala3)
-              new Exception("the outer class of example.A$B is not accessible")
-            else new NoSuchFieldError("$outer")
-          )
+          Evaluation.success("a1", new NoSuchFieldException("$outer"))
         )
       )
     }
 
-    "evaluate from an inner class of a method" - {
+    "evaluate from an local class" - {
       val source =
         """|package example
            |
@@ -454,13 +509,71 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
         Breakpoint(11)(
-          // we don't get the correct binary name for class B
-          Evaluation.successOrIgnore("new B", "", true),
-          // we try to access x1 as a local value rather than a field of class B
-          Evaluation.successOrIgnore("x1", "x1", true),
+          // B captures the local value x1
+          Evaluation.successOrIgnore("new B", isScala2)(_.startsWith("A$B$1@")),
+          // x1 is captured by B
+          Evaluation.successOrIgnore("x1", "x1", isScala2),
           Evaluation.success("x2", "x2"),
           Evaluation.successOrIgnore("A.this.x1", "ax1", isScala2),
           Evaluation.successOrIgnore("this.x2", "bx2", isScala2)
+        )
+      )
+    }
+
+    "evaluate nested methods" - {
+      val source =
+        """|package example
+           |
+           |object A {
+           |  private class B {
+           |    override def toString(): String = "b"
+           |  }
+           |  def main(args: Array[String]): Unit = {
+           |    val x1 = 1
+           |    def m1(name: String): String = {
+           |      s"m$x1($name)"
+           |    }
+           |    def m2(b: B): String = {
+           |      s"m2($b)"
+           |    }
+           |    def m3(): B = {
+           |      new B
+           |    }
+           |    println(m1("m") + m2(m3()))
+           |    val c = new C
+           |    c.m()
+           |  }
+           |}
+           |
+           |class C {
+           |  val x1 = 1
+           |  private class D {
+           |    override def toString(): String = "d"
+           |  }
+           |  def m(): Unit = {
+           |    def m1(name: String): String = {
+           |      s"m$x1($name)"
+           |    }
+           |    def m2(d: D): String = {
+           |      s"m2($d)"
+           |    }
+           |    def m3(): D = {
+           |      new D
+           |    }
+           |    println(m1("m") + m2(m3()))
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.A")(
+        Breakpoint(18)(
+          Evaluation.success("m1(\"x\")", "m1(x)"),
+          Evaluation.success("m3()")(_.startsWith("A$B@")),
+          Evaluation.success("m2(new B)", "m2(b)")
+        ),
+        Breakpoint(39)(
+          Evaluation.success("m1(\"x\")", "m1(x)"),
+          Evaluation.success("m3()")(_.startsWith("C$D@")),
+          Evaluation.success("m2(new D)", "m2(d)")
         )
       )
     }
@@ -618,45 +731,6 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
-    "evaluate private method call in class" - {
-      val source =
-        """class Foo {
-          |  val foo = this
-          |
-          |  def bar(): String = {
-          |    p("a") // breakpoint
-          |  }
-          |
-          |  def getFoo(): Foo = {
-          |    if (true) foo
-          |    else null
-          |  }
-          |
-          |  private def p(a: String) = a
-          |}
-          |
-          |object A {
-          |  def getFoo() = new Foo()
-          |}
-          |
-          |object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    new Foo().bar()
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(5)(
-          Evaluation.success("p(\"foo\")", "foo"),
-          Evaluation.success("this.p(\"foo\")", "foo"),
-          Evaluation.success("foo.p(\"foo\")", "foo"),
-          Evaluation.success("getFoo().p(\"foo\")", "foo"),
-          Evaluation.success("getFoo().getFoo().p(\"foo\")", "foo"),
-          Evaluation.success("A.getFoo().p(\"foo\")", "foo")
-        )
-      )
-    }
-
     "evaluate in default arguments" - {
       val source =
         """|object EvaluateTest {
@@ -675,65 +749,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
-    "evaluate nested methods" - {
-      val source =
-        """|package example
-           |
-           |object A {
-           |  private class B {
-           |    override def toString(): String = "b"
-           |  }
-           |  def main(args: Array[String]): Unit = {
-           |    val x1 = 1
-           |    def m1(name: String): String = {
-           |      s"m$x1($name)"
-           |    }
-           |    def m2(b: B): String = {
-           |      s"m2($b)"
-           |    }
-           |    def m3(): B = {
-           |      new B
-           |    }
-           |    println(m1("m") + m2(m3()))
-           |    val c = new C
-           |    c.m()
-           |  }
-           |}
-           |
-           |class C {
-           |  val x1 = 1
-           |  private class D {
-           |    override def toString(): String = "d"
-           |  }
-           |  def m(): Unit = {
-           |    def m1(name: String): String = {
-           |      s"m$x1($name)"
-           |    }
-           |    def m2(d: D): String = {
-           |      s"m2($d)"
-           |    }
-           |    def m3(): D = {
-           |      new D
-           |    }
-           |    println(m1("m") + m2(m3()))
-           |  }
-           |}
-           |""".stripMargin
-      assertInMainClass(source, "example.A")(
-        Breakpoint(18)(
-          Evaluation.success("m1(\"x\")", "m1(x)"),
-          Evaluation.success("m3()")(_.startsWith("A$B@")),
-          Evaluation.success("m2(new B)", "m2(b)")
-        ),
-        Breakpoint(39)(
-          Evaluation.success("m1(\"x\")", "m1(x)"),
-          Evaluation.success("m3()")(_.startsWith("C$D@")),
-          Evaluation.success("m2(new D)", "m2(d)")
-        )
-      )
-    }
-
-    "evaluate inside nested method" - {
+    "evaluate inside local method" - {
       val source =
         """|package example
            |
@@ -751,8 +767,135 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |}""".stripMargin
       assertInMainClass(source, "example.A")(
         Breakpoint(7)(
-          Evaluation.successOrIgnore("m1(\"bar\")", "m1(bar)", isScala3),
+          Evaluation.success("m1(\"bar\")", "m1(bar)"),
           Evaluation.success("m2()", "m2()")
+        )
+      )
+    }
+
+    "evaluate inside multi-level nested local class and def" - {
+      val source =
+        """|package example
+           |
+           |class A {
+           |  def m(): String = {
+           |    val x1 = "x1"
+           |    class B {
+           |      def m(): String = {
+           |        val x2 = "x2"
+           |        def m(): String = {
+           |          val x3 = "x3"
+           |          class C {
+           |            def m(): String = {
+           |              val x4 = "x4"
+           |              def m(): String = {
+           |                x1 + x2 + x3 + x4
+           |              }
+           |              m()
+           |              x1 + x2 + x3
+           |            }
+           |          }
+           |          val c = new C
+           |          c.m()
+           |          x1 + x2
+           |        }
+           |        m()
+           |        x1
+           |      }
+           |    }
+           |    val b = new B
+           |    b.m()
+           |    ""
+           |  }
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A
+           |    a.m()
+           |  }
+           |}""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(30)( // in A#m
+          Evaluation.success("new B")(_.startsWith("A$B$1@")), // captures x1
+          Evaluation.success("(new B).m()", "x1")
+        ),
+        Breakpoint(25)( // in B#m
+          Evaluation.success("x1", "x1"), // captured by B
+          Evaluation.success("m()", "x1x2"), // captures x2
+          Evaluation.success("this.m()", "x1"),
+          Evaluation.success("A.this.m()", new NoSuchFieldException("$outer")),
+          Evaluation.successOrIgnore("new B", isScala2)(
+            _.startsWith("A$B$1@")
+          ) // captures x1
+        ),
+        Breakpoint(22)( // in B#m#m
+          Evaluation.success("x1", "x1"), // captured by B
+          Evaluation.success("x2", "x2"), // captured by m
+          Evaluation.success("m()", "x1x2"), // captures x2
+          Evaluation.success("this.m()", "x1"), // captures x2
+          Evaluation.successOrIgnore("new B", isScala2)(
+            _.startsWith("A$B$1@")
+          ), // captures x1
+          Evaluation.success("new C")(
+            _.startsWith("A$B$1$C$1@")
+          ), // captures x2 and x3
+          Evaluation.success("(new C).m()", "x1x2x3") // captures x2 and x3
+        ),
+        Breakpoint(17)( // in C#m
+          Evaluation.successOrIgnore(
+            "x1",
+            "x1",
+            isScala2
+          ), // captured by B => $this.$outer.x1$1
+          Evaluation.successOrIgnore(
+            "x2",
+            "x2",
+            isScala2
+          ), // captured by C => $this.x2$1
+          Evaluation.successOrIgnore(
+            "x3",
+            "x3",
+            isScala2
+          ), // captured by C => $this.x3$1
+          Evaluation.success("m()", "x1x2x3x4"), // captures x4
+          Evaluation.success("this.m()", "x1x2x3"),
+          Evaluation.successOrIgnore("B.this.m()", "x1", isScala2),
+          Evaluation.successOrIgnore("new C", isScala2)(
+            _.startsWith("A$B$1$C$1@")
+          ), // captures x2 and x3
+          Evaluation.successOrIgnore("new B", isScala2)(
+            _.startsWith("A$B$1@")
+          ), // captures x1
+          Evaluation.success("new A")(_.startsWith("A@"))
+        ),
+        Breakpoint(15)( // in C#m#m
+          Evaluation.successOrIgnore(
+            "x1",
+            "x1",
+            isScala2
+          ), // captured by B => $this.$outer.x1$1
+          Evaluation.successOrIgnore(
+            "x2",
+            "x2",
+            isScala2
+          ), // captured by C => $this.x2$1
+          Evaluation.successOrIgnore(
+            "x3",
+            "x3",
+            isScala2
+          ), // captured by C => $this.x3$1
+          Evaluation.success("x4", "x4"), // captured by D => local x4$1
+          Evaluation.success("m()", "x1x2x3x4"), // captures x4
+          Evaluation.success("this.m()", "x1x2x3"),
+          Evaluation.successOrIgnore("B.this.m()", "x1", isScala2),
+          Evaluation.successOrIgnore("new C", isScala2)(
+            _.startsWith("A$B$1$C$1@")
+          ), // captures x2 and x3
+          Evaluation.successOrIgnore("new B", isScala2)(
+            _.startsWith("A$B$1@")
+          ), // captures x1
+          Evaluation.success("new A")(_.startsWith("A@"))
         )
       )
     }
@@ -860,12 +1003,13 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
 
       if (isScala31) {
         assertInTestSuite(source, "MySuite")(
-          Breakpoint(5)(Evaluation.success("1 + 1", 2))
+          // cannot expand macro locationImpl (probably because of virtual file)
+          Breakpoint(5)(Evaluation.ignore("1 + 1", Right("2")))
         )
       } else {
         assertInTestSuite(source, "MySuite")(
           Breakpoint(5)(), // the program stops twice...
-          Breakpoint(5)(Evaluation.success("1 + 1", 2))
+          Breakpoint(5)(Evaluation.successOrIgnore("1 + 1", 2, isScala3))
         )
       }
     }
