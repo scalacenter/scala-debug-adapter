@@ -54,14 +54,13 @@ private[debugadapter] final class SourceLookUpProvider(
   private[internal] def allOrphanClasses: Iterable[ClassFile] =
     classPathEntries.flatMap(_.orphanClassFiles)
 
-  private[internal] def getClassFile(className: String): Option[String] = {
-    val classEntryLookup = fqcnToClassPathEntry.get(className).get
-    val uri = classEntryLookup.getSourceFile(className).get
-
-    // classEntryLookup.getClassFile(uri) Doe we want classfiles?
-
-    classEntryLookup.getSourceContent(uri)
-
+  private[internal] def getClassFile(className: String): Option[ClassFile] = {
+    for(c <- fqcnToClassPathEntry.keys if c.contains("com.sun.tools")) println("IsIn")
+    for{
+      classEntryLookup <- fqcnToClassPathEntry.get(className)
+      classFile <- classEntryLookup.getClassFile(className)
+    } yield classFile
+    
   }
 }
 
