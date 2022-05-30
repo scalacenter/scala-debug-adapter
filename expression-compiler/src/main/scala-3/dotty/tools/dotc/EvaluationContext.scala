@@ -3,28 +3,30 @@ package dotty.tools.dotc
 import dotty.tools.dotc.ast.tpd.*
 import dotty.tools.dotc.core.Symbols.*
 import dotty.tools.dotc.core.Types.*
-import scala.collection.mutable
-import dotty.tools.dotc.core.SymDenotations.SymDenotation
 import dotty.tools.dotc.core.Names.*
 import dotty.tools.dotc.core.Contexts.*
 
 class EvaluationContext(
-    val expressionClassName: String,
+    val evaluationClassName: String,
     val breakpointLine: Int,
     val expression: String,
     val defNames: Set[String]
 ):
   val expressionTermName: TermName =
-    termName(expressionClassName.toLowerCase.toString)
-  val evaluateName = termName("evaluate")
+    termName(evaluationClassName.toLowerCase.toString)
 
-  var expressionOwners: List[Symbol] = _
+  // should be local to insert-extracted
   var expressionTree: Tree = _
-  var expressionSymbol: Symbol = _
   var expressionType: Type = _
-  var expressionClass: ClassSymbol = _
+
+  var expressionSymbol: Symbol = _
+  var evaluationClass: ClassSymbol = _
   var originalThis: ClassSymbol = _
-  val nestedMethods: mutable.Map[SymDenotation, DefDef] = mutable.Map()
+
+  // all classes and def in the chain of owners of the expression from local to global
+  // we store them to resolve the captured variables
+  var classOwners: Seq[ClassSymbol] = _
+  var capturingMethod: Option[TermSymbol] = None
 
   def evaluateMethod(using Context): Symbol =
-    expressionClass.info.decl(evaluateName).symbol
+    evaluationClass.info.decl(termName("evaluate")).symbol
