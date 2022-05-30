@@ -55,12 +55,13 @@ private[debugadapter] final class SourceLookUpProvider(
     classPathEntries.flatMap(_.orphanClassFiles)
 
   private[internal] def getClassFile(className: String): Option[ClassFile] = {
-    for(c <- fqcnToClassPathEntry.keys if c.contains("com.sun.tools")) println("IsIn")
-    for{
+    for (c <- fqcnToClassPathEntry.keys if c.contains("com.sun.tools"))
+      println("IsIn")
+    for {
       classEntryLookup <- fqcnToClassPathEntry.get(className)
       classFile <- classEntryLookup.getClassFile(className)
     } yield classFile
-    
+
   }
 }
 

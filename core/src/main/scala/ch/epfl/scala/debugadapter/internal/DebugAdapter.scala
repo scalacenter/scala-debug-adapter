@@ -33,14 +33,14 @@ private[debugadapter] object DebugAdapter {
     DebugSettings.getCurrent().stepFilters.customStepFilter =
       new CustomStepFilter {
         override def skip(method: Method): Boolean = {
-          
+
           val sig = method.signature()
 
           // Check wether the signature looks like a lambda
           if (method.name().contains("$anonfun$")) {
             false
           }
-          
+
           // Get the name of the class
           val className = method.getClass().getName()
           println("getName: " + className)
@@ -57,38 +57,41 @@ private[debugadapter] object DebugAdapter {
         }
 
         def skip(method: Method, scalaSig: ScalaSig): Boolean = {
-          scalaSig.entries.find{
-            case m : MethodSymbol => {
-              println("method name: " + method.name()) 
+          scalaSig.entries.find {
+            case m: MethodSymbol => {
+              println("method name: " + method.name())
               println("mSymbol name: " + m.info.name.get)
 
               // Check names
               print("names " + (method.name() == m.info.name.get))
-              
-              
+
               val methodAttrType = method.argumentTypes()
-              
+
               val symbolAttr = m.attributes
 
               // Check return type
               val methodRetType = method.returnType()
               val symRetType = m.info
-              
+
               // Check number of args
               print("Attr num " + (methodAttrType.size == symbolAttr.size))
-              
+
               // Check attribute type
-              print("Attr type " + (symbolAttr.foldLeft(true)((cond, a) => cond && methodAttrType.contains(a.symbol.name))))
+              print(
+                "Attr type " + (symbolAttr.foldLeft(true)((cond, a) =>
+                  cond && methodAttrType.contains(a.symbol.name)
+                ))
+              )
 
               false
-              
+
             }
             // Similar vut with MethodType
-            // case m: MethodType => 
+            // case m: MethodType =>
             //   m.paramRefs.foreach(r => r.get.attributes.foreach(a => a.infoRef.get))
 
             //   print(m.resultType.get)
-              
+
             //   false
 
             case _ => false

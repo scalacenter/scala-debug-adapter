@@ -13,7 +13,7 @@ import scala.util.matching.Regex
 
 private case class SourceLine(uri: URI, lineNumber: Int)
 
-private case class ClassFile( 
+private case class ClassFile(
     fullyQualifiedName: String,
     sourceName: Option[String],
     relativePath: String,
@@ -23,7 +23,7 @@ private case class ClassFile(
   def fullPackage: String = fullyQualifiedName.stripSuffix(s".$className")
   def fullPackageAsPath: String = fullPackage.replace(".", "/")
   def folderPath: String = relativePath.stripSuffix(s"/$className.class")
-  
+
   def getBytes(): Array[Byte] = classSystem.bytes(fullyQualifiedName)
 }
 
@@ -128,7 +128,14 @@ private class ClassEntryLookUp(
 
 private object ClassEntryLookUp {
   private def empty: ClassEntryLookUp =
-    new ClassEntryLookUp(Map.empty, Map.empty, Map.empty, Map.empty, Seq.empty, Seq.empty)
+    new ClassEntryLookUp(
+      Map.empty,
+      Map.empty,
+      Map.empty,
+      Map.empty,
+      Seq.empty,
+      Seq.empty
+    )
 
   private[internal] def apply(entry: ClassEntry): ClassEntryLookUp = {
     val sourceFiles =
@@ -150,10 +157,12 @@ private object ClassEntryLookUp {
 
       // println("Qualif name : " + classFiles.head.fullyQualifiedName + "\nName: " + classFiles.head.className + "\nPath: " + classFiles.head.relativePath)
       // Console.flush()
-      for(c <- classFiles if c.fullyQualifiedName.contains("com.sun.tools")) println(c.fullyQualifiedName)
-      
+      for (c <- classFiles if c.fullyQualifiedName.contains("com.sun.tools"))
+        println(c.fullyQualifiedName)
+
       // println(classFiles.forall(c => !c.fullyQualifiedName.contains("com.sun.tools")))
-      val classNameToClassFile = classFiles.map(c => (c.fullyQualifiedName, c)).toMap
+      val classNameToClassFile =
+        classFiles.map(c => (c.fullyQualifiedName, c)).toMap
 
       val sourceUriToSourceFile = sourceFiles.map(f => (f.uri, f)).toMap
       val sourceNameToSourceFile = sourceFiles.groupBy(f => f.fileName)
