@@ -25,10 +25,10 @@ private case class ClassFile(
   def folderPath: String = relativePath.stripSuffix(s"/$className.class")
 
   def getBytes(): Array[Byte] = {
-  println(fullyQualifiedName.replaceAll(".", "/"))
-  Console.flush()
-  classSystem.bytes(fullyQualifiedName.replaceAll(".", "/"))
-}
+    println(fullyQualifiedName.replaceAll(".", "/"))
+    Console.flush()
+    classSystem.bytes(fullyQualifiedName.replaceAll(".", "/"))
+  }
 }
 
 private class ClassEntryLookUp(
