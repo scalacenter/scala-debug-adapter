@@ -23,10 +23,14 @@ private[internal] class ExpressionEvaluator(
       thread: ThreadReference,
       frame: StackFrame
   ): Try[Value] = {
-    val location = frame.location()
-    val sourcePath = location.sourcePath()
-    val breakpointLine = location.lineNumber()
-    val fqcn = location.declaringType().name()
+    val location = frame.location
+    val sourcePath = location.sourcePath
+    val breakpointLine = location.lineNumber
+    val fqcn = location.declaringType.name
+    val className = fqcn.split('.').last
+    val pckg =
+      if (className == fqcn) ""
+      else fqcn.stripSuffix(s".$className")
 
     val uri = sourceLookUpProvider.getSourceFileURI(fqcn, sourcePath)
     val content = sourceLookUpProvider.getSourceContents(uri)
@@ -53,6 +57,7 @@ private[internal] class ExpressionEvaluator(
           breakpointLine,
           expression,
           names.map(_.value()).toSet,
+          pckg,
           errorMessage => error = Some(errorMessage),
           5.seconds
         )
