@@ -5,6 +5,7 @@ import scala.concurrent.{Await, Future, Promise}
 import scala.language.postfixOps
 
 class MockDebuggeeRunner() extends DebuggeeRunner {
+  val scalaVersion: String = "2.12.15"
   var currentProcess: MockCancelableFuture = _
 
   override def name: String = "mock"

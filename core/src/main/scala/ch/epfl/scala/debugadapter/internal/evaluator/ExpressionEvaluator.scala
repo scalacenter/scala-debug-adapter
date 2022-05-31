@@ -11,6 +11,7 @@ import scala.concurrent.duration._
 import scala.util.Try
 
 private[internal] class ExpressionEvaluator(
+    scalaVersion: String,
     classPath: Seq[Path],
     sourceLookUpProvider: ISourceLookUpProvider,
     driver: EvaluationDriver
@@ -154,7 +155,7 @@ private[internal] class ExpressionEvaluator(
     }
 
     // Only useful in Scala 2
-    def extractFieldsFromThisObject(
+    def extractFields(
         thisObject: ObjectReference
     ): Safe[(List[StringReference], List[Value])] = {
       val fields = thisObject.referenceType.fields.asScala.toList
@@ -166,17 +167,19 @@ private[internal] class ExpressionEvaluator(
       Safe.join(fieldNames, fieldValues)
     }
 
+    val isScala2 = scalaVersion.startsWith("2")
     for {
       (variableNames, variableValues) <- extractVariablesFromFrame()
-      (fieldNames, fieldValues) <-
-        thisObjectOpt
-          .map(extractFieldsFromThisObject)
-          .getOrElse(Safe.lift((Nil, Nil)))
-      thisObjectName <- thisObjectOpt match {
-        case Some(thisObject) =>
-          classLoader.mirrorOf("$this").map(Some.apply)
-        case None => Safe.lift(None)
-      }
+      // Currently we only need to load the fields in Scala 2
+      // It is dangerous because local values can shadow fields
+      // TODO: adapt Scala 2 expression compiler
+      (fieldNames, fieldValues) <- thisObjectOpt
+        .filter(_ => isScala2)
+        .map(extractFields)
+        .getOrElse(Safe.lift((Nil, Nil)))
+      thisObjectName <- thisObjectOpt
+        .map(_ => classLoader.mirrorOf("$this"))
+        .traverse
     } yield {
       val names = fieldNames ++ variableNames ++ thisObjectName
       val values = fieldValues ++ variableValues ++ thisObjectOpt

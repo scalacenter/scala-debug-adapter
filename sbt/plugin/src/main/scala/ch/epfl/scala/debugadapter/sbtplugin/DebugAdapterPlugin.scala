@@ -194,6 +194,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   private def mainClassSessionTask: Def.Initialize[InputTask[URI]] =
     Def.inputTask {
       val target = Keys.bspTargetIdentifier.value
+      val scalaVersion = Keys.scalaVersion.value
       val javaHome = Keys.javaHome.value
       val workingDirectory = Keys.baseDirectory.value
       val classPathEntries = InternalTasks.classPathEntries.value
@@ -230,6 +231,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
 
         new MainClassRunner(
           target,
+          scalaVersion,
           forkOptions,
           classPathEntries,
           javaRuntime,
@@ -297,6 +299,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   ): Def.Initialize[InputTask[URI]] =
     Def.inputTask {
       val target = Keys.bspTargetIdentifier.value
+      val scalaVersion = Keys.scalaVersion.value
       val testGrouping = (Keys.test / Keys.testGrouping).value
       val defaultForkOpts = Keys.forkOptions.value
       val classPathEntries = InternalTasks.classPathEntries.value
@@ -369,6 +372,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
 
         new TestSuitesRunner(
           target,
+          scalaVersion,
           forkOptions,
           classPathEntries,
           javaRuntime,
@@ -422,6 +426,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
 
   private def remoteSessionTask: Def.Initialize[Task[URI]] = Def.task {
     val target = Keys.bspTargetIdentifier.value
+    val scalaVersion = Keys.scalaVersion.value
     val classPathEntries = InternalTasks.classPathEntries.value
     val javaRuntime = InternalTasks.javaRuntime.value
     val evaluationClassLoader =
@@ -431,6 +436,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
 
     val runner = new AttachRemoteRunner(
       target,
+      scalaVersion,
       classPathEntries,
       javaRuntime,
       evaluationClassLoader

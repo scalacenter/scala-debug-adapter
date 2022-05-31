@@ -10,7 +10,7 @@ class EvaluationCompiler(
     expressionClassName: String,
     breakpointLine: Int,
     expression: String,
-    defNames: Set[String],
+    localVariables: Set[String],
     pckg: String
 )(using Context)
     extends Compiler:
@@ -18,7 +18,7 @@ class EvaluationCompiler(
     expressionClassName,
     breakpointLine,
     expression,
-    defNames,
+    localVariables,
     pckg
   )
 
