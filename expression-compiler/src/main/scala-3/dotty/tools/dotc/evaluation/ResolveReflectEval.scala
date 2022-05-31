@@ -192,10 +192,11 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
     if evalCtx.classOwners.contains(sym) then
       capturedByClass(sym.asClass, originalName)
     else
-      // the term can be a capture of the local method or a local value
-      evalCtx.capturingMethod
-        .flatMap(getMethodCapture(_, originalName))
-        .orElse(Some(getLocalValue(originalName.toString)))
+    // if the captured value is not a local variables
+    // then it must have been captured by the outer method
+    if evalCtx.localVariables.contains(originalName.toString)
+    then Some(getLocalValue(originalName.toString))
+    else evalCtx.capturingMethod.flatMap(getMethodCapture(_, originalName))
 
   private def capturedByClass(cls: ClassSymbol, originalName: TermName)(using
       Context

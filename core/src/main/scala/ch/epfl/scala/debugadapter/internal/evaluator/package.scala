@@ -57,4 +57,9 @@ package object evaluator {
       }
     }
   }
+
+  implicit class SafeOption[A](opt: Option[Safe[A]]) {
+    def traverse: Safe[Option[A]] =
+      opt.map(s => s.map(Option.apply)).getOrElse(Safe.lift(None))
+  }
 }

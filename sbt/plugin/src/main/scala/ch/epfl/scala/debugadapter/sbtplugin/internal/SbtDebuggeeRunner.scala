@@ -26,6 +26,7 @@ import ch.epfl.scala.debugadapter.testing.TestSuiteEvent
 
 private[debugadapter] final class MainClassRunner(
     target: BuildTargetIdentifier,
+    val scalaVersion: String,
     forkOptions: ForkOptions,
     val classPathEntries: Seq[ClassPathEntry],
     val javaRuntime: Option[JavaRuntime],
@@ -44,6 +45,7 @@ private[debugadapter] final class MainClassRunner(
 
 private[debugadapter] final class TestSuitesRunner(
     target: BuildTargetIdentifier,
+    val scalaVersion: String,
     forkOptions: ForkOptions,
     val classPathEntries: Seq[ClassPathEntry],
     val javaRuntime: Option[JavaRuntime],
@@ -177,6 +179,7 @@ private[debugadapter] final class TestSuitesRunner(
 
 private[debugadapter] final class AttachRemoteRunner(
     target: BuildTargetIdentifier,
+    val scalaVersion: String,
     val classPathEntries: Seq[ClassPathEntry],
     val javaRuntime: Option[JavaRuntime],
     val evaluationClassLoader: Option[ClassLoader]

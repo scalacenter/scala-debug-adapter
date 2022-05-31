@@ -26,6 +26,7 @@ private[internal] object EvaluationProvider {
       .flatMap(EvaluationDriver(_))
       .map(
         new ExpressionEvaluator(
+          runner.scalaVersion,
           runner.classPath,
           sourceLookUpProvider,
           _

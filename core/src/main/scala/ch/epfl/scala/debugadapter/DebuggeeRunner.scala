@@ -6,6 +6,7 @@ trait DebuggeeRunner {
   def name: String
   def run(listener: DebuggeeListener): CancelableFuture[Unit]
   def classPathEntries: Seq[ClassPathEntry]
+  def scalaVersion: String
   def classPath: Seq[Path] = classPathEntries.map(_.absolutePath)
   def javaRuntime: Option[JavaRuntime]
   def evaluationClassLoader: Option[ClassLoader]

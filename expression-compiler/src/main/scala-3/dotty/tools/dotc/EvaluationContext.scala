@@ -10,7 +10,7 @@ class EvaluationContext(
     uniqueName: String,
     val breakpointLine: Int,
     val expression: String,
-    val defNames: Set[String],
+    val localVariables: Set[String],
     val pckg: String
 ):
   val expressionTermName: TermName = termName(uniqueName.toLowerCase.toString)

@@ -184,8 +184,8 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
            |  ): Unit =
            |    println("foo")
            |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 6, "x + 1")(
-        _.exists(_.toInt == 4)
+      assertInMainClass(source, "EvaluateTest")(
+        Breakpoint(6)(Evaluation.success("x + 1", 4))
       )
     }
 

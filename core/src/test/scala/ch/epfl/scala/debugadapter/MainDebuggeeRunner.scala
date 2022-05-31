@@ -10,6 +10,7 @@ import scala.util.control.NonFatal
 import java.net.InetSocketAddress
 
 case class MainDebuggeeRunner(
+    scalaVersion: String,
     source: Path,
     projectEntry: ClassPathEntry,
     dependencies: Seq[ClassPathEntry],
@@ -73,7 +74,11 @@ object MainDebuggeeRunner {
   def javaBreakpointTest(): MainDebuggeeRunner = {
     val file = getResource("/java/BreakpointTest.java")
     val source = new String(Files.readAllBytes(file))
-    fromJavaSource(source, "scaladebug.test.BreakpointTest")
+    fromJavaSource(
+      ScalaVersion.`2.12`.version,
+      source,
+      "scaladebug.test.BreakpointTest"
+    )
   }
 
   def scala3Braceless(): MainDebuggeeRunner =
@@ -148,6 +153,7 @@ object MainDebuggeeRunner {
     val sourceEntry = SourceDirectory(srcDir)
     val mainClassPathEntry = ClassPathEntry(classDir, Seq(sourceEntry))
     MainDebuggeeRunner(
+      scalaVersion.version,
       sourceFile,
       mainClassPathEntry,
       classPath,
@@ -180,6 +186,7 @@ object MainDebuggeeRunner {
       )
     val mainClassPathEntry = ClassPathEntry(classDir, Seq(sourceEntry))
     MainDebuggeeRunner(
+      scalaVersion.version,
       sourceFile,
       mainClassPathEntry,
       scalaInstance.libraryJars,
@@ -198,6 +205,7 @@ object MainDebuggeeRunner {
   private val javac = javaHome.resolve(s"bin/javac$ext")
 
   private def fromJavaSource(
+      scalaVersion: String,
       source: String,
       mainClass: String
   ): MainDebuggeeRunner = {
@@ -229,7 +237,14 @@ object MainDebuggeeRunner {
 
     val sourceEntry = SourceDirectory(srcDir)
     val mainClassPathEntry = ClassPathEntry(classDir, Seq(sourceEntry))
-    MainDebuggeeRunner(srcFile, mainClassPathEntry, Seq.empty, mainClass, None)
+    MainDebuggeeRunner(
+      scalaVersion,
+      srcFile,
+      mainClassPathEntry,
+      Seq.empty,
+      mainClass,
+      None
+    )
   }
 
   private def startCrawling(input: InputStream)(f: String => Unit): Unit = {
