@@ -10,7 +10,8 @@ class EvaluationDriver(
     expressionClassName: String,
     breakpointLine: Int,
     expression: String,
-    defNames: Set[String]
+    defNames: Set[String],
+    pckg: String
 ) extends Driver:
   override def sourcesRequired: Boolean = false
 
@@ -33,7 +34,8 @@ class EvaluationDriver(
         expressionClassName,
         breakpointLine,
         expression,
-        defNames
+        defNames,
+        pckg
       )(using ctx)
     try
       val run = compiler.newRun(using ctx)

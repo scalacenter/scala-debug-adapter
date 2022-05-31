@@ -10,14 +10,16 @@ class EvaluationCompiler(
     expressionClassName: String,
     breakpointLine: Int,
     expression: String,
-    defNames: Set[String]
+    defNames: Set[String],
+    pckg: String
 )(using Context)
     extends Compiler:
   private given EvaluationContext = EvaluationContext(
     expressionClassName,
     breakpointLine,
     expression,
-    defNames
+    defNames,
+    pckg
   )
 
   override protected def frontendPhases: List[List[Phase]] =
@@ -26,8 +28,6 @@ class EvaluationCompiler(
       List(InsertExpression()) ::
       typer ::
       List(ExtractExpression()) ::
-      List(ExtractDefs()) ::
-      List(InsertExtracted()) ::
       others
 
   override protected def picklerPhases: List[List[Phase]] = List()

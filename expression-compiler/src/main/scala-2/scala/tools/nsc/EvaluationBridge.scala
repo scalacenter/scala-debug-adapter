@@ -17,6 +17,7 @@ final class EvaluationBridge {
       line: Int,
       expression: String,
       defNames: ju.Set[String],
+      pckg: String,
       errorConsumer: Consumer[String],
       timeoutMillis: Long
   ): Boolean = {

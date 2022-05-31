@@ -20,6 +20,7 @@ private[internal] class EvaluationDriver(
       line: Int,
       expression: String,
       defNames: Set[String],
+      pckg: String,
       errorConsumer: Consumer[String],
       timeout: Duration
   ): Boolean = {
@@ -34,6 +35,7 @@ private[internal] class EvaluationDriver(
           Integer.valueOf(line),
           expression,
           defNames.asJava,
+          pckg,
           { errorMessage =>
             errorConsumer.accept(errorMessage)
           }: Consumer[String],

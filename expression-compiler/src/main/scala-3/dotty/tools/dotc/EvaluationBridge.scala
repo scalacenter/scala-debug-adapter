@@ -15,6 +15,7 @@ class EvaluationBridge:
       line: Int,
       expression: String,
       defNames: ju.Set[String],
+      pckg: String,
       errorConsumer: Consumer[String],
       timeoutMillis: Long
   ): Boolean =
@@ -33,7 +34,8 @@ class EvaluationBridge:
         expressionClassName,
         line,
         expression,
-        defNames.asScala.toSet
+        defNames.asScala.toSet,
+        pckg
       )
     try
       val errors = evaluationDriver.run(code)
