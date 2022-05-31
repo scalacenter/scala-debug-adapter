@@ -6,21 +6,9 @@ import dotty.tools.dotc.evaluation.*
 import dotty.tools.dotc.util.SourceFile
 
 class EvaluationCompiler(
-    sourceFile: SourceFile,
-    expressionClassName: String,
-    breakpointLine: Int,
-    expression: String,
-    localVariables: Set[String],
-    pckg: String
-)(using Context)
+    sourceFile: SourceFile
+)(using EvaluationContext)(using Context)
     extends Compiler:
-  private given EvaluationContext = EvaluationContext(
-    expressionClassName,
-    breakpointLine,
-    expression,
-    localVariables,
-    pckg
-  )
 
   override protected def frontendPhases: List[List[Phase]] =
     val parser :: typer :: others = super.frontendPhases

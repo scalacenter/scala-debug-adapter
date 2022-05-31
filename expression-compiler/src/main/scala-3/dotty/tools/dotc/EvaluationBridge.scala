@@ -14,7 +14,7 @@ class EvaluationBridge:
       code: String,
       line: Int,
       expression: String,
-      defNames: ju.Set[String],
+      localVariables: ju.Set[String],
       pckg: String,
       errorConsumer: Consumer[String],
       timeoutMillis: Long
@@ -28,15 +28,14 @@ class EvaluationBridge:
       // Debugging: Print the tree after each phases of the debugger
       // "-Vprint:insert-extracted,resolve-reflect-eval"
     )
-    val evaluationDriver =
-      EvaluationDriver(
-        settings,
-        expressionClassName,
-        line,
-        expression,
-        defNames.asScala.toSet,
-        pckg
-      )
+    val evalCtx = EvaluationContext(
+      expressionClassName,
+      line,
+      expression,
+      localVariables.asScala.toSet,
+      pckg
+    )
+    val evaluationDriver = EvaluationDriver(settings, evalCtx)
     try
       val errors = evaluationDriver.run(code)
       val error = errors.headOption.map(_.msg.message)

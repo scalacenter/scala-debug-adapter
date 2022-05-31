@@ -7,11 +7,7 @@ import dotty.tools.dotc.util.SourceFile
 
 class EvaluationDriver(
     settings: List[String],
-    expressionClassName: String,
-    breakpointLine: Int,
-    expression: String,
-    defNames: Set[String],
-    pckg: String
+    evalCtx: EvaluationContext
 ) extends Driver:
   override def sourcesRequired: Boolean = false
 
@@ -27,18 +23,10 @@ class EvaluationDriver(
   def run(sourceCode: String): List[Diagnostic] =
     val sourceFile = SourceFile.virtual("<source>", sourceCode)
     val reporter = new StoreReporter()
-    val ctx = myInitCtx.fresh.setReporter(reporter)
-    val compiler: Compiler =
-      EvaluationCompiler(
-        sourceFile,
-        expressionClassName,
-        breakpointLine,
-        expression,
-        defNames,
-        pckg
-      )(using ctx)
+    given Context = myInitCtx.fresh.setReporter(reporter)
+    val compiler: Compiler = EvaluationCompiler(sourceFile)(using evalCtx)
     try
-      val run = compiler.newRun(using ctx)
+      val run = compiler.newRun
       run.compileSources(List(sourceFile))
       // reporter.pendingMessages(using ctx).foreach(d => println(d.msg))
       reporter.allErrors
