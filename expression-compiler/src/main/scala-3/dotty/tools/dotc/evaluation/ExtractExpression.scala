@@ -8,14 +8,16 @@ import dotty.tools.dotc.core.Flags.*
 import dotty.tools.dotc.core.Names.*
 import dotty.tools.dotc.core.Symbols.*
 import dotty.tools.dotc.core.Types.*
-import dotty.tools.dotc.transform.MegaPhase.MiniPhase
 import dotty.tools.dotc.transform.SymUtils.*
 import dotty.tools.dotc.core.DenotTransformers.DenotTransformer
 import dotty.tools.dotc.core.Denotations.SingleDenotation
 import dotty.tools.dotc.core.SymDenotations.SymDenotation
+import dotty.tools.dotc.transform.MacroTransform
+import dotty.tools.dotc.core.Phases.*
+import dotty.tools.dotc.typer.Inliner
 
 class ExtractExpression(using evalCtx: EvaluationContext)
-    extends MiniPhase
+    extends MacroTransform
     with DenotTransformer:
   override def phaseName: String = ExtractExpression.name
 
@@ -29,31 +31,36 @@ class ExtractExpression(using evalCtx: EvaluationContext)
     ref match
       case ref: SymDenotation if isExpressionVal(ref.symbol.maybeOwner) =>
         // update owner of the symDenotation, e.g. local vals
-        // after it was inserted to `evaluate` method
+        // that are extracted out of the expression val to the evaluate method
         ref.copySymDenotation(owner = evalCtx.evaluateMethod)
       case _ =>
         ref
 
-  override def transformValDef(tree: ValDef)(using Context): Tree =
-    if tree.symbol == evalCtx.expressionSymbol
-    then unitLiteral
-    else super.transformValDef(tree)
+  override def transformPhase(using Context): Phase = this.next
 
-  override def transformDefDef(tree: DefDef)(using Context): Tree =
-    if tree.symbol == evalCtx.evaluateMethod
-    then
-      val expressionTree =
-        evalCtx.expressionSymbol.defTree.asInstanceOf[ValDef].rhs
-      val transformedExpr = ExpressionTransformer.transform(expressionTree)
-      DefDef(
-        tree.symbol.asInstanceOf[TermSymbol],
-        List(),
-        tree.tpt.tpe,
-        transformedExpr
-      )
-    else super.transformDefDef(tree)
+  override protected def newTransformer(using Context): Transformer =
+    new Transformer:
+      var expressionTree: Tree = _
+      override def transform(tree: Tree)(using Context): Tree =
+        tree match
+          case PackageDef(pid, stats) =>
+            val evaluationClassDef =
+              stats.find(_.symbol == evalCtx.evaluationClass)
+            val others = stats.filter(_.symbol != evalCtx.evaluationClass)
+            val transformedStats = (others ++ evaluationClassDef).map(transform)
+            PackageDef(pid, transformedStats)
+          case tree: ValDef if isExpressionVal(tree.symbol) =>
+            expressionTree = tree.rhs
+            evalCtx.store(tree.symbol)
+            unitLiteral
+          case tree: DefDef if tree.symbol == evalCtx.evaluateMethod =>
+            val transformedExpr =
+              ExpressionTransformer.transform(expressionTree)
+            cpy.DefDef(tree)(rhs = transformedExpr)
+          case tree =>
+            super.transform(tree)
 
-  object ExpressionTransformer extends TreeMap:
+  private object ExpressionTransformer extends TreeMap:
     override def transform(tree: Tree)(using Context): Tree =
       tree match
         // static object
@@ -126,7 +133,6 @@ class ExtractExpression(using evalCtx: EvaluationContext)
             else thisOrOuterValue(owner)
           val args = tree.args.map(transform)
           callMethod(qualifier, fun.symbol.asTerm, args, tree.tpe)
-
         case tree => super.transform(tree)
 
   private def isExpressionVal(sym: Symbol)(using Context): Boolean =
@@ -242,20 +248,16 @@ class ExtractExpression(using evalCtx: EvaluationContext)
   )(using
       Context
   ): Tree =
-    val reflectEval =
-      Select(This(evalCtx.evaluationClass), termName("reflectEval"))
-    // We put the attachment on the fun of the apply.
-    // On the apply itself, it would be lost after the erasure phase.
-    reflectEval.putAttachment(EvaluationStrategy, strategy)
     val tree =
       Apply(
-        reflectEval,
+        Select(This(evalCtx.evaluationClass), termName("reflectEval")),
         List(
           qualifier.getOrElse(nullLiteral),
           Literal(Constant(strategy.toString)),
           JavaSeqLiteral(args, TypeTree(ctx.definitions.ObjectType))
         )
       )
+    tree.putAttachment(EvaluationStrategy, strategy)
     tpe.map(cast(tree, _)).getOrElse(tree)
 
   private def cast(tree: Tree, tpe: Type)(using Context): Tree =

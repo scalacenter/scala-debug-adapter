@@ -4,6 +4,7 @@ import dotty.tools.dotc.ast.tpd.*
 import dotty.tools.dotc.core.Symbols.*
 import dotty.tools.dotc.core.Types.*
 import dotty.tools.dotc.core.Names.*
+import dotty.tools.dotc.core.Flags.*
 import dotty.tools.dotc.core.Contexts.*
 
 class EvaluationContext(
@@ -21,6 +22,15 @@ class EvaluationContext(
   // we store them to resolve the captured variables
   var classOwners: Seq[ClassSymbol] = _
   var capturingMethod: Option[TermSymbol] = None
+
+  def store(symbol: Symbol)(using Context): Unit =
+    expressionSymbol = symbol.asTerm
+    classOwners = symbol.ownersIterator.collect { case cls: ClassSymbol =>
+      cls
+    }.toSeq
+    capturingMethod = symbol.ownersIterator
+      .find(sym => (sym.isClass || sym.is(Method)) && sym.owner.is(Method))
+      .collect { case sym if sym.isTerm => sym.asTerm }
 
   def evaluationClass(using Context): ClassSymbol =
     if pckg.isEmpty then requiredClass(evaluationClassName)

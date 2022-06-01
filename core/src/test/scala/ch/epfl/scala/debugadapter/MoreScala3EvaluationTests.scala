@@ -233,5 +233,80 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
         Breakpoint(5)(Evaluation.success("f(x)", 2))
       )
     }
+
+    "evaluate inline def" - {
+      val source =
+        """|package example
+           |
+           |object Main:
+           |  def main(args: Array[String]): Unit =
+           |    val msg: String = "Hello, World!"
+           |    println(foo(msg, 5))
+           |
+           |  private inline def foo(str: String, n: Int): String = str.take(n)
+           |
+           |  inline def bar(inline str: String): String = str.reverse
+           |
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(6)(
+          Evaluation.success("msg", "Hello, World!"),
+          Evaluation.success("foo(msg, 5)", "Hello"),
+          Evaluation.success("foo(msg + \"!!\", 4)", "Hell"),
+          Evaluation.success("bar(foo(msg, 5))", "olleH")
+        ),
+        Breakpoint(6)()
+      )
+    }
+
+    "evaluate macro def" - {
+      val mainSource =
+        """|package example
+           |
+           |import Macro.showType
+           |
+           |object Main:
+           |  def main(args: Array[String]): Unit =
+           |    val msg: String = "Hello, World!"
+           |    println(showType(msg))
+           |""".stripMargin
+
+      val macroSource =
+        """|package example
+           |
+           |import scala.quoted.*
+           |
+           |object Macro:
+           |  inline def showType(inline expr: Any): String = ${ showTypeImpl('expr) }
+           |
+           |  private def showTypeImpl(expr: Expr[Any])(using Quotes): Expr[String] = 
+           |    import quotes.reflect.*
+           |    Expr(expr.asTerm.tpe.widen.show)
+           |""".stripMargin
+
+      assertInMainClass(
+        Seq("Main.scala" -> mainSource, "Macro.scala" -> macroSource),
+        "example.Main"
+      )(
+        Breakpoint(8)(
+          Evaluation.success("msg", "Hello, World!"),
+          Evaluation.success("showType(msg)", "scala.Predef.String"),
+          Evaluation.success(
+            """|type Foo = Int
+               |showType(1: Foo)""".stripMargin,
+            "Foo"
+          ),
+          Evaluation.success(
+            """|trait Foo
+               |class Bar extends Foo
+               |val foo: Foo = new Bar
+               |showType(foo)
+               |""".stripMargin,
+            "Foo"
+          )
+        )
+      )
+    }
   }
 }

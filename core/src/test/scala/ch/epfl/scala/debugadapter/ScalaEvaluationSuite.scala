@@ -114,6 +114,17 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
     )
   }
 
+  def assertInMainClass(
+      sources: Seq[(String, String)],
+      mainClass: String
+  )(
+      breakpoints: Breakpoint*
+  ): Unit = {
+    val runner =
+      MainDebuggeeRunner.mainClassRunner(sources, mainClass, scalaVersion)
+    assertEvaluations(runner, breakpoints)
+  }
+
   def assertInMainClass(source: String, mainClass: String)(
       breakpoints: Breakpoint*
   ): Unit = {
@@ -142,7 +153,8 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
       client.launch()
 
       val lines = breakpoints.map(_.line).distinct.toArray
-      val configuredBreakpoints = client.setBreakpoints(runner.source, lines)
+      val configuredBreakpoints =
+        client.setBreakpoints(runner.sourceFiles.head, lines)
       assert(configuredBreakpoints.length == lines.length)
       assert(configuredBreakpoints.forall(_.verified))
       client.configurationDone()

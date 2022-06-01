@@ -21,7 +21,8 @@ object MoreScala3DebugTests extends TestSuite {
         client.initialize()
         client.launch()
 
-        val breakpoints = client.setBreakpoints(runner.source, Array(5, 7, 11))
+        val breakpoints =
+          client.setBreakpoints(runner.sourceFiles.head, Array(5, 7, 11))
         assert(breakpoints.size == 3)
         assert(breakpoints.forall(_.verified))
 
@@ -53,7 +54,8 @@ object MoreScala3DebugTests extends TestSuite {
         client.initialize()
         client.launch()
 
-        val breakpoints = client.setBreakpoints(runner.source, Array(4, 6, 10))
+        val breakpoints =
+          client.setBreakpoints(runner.sourceFiles.head, Array(4, 6, 10))
         assert(breakpoints.size == 3)
         assert(breakpoints.forall(_.verified))
 

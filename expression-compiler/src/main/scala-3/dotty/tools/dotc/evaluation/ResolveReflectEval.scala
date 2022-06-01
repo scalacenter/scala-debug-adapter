@@ -26,7 +26,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
       tree match
         case tree: Apply if isReflectEval(tree.fun.symbol) =>
           val qualifier :: _ :: args :: Nil = tree.args.map(transform)
-          tree.fun.attachment(EvaluationStrategy) match
+          tree.attachment(EvaluationStrategy) match
             case EvaluationStrategy.This => getLocalValue("$this")
             case EvaluationStrategy.Outer => getField(qualifier, "$outer")
             case EvaluationStrategy.LocalValue(value) =>

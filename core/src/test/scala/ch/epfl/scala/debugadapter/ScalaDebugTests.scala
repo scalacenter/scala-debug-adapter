@@ -26,7 +26,10 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
         client.launch()
 
         val breakpoints =
-          client.setBreakpoints(runner.source, Array(5, 13, 22, 14, 9))
+          client.setBreakpoints(
+            runner.sourceFiles.head,
+            Array(5, 13, 22, 14, 9)
+          )
         assert(breakpoints.size == 5)
         assert(breakpoints.forall(_.verified))
 
@@ -105,7 +108,7 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
         server.connect()
         client.initialize()
         client.launch()
-        client.setBreakpoints(runner.source, Array(7))
+        client.setBreakpoints(runner.sourceFiles.head, Array(7))
         client.configurationDone()
 
         val stopped = client.stopped()
@@ -145,7 +148,7 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
         server.connect()
         client.initialize()
         client.launch()
-        client.setBreakpoints(runner.source, Array(7))
+        client.setBreakpoints(runner.sourceFiles.head, Array(7))
         client.configurationDone()
 
         val stopped = client.stopped()
@@ -209,7 +212,7 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
         server.connect()
         client.initialize()
         client.launch()
-        client.setBreakpoints(runner.source, Array(6, 12))
+        client.setBreakpoints(runner.sourceFiles.head, Array(6, 12))
         client.configurationDone()
 
         val stopped = client.stopped()

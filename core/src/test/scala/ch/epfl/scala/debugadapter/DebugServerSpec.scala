@@ -240,7 +240,7 @@ object DebugServerSpec extends TestSuite {
         client.initialize()
         client.launch()
         val breakpoints =
-          client.setBreakpoints(runner.source, Array(5, 12, 16, 8))
+          client.setBreakpoints(runner.sourceFiles.head, Array(5, 12, 16, 8))
         assert(breakpoints.size == 4)
         assert(breakpoints.forall(_.verified))
 
