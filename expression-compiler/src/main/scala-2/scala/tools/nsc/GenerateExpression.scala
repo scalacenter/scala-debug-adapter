@@ -37,10 +37,7 @@ class GenerateExpression(override val global: EvaluationGlobal)
 
   override protected def newTransformer(
       unit: CompilationUnit
-  ): Transformer = {
-    if (unit.source.file.name == "<source>") new ExprEvalTransformer(unit)
-    else noopTransformer
-  }
+  ): Transformer = new ExprEvalTransformer(unit)
 
   class ExprEvalTransformer(unit: CompilationUnit) extends Transformer {
     override def transform(tree: Tree): Tree = tree match {
@@ -111,12 +108,13 @@ class GenerateExpression(override val global: EvaluationGlobal)
       case tree: ClassDef if tree.name.decode == expressionClassName =>
         thisSym = tree.symbol
       case tree: ValDef
-          if isCorrectOwner(tree) && defNames.contains(tree.name.decode) =>
+          if isCorrectOwner(tree) &&
+            localVariables.contains(tree.name.decode) =>
         valOrDefDefs += (tree.name -> tree)
         super.traverse(tree)
       case tree: DefDef
           if isCorrectOwner(tree) && tree.symbol.isGetter &&
-            defNames.contains(tree.name.decode) =>
+            localVariables.contains(tree.name.decode) =>
         valOrDefDefs += (tree.name -> tree)
         super.traverse(tree)
       case tree: DefDef if isCorrectOwner(tree) && isLambda(tree) =>
@@ -213,13 +211,13 @@ class GenerateExpression(override val global: EvaluationGlobal)
     override def transform(tree: Tree): Tree = tree match {
       case tree: This if tree.symbol == originalThisSymbol =>
         val name = TermName("$this")
-        if (defNames.contains(name.decode)) ident(name)
+        if (localVariables.contains(name.decode)) ident(name)
         else super.transform(tree)
       case tree: This =>
         tree
       case tree: Ident =>
         val name = tree.name
-        if (defNames.contains(name.decode)) ident(name)
+        if (localVariables.contains(name.decode)) ident(name)
         else super.transform(tree)
       case tree: Apply if tree.fun.symbol.isGetter =>
         val fun = tree.fun.asInstanceOf[Select]

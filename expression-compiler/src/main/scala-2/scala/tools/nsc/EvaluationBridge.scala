@@ -4,7 +4,6 @@ import java.nio.file.Path
 import java.util.function.Consumer
 import java.{util => ju}
 import scala.collection.JavaConverters._
-import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.reporters.StoreReporter
 import scala.util.control.NonFatal
 
@@ -13,10 +12,10 @@ final class EvaluationBridge {
       expressionDir: Path,
       expressionClassName: String,
       classPath: String,
-      code: String,
+      sourceFile: Path,
       line: Int,
       expression: String,
-      defNames: ju.Set[String],
+      localVariables: ju.Set[String],
       pckg: String,
       errorConsumer: Consumer[String],
       timeoutMillis: Long
@@ -32,14 +31,13 @@ final class EvaluationBridge {
       reporter,
       line,
       expression,
-      defNames.asScala.toSet,
+      localVariables.asScala.toSet,
       expressionClassName
     )
-    val source = new BatchSourceFile("<source>", code)
 
     try {
-      val compilerRun = new global.Run()
-      compilerRun.compileSources(List(source))
+      val run = new global.Run()
+      run.compile(List(sourceFile.toString))
 
       val error = reporter.infos.find(_.severity == reporter.ERROR).map(_.msg)
       error.foreach(errorConsumer.accept)

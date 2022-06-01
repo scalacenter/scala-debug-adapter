@@ -9,6 +9,7 @@ import java.nio.file.Path
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.util.Try
+import java.nio.charset.StandardCharsets
 
 private[internal] class ExpressionEvaluator(
     scalaVersion: String,
@@ -34,12 +35,16 @@ private[internal] class ExpressionEvaluator(
       else fqcn.stripSuffix(s".$className")
 
     val uri = sourceLookUpProvider.getSourceFileURI(fqcn, sourcePath)
-    val content = sourceLookUpProvider.getSourceContents(uri)
+    val sourceContent = sourceLookUpProvider.getSourceContents(uri)
 
     val randomId = java.util.UUID.randomUUID.toString.replace("-", "")
     val expressionDir =
       Files.createTempDirectory(s"scala-debug-adapter-$randomId")
     val expressionClassName = s"Expression$randomId"
+
+    val fileName = sourcePath.split("/").last
+    val sourceFile = Files.createFile(expressionDir.resolve(fileName))
+    Files.write(sourceFile, sourceContent.getBytes(StandardCharsets.UTF_8))
 
     val expressionFqcn =
       (fqcn.split("\\.").dropRight(1) :+ expressionClassName).mkString(".")
@@ -54,7 +59,7 @@ private[internal] class ExpressionEvaluator(
           expressionDir,
           expressionClassName,
           classPathString,
-          content,
+          sourceFile,
           breakpointLine,
           expression,
           names.map(_.value()).toSet,

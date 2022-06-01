@@ -5,13 +5,15 @@ import java.util.function.Consumer
 import java.{util => ju}
 import collection.JavaConverters._
 import scala.util.control.NonFatal
+import dotty.tools.dotc.reporting.StoreReporter
+import dotty.tools.dotc.core.Contexts.Context
 
 class EvaluationBridge:
   def run(
       expressionDir: Path,
       expressionClassName: String,
       classPath: String,
-      code: String,
+      sourceFile: Path,
       line: Int,
       expression: String,
       localVariables: ju.Set[String],
@@ -19,14 +21,15 @@ class EvaluationBridge:
       errorConsumer: Consumer[String],
       timeoutMillis: Long
   ): Boolean =
-    val settings = List(
+    val args = Array(
       "-d",
       expressionDir.toString,
       "-classpath",
       classPath,
-      "-Yskip:pureStats"
+      "-Yskip:pureStats",
       // Debugging: Print the tree after each phases of the debugger
-      // "-Vprint:insert-extracted,resolve-reflect-eval"
+      // "-Vprint:insert-extracted,resolve-reflect-eval",
+      sourceFile.toString
     )
     val evalCtx = EvaluationContext(
       expressionClassName,
@@ -35,14 +38,22 @@ class EvaluationBridge:
       localVariables.asScala.toSet,
       pckg
     )
-    val evaluationDriver = EvaluationDriver(settings, evalCtx)
+
+    val driver = new Driver:
+      protected override def newCompiler(using Context): EvaluationCompiler =
+        EvaluationCompiler(using evalCtx)
+
     try
-      val errors = evaluationDriver.run(code)
+      val reporter = new StoreReporter
+      driver.process(args, reporter)
+      val errors = reporter.allErrors
       val error = errors.headOption.map(_.msg.message)
       error.foreach(errorConsumer.accept)
-      error.isEmpty
+      // reporter.pendingMessages(using null).foreach(d => println(d.msg))
+      !reporter.hasErrors
     catch
       case NonFatal(t) =>
+        // reporter.pendingMessages(using null).foreach(d => println(d.msg))
         t.printStackTrace()
         errorConsumer.accept(t.getMessage)
         false

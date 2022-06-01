@@ -14,10 +14,7 @@ class InsertExpression(override val global: EvaluationGlobal)
 
   override protected def newTransformer(
       unit: CompilationUnit
-  ): Transformer = {
-    if (unit.source.file.name == "<source>") new InsExprTransformer()
-    else noopTransformer
-  }
+  ): Transformer = new Inserter()
 
   /**
    * This transformer:
@@ -26,7 +23,7 @@ class InsertExpression(override val global: EvaluationGlobal)
    * normal code would behave.
    * - inserts the expression class in the same package as the expression. This allows us to call package private methods without any trouble.
    */
-  class InsExprTransformer extends Transformer {
+  private class Inserter extends Transformer {
     private val expressionClassSource =
       s"""class $expressionClassName(names: Array[String], values: Array[Object]) {
          |  val valuesByName = names.map(_.asInstanceOf[String]).zip(values).toMap
