@@ -1037,13 +1037,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
 
       if (isScala31) {
         assertInTestSuite(source, "MySuite")(
-          // cannot expand macro locationImpl (probably because of virtual file)
-          Breakpoint(5)(Evaluation.ignore("1 + 1", Right("2")))
+          Breakpoint(5)(Evaluation.success("1 + 1", 2))
         )
       } else {
         assertInTestSuite(source, "MySuite")(
           Breakpoint(5)(), // the program stops twice...
-          Breakpoint(5)(Evaluation.successOrIgnore("1 + 1", 2, isScala3))
+          Breakpoint(5)(Evaluation.success("1 + 1", 2))
         )
       }
     }

@@ -7,7 +7,7 @@ private[nsc] class EvaluationGlobal(
     reporter: Reporter,
     val line: Int,
     val expression: String,
-    val defNames: Set[String],
+    val localVariables: Set[String],
     val expressionClassName: String
 ) extends Global(settings, reporter) {
   override protected def computeInternalPhases(): Unit = {
