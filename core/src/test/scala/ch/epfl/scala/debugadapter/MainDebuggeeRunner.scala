@@ -11,7 +11,7 @@ import java.net.InetSocketAddress
 
 case class MainDebuggeeRunner(
     scalaVersion: String,
-    source: Path,
+    sourceFiles: Seq[Path],
     projectEntry: ClassPathEntry,
     dependencies: Seq[ClassPathEntry],
     mainClass: String,
@@ -154,7 +154,7 @@ object MainDebuggeeRunner {
     val mainClassPathEntry = ClassPathEntry(classDir, Seq(sourceEntry))
     MainDebuggeeRunner(
       scalaVersion.version,
-      sourceFile,
+      Seq(sourceFile),
       mainClassPathEntry,
       classPath,
       "TestRunner",
@@ -163,7 +163,7 @@ object MainDebuggeeRunner {
   }
 
   def mainClassRunner(
-      source: String,
+      sources: Seq[(String, String)],
       mainClass: String,
       scalaVersion: ScalaVersion
   ): MainDebuggeeRunner = {
@@ -174,26 +174,37 @@ object MainDebuggeeRunner {
     val classDir = tempDir.resolve("classes")
     Files.createDirectory(classDir)
 
-    val className = mainClass.split('.').last
-    val sourceFile = srcDir.resolve(s"$className.scala")
-    Files.write(sourceFile, source.getBytes())
+    val sourceFiles = for ((fileName, source) <- sources) yield {
+      val sourceFile = srcDir.resolve(fileName)
+      Files.write(sourceFile, source.getBytes())
+      sourceFile
+    }
 
     val scalaInstance = ScalaInstanceCache.get(scalaVersion)
-    scalaInstance.compile(classDir, scalaInstance.libraryJars, Seq(sourceFile))
-    val sourceEntry =
-      StandaloneSourceFile(
-        sourceFile,
-        sourceFile.getParent.relativize(sourceFile).toString
-      )
-    val mainClassPathEntry = ClassPathEntry(classDir, Seq(sourceEntry))
+    scalaInstance.compile(classDir, scalaInstance.libraryJars, sourceFiles)
+    val sourceEntries = sourceFiles.map { srcFile =>
+      StandaloneSourceFile(srcFile, srcDir.relativize(srcFile).toString)
+    }
+
+    val mainClassPathEntry = ClassPathEntry(classDir, sourceEntries)
     MainDebuggeeRunner(
       scalaVersion.version,
-      sourceFile,
+      sourceFiles,
       mainClassPathEntry,
       scalaInstance.libraryJars,
       mainClass,
       Some(scalaInstance.expressionCompilerClassLoader)
     )
+  }
+
+  def mainClassRunner(
+      source: String,
+      mainClass: String,
+      scalaVersion: ScalaVersion
+  ): MainDebuggeeRunner = {
+    val className = mainClass.split('.').last
+    val sourceName = s"$className.scala"
+    mainClassRunner(Seq(sourceName -> source), mainClass, scalaVersion)
   }
 
   private def getResource(name: String): Path =
@@ -240,7 +251,7 @@ object MainDebuggeeRunner {
     val mainClassPathEntry = ClassPathEntry(classDir, Seq(sourceEntry))
     MainDebuggeeRunner(
       scalaVersion,
-      srcFile,
+      Seq(srcFile),
       mainClassPathEntry,
       Seq.empty,
       mainClass,

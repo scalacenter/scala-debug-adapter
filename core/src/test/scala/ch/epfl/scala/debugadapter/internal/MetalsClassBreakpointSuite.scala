@@ -179,7 +179,7 @@ object MetalsClassBreakpointSuite extends TestSuite {
       )
       val lookUp = ClassEntryLookUp(runner.projectEntry)
 
-      val sourceFile = runner.source.toUri
+      val sourceFile = runner.sourceFiles.head.toUri
 
       val className =
         lookUp.getFullyQualifiedClassName(sourceFile, lineNumber)

@@ -16,7 +16,7 @@ object ClassEntryLookUpSpec extends TestSuite {
         MainDebuggeeRunner.scalaBreakpointTest(ScalaVersion.`2.12`)
       val lookUp = ClassEntryLookUp(runner.projectEntry)
 
-      val expectedSourceFile = runner.source.toUri
+      val expectedSourceFile = runner.sourceFiles.head.toUri
       val expectedClassName =
         "scaladebug.test.BreakpointTest$Hello$InnerHello$1"
 
@@ -53,8 +53,9 @@ object ClassEntryLookUpSpec extends TestSuite {
         MainDebuggeeRunner.scalaBreakpointTest(ScalaVersion.`2.12`)
       val lookUp = ClassEntryLookUp(runner.projectEntry)
 
-      val sourceFile = runner.source.toUri
-      val expectedSourceContent = new String(Files.readAllBytes(runner.source))
+      val sourceFile = runner.sourceFiles.head.toUri
+      val expectedSourceContent =
+        new String(Files.readAllBytes(runner.sourceFiles.head))
 
       val sourceContent = lookUp.getSourceContent(sourceFile)
       assert(sourceContent.contains(expectedSourceContent))

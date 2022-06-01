@@ -42,7 +42,7 @@ private[internal] class ExpressionEvaluator(
       Files.createTempDirectory(s"scala-debug-adapter-$randomId")
     val expressionClassName = s"Expression$randomId"
 
-    val fileName = sourcePath.split("/").last
+    val fileName = sourcePath.split('/').flatMap(_.split('\\')).last
     val sourceFile = Files.createFile(expressionDir.resolve(fileName))
     Files.write(sourceFile, sourceContent.getBytes(StandardCharsets.UTF_8))
 

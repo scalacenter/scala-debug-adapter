@@ -8,13 +8,11 @@ class EvaluationCompiler(using EvaluationContext)(using Context)
     extends Compiler:
 
   override protected def frontendPhases: List[List[Phase]] =
-    val parser :: typer :: others = super.frontendPhases
-    parser ::
-      List(InsertExpression()) ::
-      typer ::
-      List(PrepareExtractExpression()) ::
-      List(ExtractExpression()) ::
-      others
+    val parser :: others = super.frontendPhases
+    parser :: List(InsertExpression()) :: others
+
+  override protected def picklerPhases: List[List[Phase]] =
+    super.picklerPhases :+ List(ExtractExpression())
 
   override protected def transformPhases: List[List[Phase]] =
     super.transformPhases :+ List(ResolveReflectEval())

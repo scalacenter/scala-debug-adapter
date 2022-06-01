@@ -1,7 +1,7 @@
 package dotty.tools.dotc.evaluation
 
-import dotty.tools.dotc.util.Property.Key
 import dotty.tools.dotc.core.Symbols.*
+import dotty.tools.dotc.util.Property.*
 
 /**
  * The [[ExtractExpression]] phase attaches an [[EvaluationStrategy]] to each `reflectEval` node
@@ -31,4 +31,4 @@ enum EvaluationStrategy:
     case MethodCall(method) => method.toString
     case ConstructorCall(_, cls) => s"new $cls"
 
-object EvaluationStrategy extends Key[EvaluationStrategy]
+object EvaluationStrategy extends StickyKey[EvaluationStrategy]
