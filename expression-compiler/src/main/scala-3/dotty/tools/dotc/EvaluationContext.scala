@@ -16,6 +16,7 @@ class EvaluationContext(
   val expressionTermName: TermName = termName(uniqueName.toLowerCase.toString)
   val evaluationClassName: TypeName = typeName(uniqueName)
 
+  var expressionSymbol: TermSymbol = _
   // all classes and def in the chain of owners of the expression from local to global
   // we store them to resolve the captured variables
   var classOwners: Seq[ClassSymbol] = _

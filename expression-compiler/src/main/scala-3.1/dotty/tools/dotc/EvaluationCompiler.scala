@@ -27,6 +27,7 @@ class EvaluationCompiler(
     parser ::
       List(InsertExpression()) ::
       typer ::
+      List(PrepareExtractExpression()) ::
       List(ExtractExpression()) ::
       others
 
