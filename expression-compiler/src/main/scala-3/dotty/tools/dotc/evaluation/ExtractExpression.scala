@@ -17,9 +17,6 @@ import dotty.tools.dotc.core.SymDenotations.SymDenotation
 class ExtractExpression(using evalCtx: EvaluationContext)
     extends MiniPhase
     with DenotTransformer:
-  private var expressionTree: Tree = _
-  private var expressionSymbol: Symbol = _
-
   override def phaseName: String = ExtractExpression.name
 
   /**
@@ -38,31 +35,21 @@ class ExtractExpression(using evalCtx: EvaluationContext)
         ref
 
   override def transformValDef(tree: ValDef)(using Context): Tree =
-    if tree.name == evalCtx.expressionTermName && expressionTree == null
-    then
-      expressionTree = tree.rhs
-      expressionSymbol = tree.symbol
-
-      evalCtx.classOwners = tree.symbol.ownersIterator.collect {
-        case cls: ClassSymbol => cls
-      }.toSeq
-      evalCtx.capturingMethod = tree.symbol.ownersIterator
-        .find(sym => (sym.isClass || sym.is(Method)) && sym.owner.is(Method))
-        .collect { case sym if sym.isTerm => sym.asTerm }
-
-      unitLiteral
+    if tree.symbol == evalCtx.expressionSymbol
+    then unitLiteral
     else super.transformValDef(tree)
 
   override def transformDefDef(tree: DefDef)(using Context): Tree =
     if tree.symbol == evalCtx.evaluateMethod
     then
-      val transformedExpression =
-        ExpressionTransformer.transform(expressionTree)
+      val expressionTree =
+        evalCtx.expressionSymbol.defTree.asInstanceOf[ValDef].rhs
+      val transformedExpr = ExpressionTransformer.transform(expressionTree)
       DefDef(
         tree.symbol.asInstanceOf[TermSymbol],
         List(),
         tree.tpt.tpe,
-        transformedExpression
+        transformedExpr
       )
     else super.transformDefDef(tree)
 
@@ -86,7 +73,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
         case tree @ Ident(name) if isLocalVal(tree.symbol) =>
           // a local value can be captured by a class or method
           val owner = tree.symbol.owner
-          val candidates = expressionSymbol.ownersIterator
+          val candidates = evalCtx.expressionSymbol.ownersIterator
             .takeWhile(_ != owner)
             .filter(s => s.isClass || s.is(Method))
             .toSeq

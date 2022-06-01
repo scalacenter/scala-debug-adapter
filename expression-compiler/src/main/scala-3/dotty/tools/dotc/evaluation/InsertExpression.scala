@@ -111,8 +111,7 @@ class InsertExpression(using
         case tree: (Ident | Select | GenericApply | Literal | This | New |
               InterpolatedString | OpTree | Tuple) if isOnBreakpoint(tree) =>
           mkExprBlock(expression, tree)
-        case tree =>
-          super.transform(tree)
+        case tree => super.transform(tree)
 
   private def parseExpression(expression: String)(using Context): Tree =
     val expressionSource =

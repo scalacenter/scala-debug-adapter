@@ -25,6 +25,7 @@ class EvaluationCompiler(
   override protected def frontendPhases: List[List[Phase]] =
     val frontEnd :: others = super.frontendPhases
     List(EvaluationFrontEnd()) ::
+      List(PrepareExtractExpression()) ::
       List(ExtractExpression()) ::
       others
 
