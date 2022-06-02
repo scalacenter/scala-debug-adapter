@@ -27,7 +27,7 @@ class EvaluationBridge:
       "-classpath",
       classPath,
       "-Yskip:pureStats",
-      // Debugging: Print the tree after each phases of the debugger
+      // Debugging: Print the tree after phases of the debugger
       // "-Vprint:extract-expression,resolve-reflect-eval",
       sourceFile.toString
     )

@@ -983,23 +983,60 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           // we can reassign neither y nor u because they are fields
           Evaluation.failed("u = 2")(_ => true),
           if (isScala3) Evaluation.failed("y += 1")(_ => true)
-          else Evaluation.success("y += 1", ())
+          else Evaluation.success("y += 1", ()),
+          Evaluation.success("new B")(_.startsWith("A$B$1@")),
+          if (isScala3) Evaluation.success("yy()", 2)
+          else Evaluation.success("yy()", 3)
         ),
         Breakpoint(11)(
           // captured by method m
-          if (isScala3) Evaluation.success("y", 1)
-          else Evaluation.success("y", 2),
+          if (isScala3) Evaluation.success("y", 2)
+          else Evaluation.success("y", 3),
           if (isScala3) Evaluation.failed("y += 1")(_ => true)
           else Evaluation.success("y += 1", ())
         ),
         Breakpoint(12)(
-          if (isScala3) Evaluation.success("y", 2)
-          else Evaluation.success("y", 4)
+          if (isScala3) Evaluation.success("y", 3)
+          else Evaluation.success("y", 5)
         ),
         Breakpoint(16)(
           // captured by class B
           Evaluation.successOrIgnore("z", 1, isScala2),
           Evaluation.failedOrIgnore("z += 1", isScala2)(_ => true)
+        )
+      )
+    }
+
+    "evaluate lazy variables" - {
+      val source =
+        """|package example
+           |
+           |object A {
+           |  private lazy val x = 1
+           |  def m(): Int = {
+           |    lazy val y = 2
+           |    x + y
+           |  }
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    println(A.m())
+           |  }
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(7)(
+          Evaluation.successOrIgnore("x", 1, isScala2),
+          if (isScala3) Evaluation.failed("y")(_ => true)
+          else Evaluation.success("y", 2),
+          Evaluation.successOrIgnore(
+            """|lazy val z = 2
+               |z""".stripMargin,
+            2,
+            isScala2
+          )
         )
       )
     }
