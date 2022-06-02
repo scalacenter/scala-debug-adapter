@@ -12,6 +12,7 @@ import dotty.tools.dotc.transform.MegaPhase.MiniPhase
 import dotty.tools.dotc.transform.SymUtils.*
 import dotty.tools.dotc.core.StdNames.*
 import dotty.tools.dotc.core.NameKinds.QualifiedInfo
+import dotty.tools.dotc.report
 
 class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
   override def phaseName: String = ResolveReflectEval.name
@@ -25,25 +26,32 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
     override def transform(tree: Tree)(using Context): Tree =
       tree match
         case tree: Apply if isReflectEval(tree.fun.symbol) =>
-          val qualifier :: _ :: args :: Nil = tree.args.map(transform)
+          val qualifier :: _ :: argsTree :: Nil = tree.args.map(transform)
+          val args = argsTree.asInstanceOf[JavaSeqLiteral].elems
           tree.attachment(EvaluationStrategy) match
             case EvaluationStrategy.This => getLocalValue("$this")
             case EvaluationStrategy.Outer => getField(qualifier, "$outer")
-            case EvaluationStrategy.LocalValue(value) =>
-              getLocalValue(value.name.toString)
-            case EvaluationStrategy.ClassCapture(value, cls) =>
-              getClassCapture(qualifier, value.name, cls)
-                .getOrElse(
-                  throw new Exception(s"No capture found for $value in $cls")
-                )
-            case EvaluationStrategy.MethodCapture(value, method) =>
-              getMethodCapture(method, value.name)
-                .getOrElse(
-                  throw new Exception(s"No capture found for $value in $method")
-                )
+            case EvaluationStrategy.LocalValue(variable) =>
+              derefCapturedVar(getLocalValue(variable.name.toString), variable)
+            case EvaluationStrategy.ClassCapture(variable, cls) =>
+              val capture = getClassCapture(qualifier, variable.name, cls)
+                .getOrElse {
+                  report.error(s"No capture found for $variable in $cls")
+                  ref(defn.Predef_undefined)
+                }
+              derefCapturedVar(capture, variable)
+            case EvaluationStrategy.MethodCapture(variable, method) =>
+              val capture = getMethodCapture(method, variable.name)
+                .getOrElse {
+                  report.error(s"No capture found for $variable in $method")
+                  ref(defn.Predef_undefined)
+                }
+              derefCapturedVar(capture, variable)
             case EvaluationStrategy.StaticObject(obj) => getStaticObject(obj)
             case EvaluationStrategy.Field(field) =>
               getField(qualifier, field.name.toString)
+            case EvaluationStrategy.FieldAssign(field) =>
+              setField(qualifier, field.name.toString, args.head)
             case EvaluationStrategy.MethodCall(method) =>
               callMethod(qualifier, method, args)
             case EvaluationStrategy.ConstructorCall(ctr, cls) =>
@@ -54,6 +62,14 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
     symbol.name == termName(
       "reflectEval"
     ) && symbol.owner == evalCtx.evaluationClass
+
+  private def derefCapturedVar(tree: Tree, term: TermSymbol)(using
+      Context
+  ): Tree =
+    term.info.typeSymbol.fullName.toString match
+      case s"scala.runtime.${_}Ref" =>
+        getField(tree, "elem")
+      case _ => tree
 
   private def getLocalValue(name: String)(using Context): Tree =
     Apply(
@@ -105,10 +121,22 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
       )
     )
 
+  private def setField(qualifier: Tree, field: String, arg: Tree)(using
+      Context
+  ): Tree =
+    Apply(
+      Select(This(evalCtx.evaluationClass), termName("setField")),
+      List(
+        qualifier,
+        Literal(Constant(field)),
+        arg
+      )
+    )
+
   private def callMethod(
       qualifier: Tree,
       method: TermSymbol,
-      argsArray: Tree
+      args: List[Tree]
   )(using Context): Tree =
     val methodType = method.info.asInstanceOf[MethodType]
     val paramTypesNames = methodType.paramInfos.map(JavaEncoding.encode)
@@ -117,16 +145,14 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
       TypeTree(ctx.definitions.StringType)
     )
 
-    val args = argsArray.asInstanceOf[JavaSeqLiteral].elems
     val capturedArgs =
       methodType.paramNames.dropRight(args.size).map {
         case name @ DerivedName(underlying, _) =>
           capturedValue(method, underlying)
             .getOrElse(getLocalValue(underlying.toString))
         case name =>
-          throw new Exception(
-            s"Unidentified captured variable $name in $method"
-          )
+          report.error(s"Unknown captured variable $name in $method")
+          ref(defn.Predef_undefined)
       }
 
     val returnTypeName = JavaEncoding.encode(methodType.resType)
@@ -147,13 +173,12 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
   private def callConstructor(
       qualifier: Tree,
       ctr: TermSymbol,
-      argsArray: Tree
+      args: List[Tree]
   )(using Context): Tree =
     val methodType = ctr.info.asInstanceOf[MethodType]
     val paramTypesNames = methodType.paramInfos.map(JavaEncoding.encode)
     val clsName = JavaEncoding.encode(methodType.resType)
 
-    val args = argsArray.asInstanceOf[JavaSeqLiteral].elems
     val capturedArgs =
       methodType.paramNames.dropRight(args.size).map {
         case outer if outer.toString == "$outer" => qualifier
@@ -162,11 +187,12 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               _
             ) => // if derived then probably a capture
           capturedValue(ctr.owner, underlying)
-            .getOrElse(
-              throw new Exception(
-                s"Unidentified captured variable $name in $ctr of ${ctr.owner}"
+            .getOrElse {
+              report.error(
+                s"Unknown capture variable $name in $ctr of ${ctr.owner}"
               )
-            )
+              ref(defn.Predef_undefined)
+            }
         case name => getLocalValue(name.toString)
       }
 

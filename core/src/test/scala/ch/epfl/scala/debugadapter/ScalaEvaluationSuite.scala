@@ -39,6 +39,13 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
       )
     }
 
+    def failedOrIgnore(expression: String, ignore: Boolean)(
+        assertion: Message => Boolean
+    ) = {
+      if (ignore) this.ignore(expression, Left(new Message(0, "???")))
+      else failed(expression)(assertion)
+    }
+
     def successOrIgnore(expression: String, result: Any, ignore: Boolean) = {
       if (ignore) this.ignore(expression, Right(result.toString))
       else success(expression, result)

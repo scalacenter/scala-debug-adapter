@@ -934,6 +934,76 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "read and write mutable variables" - {
+      val source =
+        """|package example
+           |
+           |class A {
+           |  private var x = 1
+           |  def xx(): Int = {
+           |    var y = 1
+           |    var z = 1
+           |    var u = 1
+           |    x += 1
+           |    def yy(): Int = {
+           |      y += 1
+           |      y
+           |    }
+           |    class B {
+           |      def zz(): Int = {
+           |        z += 1
+           |        z
+           |      }
+           |    }
+           |    val b = new B
+           |    x * 100 + yy() + b.zz() + u
+           |  }
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A
+           |    println(a.xx())
+           |  }
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(9)(
+          Evaluation.success("x", 1),
+          Evaluation.success("u", 1),
+          Evaluation.success("y", 1),
+          // we can reassign x because it is a field
+          Evaluation.successOrIgnore("x = 2", (), isScala2),
+          Evaluation.successOrIgnore("x", 2, isScala2),
+          Evaluation.successOrIgnore("x = x - 1", (), isScala2),
+          Evaluation.successOrIgnore("x", 1, isScala2),
+          Evaluation.successOrIgnore("x *= 2", (), isScala2),
+          Evaluation.successOrIgnore("x", 2, isScala2),
+          // we can reassign neither y nor u because they are fields
+          Evaluation.failed("u = 2")(_ => true),
+          if (isScala3) Evaluation.failed("y += 1")(_ => true)
+          else Evaluation.success("y += 1", ())
+        ),
+        Breakpoint(11)(
+          // captured by method m
+          if (isScala3) Evaluation.success("y", 1)
+          else Evaluation.success("y", 2),
+          if (isScala3) Evaluation.failed("y += 1")(_ => true)
+          else Evaluation.success("y += 1", ())
+        ),
+        Breakpoint(12)(
+          if (isScala3) Evaluation.success("y", 2)
+          else Evaluation.success("y", 4)
+        ),
+        Breakpoint(16)(
+          // captured by class B
+          Evaluation.successOrIgnore("z", 1, isScala2),
+          Evaluation.failedOrIgnore("z += 1", isScala2)(_ => true)
+        )
+      )
+    }
+
     "evaluate tail-rec function" - {
       val source =
         """|object EvaluateTest {
