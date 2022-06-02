@@ -62,6 +62,12 @@ class InsertExpression(using
         |    field.setAccessible(true)
         |    field.get(obj)
         |
+        |  def setField(obj: Any, name: String, value: Any) =
+        |    val clazz = obj.getClass
+        |    val field = clazz.getDeclaredField(name)
+        |    field.setAccessible(true)
+        |    field.set(obj, value)
+        |
         |  def getStaticObject(className: String): Any =
         |    val clazz = getClass.getClassLoader.loadClass(className)
         |    val field = clazz.getDeclaredField("MODULE$$")

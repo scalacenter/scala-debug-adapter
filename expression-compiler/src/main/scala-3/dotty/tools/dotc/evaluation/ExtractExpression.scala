@@ -15,6 +15,7 @@ import dotty.tools.dotc.core.SymDenotations.SymDenotation
 import dotty.tools.dotc.transform.MacroTransform
 import dotty.tools.dotc.core.Phases.*
 import dotty.tools.dotc.typer.Inliner
+import dotty.tools.dotc.report
 
 class ExtractExpression(using evalCtx: EvaluationContext)
     extends MacroTransform
@@ -76,9 +77,9 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           val qualifier = transform(tree.qualifier)
           callMethod(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
 
-        // local value
-        case tree @ Ident(name) if isLocalVal(tree.symbol) =>
-          // a local value can be captured by a class or method
+        // local variable
+        case tree: Ident if isLocalVariable(tree.symbol) =>
+          // a local variable can be captured by a class or method
           val owner = tree.symbol.owner
           val candidates = evalCtx.expressionSymbol.ownersIterator
             .takeWhile(_ != owner)
@@ -93,17 +94,31 @@ class ExtractExpression(using evalCtx: EvaluationContext)
             case Some(method) => getMethodCapture(tree.symbol, method, tree.tpe)
             case None => getLocalValue(tree.symbol, tree.tpe)
 
+        // assignement to local variable
+        case tree @ Assign(lhs, rhs) if isLocalVariable(lhs.symbol) =>
+          report.error("Assignment to local variable not supported")
+          Assign(lhs, transform(rhs))
+
         // inaccessible fields
-        case tree @ Ident(name) if isInaccessibleField(tree.symbol) =>
+        case tree: Ident if isInaccessibleField(tree.symbol) =>
           val qualifier =
             if isStaticObject(tree.symbol.owner)
             then getStaticObject(tree.symbol.owner)
             else getThis
           getField(qualifier, tree.symbol.asTerm, tree.tpe)
-        case tree @ Select(qualifier, name)
-            if isInaccessibleField(tree.symbol) =>
+        case tree: Select if isInaccessibleField(tree.symbol) =>
           val qualifier = transform(tree.qualifier)
           getField(qualifier, tree.symbol.asTerm, tree.tpe)
+
+        // assignment to inaccessible fields
+        case tree @ Assign(lhs, rhs) if isInaccessibleField(lhs.symbol) =>
+          val qualifier = lhs match
+            case lhs: Ident =>
+              if isStaticObject(lhs.symbol.owner)
+              then getStaticObject(lhs.symbol.owner)
+              else getThis
+            case lhs: Select => transform(lhs.qualifier)
+          setField(qualifier, lhs.symbol.asTerm, transform(rhs), tree.tpe)
 
         // this or outer this
         case tree @ This(Ident(name)) =>
@@ -168,30 +183,30 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       Some(tpe)
     )
 
-  private def getLocalValue(value: Symbol, tpe: Type)(using Context): Tree =
+  private def getLocalValue(variable: Symbol, tpe: Type)(using Context): Tree =
     reflectEval(
       None,
-      EvaluationStrategy.LocalValue(value.asTerm),
+      EvaluationStrategy.LocalValue(variable.asTerm),
       List.empty,
       Some(tpe)
     )
 
-  private def getClassCapture(value: Symbol, cls: Symbol, tpe: Type)(using
+  private def getClassCapture(variable: Symbol, cls: Symbol, tpe: Type)(using
       Context
   ): Tree =
     reflectEval(
       Some(thisOrOuterValue(cls)),
-      EvaluationStrategy.ClassCapture(value.asTerm, cls.asClass),
+      EvaluationStrategy.ClassCapture(variable.asTerm, cls.asClass),
       List.empty,
       Some(tpe)
     )
 
-  private def getMethodCapture(value: Symbol, method: Symbol, tpe: Type)(using
-      Context
+  private def getMethodCapture(variable: Symbol, method: Symbol, tpe: Type)(
+      using Context
   ): Tree =
     reflectEval(
       None,
-      EvaluationStrategy.MethodCapture(value.asTerm, method.asTerm),
+      EvaluationStrategy.MethodCapture(variable.asTerm, method.asTerm),
       List.empty,
       Some(tpe)
     )
@@ -211,6 +226,21 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       Some(qualifier),
       EvaluationStrategy.Field(field),
       List.empty,
+      Some(tpe)
+    )
+
+  private def setField(
+      qualifier: Tree,
+      field: TermSymbol,
+      rhs: Tree,
+      tpe: Type
+  )(using
+      Context
+  ): Tree =
+    reflectEval(
+      Some(qualifier),
+      EvaluationStrategy.FieldAssign(field),
+      List(rhs),
       Some(tpe)
     )
 
@@ -302,7 +332,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
     symbol.isConstructor &&
       (isInaccessibleMethod(symbol) || !symbol.owner.isStatic)
 
-  private def isLocalVal(symbol: Symbol)(using Context): Boolean =
+  private def isLocalVariable(symbol: Symbol)(using Context): Boolean =
     !symbol.is(Method) &&
       symbol.isLocalToBlock &&
       symbol.ownersIterator.forall(_ != evalCtx.evaluateMethod)
