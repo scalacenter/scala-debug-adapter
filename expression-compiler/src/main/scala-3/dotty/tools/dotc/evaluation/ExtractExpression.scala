@@ -79,24 +79,33 @@ class ExtractExpression(using evalCtx: EvaluationContext)
 
         // local variable
         case tree: Ident if isLocalVariable(tree.symbol) =>
-          // a local variable can be captured by a class or method
-          val owner = tree.symbol.owner
-          val candidates = evalCtx.expressionSymbol.ownersIterator
-            .takeWhile(_ != owner)
-            .filter(s => s.isClass || s.is(Method))
-            .toSeq
-          val capturer = candidates
-            .findLast(_.isClass)
-            .orElse(candidates.find(_.is(Method)))
-          capturer match
-            case Some(cls) if cls.isClass =>
-              getClassCapture(tree.symbol, cls, tree.tpe)
-            case Some(method) => getMethodCapture(tree.symbol, method, tree.tpe)
-            case None => getLocalValue(tree.symbol, tree.tpe)
+          if tree.symbol.is(Lazy) then
+            report.error(
+              s"Evaluation of local lazy val not supported: ${tree.symbol}"
+            )
+            tree
+          else
+            // a local variable can be captured by a class or method
+            val owner = tree.symbol.owner
+            val candidates = evalCtx.expressionSymbol.ownersIterator
+              .takeWhile(_ != owner)
+              .filter(s => s.isClass || s.is(Method))
+              .toSeq
+            val capturer = candidates
+              .findLast(_.isClass)
+              .orElse(candidates.find(_.is(Method)))
+            capturer match
+              case Some(cls) if cls.isClass =>
+                getClassCapture(tree.symbol, cls, tree.tpe)
+              case Some(method) =>
+                getMethodCapture(tree.symbol, method, tree.tpe)
+              case None => getLocalValue(tree.symbol, tree.tpe)
 
         // assignement to local variable
         case tree @ Assign(lhs, rhs) if isLocalVariable(lhs.symbol) =>
-          report.error("Assignment to local variable not supported")
+          report.error(
+            s"Assignment to local variable not supported: ${lhs.symbol}"
+          )
           Assign(lhs, transform(rhs))
 
         // inaccessible fields

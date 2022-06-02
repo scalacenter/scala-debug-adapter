@@ -49,7 +49,11 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               derefCapturedVar(capture, variable)
             case EvaluationStrategy.StaticObject(obj) => getStaticObject(obj)
             case EvaluationStrategy.Field(field) =>
-              getField(qualifier, field.name.toString)
+              if field.is(Lazy)
+              then
+                // a lazy val transformed into a getter method
+                callMethod(qualifier, field, Nil)
+              else getField(qualifier, field.name.toString)
             case EvaluationStrategy.FieldAssign(field) =>
               setField(qualifier, field.name.toString, args.head)
             case EvaluationStrategy.MethodCall(method) =>
@@ -149,7 +153,10 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
       methodType.paramNames.dropRight(args.size).map {
         case name @ DerivedName(underlying, _) =>
           capturedValue(method, underlying)
-            .getOrElse(getLocalValue(underlying.toString))
+            .getOrElse {
+              report.error(s"Unknown captured variable $name in $method")
+              ref(defn.Predef_undefined)
+            }
         case name =>
           report.error(s"Unknown captured variable $name in $method")
           ref(defn.Predef_undefined)
@@ -189,7 +196,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
           capturedValue(ctr.owner, underlying)
             .getOrElse {
               report.error(
-                s"Unknown capture variable $name in $ctr of ${ctr.owner}"
+                s"Unknown captured variable $name in $ctr of ${ctr.owner}"
               )
               ref(defn.Predef_undefined)
             }
