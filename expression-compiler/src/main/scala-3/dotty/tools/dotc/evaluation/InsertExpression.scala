@@ -44,7 +44,7 @@ class InsertExpression(using
         |          m.getReturnType.getName == returnTypeName &&
         |          m.getParameterTypes.map(_.getName).toSeq == paramTypesNames.toSeq
         |      }
-        |      .get
+        |      .getOrElse(throw new NoSuchMethodException(methodName))
         |    method.setAccessible(true)
         |    method.invoke(obj, args*)
         |
@@ -53,7 +53,7 @@ class InsertExpression(using
         |    val clazz = classLoader.loadClass(className)
         |    val constructor = clazz.getConstructors
         |      .find { c => c.getParameterTypes.map(_.getName).toSeq == paramTypesNames.toSeq }
-        |      .get
+        |      .getOrElse(throw new NoSuchMethodException(s"new $$className"))
         |    constructor.setAccessible(true)
         |    constructor.newInstance(args*)
         |
@@ -69,9 +69,12 @@ class InsertExpression(using
         |    field.setAccessible(true)
         |    field.set(obj, value)
         |
-        |  private def getOuter(obj: Any): Any =
+        |  private def getOuter(obj: Any, outerTypeName: String): Any =
         |    val clazz = obj.getClass
-        |    val field = clazz.getDeclaredField("$$outer")
+        |    val field = getSuperclassIterator(clazz)
+        |      .flatMap(_.getDeclaredFields)
+        |      .find { field => field.getName == "$$outer" && field.getType.getName == outerTypeName }
+        |      .getOrElse(throw new NoSuchFieldException("$$outer"))
         |    field.setAccessible(true)
         |    field.get(obj)
         |
@@ -80,6 +83,9 @@ class InsertExpression(using
         |    val field = clazz.getDeclaredField("MODULE$$")
         |    field.setAccessible(true)
         |    field.get(null)
+        |
+        |  private def getSuperclassIterator(clazz: Class[?]): Iterator[Class[?]] =
+        |    Iterator.iterate(clazz)(_.getSuperclass).takeWhile(_ != null)
         |
         |  // a fake method that is used between the extract-expression and the resolve-reflect-eval phases, 
         |  // which transforms them to calls of one of the methods defined above.

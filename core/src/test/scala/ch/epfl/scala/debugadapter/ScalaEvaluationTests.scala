@@ -475,7 +475,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
         Breakpoint(7)(
-          Evaluation.success("a1", new NoSuchFieldException("$outer"))
+          Evaluation.success(
+            "a1",
+            if (isScala3) new NoSuchFieldException("$outer")
+            else new NoSuchFieldError("$outer")
+          )
         )
       )
     }
@@ -824,7 +828,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           Evaluation.success("x1", "x1"), // captured by B
           Evaluation.success("m()", "x1x2"), // captures x2
           Evaluation.success("this.m()", "x1"),
-          Evaluation.success("A.this.m()", new NoSuchFieldException("$outer")),
+          Evaluation.success(
+            "A.this.m()",
+            if (isScala3) new NoSuchFieldException("$outer")
+            else new NoSuchFieldError("$outer")
+          ),
           Evaluation.successOrIgnore("new B", isScala2)(
             _.startsWith("A$B$1@")
           ) // captures x1

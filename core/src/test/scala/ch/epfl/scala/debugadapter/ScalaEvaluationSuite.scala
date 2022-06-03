@@ -83,17 +83,6 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
               case Right(m: String) if m.endsWith('"' + n.toString + '"') =>
                 ()
             }
-          case expected: NoSuchFieldException =>
-            if (isScala3)
-              assert(resp.exists(res => res.endsWith("\"" + expected + "\"")))
-            else
-              assert(
-                resp.exists(res =>
-                  res.endsWith(
-                    "\"" + new NoSuchFieldError(expected.getMessage) + "\""
-                  )
-                )
-              )
           case expected =>
             assert(resp.exists(_.endsWith("\"" + expected + "\"")))
         }

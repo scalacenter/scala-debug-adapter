@@ -308,5 +308,50 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
         )
       )
     }
+
+    "evaluate expression involving enums" - {
+      val source =
+        """|package example
+           |
+           |enum A(val a: Int) extends java.lang.Enum[A]:
+           |  case A1 extends A(1)
+           |  case A2 extends A(2)
+           |
+           |class B(b: String):
+           |  private enum C(c: String):
+           |    case C1 extends C(b)
+           |    case C2(x: String) extends C(x)
+           |
+           |    def m: String = b + c
+           |
+           |  def bar: String =
+           |    C.C1.m
+           |
+           |object Main:
+           |  def main(args: Array[String]): Unit =
+           |    val b = new B("b")
+           |    println(b.bar)
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(12)(),
+        Breakpoint(12)(),
+        Breakpoint(15)(),
+        Breakpoint(20)( // in A#m
+          Evaluation.success("A.A1.a", 1),
+          Evaluation.success("A.A2.a", 2)
+        ),
+        Breakpoint(15)(
+          Evaluation.success("C.C1.m", "bb"),
+          Evaluation.success("C.C2(\"bb\").m", "bbb"),
+          Evaluation.success("this.C.C2(\"bb\").m", "bbb")
+        ),
+        Breakpoint(12)(
+          Evaluation.success("C1.m", "bb"),
+          Evaluation.success("C2(\"bb\").m", "bbb"),
+          Evaluation.success("B.this.C.C1.m", "bb"),
+          Evaluation.success("C.C2(\"bb\").m", "bbb")
+        )
+      )
+    }
   }
 }

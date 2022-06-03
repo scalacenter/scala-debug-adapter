@@ -30,7 +30,8 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
           val args = argsTree.asInstanceOf[JavaSeqLiteral].elems
           tree.attachment(EvaluationStrategy) match
             case EvaluationStrategy.This => getLocalValue("$this")
-            case EvaluationStrategy.Outer => getOuter(qualifier)
+            case EvaluationStrategy.Outer(outerCls) =>
+              getOuter(qualifier, outerCls)
             case EvaluationStrategy.LocalValue(variable) =>
               derefCapturedVar(getLocalValue(variable.name.toString), variable)
             case EvaluationStrategy.ClassCapture(variable, cls) =>
@@ -83,10 +84,12 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
       List(Literal(Constant(name)))
     )
 
-  private def getOuter(qualifier: Tree)(using Context): Tree =
+  private def getOuter(qualifier: Tree, outerCls: ClassSymbol)(using
+      Context
+  ): Tree =
     Apply(
       Select(This(evalCtx.evaluationClass), termName("getOuter")),
-      List(qualifier)
+      List(qualifier, Literal(Constant(JavaEncoding.encode(outerCls))))
     )
 
   private def getClassCapture(
@@ -247,11 +250,11 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
   private def capturedByClass(cls: ClassSymbol, originalName: TermName)(using
       Context
   ): Option[Tree] =
-    // should call getClassCapture instead
-    val deepness = evalCtx.classOwners.takeWhile(_ != cls).size
-    val qualifier = 0
-      .until(deepness)
-      .foldLeft(getLocalValue("$this"))((q, _) => getOuter(q))
+    val target = evalCtx.classOwners.indexOf(cls)
+    val qualifier = evalCtx.classOwners
+      .drop(1)
+      .take(target)
+      .foldLeft(getLocalValue("$this"))((q, cls) => getOuter(q, cls))
     getClassCapture(qualifier, originalName, cls)
 
 object ResolveReflectEval:
