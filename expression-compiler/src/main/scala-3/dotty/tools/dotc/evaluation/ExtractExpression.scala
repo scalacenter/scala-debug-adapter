@@ -128,29 +128,26 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           thisOrOuterValue(tree.symbol)
 
         // inaccessible constructors
-        case tree @ Apply(Select(New(cls), _), _)
+        case tree: (Select | Apply | TypeApply)
             if isInaccessibleConstructor(tree.symbol) =>
-          val args = tree.args.map(transform)
-          val qualifier = getTransformedQualifier(cls)
+          val args = getTransformedArgs(tree)
+          val qualifier = getTransformedQualifierOfNew(tree)
           callConstructor(qualifier, tree.symbol.asTerm, args, tree.tpe)
-        case tree: TypeApply if isInaccessibleConstructor(tree.symbol) =>
-          transform(tree.fun)
-        case tree: (Select | Ident) if isInaccessibleConstructor(tree.symbol) =>
-          val qualifier = getTransformedQualifier(tree)
-          callConstructor(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
 
         // inaccessible methods
-        case tree: Apply if isInaccessibleMethod(tree.symbol) =>
-          val args = tree.args.map(transform)
-          val qualifier = getTransformedQualifier(tree.fun)
-          callMethod(qualifier, tree.symbol.asTerm, args, tree.tpe)
-        case tree: TypeApply if isInaccessibleMethod(tree.symbol) =>
-          transform(tree.fun)
-        case tree: (Select | Ident) if isInaccessibleMethod(tree.symbol) =>
+        case tree: (Ident | Select | Apply | TypeApply)
+            if isInaccessibleMethod(tree.symbol) =>
+          val args = getTransformedArgs(tree)
           val qualifier = getTransformedQualifier(tree)
-          callMethod(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
+          callMethod(qualifier, tree.symbol.asTerm, args, tree.tpe)
 
         case tree => super.transform(tree)
+
+    private def getTransformedArgs(tree: Tree)(using Context): List[Tree] =
+      tree match
+        case _: (Ident | Select) => List.empty
+        case Apply(fun, args) => getTransformedArgs(fun) ++ args.map(transform)
+        case TypeApply(fun, _) => getTransformedArgs(fun)
 
     private def getTransformedQualifier(tree: Tree)(using Context): Tree =
       tree match
@@ -159,9 +156,22 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           if isStaticObject(owner)
           then getStaticObject(owner)
           else thisOrOuterValue(owner)
+        case Select(New(tree), _) => getTransformedPrefix(tree)
         case Select(qualifier, _) => transform(qualifier)
         case Apply(fun, _) => getTransformedQualifier(fun)
         case TypeApply(fun, _) => getTransformedQualifier(fun)
+
+    private def getTransformedQualifierOfNew(tree: Tree)(using Context): Tree =
+      tree match
+        case Select(New(tree), _) => getTransformedPrefix(tree)
+        case Apply(fun, _) => getTransformedQualifier(fun)
+        case TypeApply(fun, _) => getTransformedQualifier(fun)
+
+    private def getTransformedPrefix(tree: Tree)(using Context): Tree =
+      tree match
+        case Ident(_) => thisOrOuterValue(tree.symbol.owner)
+        case Select(qualifier, _) => transform(qualifier)
+        case AppliedTypeTree(tpt, _) => getTransformedPrefix(tpt)
 
   end ExpressionTransformer
 
@@ -173,12 +183,14 @@ class ExtractExpression(using evalCtx: EvaluationContext)
     val cls = symbol.ownersIterator.find(_.isClass).get
     val owners = evalCtx.classOwners.toSeq
     val target = owners.indexOf(cls)
-    owners
-      .take(target + 1)
-      .drop(1)
-      .foldLeft(getThis) { (innerObj, outerSym) =>
-        getOuter(innerObj, outerSym.thisType)
-      }
+    if target >= 0 then
+      owners
+        .take(target + 1)
+        .drop(1)
+        .foldLeft(getThis) { (innerObj, outerSym) =>
+          getOuter(innerObj, outerSym.thisType)
+        }
+    else Literal(Constant(null))
 
   private def getThis(using Context): Tree =
     reflectEval(

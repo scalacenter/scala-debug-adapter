@@ -37,8 +37,8 @@ class InsertExpression(using
         |    valuesByName(name)
         |
         |  def callMethod(obj: Any, className: String, methodName: String, paramTypesNames: Array[String], returnTypeName: String, args: Array[Object]): Any =
-        |    val methods = getClass.getClassLoader.loadClass(className).getDeclaredMethods
-        |    val method = methods
+        |    val clazz = getClass.getClassLoader.loadClass(className)
+        |    val method = clazz.getDeclaredMethods
         |      .find { m => 
         |        m.getName == methodName &&
         |          m.getReturnType.getName == returnTypeName &&
@@ -51,8 +51,9 @@ class InsertExpression(using
         |  def callConstructor(className: String, paramTypesNames: Array[String], args: Array[Object]): Any =
         |    val classLoader = getClass.getClassLoader
         |    val clazz = classLoader.loadClass(className)
-        |    val paramClasses = paramTypesNames.map(classLoader.loadClass)
-        |    val constructor = clazz.getConstructor(paramClasses*)
+        |    val constructor = clazz.getConstructors
+        |      .find { c => c.getParameterTypes.map(_.getName).toSeq == paramTypesNames.toSeq }
+        |      .get
         |    constructor.setAccessible(true)
         |    constructor.newInstance(args*)
         |

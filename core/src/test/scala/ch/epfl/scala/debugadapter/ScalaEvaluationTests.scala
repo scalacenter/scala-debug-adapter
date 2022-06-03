@@ -1089,6 +1089,53 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "evaluate type parameter list and multi parameter lists" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    println("Hello, World!")
+           |  }
+           |
+           |  def m1[X]: String = {
+           |    "m1[X]"
+           |  }
+           |
+           |  private def m2[X]: String = {
+           |    "m2[X]"
+           |  }
+           |
+           |  private def m3(x: Int)(y: String): String = {
+           |    s"m3($x)($y)"
+           |  }
+           |
+           |  private def m4[X, Y](x: X)(y: Y): String = {
+           |    s"m4($x)($y)"
+           |  }
+           |
+           |  private class A[X]
+           |  private class B(x: Int)(y: String)
+           |  private class C[X, Y](x: X)(y: Y)
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(5)(
+          Evaluation.success("m1[String]", "m1[X]"),
+          Evaluation.success("m1[A[Int]]", "m1[X]"),
+          Evaluation.success("m2[String]", "m2[X]"),
+          Evaluation.success("m3(1)(\"x\")", "m3(1)(x)"),
+          Evaluation
+            .successOrIgnore("m4[Int, String](1)(\"x\")", "m4(1)(x)", isScala2),
+          Evaluation.success("new A[String]")(_.startsWith("Main$A@")),
+          Evaluation.success("new B(2)(\"x\")")(_.startsWith("Main$B@")),
+          Evaluation.success("new C[Int, String](2)(\"x\")")(
+            _.startsWith("Main$C@")
+          )
+        )
+      )
+    }
+
     "evaluate tail-rec function" - {
       val source =
         """|object EvaluateTest {
