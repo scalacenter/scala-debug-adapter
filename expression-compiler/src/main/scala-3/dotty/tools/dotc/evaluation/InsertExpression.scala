@@ -36,8 +36,8 @@ class InsertExpression(using
         |  def getLocalValue(name: String): Any =
         |    valuesByName(name)
         |
-        |  def callMethod(obj: Any, methodName: String, paramTypesNames: Array[String], returnTypeName: String, args: Array[Object]): Any =
-        |    val methods = obj.getClass.getDeclaredMethods
+        |  def callMethod(obj: Any, className: String, methodName: String, paramTypesNames: Array[String], returnTypeName: String, args: Array[Object]): Any =
+        |    val methods = getClass.getClassLoader.loadClass(className).getDeclaredMethods
         |    val method = methods
         |      .find { m => 
         |        m.getName == methodName &&
@@ -50,34 +50,39 @@ class InsertExpression(using
         |
         |  def callConstructor(className: String, paramTypesNames: Array[String], args: Array[Object]): Any =
         |    val classLoader = getClass.getClassLoader
-        |    val clazz = getClass.getClassLoader.loadClass(className)
+        |    val clazz = classLoader.loadClass(className)
         |    val paramClasses = paramTypesNames.map(classLoader.loadClass)
         |    val constructor = clazz.getConstructor(paramClasses*)
         |    constructor.setAccessible(true)
         |    constructor.newInstance(args*)
         |
-        |  def getField(obj: Any, name: String): Any =
-        |    val clazz = obj.getClass
-        |    val field = clazz.getDeclaredField(name)
+        |  def getField(obj: Any, className: String, fieldName: String): Any =
+        |    val clazz = getClass.getClassLoader.loadClass(className)
+        |    val field = clazz.getDeclaredField(fieldName)
         |    field.setAccessible(true)
         |    field.get(obj)
         |
-        |  def setField(obj: Any, name: String, value: Any) =
-        |    val clazz = obj.getClass
-        |    val field = clazz.getDeclaredField(name)
+        |  private def setField(obj: Any, className: String, fieldName: String, value: Any): Unit =
+        |    val clazz = getClass.getClassLoader.loadClass(className)
+        |    val field = clazz.getDeclaredField(fieldName)
         |    field.setAccessible(true)
         |    field.set(obj, value)
         |
-        |  def getStaticObject(className: String): Any =
+        |  private def getOuter(obj: Any): Any =
+        |    val clazz = obj.getClass
+        |    val field = clazz.getDeclaredField("$$outer")
+        |    field.setAccessible(true)
+        |    field.get(obj)
+        |
+        |  private def getStaticObject(className: String): Any =
         |    val clazz = getClass.getClassLoader.loadClass(className)
         |    val field = clazz.getDeclaredField("MODULE$$")
         |    field.setAccessible(true)
         |    field.get(null)
         |
-        |  // a fake method that is used internally of the expression compiler, in Apply nodes, 
-        |  // until it transform them to calls of one of the methods defined above.
-        |  def reflectEval(qualifier: Object, term: String, args: Array[Object]): Any = ???
-        |
+        |  // a fake method that is used between the extract-expression and the resolve-reflect-eval phases, 
+        |  // which transforms them to calls of one of the methods defined above.
+        |  private def reflectEval(qualifier: Object, term: String, args: Array[Object]): Any = ???
         |""".stripMargin
 
   override def run(using Context): Unit =

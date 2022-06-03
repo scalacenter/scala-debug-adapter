@@ -1041,6 +1041,54 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "evaluate private members in parent class" - {
+      val source =
+        """|package example
+           |
+           |abstract class BaseA {
+           |  private val x: String = "x"
+           |  private var y: String = "y"
+           |  private lazy val z: String = "z"
+           |  def m1: String = {
+           |    val b = new B
+           |    b.m3 + m2
+           |  }
+           |  private def m2: String = {
+           |    y + z
+           |  }
+           |  private abstract class BaseB {
+           |    def m3: String = {
+           |      x
+           |    }
+           |  }
+           |  private class B extends BaseB
+           |}
+           |
+           |class A extends BaseA
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A
+           |    println(a.m1)
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(9)(
+          Evaluation.successOrIgnore("x", "x", isScala2),
+          Evaluation.successOrIgnore("this.x", "x", isScala2),
+          Evaluation.successOrIgnore("y", "y", isScala2),
+          Evaluation.successOrIgnore("this.y = \"yy\"", (), isScala2),
+          Evaluation.successOrIgnore("y", "yy", isScala2),
+          Evaluation.successOrIgnore("z", "z", isScala2),
+          Evaluation.successOrIgnore("m2", "yyz", isScala2)
+        ),
+        Breakpoint(16)(
+          Evaluation.success("x", "x")
+        )
+      )
+    }
+
     "evaluate tail-rec function" - {
       val source =
         """|object EvaluateTest {
