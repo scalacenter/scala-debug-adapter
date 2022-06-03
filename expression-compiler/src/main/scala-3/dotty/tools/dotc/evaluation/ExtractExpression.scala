@@ -109,14 +109,8 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           Assign(lhs, transform(rhs))
 
         // inaccessible fields
-        case tree: Ident if isInaccessibleField(tree.symbol) =>
-          val qualifier =
-            if isStaticObject(tree.symbol.owner)
-            then getStaticObject(tree.symbol.owner)
-            else getThis
-          getField(qualifier, tree.symbol.asTerm, tree.tpe)
-        case tree: Select if isInaccessibleField(tree.symbol) =>
-          val qualifier = transform(tree.qualifier)
+        case tree: (Ident | Select) if isInaccessibleField(tree.symbol) =>
+          val qualifier = getTransformedQualifier(tree)
           getField(qualifier, tree.symbol.asTerm, tree.tpe)
 
         // assignment to inaccessible fields
@@ -134,30 +128,42 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           thisOrOuterValue(tree.symbol)
 
         // inaccessible constructors
-        case tree @ Apply(fun @ Select(New(classTree), _), _)
-            if isInaccessibleConstructor(fun.symbol) =>
+        case tree @ Apply(Select(New(cls), _), _)
+            if isInaccessibleConstructor(tree.symbol) =>
           val args = tree.args.map(transform)
-          // the qualifier can be captured by the constructor
-          val qualifier = classTree match
-            case Select(qualifier, _) => transform(qualifier)
-            case tree @ Ident(_) => thisOrOuterValue(tree.symbol.owner)
-            case _ => EmptyTree
-          callConstructor(qualifier, fun.symbol.asTerm, args, tree.tpe)
+          val qualifier = getTransformedQualifier(cls)
+          callConstructor(qualifier, tree.symbol.asTerm, args, tree.tpe)
+        case tree: TypeApply if isInaccessibleConstructor(tree.symbol) =>
+          transform(tree.fun)
+        case tree: (Select | Ident) if isInaccessibleConstructor(tree.symbol) =>
+          val qualifier = getTransformedQualifier(tree)
+          callConstructor(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
 
         // inaccessible methods
-        case tree @ Apply(fun: Select, _) if isInaccessibleMethod(fun.symbol) =>
+        case tree: Apply if isInaccessibleMethod(tree.symbol) =>
           val args = tree.args.map(transform)
-          val qualifier = transform(fun.qualifier)
-          callMethod(qualifier, fun.symbol.asTerm, args, tree.tpe)
-        case tree @ Apply(fun: Ident, _) if isInaccessibleMethod(fun.symbol) =>
-          val owner = fun.symbol.owner
-          val qualifier =
-            if isStaticObject(owner)
-            then getStaticObject(owner)
-            else thisOrOuterValue(owner)
-          val args = tree.args.map(transform)
-          callMethod(qualifier, fun.symbol.asTerm, args, tree.tpe)
+          val qualifier = getTransformedQualifier(tree.fun)
+          callMethod(qualifier, tree.symbol.asTerm, args, tree.tpe)
+        case tree: TypeApply if isInaccessibleMethod(tree.symbol) =>
+          transform(tree.fun)
+        case tree: (Select | Ident) if isInaccessibleMethod(tree.symbol) =>
+          val qualifier = getTransformedQualifier(tree)
+          callMethod(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
+
         case tree => super.transform(tree)
+
+    private def getTransformedQualifier(tree: Tree)(using Context): Tree =
+      tree match
+        case Ident(_) =>
+          val owner = tree.symbol.owner
+          if isStaticObject(owner)
+          then getStaticObject(owner)
+          else thisOrOuterValue(owner)
+        case Select(qualifier, _) => transform(qualifier)
+        case Apply(fun, _) => getTransformedQualifier(fun)
+        case TypeApply(fun, _) => getTransformedQualifier(fun)
+
+  end ExpressionTransformer
 
   private def isExpressionVal(sym: Symbol)(using Context): Boolean =
     sym.name == evalCtx.expressionTermName

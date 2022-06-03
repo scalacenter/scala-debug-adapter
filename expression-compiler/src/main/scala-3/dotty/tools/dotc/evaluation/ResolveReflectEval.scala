@@ -30,7 +30,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
           val args = argsTree.asInstanceOf[JavaSeqLiteral].elems
           tree.attachment(EvaluationStrategy) match
             case EvaluationStrategy.This => getLocalValue("$this")
-            case EvaluationStrategy.Outer => getField(qualifier, "$outer")
+            case EvaluationStrategy.Outer => getOuter(qualifier)
             case EvaluationStrategy.LocalValue(variable) =>
               derefCapturedVar(getLocalValue(variable.name.toString), variable)
             case EvaluationStrategy.ClassCapture(variable, cls) =>
@@ -53,9 +53,9 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               then
                 // a lazy val transformed into a getter method
                 callMethod(qualifier, field, Nil)
-              else getField(qualifier, field.name.toString)
+              else getField(qualifier, field)
             case EvaluationStrategy.FieldAssign(field) =>
-              setField(qualifier, field.name.toString, args.head)
+              setField(qualifier, field, args.head)
             case EvaluationStrategy.MethodCall(method) =>
               callMethod(qualifier, method, args)
             case EvaluationStrategy.ConstructorCall(ctr, cls) =>
@@ -70,15 +70,23 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
   private def derefCapturedVar(tree: Tree, term: TermSymbol)(using
       Context
   ): Tree =
-    term.info.typeSymbol.fullName.toString match
+    val typeSymbol = term.info.typeSymbol
+    typeSymbol.fullName.toString match
       case s"scala.runtime.${_}Ref" =>
-        getField(tree, "elem")
+        val elemField = typeSymbol.info.decl(termName("elem")).symbol
+        getField(tree, elemField.asTerm)
       case _ => tree
 
   private def getLocalValue(name: String)(using Context): Tree =
     Apply(
       Select(This(evalCtx.evaluationClass), termName("getLocalValue")),
       List(Literal(Constant(name)))
+    )
+
+  private def getOuter(qualifier: Tree)(using Context): Tree =
+    Apply(
+      Select(This(evalCtx.evaluationClass), termName("getOuter")),
+      List(qualifier)
     )
 
   private def getClassCapture(
@@ -96,7 +104,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
             info.name == originalName
           case _ => false
       }
-      .map(field => getField(qualifier, field.name.toString))
+      .map(field => getField(qualifier, field.asTerm))
 
   private def getMethodCapture(method: TermSymbol, originalName: TermName)(using
       Context
@@ -116,23 +124,27 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
       List(Literal(Constant(className)))
     )
 
-  private def getField(qualifier: Tree, field: String)(using Context): Tree =
+  private def getField(qualifier: Tree, field: TermSymbol)(using
+      Context
+  ): Tree =
     Apply(
       Select(This(evalCtx.evaluationClass), termName("getField")),
       List(
         qualifier,
-        Literal(Constant(field))
+        Literal(Constant(JavaEncoding.encode(field.owner))),
+        Literal(Constant(field.name.toString))
       )
     )
 
-  private def setField(qualifier: Tree, field: String, arg: Tree)(using
+  private def setField(qualifier: Tree, field: TermSymbol, arg: Tree)(using
       Context
   ): Tree =
     Apply(
       Select(This(evalCtx.evaluationClass), termName("setField")),
       List(
         qualifier,
-        Literal(Constant(field)),
+        Literal(Constant(JavaEncoding.encode(field.owner))),
+        Literal(Constant(field.name.toString)),
         arg
       )
     )
@@ -167,6 +179,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
       Select(This(evalCtx.evaluationClass), termName("callMethod")),
       List(
         qualifier,
+        Literal(Constant(JavaEncoding.encode(method.owner))),
         Literal(Constant(method.name.toString)),
         paramTypesArray,
         Literal(Constant(returnTypeName)),
@@ -238,7 +251,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
     val deepness = evalCtx.classOwners.takeWhile(_ != cls).size
     val qualifier = 0
       .until(deepness)
-      .foldLeft(getLocalValue("$this"))((q, _) => getField(q, "$outer"))
+      .foldLeft(getLocalValue("$this"))((q, _) => getOuter(q))
     getClassCapture(qualifier, originalName, cls)
 
 object ResolveReflectEval:
