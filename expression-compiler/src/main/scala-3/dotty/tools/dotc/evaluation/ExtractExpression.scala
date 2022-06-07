@@ -65,16 +65,12 @@ class ExtractExpression(using evalCtx: EvaluationContext)
     override def transform(tree: Tree)(using Context): Tree =
       tree match
         // static object
-        case tree: Ident if isStaticObject(tree.symbol) =>
-          getStaticObject(tree.symbol.moduleClass)
-        case tree: Select if isStaticObject(tree.symbol) =>
+        case tree: (Ident | Select) if isStaticObject(tree.symbol) =>
           getStaticObject(tree.symbol.moduleClass)
 
         // non-static object
-        case tree: Ident if isNonStaticObject(tree.symbol) =>
-          callMethod(getThis, tree.symbol.asTerm, List.empty, tree.tpe)
-        case tree: Select if isNonStaticObject(tree.symbol) =>
-          val qualifier = transform(tree.qualifier)
+        case tree: (Ident | Select) if isNonStaticObject(tree.symbol) =>
+          val qualifier = getTransformedQualifier(tree)
           callMethod(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
 
         // local variable
@@ -115,12 +111,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
 
         // assignment to inaccessible fields
         case tree @ Assign(lhs, rhs) if isInaccessibleField(lhs.symbol) =>
-          val qualifier = lhs match
-            case lhs: Ident =>
-              if isStaticObject(lhs.symbol.owner)
-              then getStaticObject(lhs.symbol.owner)
-              else getThis
-            case lhs: Select => transform(lhs.qualifier)
+          val qualifier = getTransformedQualifier(lhs)
           setField(qualifier, lhs.symbol.asTerm, transform(rhs), tree.tpe)
 
         // this or outer this
@@ -141,7 +132,11 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           val qualifier = getTransformedQualifier(tree)
           callMethod(qualifier, tree.symbol.asTerm, args, tree.tpe)
 
-        case tree => super.transform(tree)
+        case Typed(tree, tpt)
+            if tpt.symbol.isType && !isTypeAccessible(tpt.symbol.asType) =>
+          transform(tree)
+        case tree =>
+          super.transform(tree)
 
     private def getTransformedArgs(tree: Tree)(using Context): List[Tree] =
       tree match
@@ -156,7 +151,6 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           if isStaticObject(owner)
           then getStaticObject(owner)
           else thisOrOuterValue(owner)
-        case Select(New(tree), _) => getTransformedPrefix(tree)
         case Select(qualifier, _) => transform(qualifier)
         case Apply(fun, _) => getTransformedQualifier(fun)
         case TypeApply(fun, _) => getTransformedQualifier(fun)
@@ -164,8 +158,8 @@ class ExtractExpression(using evalCtx: EvaluationContext)
     private def getTransformedQualifierOfNew(tree: Tree)(using Context): Tree =
       tree match
         case Select(New(tree), _) => getTransformedPrefix(tree)
-        case Apply(fun, _) => getTransformedQualifier(fun)
-        case TypeApply(fun, _) => getTransformedQualifier(fun)
+        case Apply(fun, _) => getTransformedQualifierOfNew(fun)
+        case TypeApply(fun, _) => getTransformedQualifierOfNew(fun)
 
     private def getTransformedPrefix(tree: Tree)(using Context): Tree =
       tree match
@@ -185,10 +179,10 @@ class ExtractExpression(using evalCtx: EvaluationContext)
     val target = owners.indexOf(cls)
     if target >= 0 then
       owners
-        .take(target + 1)
         .drop(1)
+        .take(target)
         .foldLeft(getThis) { (innerObj, outerSym) =>
-          getOuter(innerObj, outerSym.thisType)
+          getOuter(innerObj, outerSym, outerSym.thisType)
         }
     else Literal(Constant(null))
 
@@ -200,12 +194,12 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       Some(evalCtx.classOwners.head.thisType)
     )
 
-  private def getOuter(qualifier: Tree, tpe: Type)(using
+  private def getOuter(qualifier: Tree, outerCls: ClassSymbol, tpe: Type)(using
       Context
   ): Tree =
     reflectEval(
       Some(qualifier),
-      EvaluationStrategy.Outer,
+      EvaluationStrategy.Outer(outerCls),
       List.empty,
       Some(tpe)
     )
