@@ -63,7 +63,11 @@ class ExtractExpression(using evalCtx: EvaluationContext)
 
   private object ExpressionTransformer extends TreeMap:
     override def transform(tree: Tree)(using Context): Tree =
-      tree match
+      val desugaredIdent = tree match
+        case tree: Ident => desugarIdent(tree)
+        case _ => tree
+
+      desugaredIdent match
         // static object
         case tree: (Ident | Select) if isStaticObject(tree.symbol) =>
           getStaticObject(tree.symbol.moduleClass)
@@ -151,7 +155,11 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           if isStaticObject(owner)
           then getStaticObject(owner)
           else thisOrOuterValue(owner)
-        case Select(qualifier, _) => transform(qualifier)
+        case Select(qualifier, _) =>
+          val owner = tree.symbol.owner
+          if isStaticObject(owner)
+          then getStaticObject(owner)
+          else transform(qualifier)
         case Apply(fun, _) => getTransformedQualifier(fun)
         case TypeApply(fun, _) => getTransformedQualifier(fun)
 
@@ -175,21 +183,21 @@ class ExtractExpression(using evalCtx: EvaluationContext)
   // symbol can be a class or a method
   private def thisOrOuterValue(symbol: Symbol)(using Context): Tree =
     val cls = symbol.ownersIterator.find(_.isClass).get
-    val owners = evalCtx.classOwners.toSeq
-    val target = owners.indexOf(cls)
+    val ths = getThis(evalCtx.classOwners.head)
+    val target = evalCtx.classOwners.indexOf(cls)
     if target >= 0 then
-      owners
+      evalCtx.classOwners
         .drop(1)
         .take(target)
-        .foldLeft(getThis) { (innerObj, outerSym) =>
+        .foldLeft(ths) { (innerObj, outerSym) =>
           getOuter(innerObj, outerSym, outerSym.thisType)
         }
-    else Literal(Constant(null))
+    else nullLiteral
 
-  private def getThis(using Context): Tree =
+  private def getThis(cls: ClassSymbol)(using Context): Tree =
     reflectEval(
       None,
-      EvaluationStrategy.This,
+      EvaluationStrategy.This(cls),
       List.empty,
       Some(evalCtx.classOwners.head.thisType)
     )

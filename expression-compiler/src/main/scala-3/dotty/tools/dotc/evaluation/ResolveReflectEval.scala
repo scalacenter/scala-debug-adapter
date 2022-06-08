@@ -13,6 +13,9 @@ import dotty.tools.dotc.transform.SymUtils.*
 import dotty.tools.dotc.core.StdNames.*
 import dotty.tools.dotc.core.NameKinds.QualifiedInfo
 import dotty.tools.dotc.report
+import dotty.tools.dotc.core.Phases
+import dotty.tools.dotc.core.TypeErasure.ErasedValueType
+import dotty.tools.dotc.transform.ValueClasses
 
 class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
   override def phaseName: String = ResolveReflectEval.name
@@ -29,11 +32,25 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
           val qualifier :: _ :: argsTree :: Nil = tree.args.map(transform)
           val args = argsTree.asInstanceOf[JavaSeqLiteral].elems
           tree.attachment(EvaluationStrategy) match
-            case EvaluationStrategy.This => getLocalValue("$this")
+            case EvaluationStrategy.This(cls) =>
+              if cls.isValueClass then
+                // if cls is a value class then the local $this is the erased value,
+                // but we expect an instance of the value class instead
+                // so we call the constructor of the value class
+                callConstructor(
+                  nullLiteral,
+                  cls.primaryConstructor.asTerm,
+                  List(getLocalValue("$this"))
+                )
+              else getLocalValue("$this")
             case EvaluationStrategy.Outer(outerCls) =>
               getOuter(qualifier, outerCls)
             case EvaluationStrategy.LocalValue(variable) =>
-              derefCapturedVar(getLocalValue(variable.name.toString), variable)
+              val localValue = derefCapturedVar(
+                getLocalValue(variable.name.toString),
+                variable
+              )
+              boxIfValueClass(variable, localValue)
             case EvaluationStrategy.ClassCapture(variable, cls) =>
               val capture = getClassCapture(qualifier, variable.name, cls)
                 .getOrElse {
@@ -50,13 +67,17 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               derefCapturedVar(capture, variable)
             case EvaluationStrategy.StaticObject(obj) => getStaticObject(obj)
             case EvaluationStrategy.Field(field) =>
-              if field.is(Lazy)
-              then
-                // a lazy val transformed into a getter method
-                callMethod(qualifier, field, Nil)
-              else getField(qualifier, field)
+              // if the field is lazy or if it is private in a value class
+              // then we must call the getter method
+              val fieldValue =
+                if field.is(Lazy) || field.owner.isValueClass then
+                  assert(field.is(Method))
+                  callMethod(qualifier, field, Nil)
+                else getField(qualifier, field)
+              boxIfValueClass(field, fieldValue)
             case EvaluationStrategy.FieldAssign(field) =>
-              setField(qualifier, field, args.head)
+              val arg = unboxIfValueClass(field, args.head)
+              setField(qualifier, field, arg)
             case EvaluationStrategy.MethodCall(method) =>
               callMethod(qualifier, method, args)
             case EvaluationStrategy.ConstructorCall(ctr, cls) =>
@@ -77,6 +98,28 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
         val elemField = typeSymbol.info.decl(termName("elem")).symbol
         getField(tree, elemField.asTerm)
       case _ => tree
+
+  private def boxIfValueClass(term: TermSymbol, tree: Tree)(using
+      Context
+  ): Tree =
+    atPhase(Phases.elimErasedValueTypePhase)(term.info) match
+      case tpe: ErasedValueType =>
+        val ctor = tpe.tycon.typeSymbol.primaryConstructor
+        // qualifier is null: a value class cannot be nested into a class
+        callConstructor(nullLiteral, ctor.asTerm, List(tree))
+      case tpe =>
+        tree
+
+  private def unboxIfValueClass(term: TermSymbol, tree: Tree)(using
+      Context
+  ): Tree =
+    atPhase(Phases.elimErasedValueTypePhase)(term.info) match
+      case tpe: ErasedValueType =>
+        val cls = tpe.tycon.typeSymbol.asClass
+        val unboxMethod = ValueClasses.valueClassUnbox(cls).asTerm
+        callMethod(tree, unboxMethod, Nil)
+      case tpe =>
+        tree
 
   private def getLocalValue(name: String)(using Context): Tree =
     Apply(

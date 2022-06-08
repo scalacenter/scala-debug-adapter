@@ -146,7 +146,6 @@ private[internal] class ExpressionEvaluator(
     val thisObjectOpt = Option(frame.thisObject) // this object can be null
     def extractVariablesFromFrame()
         : Safe[(List[StringReference], List[Value])] = {
-
       val variables: List[LocalVariable] =
         frame.visibleVariables().asScala.toList
       val variableNames =
@@ -175,19 +174,25 @@ private[internal] class ExpressionEvaluator(
     val isScala2 = scalaVersion.startsWith("2")
     for {
       (variableNames, variableValues) <- extractVariablesFromFrame()
-      // Currently we only need to load the fields in Scala 2
+      // Currently we only need to load the fields for the Scala 2
+      // expression evaluator.
       // It is dangerous because local values can shadow fields
       // TODO: adapt Scala 2 expression compiler
       (fieldNames, fieldValues) <- thisObjectOpt
         .filter(_ => isScala2)
         .map(extractFields)
         .getOrElse(Safe.lift((Nil, Nil)))
-      thisObjectName <- thisObjectOpt
+      // If `this` is a value class then the breakpoint must be in
+      // a generated method of its companion object which takes
+      // the erased value`$this` as argument.
+      thisObjectValue = thisObjectOpt
+        .filter(_ => !variableNames.exists(_.value == "$this"))
+      thisObjectName <- thisObjectValue
         .map(_ => classLoader.mirrorOf("$this"))
         .traverse
     } yield {
       val names = fieldNames ++ variableNames ++ thisObjectName
-      val values = fieldValues ++ variableValues ++ thisObjectOpt
+      val values = fieldValues ++ variableValues ++ thisObjectValue
       (names, values)
     }
   }

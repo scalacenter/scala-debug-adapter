@@ -176,12 +176,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |
            |object Main {
            |  def main(args: Array[String]): Unit = {
-           |    val a = new A("a")
+           |    val a = new A("a", 1)
            |    println(a)
            |  }
            |}
            |
-           |class A(name: String) {
+           |class A(name: String, val n: Int) {
            |  val a1 = s"$name.a1"
            |  private val a2 = s"$name.a2"
            |  
@@ -202,19 +202,20 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
         Breakpoint(6)(
           Evaluation.success("a.a1", "a.a1"),
           Evaluation.success("a.B.b1", "a.B.b1"),
-          Evaluation.success("new A(\"aa\").a1", "aa.a1"),
-          Evaluation.success("new A(\"aa\").B.b1", "aa.B.b1")
+          Evaluation.success("new A(\"aa\", 2).a1", "aa.a1"),
+          Evaluation.success("new A(\"aa\", 2).B.b1", "aa.B.b1")
         ),
         Breakpoint(23)(
           Evaluation.success("name", "a"),
+          Evaluation.success("n", 1),
           Evaluation.success("this.name", "a"),
           Evaluation.success("a1", "a.a1"),
           Evaluation.success("a2", "a.a2"),
-          Evaluation.successOrIgnore("new A(\"aa\").a2", "aa.a2", isScala2),
+          Evaluation.successOrIgnore("new A(\"aa\", 2).a2", "aa.a2", isScala2),
           Evaluation.success("B.b1", "a.B.b1"),
           Evaluation.success("this.B.b1", "a.B.b1"),
           Evaluation.success("C.c1", "a.C.c1"),
-          Evaluation.success("new A(\"aa\").C.c1", "aa.C.c1")
+          Evaluation.success("new A(\"aa\", 2).C.c1", "aa.C.c1")
         )
       )
     }
@@ -1140,6 +1141,67 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           Evaluation.success("new C[Int, String](2)(\"x\")")(
             _.startsWith("Main$C@")
           )
+        )
+      )
+    }
+
+    "evaluate instance of value class" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  var b1 = new B("foo")
+           |  private var c1 = new C(2)
+           |  def main(args: Array[String]): Unit = {
+           |    val b2 = new B("bar")
+           |    println(b1.m(c1))
+           |    println(m(b1 + b2))
+           |  }
+           |
+           |  def m(b: A): String = {
+           |    val c2 = new C(5)
+           |    b.m(c2)
+           |  }
+           |}
+           |
+           |trait A extends Any {
+           |  def m(c: C): String
+           |}
+           |
+           |class B(self: String) extends AnyVal with A {
+           |  def getSelf: String = self
+           |
+           |  def m(c: C): String = {
+           |    self.take(c.size)
+           |  }
+           |
+           |  def +(b: B): B = {
+           |    new B(self + b.getSelf)
+           |  }
+           |}
+           |
+           |class C(val size: Int) extends AnyVal
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(8)(
+          Evaluation.success("b1")(_.startsWith("B@")),
+          Evaluation.success("c1.size", 2),
+          Evaluation.success("b2.m(c1)", "ba"),
+          Evaluation.success("m(b2)", "bar"),
+          Evaluation.success("new B(\"fizz\")")(_.startsWith("B@")),
+          Evaluation.success("b1 + new B(\"buzz\")")(_.startsWith("B@"))
+        ),
+        Breakpoint(26)(
+          Evaluation.success("self", "foo"),
+          Evaluation.success("m(c)", "fo")
+        ),
+        Breakpoint(9)(
+          Evaluation.success("b1 = new B(\"fizz\")", ()),
+          Evaluation.success("c1 = new C(3)", ())
+        ),
+        Breakpoint(26)(
+          Evaluation.success("self", "fizzbar"),
+          Evaluation.success("m(c)", "fizzb")
         )
       )
     }

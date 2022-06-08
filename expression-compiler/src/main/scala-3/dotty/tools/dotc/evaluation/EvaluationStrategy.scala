@@ -10,7 +10,7 @@ import dotty.tools.dotc.util.Property.*
  * a method of the evaluation class.
  */
 enum EvaluationStrategy:
-  case This
+  case This(cls: ClassSymbol)
   case Outer(outerCls: ClassSymbol)
   case LocalValue(variable: TermSymbol)
   case MethodCapture(variable: TermSymbol, method: TermSymbol)
