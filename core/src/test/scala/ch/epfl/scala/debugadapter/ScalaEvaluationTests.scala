@@ -176,12 +176,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |
            |object Main {
            |  def main(args: Array[String]): Unit = {
-           |    val a = new A("a")
+           |    val a = new A("a", 1)
            |    println(a)
            |  }
            |}
            |
-           |class A(name: String) {
+           |class A(name: String, val n: Int) {
            |  val a1 = s"$name.a1"
            |  private val a2 = s"$name.a2"
            |  
@@ -202,19 +202,20 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
         Breakpoint(6)(
           Evaluation.success("a.a1", "a.a1"),
           Evaluation.success("a.B.b1", "a.B.b1"),
-          Evaluation.success("new A(\"aa\").a1", "aa.a1"),
-          Evaluation.success("new A(\"aa\").B.b1", "aa.B.b1")
+          Evaluation.success("new A(\"aa\", 2).a1", "aa.a1"),
+          Evaluation.success("new A(\"aa\", 2).B.b1", "aa.B.b1")
         ),
         Breakpoint(23)(
           Evaluation.success("name", "a"),
+          Evaluation.success("n", 1),
           Evaluation.success("this.name", "a"),
           Evaluation.success("a1", "a.a1"),
           Evaluation.success("a2", "a.a2"),
-          Evaluation.successOrIgnore("new A(\"aa\").a2", "aa.a2", isScala2),
+          Evaluation.successOrIgnore("new A(\"aa\", 2).a2", "aa.a2", isScala2),
           Evaluation.success("B.b1", "a.B.b1"),
           Evaluation.success("this.B.b1", "a.B.b1"),
           Evaluation.success("C.c1", "a.C.c1"),
-          Evaluation.success("new A(\"aa\").C.c1", "aa.C.c1")
+          Evaluation.success("new A(\"aa\", 2).C.c1", "aa.C.c1")
         )
       )
     }
@@ -1140,6 +1141,246 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           Evaluation.success("new C[Int, String](2)(\"x\")")(
             _.startsWith("Main$C@")
           )
+        )
+      )
+    }
+
+    "evaluate instance of value class" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  var b1 = new B("foo")
+           |  private var c1 = new C(2)
+           |  def main(args: Array[String]): Unit = {
+           |    val b2 = new B("bar")
+           |    println(b1.m(c1))
+           |    println(m(b1 + b2))
+           |  }
+           |
+           |  def m(b: A): String = {
+           |    val c2 = new C(5)
+           |    b.m(c2)
+           |  }
+           |}
+           |
+           |trait A extends Any {
+           |  def m(c: C): String
+           |}
+           |
+           |class B(val self: String) extends AnyVal with A {
+           |  def m(c: C): String = {
+           |    self.take(c.size)
+           |  }
+           |
+           |  def +(b: B): B = {
+           |    new B(self + b.self)
+           |  }
+           |}
+           |
+           |class C(val size: Int) extends AnyVal
+           |""".stripMargin
+
+      if (isScala3)
+        assertInMainClass(source, "example.Main")(
+          Breakpoint(8)(
+            Evaluation.success("b1")(_.startsWith("B@")),
+            Evaluation.success("c1.size", 2),
+            Evaluation.success("b2.m(c1)", "ba"),
+            Evaluation.success("m(b2)", "bar"),
+            Evaluation.success("new B(\"fizz\")")(_.startsWith("B@")),
+            Evaluation.success("b1 + new B(\"buzz\")")(_.startsWith("B@"))
+          ),
+          Breakpoint(24)(
+            Evaluation.success("self", "foo"),
+            Evaluation.success("m(c)", "fo")
+          ),
+          Breakpoint(9)(
+            Evaluation.success("b1 = new B(\"fizz\")", ()),
+            Evaluation.success("c1 = new C(3)", ())
+          ),
+          Breakpoint(24)(
+            Evaluation.success("self", "fizzbar"),
+            Evaluation.success("m(c)", "fizzb")
+          )
+        )
+      else
+        assertInMainClass(source, "example.Main")(
+          Breakpoint(8)(
+            Evaluation.success("b1", "foo"),
+            Evaluation.success("c1.size", 2),
+            Evaluation.success("b2.m(c1)", "ba"),
+            Evaluation.success("m(b2)", "bar"),
+            Evaluation.success("new B(\"fizz\")", "fizz"),
+            Evaluation.success("b1 + new B(\"buzz\")", "foobuzz")
+          ),
+          Breakpoint(24)(
+            Evaluation.ignore("self", Right("foo")),
+            Evaluation.ignore("m(c)", Right("fo"))
+          ),
+          Breakpoint(9)(
+            Evaluation.ignore("b1 = new B(\"fizz\")", Right("()")),
+            Evaluation.ignore("c1 = new C(3)", Right("()"))
+          ),
+          Breakpoint(24)(),
+          Breakpoint(24)(
+            Evaluation.ignore("self", Right("fizzbar")),
+            Evaluation.ignore("m(c)", Right("fizzb"))
+          )
+        )
+    }
+
+    "evaluate method or constructor that takes or returns an instance of value class" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def size: Size = new Size(1)
+           |  def getMsg(size: Size): Msg = {
+           |    new Msg(size)
+           |  }
+           |  def main(args: Array[String]): Unit = {
+           |    val msg = getMsg(size)
+           |    println(msg.value)
+           |  }
+           |}
+           |
+           |class Msg(size: Size) {
+           |  def value: String = {
+           |    "Hello, World!".take(size.value)
+           |  }
+           |}
+           |
+           |class Size(val value: Int) extends AnyVal
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(10)(
+          Evaluation.success("size.value", 1),
+          Evaluation.successOrIgnore(
+            """|def size2: Size = new Size(2)
+               |getMsg(size2).value""".stripMargin,
+            "He",
+            isScala2
+          ),
+          Evaluation.success("new Msg(new Size(3)).value", "Hel")
+        )
+      )
+    }
+
+    "evaluate local method in value class" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def size: Size = new Size(1)
+           |  def main(args: Array[String]): Unit = {
+           |    val msg = "foo"
+           |    println(msg.take(size.value))
+           |  }
+           |}
+           |
+           |class Size(val value: Int) extends AnyVal
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(7)(
+          Evaluation.success("msg.take(size.value)", "f"),
+          Evaluation.successOrIgnore(
+            """|def size2: Size = new Size(2)
+               |msg.take(size2.value)""".stripMargin,
+            "fo",
+            isScala2
+          )
+        )
+      )
+    }
+
+    "evaluate captured instance of value class" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val size = new Size(2)
+           |    class A(msg: String) {
+           |      def m: String = {
+           |        msg.take(size.value)
+           |      }
+           |    }
+           |    def m(msg: String): String = {
+           |      msg.take(size.value)
+           |    }
+           |    println(new A("foo").m)
+           |    println(m("bar"))
+           |  }
+           |}
+           |
+           |class Size(val value: Int) extends AnyVal
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(14)(
+          Evaluation.success("new A(\"foo\")")(_.startsWith("Main$A$1@")),
+          Evaluation.success("m(\"bar\")", "ba")
+        ),
+        Breakpoint(8)(
+          Evaluation.successOrIgnore("size", isScala2)(_.startsWith("Size@")),
+          Evaluation.successOrIgnore("size.value", 2, isScala2),
+          Evaluation.successOrIgnore("new A(\"foo\")", isScala2)(
+            _.startsWith("Main$A$1@")
+          )
+        ),
+        Breakpoint(12)(
+          if (isScala3) Evaluation.success("size")(_.startsWith("Size@"))
+          else Evaluation.success("size", 2),
+          Evaluation.success("size.value", 2),
+          Evaluation.success("m(\"bar\")", "ba")
+        )
+      )
+    }
+
+    "evaluate local method in value class" - {
+      val source =
+        """|package example
+           |
+           |class A(val self: String) extends AnyVal {
+           |  def m(size: Int): String = {
+           |    def m(mul: Int): String = {
+           |      self.take(size) * mul
+           |    }
+           |    m(2)
+           |  }
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A("foo")
+           |    println(a.m(2))
+           |  }
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(8)(
+          Evaluation.successOrIgnore("this.m(2)", "fofo", isScala2),
+          Evaluation.failedOrIgnore("m(3)", isScala2)(
+            _.format.contains("not supported")
+          )
+        ),
+        Breakpoint(6)(
+          if (isScala3)
+            Evaluation.failed("self")(_.format.contains("not supported"))
+          else Evaluation.success("self", "foo"),
+          if (isScala3)
+            Evaluation.failed("size")(_.format.contains("not supported"))
+          else Evaluation.success("size", 2),
+          if (isScala3)
+            Evaluation.failed("m(1)")(_.format.contains("not supported"))
+          else Evaluation.success("m(1)", "fo"),
+          if (isScala3)
+            Evaluation.failed("this.m(1)")(_.format.contains("not supported"))
+          else Evaluation.success("this.m(1)", "ff")
         )
       )
     }

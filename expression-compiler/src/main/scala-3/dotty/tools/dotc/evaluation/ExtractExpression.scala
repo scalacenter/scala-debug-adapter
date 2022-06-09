@@ -14,7 +14,6 @@ import dotty.tools.dotc.core.Denotations.SingleDenotation
 import dotty.tools.dotc.core.SymDenotations.SymDenotation
 import dotty.tools.dotc.transform.MacroTransform
 import dotty.tools.dotc.core.Phases.*
-import dotty.tools.dotc.typer.Inliner
 import dotty.tools.dotc.report
 
 class ExtractExpression(using evalCtx: EvaluationContext)
@@ -63,7 +62,11 @@ class ExtractExpression(using evalCtx: EvaluationContext)
 
   private object ExpressionTransformer extends TreeMap:
     override def transform(tree: Tree)(using Context): Tree =
-      tree match
+      val desugaredIdent = tree match
+        case tree: Ident => desugarIdent(tree)
+        case _ => tree
+
+      desugaredIdent match
         // static object
         case tree: (Ident | Select) if isStaticObject(tree.symbol) =>
           getStaticObject(tree.symbol.moduleClass)
@@ -91,10 +94,10 @@ class ExtractExpression(using evalCtx: EvaluationContext)
               .findLast(_.isClass)
               .orElse(candidates.find(_.is(Method)))
             capturer match
-              case Some(cls) if cls.isClass =>
-                getClassCapture(tree.symbol, cls, tree.tpe)
-              case Some(method) =>
-                getMethodCapture(tree.symbol, method, tree.tpe)
+              case Some(capturer) =>
+                if capturer.isClass
+                then getClassCapture(tree.symbol, capturer.asClass, tree.tpe)
+                else getMethodCapture(tree.symbol, capturer.asTerm, tree.tpe)
               case None => getLocalValue(tree.symbol, tree.tpe)
 
         // assignement to local variable
@@ -105,7 +108,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           Assign(lhs, transform(rhs))
 
         // inaccessible fields
-        case tree: (Ident | Select) if isInaccessibleField(tree.symbol) =>
+        case tree: Select if isInaccessibleField(tree.symbol) =>
           val qualifier = getTransformedQualifier(tree)
           getField(qualifier, tree.symbol.asTerm, tree.tpe)
 
@@ -116,7 +119,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
 
         // this or outer this
         case tree @ This(Ident(name)) =>
-          thisOrOuterValue(tree.symbol)
+          thisOrOuterValue(tree.symbol.enclosingClass.asClass)
 
         // inaccessible constructors
         case tree: (Select | Apply | TypeApply)
@@ -147,23 +150,28 @@ class ExtractExpression(using evalCtx: EvaluationContext)
     private def getTransformedQualifier(tree: Tree)(using Context): Tree =
       tree match
         case Ident(_) =>
-          val owner = tree.symbol.owner
-          if isStaticObject(owner)
-          then getStaticObject(owner)
-          else thisOrOuterValue(owner)
-        case Select(qualifier, _) => transform(qualifier)
+          val classOwner = tree.symbol.enclosingClass.asClass
+          if isStaticObject(classOwner)
+          then getStaticObject(classOwner)
+          else thisOrOuterValue(classOwner)
+        case Select(qualifier, _) =>
+          val classOwner = tree.symbol.enclosingClass.asClass
+          if isStaticObject(classOwner)
+          then getStaticObject(classOwner)
+          else transform(qualifier)
         case Apply(fun, _) => getTransformedQualifier(fun)
         case TypeApply(fun, _) => getTransformedQualifier(fun)
 
     private def getTransformedQualifierOfNew(tree: Tree)(using Context): Tree =
       tree match
-        case Select(New(tree), _) => getTransformedPrefix(tree)
+        case Select(New(tpt), _) => getTransformedPrefix(tpt)
         case Apply(fun, _) => getTransformedQualifierOfNew(fun)
         case TypeApply(fun, _) => getTransformedQualifierOfNew(fun)
 
-    private def getTransformedPrefix(tree: Tree)(using Context): Tree =
-      tree match
-        case Ident(_) => thisOrOuterValue(tree.symbol.owner)
+    private def getTransformedPrefix(typeTree: Tree)(using Context): Tree =
+      typeTree match
+        case Ident(_) =>
+          thisOrOuterValue(typeTree.symbol.owner.enclosingClass.asClass)
         case Select(qualifier, _) => transform(qualifier)
         case AppliedTypeTree(tpt, _) => getTransformedPrefix(tpt)
 
@@ -173,23 +181,23 @@ class ExtractExpression(using evalCtx: EvaluationContext)
     sym.name == evalCtx.expressionTermName
 
   // symbol can be a class or a method
-  private def thisOrOuterValue(symbol: Symbol)(using Context): Tree =
-    val cls = symbol.ownersIterator.find(_.isClass).get
-    val owners = evalCtx.classOwners.toSeq
-    val target = owners.indexOf(cls)
+  private def thisOrOuterValue(cls: ClassSymbol)(using Context): Tree =
+    reportErrorIfLocalInsideValueClass(evalCtx.expressionSymbol)
+    val ths = getThis(evalCtx.classOwners.head)
+    val target = evalCtx.classOwners.indexOf(cls)
     if target >= 0 then
-      owners
+      evalCtx.classOwners
         .drop(1)
         .take(target)
-        .foldLeft(getThis) { (innerObj, outerSym) =>
+        .foldLeft(ths) { (innerObj, outerSym) =>
           getOuter(innerObj, outerSym, outerSym.thisType)
         }
-    else Literal(Constant(null))
+    else nullLiteral
 
-  private def getThis(using Context): Tree =
+  private def getThis(cls: ClassSymbol)(using Context): Tree =
     reflectEval(
       None,
-      EvaluationStrategy.This,
+      EvaluationStrategy.This(cls),
       List.empty,
       Some(evalCtx.classOwners.head.thisType)
     )
@@ -212,9 +220,10 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       Some(tpe)
     )
 
-  private def getClassCapture(variable: Symbol, cls: Symbol, tpe: Type)(using
-      Context
+  private def getClassCapture(variable: Symbol, cls: ClassSymbol, tpe: Type)(
+      using Context
   ): Tree =
+    reportErrorIfLocalInsideValueClass(cls)
     reflectEval(
       Some(thisOrOuterValue(cls)),
       EvaluationStrategy.ClassCapture(variable.asTerm, cls.asClass),
@@ -222,9 +231,10 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       Some(tpe)
     )
 
-  private def getMethodCapture(variable: Symbol, method: Symbol, tpe: Type)(
+  private def getMethodCapture(variable: Symbol, method: TermSymbol, tpe: Type)(
       using Context
   ): Tree =
+    reportErrorIfLocalInsideValueClass(method)
     reflectEval(
       None,
       EvaluationStrategy.MethodCapture(variable.asTerm, method.asTerm),
@@ -243,6 +253,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
   private def getField(qualifier: Tree, field: TermSymbol, tpe: Type)(using
       Context
   ): Tree =
+    reportErrorIfLocalInsideValueClass(field)
     reflectEval(
       Some(qualifier),
       EvaluationStrategy.Field(field),
@@ -258,6 +269,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
   )(using
       Context
   ): Tree =
+    reportErrorIfLocalInsideValueClass(field)
     reflectEval(
       Some(qualifier),
       EvaluationStrategy.FieldAssign(field),
@@ -267,13 +279,14 @@ class ExtractExpression(using evalCtx: EvaluationContext)
 
   private def callMethod(
       qualifier: Tree,
-      fun: TermSymbol,
+      method: TermSymbol,
       args: List[Tree],
       tpe: Type
   )(using Context): Tree =
+    reportErrorIfLocalInsideValueClass(method)
     reflectEval(
       Some(qualifier),
-      EvaluationStrategy.MethodCall(fun),
+      EvaluationStrategy.MethodCall(method),
       args,
       Some(tpe)
     )
@@ -284,6 +297,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       args: List[Tree],
       tpe: Type
   )(using Context): Tree =
+    reportErrorIfLocalInsideValueClass(ctr)
     reflectEval(
       Some(qualifier),
       EvaluationStrategy.ConstructorCall(ctr, ctr.owner.asClass),
@@ -316,6 +330,24 @@ class ExtractExpression(using evalCtx: EvaluationContext)
     if isTypeAccessible(widenDealiasTpe.typeSymbol.asType)
     then tree.cast(widenDealiasTpe)
     else tree
+
+  /**
+   * In the [[ResolveReflectEval]] phase we cannot find the symbol of a local method
+   * or local class inside a value class. So we report an error early.
+   */
+  private def reportErrorIfLocalInsideValueClass(
+      symbol: Symbol
+  )(using Context): Unit =
+    for
+      localClassOrMethod <- symbol.ownersIterator
+        .find { sym =>
+          (sym.isClass || sym.is(Method)) && sym.enclosure.is(Method)
+        }
+      valueClass <- localClassOrMethod.ownersIterator.find(_.isValueClass)
+    do
+      report.error(
+        s"Evaluation of a local method or local class in a value class not supported:\n $localClassOrMethod is local inside $valueClass"
+      )
 
   private def isStaticObject(symbol: Symbol)(using Context): Boolean =
     symbol.is(Module) && symbol.isStatic && !symbol.isRoot

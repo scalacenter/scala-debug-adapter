@@ -178,7 +178,7 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
         """|object EvaluateTest:
            |  def main(args: Array[String]): Unit =
            |    foo(3)()
-           |  
+           |
            |  def foo(x: Int)(
            |    y: Int = x + 1
            |  ): Unit =
@@ -280,7 +280,7 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
            |object Macro:
            |  inline def showType(inline expr: Any): String = ${ showTypeImpl('expr) }
            |
-           |  private def showTypeImpl(expr: Expr[Any])(using Quotes): Expr[String] = 
+           |  private def showTypeImpl(expr: Expr[Any])(using Quotes): Expr[String] =
            |    import quotes.reflect.*
            |    Expr(expr.asTerm.tpe.widen.show)
            |""".stripMargin
@@ -350,6 +350,45 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
           Evaluation.success("C2(\"bb\").m", "bbb"),
           Evaluation.success("B.this.C.C1.m", "bb"),
           Evaluation.success("C.C2(\"bb\").m", "bbb")
+        )
+      )
+    }
+
+    "evaluate instance of local class in method of value class" - {
+      // only Scala 3 because:
+      // "implementation restriction: nested class is not allowed in value class
+      // This restriction is planned to be removed in subsequent releases."
+      val source =
+        """|package example
+           |
+           |class A(self: String) extends AnyVal:
+           |  def m(size: Int): String =
+           |    class B:
+           |      def m(): String =
+           |        self.take(size)
+           |    val b = new B
+           |    b.m()
+           |
+           |object Main:
+           |  def main(args: Array[String]): Unit =
+           |    val a = new A("foo")
+           |    println(a.m(2))
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(9)(
+          Evaluation.success("self", "foo"),
+          Evaluation.success("m(2)", "fo"),
+          Evaluation.failed("b.m()")(_.format.contains("not supported")),
+          Evaluation.failed("new B")(_.format.contains("not supported"))
+        ),
+        Breakpoint(7)(
+          Evaluation.success("1 + 1", 2),
+          Evaluation.failed("self.take(size)")(
+            _.format.contains("not supported")
+          ),
+          Evaluation.failed("m()")(_.format.contains("not supported")),
+          Evaluation.failed("new B")(_.format.contains("not supported")),
+          Evaluation.failed("A.this")(_.format.contains("not supported"))
         )
       )
     }
