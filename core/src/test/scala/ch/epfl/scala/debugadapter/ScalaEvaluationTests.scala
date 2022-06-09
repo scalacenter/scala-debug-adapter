@@ -1168,40 +1168,44 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |  def m(c: C): String
            |}
            |
-           |class B(self: String) extends AnyVal with A {
-           |  def getSelf: String = self
-           |
+           |class B(val self: String) extends AnyVal with A {
            |  def m(c: C): String = {
            |    self.take(c.size)
            |  }
            |
            |  def +(b: B): B = {
-           |    new B(self + b.getSelf)
+           |    new B(self + b.self)
            |  }
            |}
            |
            |class C(val size: Int) extends AnyVal
            |""".stripMargin
+
       assertInMainClass(source, "example.Main")(
         Breakpoint(8)(
-          Evaluation.success("b1")(_.startsWith("B@")),
+          if (isScala3) Evaluation.success("b1")(_.startsWith("B@"))
+          else Evaluation.success("b1", "foo"),
           Evaluation.success("c1.size", 2),
           Evaluation.success("b2.m(c1)", "ba"),
           Evaluation.success("m(b2)", "bar"),
-          Evaluation.success("new B(\"fizz\")")(_.startsWith("B@")),
-          Evaluation.success("b1 + new B(\"buzz\")")(_.startsWith("B@"))
+          if (isScala3)
+            Evaluation.success("new B(\"fizz\")")(_.startsWith("B@"))
+          else Evaluation.success("new B(\"fizz\")", "fizz"),
+          if (isScala3)
+            Evaluation.success("b1 + new B(\"buzz\")")(_.startsWith("B@"))
+          else Evaluation.success("b1 + new B(\"buzz\")", "foobuzz")
         ),
-        Breakpoint(26)(
-          Evaluation.success("self", "foo"),
-          Evaluation.success("m(c)", "fo")
+        Breakpoint(24)(
+          Evaluation.successOrIgnore("self", "foo", isScala2),
+          Evaluation.successOrIgnore("m(c)", "fo", isScala2)
         ),
         Breakpoint(9)(
-          Evaluation.success("b1 = new B(\"fizz\")", ()),
-          Evaluation.success("c1 = new C(3)", ())
+          Evaluation.successOrIgnore("b1 = new B(\"fizz\")", (), isScala2),
+          Evaluation.successOrIgnore("c1 = new C(3)", (), isScala2)
         ),
-        Breakpoint(26)(
-          Evaluation.success("self", "fizzbar"),
-          Evaluation.success("m(c)", "fizzb")
+        Breakpoint(24)(
+          Evaluation.successOrIgnore("self", "fizzbar", isScala2),
+          Evaluation.successOrIgnore("m(c)", "fizzb", isScala2)
         )
       )
     }

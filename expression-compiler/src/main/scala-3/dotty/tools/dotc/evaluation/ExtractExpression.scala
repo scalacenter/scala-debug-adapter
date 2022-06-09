@@ -95,10 +95,10 @@ class ExtractExpression(using evalCtx: EvaluationContext)
               .findLast(_.isClass)
               .orElse(candidates.find(_.is(Method)))
             capturer match
-              case Some(cls) if cls.isClass =>
-                getClassCapture(tree.symbol, cls, tree.tpe)
-              case Some(method) =>
-                getMethodCapture(tree.symbol, method, tree.tpe)
+              case Some(capturer) =>
+                if capturer.isClass
+                then getClassCapture(tree.symbol, capturer.asClass, tree.tpe)
+                else getMethodCapture(tree.symbol, capturer.asTerm, tree.tpe)
               case None => getLocalValue(tree.symbol, tree.tpe)
 
         // assignement to local variable
@@ -109,7 +109,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           Assign(lhs, transform(rhs))
 
         // inaccessible fields
-        case tree: (Ident | Select) if isInaccessibleField(tree.symbol) =>
+        case tree: Select if isInaccessibleField(tree.symbol) =>
           val qualifier = getTransformedQualifier(tree)
           getField(qualifier, tree.symbol.asTerm, tree.tpe)
 
@@ -220,9 +220,10 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       Some(tpe)
     )
 
-  private def getClassCapture(variable: Symbol, cls: Symbol, tpe: Type)(using
-      Context
+  private def getClassCapture(variable: Symbol, cls: ClassSymbol, tpe: Type)(
+      using Context
   ): Tree =
+    reportErrorIfLocalClassInsideValueClass(cls)
     reflectEval(
       Some(thisOrOuterValue(cls)),
       EvaluationStrategy.ClassCapture(variable.asTerm, cls.asClass),
@@ -230,9 +231,10 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       Some(tpe)
     )
 
-  private def getMethodCapture(variable: Symbol, method: Symbol, tpe: Type)(
+  private def getMethodCapture(variable: Symbol, method: TermSymbol, tpe: Type)(
       using Context
   ): Tree =
+    reportErrorIfLocalClassInsideValueClass(method.enclosingClass)
     reflectEval(
       None,
       EvaluationStrategy.MethodCapture(variable.asTerm, method.asTerm),
@@ -251,6 +253,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
   private def getField(qualifier: Tree, field: TermSymbol, tpe: Type)(using
       Context
   ): Tree =
+    reportErrorIfLocalClassInsideValueClass(field.enclosingClass)
     reflectEval(
       Some(qualifier),
       EvaluationStrategy.Field(field),
@@ -266,6 +269,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
   )(using
       Context
   ): Tree =
+    reportErrorIfLocalClassInsideValueClass(field.enclosingClass)
     reflectEval(
       Some(qualifier),
       EvaluationStrategy.FieldAssign(field),
@@ -275,13 +279,14 @@ class ExtractExpression(using evalCtx: EvaluationContext)
 
   private def callMethod(
       qualifier: Tree,
-      fun: TermSymbol,
+      method: TermSymbol,
       args: List[Tree],
       tpe: Type
   )(using Context): Tree =
+    reportErrorIfLocalClassInsideValueClass(method.enclosingClass)
     reflectEval(
       Some(qualifier),
-      EvaluationStrategy.MethodCall(fun),
+      EvaluationStrategy.MethodCall(method),
       args,
       Some(tpe)
     )
@@ -292,6 +297,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       args: List[Tree],
       tpe: Type
   )(using Context): Tree =
+    reportErrorIfLocalClassInsideValueClass(ctr.enclosingClass)
     reflectEval(
       Some(qualifier),
       EvaluationStrategy.ConstructorCall(ctr, ctr.owner.asClass),
@@ -324,6 +330,23 @@ class ExtractExpression(using evalCtx: EvaluationContext)
     if isTypeAccessible(widenDealiasTpe.typeSymbol.asType)
     then tree.cast(widenDealiasTpe)
     else tree
+
+  /**
+   * In the [[ResolveReflectEval]] phase we cannot find the symbol of a local class
+   *  that is nested inside a value class. So we report an error early.
+   */
+  private def reportErrorIfLocalClassInsideValueClass(
+      cls: ClassSymbol
+  )(using Context): Unit = {
+    cls.ownersIterator
+      .drop(1)
+      .find(_.isValueClass)
+      .foreach { valueClass =>
+        report.error(
+          s"Evaluation of a class nested in a value class not supported:\n  $cls is nested inside $valueClass"
+        )
+      }
+  }
 
   private def isStaticObject(symbol: Symbol)(using Context): Boolean =
     symbol.is(Module) && symbol.isStatic && !symbol.isRoot
@@ -377,6 +400,13 @@ class ExtractExpression(using evalCtx: EvaluationContext)
     !symbol.isLocal && symbol.ownersIterator.forall(sym =>
       sym.isPublic || sym.privateWithin.is(PackageClass)
     )
+
+  extension (sym: Symbol)
+    private def enclosingClass(using Context): ClassSymbol =
+      sym.ownersIterator
+        .find(_.isClass)
+        .getOrElse(throw new Exception(s"No enclosing class found for $sym"))
+        .asClass
 
 object ExtractExpression:
   val name: String = "extract-expression"

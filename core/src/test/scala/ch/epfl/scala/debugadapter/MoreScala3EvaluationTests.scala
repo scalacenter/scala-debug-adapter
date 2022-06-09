@@ -353,5 +353,44 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
         )
       )
     }
+
+    "evaluate instance of local class in method of value class" - {
+      // only Scala 3 because:
+      // "implementation restriction: nested class is not allowed in value class
+      // This restriction is planned to be removed in subsequent releases."
+      val source =
+        """|package example
+           |
+           |class A(self: String) extends AnyVal:
+           |  def m(size: Int): String =
+           |    class B:
+           |      def m(): String =
+           |        self.take(size)
+           |    val b = new B
+           |    b.m()
+           |
+           |object Main:
+           |  private val s1 = 1
+           |  def main(args: Array[String]): Unit =
+           |    val a = new A("foo")
+           |    println(a.m(2))
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(9)(
+          Evaluation.success("self", "foo"),
+          Evaluation.success("m(2)", "fo"),
+          Evaluation.failed("b.m()")(_.format.contains("not supported")),
+          Evaluation.failed("new B")(_.format.contains("not supported"))
+        ),
+        Breakpoint(7)(
+          Evaluation.success("1 + 1", 2),
+          Evaluation.failed("self.take(size)")(
+            _.format.contains("not supported")
+          ),
+          Evaluation.failed("m()")(_.format.contains("not supported")),
+          Evaluation.failed("new B")(_.format.contains("not supported"))
+        )
+      )
+    }
   }
 }

@@ -206,7 +206,6 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
       paramTypesNames.map(t => Literal(Constant(t))),
       TypeTree(ctx.definitions.StringType)
     )
-
     val capturedArgs =
       methodType.paramNames.dropRight(args.size).map {
         case name @ DerivedName(underlying, _) =>
