@@ -1254,6 +1254,51 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "evaluate local method in value class" - {
+      val source =
+        """|package example
+           |
+           |class A(val self: String) extends AnyVal {
+           |  def m(size: Int): String = {
+           |    def m(mul: Int): String = {
+           |      self.take(size) * mul
+           |    }
+           |    m(2)
+           |  }
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A("foo")
+           |    println(a.m(2))
+           |  }
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(8)(
+          Evaluation.successOrIgnore("this.m(2)", "fofo", isScala2),
+          Evaluation.failedOrIgnore("m(3)", isScala2)(
+            _.format.contains("not supported")
+          )
+        ),
+        Breakpoint(6)(
+          if (isScala3)
+            Evaluation.failed("self")(_.format.contains("not supported"))
+          else Evaluation.success("self", "foo"),
+          if (isScala3)
+            Evaluation.failed("size")(_.format.contains("not supported"))
+          else Evaluation.success("size", 2),
+          if (isScala3)
+            Evaluation.failed("m(1)")(_.format.contains("not supported"))
+          else Evaluation.success("m(1)", "fo"),
+          if (isScala3)
+            Evaluation.failed("this.m(1)")(_.format.contains("not supported"))
+          else Evaluation.success("this.m(1)", "ff")
+        )
+      )
+    }
+
     "evaluate tail-rec function" - {
       val source =
         """|object EvaluateTest {

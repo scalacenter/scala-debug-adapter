@@ -6,6 +6,7 @@ import dotty.tools.dotc.core.Types.*
 import dotty.tools.dotc.core.Names.*
 import dotty.tools.dotc.core.Flags.*
 import dotty.tools.dotc.core.Contexts.*
+import dotty.tools.dotc.transform.SymUtils.*
 
 class EvaluationContext(
     uniqueName: String,
@@ -23,14 +24,16 @@ class EvaluationContext(
   var classOwners: Seq[ClassSymbol] = _
   var capturingMethod: Option[TermSymbol] = None
 
-  def store(symbol: Symbol)(using Context): Unit =
-    expressionSymbol = symbol.asTerm
-    classOwners = symbol.ownersIterator.collect { case cls: ClassSymbol =>
+  def store(exprSym: Symbol)(using Context): Unit =
+    expressionSymbol = exprSym.asTerm
+    classOwners = exprSym.ownersIterator.collect { case cls: ClassSymbol =>
       cls
     }.toSeq
-    capturingMethod = symbol.ownersIterator
-      .find(sym => (sym.isClass || sym.is(Method)) && sym.owner.is(Method))
-      .collect { case sym if sym.isTerm => sym.asTerm }
+    capturingMethod = exprSym.ownersIterator
+      .find(sym =>
+        (sym.isClass || sym.is(Method)) && sym.enclosure.is(Method)
+      ) // the first local class or method
+      .collect { case sym if sym.is(Method) => sym.asTerm } // if it is a method
 
   def evaluationClass(using Context): ClassSymbol =
     if pckg.isEmpty then requiredClass(evaluationClassName)

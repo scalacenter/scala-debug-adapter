@@ -178,7 +178,7 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
         """|object EvaluateTest:
            |  def main(args: Array[String]): Unit =
            |    foo(3)()
-           |  
+           |
            |  def foo(x: Int)(
            |    y: Int = x + 1
            |  ): Unit =
@@ -280,7 +280,7 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
            |object Macro:
            |  inline def showType(inline expr: Any): String = ${ showTypeImpl('expr) }
            |
-           |  private def showTypeImpl(expr: Expr[Any])(using Quotes): Expr[String] = 
+           |  private def showTypeImpl(expr: Expr[Any])(using Quotes): Expr[String] =
            |    import quotes.reflect.*
            |    Expr(expr.asTerm.tpe.widen.show)
            |""".stripMargin
@@ -387,7 +387,8 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
             _.format.contains("not supported")
           ),
           Evaluation.failed("m()")(_.format.contains("not supported")),
-          Evaluation.failed("new B")(_.format.contains("not supported"))
+          Evaluation.failed("new B")(_.format.contains("not supported")),
+          Evaluation.failed("A.this")(_.format.contains("not supported"))
         )
       )
     }
