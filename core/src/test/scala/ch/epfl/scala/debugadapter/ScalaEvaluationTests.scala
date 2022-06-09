@@ -1210,6 +1210,72 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "evaluate method or constructor that takes or returns an instance of value class" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def size: Size = new Size(1)
+           |  def getMsg(size: Size): Msg = {
+           |    new Msg(size)
+           |  }
+           |  def main(args: Array[String]): Unit = {
+           |    val msg = getMsg(size)
+           |    println(msg.value)
+           |  }
+           |}
+           |
+           |class Msg(size: Size) {
+           |  def value: String = {
+           |    "Hello, World!".take(size.value)
+           |  }
+           |}
+           |
+           |class Size(val value: Int) extends AnyVal
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(10)(
+          Evaluation.success("size.value", 1),
+          Evaluation.successOrIgnore(
+            """|def size2: Size = new Size(2)
+               |getMsg(size2).value""".stripMargin,
+            "He",
+            isScala2
+          ),
+          Evaluation.success("new Msg(new Size(3)).value", "Hel")
+        )
+      )
+    }
+
+    "evaluate local method in value class" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def size: Size = new Size(1)
+           |  def main(args: Array[String]): Unit = {
+           |    val msg = "foo"
+           |    println(msg.take(size.value))
+           |  }
+           |}
+           |
+           |class Size(val value: Int) extends AnyVal
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(7)(
+          Evaluation.success("msg.take(size.value)", "f"),
+          Evaluation.successOrIgnore(
+            """|def size2: Size = new Size(2)
+               |msg.take(size2.value)""".stripMargin,
+            "fo",
+            isScala2
+          )
+        )
+      )
+    }
+
     "evaluate captured instance of value class" - {
       val source =
         """|package example

@@ -36,12 +36,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               if cls.isValueClass then
                 // if cls is a value class then the local $this is the erased value,
                 // but we expect an instance of the value class instead
-                // so we call the constructor of the value class
-                callConstructor(
-                  nullLiteral,
-                  cls.primaryConstructor.asTerm,
-                  List(getLocalValue("$this"))
-                )
+                boxValueClass(cls, getLocalValue("$this"))
               else getLocalValue("$this")
             case EvaluationStrategy.Outer(outerCls) =>
               getOuter(qualifier, outerCls)
@@ -106,22 +101,29 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
   ): Tree =
     atPhase(Phases.elimErasedValueTypePhase)(term.info) match
       case tpe: ErasedValueType =>
-        val ctor = tpe.tycon.typeSymbol.primaryConstructor
-        // qualifier is null: a value class cannot be nested into a class
-        callConstructor(nullLiteral, ctor.asTerm, List(tree))
-      case tpe =>
-        tree
+        boxValueClass(tpe.tycon.typeSymbol.asClass, tree)
+      case tpe => tree
+
+  private def boxValueClass(valueClass: ClassSymbol, tree: Tree)(using
+      Context
+  ): Tree =
+    // qualifier is null: a value class cannot be nested into a class
+    val ctor = valueClass.primaryConstructor.asTerm
+    callConstructor(nullLiteral, ctor, List(tree))
 
   private def unboxIfValueClass(term: TermSymbol, tree: Tree)(using
       Context
   ): Tree =
     atPhase(Phases.elimErasedValueTypePhase)(term.info) match
-      case tpe: ErasedValueType =>
-        val cls = tpe.tycon.typeSymbol.asClass
-        val unboxMethod = ValueClasses.valueClassUnbox(cls).asTerm
-        callMethod(tree, unboxMethod, Nil)
-      case tpe =>
-        tree
+      case tpe: ErasedValueType => unboxValueClass(tree, tpe)
+      case tpe => tree
+
+  private def unboxValueClass(tree: Tree, tpe: ErasedValueType)(using
+      Context
+  ): Tree =
+    val cls = tpe.tycon.typeSymbol.asClass
+    val unboxMethod = ValueClasses.valueClassUnbox(cls).asTerm
+    callMethod(tree, unboxMethod, Nil)
 
   private def getLocalValue(name: String)(using Context): Tree =
     Apply(
@@ -221,8 +223,16 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
           ref(defn.Predef_undefined)
       }
 
+    val erasedMethodInfo = atPhase(Phases.elimErasedValueTypePhase)(method.info)
+      .asInstanceOf[MethodType]
+    val unboxedArgs =
+      erasedMethodInfo.paramInfos.takeRight(args.size).zip(args).map {
+        case (tpe: ErasedValueType, arg) => unboxValueClass(arg, tpe)
+        case (_, arg) => arg
+      }
+
     val returnTypeName = JavaEncoding.encode(methodType.resType)
-    Apply(
+    val result = Apply(
       Select(This(evalCtx.evaluationClass), termName("callMethod")),
       List(
         qualifier,
@@ -231,11 +241,15 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
         paramTypesArray,
         Literal(Constant(returnTypeName)),
         JavaSeqLiteral(
-          capturedArgs ++ args,
+          capturedArgs ++ unboxedArgs,
           TypeTree(ctx.definitions.ObjectType)
         )
       )
     )
+    erasedMethodInfo.resType match
+      case tpe: ErasedValueType =>
+        boxValueClass(tpe.tycon.typeSymbol.asClass, result)
+      case _ => result
 
   private def callConstructor(
       qualifier: Tree,
@@ -249,10 +263,8 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
     val capturedArgs =
       methodType.paramNames.dropRight(args.size).map {
         case outer if outer.toString == "$outer" => qualifier
-        case name @ DerivedName(
-              underlying,
-              _
-            ) => // if derived then probably a capture
+        case name @ DerivedName(underlying, _) =>
+          // if derived then probably a capture
           capturedValue(ctr.owner, underlying)
             .getOrElse {
               report.error(
@@ -261,6 +273,14 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               ref(defn.Predef_undefined)
             }
         case name => getLocalValue(name.toString)
+      }
+
+    val erasedCtrInfo = atPhase(Phases.elimErasedValueTypePhase)(ctr.info)
+      .asInstanceOf[MethodType]
+    val unboxedArgs =
+      erasedCtrInfo.paramInfos.takeRight(args.size).zip(args).map {
+        case (tpe: ErasedValueType, arg) => unboxValueClass(arg, tpe)
+        case (_, arg) => arg
       }
 
     val paramTypesArray = JavaSeqLiteral(
@@ -273,7 +293,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
         Literal(Constant(clsName)),
         paramTypesArray,
         JavaSeqLiteral(
-          capturedArgs ++ args,
+          capturedArgs ++ unboxedArgs,
           TypeTree(ctx.definitions.ObjectType)
         )
       )
@@ -282,8 +302,8 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
   private def capturedValue(sym: Symbol, originalName: TermName)(using
       Context
   ): Option[Tree] =
-    if evalCtx.classOwners.contains(sym) then
-      capturedByClass(sym.asClass, originalName)
+    if evalCtx.classOwners.contains(sym)
+    then capturedByClass(sym.asClass, originalName)
     else
     // if the captured value is not a local variables
     // then it must have been captured by the outer method
