@@ -57,14 +57,16 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
                   report.error(s"No capture found for $variable in $cls")
                   ref(defn.Predef_undefined)
                 }
-              derefCapturedVar(capture, variable)
+              val capturedValue = derefCapturedVar(capture, variable)
+              boxIfValueClass(variable, capturedValue)
             case EvaluationStrategy.MethodCapture(variable, method) =>
               val capture = getMethodCapture(method, variable.name)
                 .getOrElse {
                   report.error(s"No capture found for $variable in $method")
                   ref(defn.Predef_undefined)
                 }
-              derefCapturedVar(capture, variable)
+              val capturedValue = derefCapturedVar(capture, variable)
+              boxIfValueClass(variable, capturedValue)
             case EvaluationStrategy.StaticObject(obj) => getStaticObject(obj)
             case EvaluationStrategy.Field(field) =>
               // if the field is lazy or if it is private in a value class

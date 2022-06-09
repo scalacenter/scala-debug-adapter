@@ -1210,6 +1210,50 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "evaluate captured instance of value class" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val size = new Size(2)
+           |    class A(msg: String) {
+           |      def m: String = {
+           |        msg.take(size.value)
+           |      }
+           |    }
+           |    def m(msg: String): String = {
+           |      msg.take(size.value)
+           |    }
+           |    println(new A("foo").m)
+           |    println(m("bar"))
+           |  }
+           |}
+           |
+           |class Size(val value: Int) extends AnyVal
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(14)(
+          Evaluation.success("new A(\"foo\")")(_.startsWith("Main$A$1@")),
+          Evaluation.success("m(\"bar\")", "ba")
+        ),
+        Breakpoint(8)(
+          Evaluation.successOrIgnore("size", isScala2)(_.startsWith("Size@")),
+          Evaluation.successOrIgnore("size.value", 2, isScala2),
+          Evaluation.successOrIgnore("new A(\"foo\")", isScala2)(
+            _.startsWith("Main$A$1@")
+          )
+        ),
+        Breakpoint(12)(
+          if (isScala3) Evaluation.success("size")(_.startsWith("Size@"))
+          else Evaluation.success("size", 2),
+          Evaluation.success("size.value", 2),
+          Evaluation.success("m(\"bar\")", "ba")
+        )
+      )
+    }
+
     "evaluate tail-rec function" - {
       val source =
         """|object EvaluateTest {

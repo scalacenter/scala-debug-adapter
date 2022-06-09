@@ -370,7 +370,6 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
            |    b.m()
            |
            |object Main:
-           |  private val s1 = 1
            |  def main(args: Array[String]): Unit =
            |    val a = new A("foo")
            |    println(a.m(2))
