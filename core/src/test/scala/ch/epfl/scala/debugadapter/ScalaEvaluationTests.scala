@@ -1181,33 +1181,53 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |class C(val size: Int) extends AnyVal
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(8)(
-          if (isScala3) Evaluation.success("b1")(_.startsWith("B@"))
-          else Evaluation.success("b1", "foo"),
-          Evaluation.success("c1.size", 2),
-          Evaluation.success("b2.m(c1)", "ba"),
-          Evaluation.success("m(b2)", "bar"),
-          if (isScala3)
-            Evaluation.success("new B(\"fizz\")")(_.startsWith("B@"))
-          else Evaluation.success("new B(\"fizz\")", "fizz"),
-          if (isScala3)
+      if (isScala3)
+        assertInMainClass(source, "example.Main")(
+          Breakpoint(8)(
+            Evaluation.success("b1")(_.startsWith("B@")),
+            Evaluation.success("c1.size", 2),
+            Evaluation.success("b2.m(c1)", "ba"),
+            Evaluation.success("m(b2)", "bar"),
+            Evaluation.success("new B(\"fizz\")")(_.startsWith("B@")),
             Evaluation.success("b1 + new B(\"buzz\")")(_.startsWith("B@"))
-          else Evaluation.success("b1 + new B(\"buzz\")", "foobuzz")
-        ),
-        Breakpoint(24)(
-          Evaluation.successOrIgnore("self", "foo", isScala2),
-          Evaluation.successOrIgnore("m(c)", "fo", isScala2)
-        ),
-        Breakpoint(9)(
-          Evaluation.successOrIgnore("b1 = new B(\"fizz\")", (), isScala2),
-          Evaluation.successOrIgnore("c1 = new C(3)", (), isScala2)
-        ),
-        Breakpoint(24)(
-          Evaluation.successOrIgnore("self", "fizzbar", isScala2),
-          Evaluation.successOrIgnore("m(c)", "fizzb", isScala2)
+          ),
+          Breakpoint(24)(
+            Evaluation.success("self", "foo"),
+            Evaluation.success("m(c)", "fo")
+          ),
+          Breakpoint(9)(
+            Evaluation.success("b1 = new B(\"fizz\")", ()),
+            Evaluation.success("c1 = new C(3)", ())
+          ),
+          Breakpoint(24)(
+            Evaluation.success("self", "fizzbar"),
+            Evaluation.success("m(c)", "fizzb")
+          )
         )
-      )
+      else
+        assertInMainClass(source, "example.Main")(
+          Breakpoint(8)(
+            Evaluation.success("b1", "foo"),
+            Evaluation.success("c1.size", 2),
+            Evaluation.success("b2.m(c1)", "ba"),
+            Evaluation.success("m(b2)", "bar"),
+            Evaluation.success("new B(\"fizz\")", "fizz"),
+            Evaluation.success("b1 + new B(\"buzz\")", "foobuzz")
+          ),
+          Breakpoint(24)(
+            Evaluation.ignore("self", Right("foo")),
+            Evaluation.ignore("m(c)", Right("fo"))
+          ),
+          Breakpoint(9)(
+            Evaluation.ignore("b1 = new B(\"fizz\")", Right("()")),
+            Evaluation.ignore("c1 = new C(3)", Right("()"))
+          ),
+          Breakpoint(24)(),
+          Breakpoint(24)(
+            Evaluation.ignore("self", Right("fizzbar")),
+            Evaluation.ignore("m(c)", Right("fizzb"))
+          )
+        )
     }
 
     "evaluate method or constructor that takes or returns an instance of value class" - {
