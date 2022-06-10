@@ -3,11 +3,11 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import com.sun.jdi.{ObjectReference, ThreadReference}
 
 object JdiPrimitive {
-  def boxed(
+  def box(
       value: AnyVal,
       classLoader: JdiClassLoader,
       thread: ThreadReference
-  ): Safe[JdiObject] = {
+  ): Safe[ObjectReference] = {
     for {
       jdiValue <- classLoader.mirrorOf(value.toString)
       clazz <- value match {
@@ -20,10 +20,9 @@ object JdiPrimitive {
         case _: Long => classLoader.loadClass("java.lang.Long")
         case _: Short => classLoader.loadClass("java.lang.Short")
       }
-      jdiObject <- clazz
+      objectRef <- clazz
         .invokeStatic("valueOf", List(jdiValue))
         .map(_.asInstanceOf[ObjectReference])
-        .map(new JdiObject(_, thread))
-    } yield jdiObject
+    } yield objectRef
   }
 }

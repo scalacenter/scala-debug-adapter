@@ -27,11 +27,11 @@ object JdiArray {
           .map(_.asInstanceOf[ObjectReference])
           .map(new JdiObject(_, thread))
       arrayTypeClass <- classLoader.loadClass(arrayType)
-      integerValue <- JdiPrimitive.boxed(arraySize, classLoader, thread)
+      integerRef <- JdiPrimitive.box(arraySize, classLoader, thread)
       array <- newInstanceMethod
         .invoke(
           "invoke",
-          List(null, arrayTypeClass.reference, integerValue.reference)
+          List(null, arrayTypeClass.reference, integerRef)
         )
         .map(_.asInstanceOf[ArrayReference])
         .map(new JdiArray(_, thread))

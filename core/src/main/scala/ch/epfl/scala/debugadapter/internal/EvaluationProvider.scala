@@ -57,27 +57,27 @@ private[internal] class EvaluationProvider(
       thread: ThreadReference,
       depth: Int
   ): CompletableFuture[Value] = {
-    val frame = thread.frames().get(depth)
-    val isJava = frame.location().sourcePath().endsWith(".java")
     val future = new CompletableFuture[Value]()
     evaluator match {
       case None =>
         future.completeExceptionally(
           new Exception("Missing evaluator for this debug session")
         )
-      case _ if isJava =>
-        future.completeExceptionally(
-          new Exception("Cannot evaluate Java sources")
-        )
       case Some(evaluator) =>
-        evaluationBlock {
-          evaluator.evaluate(expression, thread, frame) match {
-            case Failure(exception) =>
-              future.completeExceptionally(exception)
-            case Success(value) =>
-              future.complete(value)
+        val frame = thread.frames().get(depth)
+        if (frame.location().sourcePath().endsWith(".java"))
+          future.completeExceptionally(
+            new Exception("Cannot evaluate Java sources")
+          )
+        else
+          evaluationBlock {
+            evaluator.evaluate(expression, thread, frame) match {
+              case Failure(exception) =>
+                future.completeExceptionally(exception)
+              case Success(value) =>
+                future.complete(value)
+            }
           }
-        }
     }
     debugContext.getStackFrameManager.reloadStackFrames(thread)
     future

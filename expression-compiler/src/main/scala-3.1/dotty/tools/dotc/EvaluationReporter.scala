@@ -11,7 +11,7 @@ class EvaluationReporter(reportError: String => Unit) extends AbstractReporter:
       case error: Diagnostic.Error =>
         val newPos = error.pos.source.positionInUltimateSource(error.pos)
         val errorWithNewPos = new Diagnostic.Error(error.msg, newPos)
-        reportError(messageAndPos(errorWithNewPos))
+        reportError(stripColor(messageAndPos(errorWithNewPos)))
       case _ =>
         // TODO report the warnings
         ()

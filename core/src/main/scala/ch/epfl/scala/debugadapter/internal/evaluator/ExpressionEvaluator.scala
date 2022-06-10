@@ -88,7 +88,8 @@ private[internal] class ExpressionEvaluator(
         )
 
       evaluatedValue <- evaluateExpression(expressionInstance)
-    } yield evaluatedValue
+      unboxedValue <- unboxIfPrimitive(evaluatedValue, thread)
+    } yield unboxedValue
     evaluatedValue.getResult
   }
 
@@ -153,7 +154,7 @@ private[internal] class ExpressionEvaluator(
       val variableValues =
         variables
           .map(frame.getValue)
-          .map(value => boxIfNeeded(value, classLoader, classLoader.thread))
+          .map(value => boxIfPrimitive(value, classLoader, classLoader.thread))
           .traverse
       Safe.join(variableNames, variableValues)
     }
@@ -166,7 +167,7 @@ private[internal] class ExpressionEvaluator(
       val fieldNames = fields.map(_.name).map(classLoader.mirrorOf).traverse
       val fieldValues = fields
         .map(field => thisObject.getValue(field))
-        .map(value => boxIfNeeded(value, classLoader, classLoader.thread))
+        .map(value => boxIfPrimitive(value, classLoader, classLoader.thread))
         .traverse
       Safe.join(fieldNames, fieldValues)
     }
@@ -206,25 +207,53 @@ private[internal] class ExpressionEvaluator(
     JdiClassLoader(someClass.classLoader, thread)
   }
 
-  private def boxIfNeeded(
+  private def boxIfPrimitive(
       value: Value,
       classLoader: JdiClassLoader,
       thread: ThreadReference
-  ): Safe[Value] = value match {
-    case value: BooleanValue =>
-      JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
-    case value: CharValue =>
-      JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
-    case value: DoubleValue =>
-      JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
-    case value: FloatValue =>
-      JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
-    case value: IntegerValue =>
-      JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
-    case value: LongValue =>
-      JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
-    case value: ShortValue =>
-      JdiPrimitive.boxed(value.value(), classLoader, thread).map(_.reference)
-    case value => Safe(value)
+  ): Safe[Value] =
+    value match {
+      case value: BooleanValue =>
+        JdiPrimitive.box(value.value(), classLoader, thread)
+      case value: CharValue =>
+        JdiPrimitive.box(value.value(), classLoader, thread)
+      case value: DoubleValue =>
+        JdiPrimitive.box(value.value(), classLoader, thread)
+      case value: FloatValue =>
+        JdiPrimitive.box(value.value(), classLoader, thread)
+      case value: IntegerValue =>
+        JdiPrimitive.box(value.value(), classLoader, thread)
+      case value: LongValue =>
+        JdiPrimitive.box(value.value(), classLoader, thread)
+      case value: ShortValue =>
+        JdiPrimitive.box(value.value(), classLoader, thread)
+      case value => Safe(value)
+    }
+
+  private val unboxMethods = Map(
+    "java.lang.Boolean" -> "booleanValue",
+    "java.lang.Byte" -> "byteValue",
+    "java.lang.Character" -> "charValue",
+    "java.lang.Double" -> "doubleValue",
+    "java.lang.Float" -> "floatValue",
+    "java.lang.Integer" -> "intValue",
+    "java.lang.Long" -> "longValue",
+    "java.lang.Short" -> "shortValue"
+  )
+
+  private def unboxIfPrimitive(
+      value: Value,
+      thread: ThreadReference
+  ): Safe[Value] = {
+    value match {
+      case ref: ObjectReference =>
+        val typeName = ref.referenceType().name()
+        println(typeName)
+        unboxMethods
+          .get(typeName)
+          .map(methodName => new JdiObject(ref, thread).invoke(methodName, Nil))
+          .getOrElse(Safe(value))
+      case _ => Safe(value)
+    }
   }
 }

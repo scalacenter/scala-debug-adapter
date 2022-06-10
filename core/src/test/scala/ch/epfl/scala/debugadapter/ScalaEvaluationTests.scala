@@ -34,6 +34,29 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "evaluate primitive values" - {
+      val source =
+        """|package example
+           |object App {
+           |  def main(args: Array[String]): Unit = {
+           |    println("Hello, World!")
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.App")(
+        Breakpoint(4)(
+          Evaluation.success("true", true),
+          Evaluation.success("0: Byte", 0: Byte),
+          Evaluation.success("'a'", 'a'),
+          Evaluation.success("1.0D", 1.0d),
+          Evaluation.success("0.42F", 0.42f),
+          Evaluation.success("42", 42),
+          Evaluation.success("42L", 42L),
+          Evaluation.success("42: Short", 42: Short)
+        )
+      )
+    }
+
     "evaluate local variables" - {
       val source =
         """|package example
@@ -669,20 +692,17 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |  def m1(): Int = 9
            |}
            |""".stripMargin
-      val evaluations =
-        Seq(
-          Breakpoint(6)(
-            Evaluation.success("n", 1),
-            Evaluation.success("m1()", 9)
-          )
-        ) ++
-          (if (isScala3) Some(Breakpoint(9)()) else None) :+
-          Breakpoint(9)(
-            Evaluation.success("n", 1),
-            Evaluation.success("m1()", 9)
-          )
-
-      assertInMainClass(source, "example.Main")(evaluations: _*)
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(6)(
+          Evaluation.success("n", 1),
+          Evaluation.success("m1()", 9)
+        ),
+        Breakpoint(9, ignore = isScala2)(),
+        Breakpoint(9)(
+          Evaluation.success("n", 1),
+          Evaluation.success("m1()", 9)
+        )
+      )
     }
 
     "evaluate expression with breakpoint on an assignment" - {
@@ -1204,53 +1224,29 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |class C(val size: Int) extends AnyVal
            |""".stripMargin
 
-      if (isScala3)
-        assertInMainClass(source, "example.Main")(
-          Breakpoint(8)(
-            Evaluation.success("b1")(_.startsWith("B@")),
-            Evaluation.success("c1.size", 2),
-            Evaluation.success("b2.m(c1)", "ba"),
-            Evaluation.success("m(b2)", "bar"),
-            Evaluation.success("new B(\"fizz\")")(_.startsWith("B@")),
-            Evaluation.success("b1 + new B(\"buzz\")")(_.startsWith("B@"))
-          ),
-          Breakpoint(24)(
-            Evaluation.success("self", "foo"),
-            Evaluation.success("m(c)", "fo")
-          ),
-          Breakpoint(9)(
-            Evaluation.success("b1 = new B(\"fizz\")", ()),
-            Evaluation.success("c1 = new C(3)", ())
-          ),
-          Breakpoint(24)(
-            Evaluation.success("self", "fizzbar"),
-            Evaluation.success("m(c)", "fizzb")
-          )
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(8)(
+          Evaluation.success("b1", "foo"),
+          Evaluation.success("c1.size", 2),
+          Evaluation.success("b2.m(c1)", "ba"),
+          Evaluation.success("m(b2)", "bar"),
+          Evaluation.success("new B(\"fizz\")", "fizz"),
+          Evaluation.success("b1 + new B(\"buzz\")", "foobuzz")
+        ),
+        Breakpoint(24)(
+          Evaluation.successOrIgnore("self", "foo", isScala2),
+          Evaluation.successOrIgnore("m(c)", "fo", isScala2)
+        ),
+        Breakpoint(9)(
+          Evaluation.successOrIgnore("b1 = new B(\"fizz\")", (), isScala2),
+          Evaluation.successOrIgnore("c1 = new C(3)", (), isScala2)
+        ),
+        Breakpoint(24, ignore = isScala3)(),
+        Breakpoint(24)(
+          Evaluation.successOrIgnore("self", "fizzbar", isScala2),
+          Evaluation.successOrIgnore("m(c)", "fizzb", isScala2)
         )
-      else
-        assertInMainClass(source, "example.Main")(
-          Breakpoint(8)(
-            Evaluation.success("b1", "foo"),
-            Evaluation.success("c1.size", 2),
-            Evaluation.success("b2.m(c1)", "ba"),
-            Evaluation.success("m(b2)", "bar"),
-            Evaluation.success("new B(\"fizz\")", "fizz"),
-            Evaluation.success("b1 + new B(\"buzz\")", "foobuzz")
-          ),
-          Breakpoint(24)(
-            Evaluation.ignore("self", Right("foo")),
-            Evaluation.ignore("m(c)", Right("fo"))
-          ),
-          Breakpoint(9)(
-            Evaluation.ignore("b1 = new B(\"fizz\")", Right("()")),
-            Evaluation.ignore("c1 = new C(3)", Right("()"))
-          ),
-          Breakpoint(24)(),
-          Breakpoint(24)(
-            Evaluation.ignore("self", Right("fizzbar")),
-            Evaluation.ignore("m(c)", Right("fizzb"))
-          )
-        )
+      )
     }
 
     "evaluate method or constructor that takes or returns an instance of value class" - {
@@ -1279,7 +1275,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
 
       assertInMainClass(source, "example.Main")(
         Breakpoint(10)(
-          Evaluation.success("size.value", 1),
+          Evaluation.success("size", 1),
           Evaluation.successOrIgnore(
             """|def size2: Size = new Size(2)
                |getMsg(size2).value""".stripMargin,
@@ -1287,34 +1283,6 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
             isScala2
           ),
           Evaluation.success("new Msg(new Size(3)).value", "Hel")
-        )
-      )
-    }
-
-    "evaluate local method in value class" - {
-      val source =
-        """|package example
-           |
-           |object Main {
-           |  def size: Size = new Size(1)
-           |  def main(args: Array[String]): Unit = {
-           |    val msg = "foo"
-           |    println(msg.take(size.value))
-           |  }
-           |}
-           |
-           |class Size(val value: Int) extends AnyVal
-           |""".stripMargin
-
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(7)(
-          Evaluation.success("msg.take(size.value)", "f"),
-          Evaluation.successOrIgnore(
-            """|def size2: Size = new Size(2)
-               |msg.take(size2.value)""".stripMargin,
-            "fo",
-            isScala2
-          )
         )
       )
     }
@@ -1348,15 +1316,14 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           Evaluation.success("m(\"bar\")", "ba")
         ),
         Breakpoint(8)(
-          Evaluation.successOrIgnore("size", isScala2)(_.startsWith("Size@")),
+          Evaluation.successOrIgnore("size", 2, isScala2),
           Evaluation.successOrIgnore("size.value", 2, isScala2),
           Evaluation.successOrIgnore("new A(\"foo\")", isScala2)(
             _.startsWith("Main$A$1@")
           )
         ),
         Breakpoint(12)(
-          if (isScala3) Evaluation.success("size")(_.startsWith("Size@"))
-          else Evaluation.success("size", 2),
+          Evaluation.success("size", 2),
           Evaluation.success("size.value", 2),
           Evaluation.success("m(\"bar\")", "ba")
         )

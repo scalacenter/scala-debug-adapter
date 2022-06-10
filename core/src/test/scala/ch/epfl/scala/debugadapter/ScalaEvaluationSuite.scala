@@ -18,11 +18,17 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
   val isScala3 = scalaVersion.binaryVersion.startsWith("3")
   val isScala2 = scalaVersion.binaryVersion.startsWith("2")
 
-  class Breakpoint(val line: Int, val evaluations: Seq[Evaluation])
+  class Breakpoint(
+      val line: Int,
+      val ignore: Boolean,
+      val evaluations: Seq[Evaluation]
+  )
 
   object Breakpoint {
-    def apply(line: Int)(evaluations: Evaluation*): Breakpoint = {
-      new Breakpoint(line, evaluations)
+    def apply(line: Int, ignore: Boolean = false)(
+        evaluations: Evaluation*
+    ): Breakpoint = {
+      new Breakpoint(line, ignore, evaluations)
     }
   }
 
@@ -71,18 +77,20 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
     def success(expression: String, result: Any): Evaluation = {
       val assertion: Either[Message, String] => Unit = resp =>
         result match {
-          case str: String =>
-            assert(resp == Right('"' + str + '"'))
-          case () if isScala3 =>
-            assert(resp.exists(_.endsWith("\"()\"")))
+          case expected: String =>
+            assert(resp == Right('"' + expected + '"'))
           case () =>
-            assert(resp == Right("<void value>"))
-          case n: Int =>
-            assertMatch(resp) {
-              case Right(m) if m == n.toString => ()
-              case Right(m: String) if m.endsWith('"' + n.toString + '"') =>
-                ()
-            }
+            if (isScala3) assert(resp.exists(_.endsWith("\"()\"")))
+            else assert(resp == Right("<void value>"))
+          case expected @ (_: Boolean | _: Byte | _: Char | _: Int | _: Long |
+              _: Short) =>
+            assert(resp == Right(expected.toString))
+          case floating @ (_: Double | _: Float) =>
+            val expected = String.format(
+              "%f",
+              floating.toString().toDouble: java.lang.Double
+            )
+            assert(resp == Right(expected))
           case expected =>
             assert(resp.exists(_.endsWith("\"" + expected + "\"")))
         }
@@ -139,7 +147,7 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
 
   private def assertEvaluations(
       runner: MainDebuggeeRunner,
-      breakpoints: Seq[Breakpoint]
+      allBreakpoints: Seq[Breakpoint]
   ): Unit = {
     val server = DebugServer(runner, NoopLogger)
     val client = TestDebugClient.connect(server.uri, 20.seconds)
@@ -148,6 +156,7 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
       client.initialize()
       client.launch()
 
+      val breakpoints = allBreakpoints.filter(!_.ignore)
       val lines = breakpoints.map(_.line).distinct.toArray
       val configuredBreakpoints =
         client.setBreakpoints(runner.sourceFiles.head, lines)
