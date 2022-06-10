@@ -18,11 +18,17 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
   val isScala3 = scalaVersion.binaryVersion.startsWith("3")
   val isScala2 = scalaVersion.binaryVersion.startsWith("2")
 
-  class Breakpoint(val line: Int, val evaluations: Seq[Evaluation])
+  class Breakpoint(
+      val line: Int,
+      val ignore: Boolean,
+      val evaluations: Seq[Evaluation]
+  )
 
   object Breakpoint {
-    def apply(line: Int)(evaluations: Evaluation*): Breakpoint = {
-      new Breakpoint(line, evaluations)
+    def apply(line: Int, ignore: Boolean = false)(
+        evaluations: Evaluation*
+    ): Breakpoint = {
+      new Breakpoint(line, ignore, evaluations)
     }
   }
 
@@ -139,7 +145,7 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
 
   private def assertEvaluations(
       runner: MainDebuggeeRunner,
-      breakpoints: Seq[Breakpoint]
+      allBreakpoints: Seq[Breakpoint]
   ): Unit = {
     val server = DebugServer(runner, NoopLogger)
     val client = TestDebugClient.connect(server.uri, 20.seconds)
@@ -148,6 +154,7 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
       client.initialize()
       client.launch()
 
+      val breakpoints = allBreakpoints.filter(!_.ignore)
       val lines = breakpoints.map(_.line).distinct.toArray
       val configuredBreakpoints =
         client.setBreakpoints(runner.sourceFiles.head, lines)

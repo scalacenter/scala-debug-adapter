@@ -28,6 +28,14 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
   object ExpressionTransformer extends TreeMap:
     override def transform(tree: Tree)(using Context): Tree =
       tree match
+        case tree: DefDef if tree.symbol == evalCtx.evaluateMethod =>
+          // unbox the result of the `evaluate` method if it is a value class
+          val rhs = unboxIfValueClass(
+            evalCtx.expressionSymbol,
+            transform(tree.rhs)
+          )
+          cpy.DefDef(tree)(rhs = rhs)
+
         case tree: Apply if isReflectEval(tree.fun.symbol) =>
           val qualifier :: _ :: argsTree :: Nil = tree.args.map(transform)
           val args = argsTree.asInstanceOf[JavaSeqLiteral].elems
