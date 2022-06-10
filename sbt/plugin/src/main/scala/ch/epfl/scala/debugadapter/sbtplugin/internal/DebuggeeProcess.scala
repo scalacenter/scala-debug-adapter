@@ -43,8 +43,12 @@ private object DebuggeeProcess {
     val classpathOption = classpath.mkString(File.pathSeparator)
     val envVars = forkOptions.envVars + ("CLASSPATH" -> classpathOption)
 
+    // remove agentlib option specified by the user
+    val jvmOptions = forkOptions.runJVMOptions
+      .filter(opt => !opt.contains("-agentlib"))
+
     val command = Seq(javaBin, debugInterface) ++
-      forkOptions.runJVMOptions ++
+      jvmOptions ++
       Some(mainClass) ++
       arguments
 
