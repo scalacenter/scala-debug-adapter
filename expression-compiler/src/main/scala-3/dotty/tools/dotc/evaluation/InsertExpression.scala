@@ -131,12 +131,12 @@ class InsertExpression(using
         case tree => super.transform(tree)
 
   private def parseExpression(using Context): Tree =
-    val wrappedExpression =
+    val prefix =
       s"""|object Expression:
           |  {
-          |    ${evalCtx.expression}
-          |  }
-          |""".stripMargin
+          |    """.stripMargin
+    // don't use stripMargin on wrappedExpression because expression can contain a line starting with `  |`
+    val wrappedExpression = prefix + evalCtx.expression + "\n  }\n"
     val expressionFile = SourceFile.virtual("<expression>", evalCtx.expression)
     val wrappedExpressionFile = new VirtualFile(
       "<wrapped-expression>",
@@ -144,7 +144,9 @@ class InsertExpression(using
     )
     val sourceFile =
       new SourceFile(wrappedExpressionFile, scala.io.Codec.UTF8):
-        override def start: Int = -27
+        override def start: Int =
+          // prefix.size depends on the OS
+          -prefix.size
         override def underlying: SourceFile = expressionFile
         override def atSpan(span: Span): SourcePosition =
           if (span.exists) SourcePosition(this, span)
