@@ -49,7 +49,10 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
             case EvaluationStrategy.ClassCapture(variable, cls) =>
               val capture = getClassCapture(qualifier, variable.name, cls)
                 .getOrElse {
-                  report.error(s"No capture found for $variable in $cls")
+                  report.error(
+                    s"No capture found for $variable in $cls",
+                    tree.srcPos
+                  )
                   ref(defn.Predef_undefined)
                 }
               val capturedValue = derefCapturedVar(capture, variable)
@@ -57,7 +60,10 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
             case EvaluationStrategy.MethodCapture(variable, method) =>
               val capture = getMethodCapture(method, variable.name)
                 .getOrElse {
-                  report.error(s"No capture found for $variable in $method")
+                  report.error(
+                    s"No capture found for $variable in $method",
+                    tree.srcPos
+                  )
                   ref(defn.Predef_undefined)
                 }
               val capturedValue = derefCapturedVar(capture, variable)
@@ -69,16 +75,16 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               val fieldValue =
                 if field.is(Lazy) || field.owner.isValueClass then
                   assert(field.is(Method))
-                  callMethod(qualifier, field, Nil)
+                  callMethod(tree)(qualifier, field, Nil)
                 else getField(qualifier, field)
               boxIfValueClass(field, fieldValue)
             case EvaluationStrategy.FieldAssign(field) =>
               val arg = unboxIfValueClass(field, args.head)
               setField(qualifier, field, arg)
             case EvaluationStrategy.MethodCall(method) =>
-              callMethod(qualifier, method, args)
+              callMethod(tree)(qualifier, method, args)
             case EvaluationStrategy.ConstructorCall(ctr, cls) =>
-              callConstructor(qualifier, ctr, args)
+              callConstructor(tree)(qualifier, ctr, args)
         case _ => super.transform(tree)
 
   private def isReflectEval(symbol: Symbol)(using Context): Boolean =
@@ -109,7 +115,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
   ): Tree =
     // qualifier is null: a value class cannot be nested into a class
     val ctor = valueClass.primaryConstructor.asTerm
-    callConstructor(nullLiteral, ctor, List(tree))
+    callConstructor(tree)(nullLiteral, ctor, List(tree))
 
   private def unboxIfValueClass(term: TermSymbol, tree: Tree)(using
       Context
@@ -123,7 +129,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
   ): Tree =
     val cls = tpe.tycon.typeSymbol.asClass
     val unboxMethod = ValueClasses.valueClassUnbox(cls).asTerm
-    callMethod(tree, unboxMethod, Nil)
+    callMethod(tree)(tree, unboxMethod, Nil)
 
   private def getLocalValue(name: String)(using Context): Tree =
     Apply(
@@ -199,7 +205,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
       )
     )
 
-  private def callMethod(
+  private def callMethod(tree: Tree)(
       qualifier: Tree,
       method: TermSymbol,
       args: List[Tree]
@@ -215,11 +221,15 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
         case name @ DerivedName(underlying, _) =>
           capturedValue(method, underlying)
             .getOrElse {
-              report.error(s"Unknown captured variable $name in $method")
+              report.error(
+                s"Unknown captured variable $name in $method",
+                tree.srcPos
+              )
               ref(defn.Predef_undefined)
             }
         case name =>
-          report.error(s"Unknown captured variable $name in $method")
+          report
+            .error(s"Unknown captured variable $name in $method", tree.srcPos)
           ref(defn.Predef_undefined)
       }
 
@@ -251,7 +261,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
         boxValueClass(tpe.tycon.typeSymbol.asClass, result)
       case _ => result
 
-  private def callConstructor(
+  private def callConstructor(tree: Tree)(
       qualifier: Tree,
       ctr: TermSymbol,
       args: List[Tree]
@@ -268,7 +278,8 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
           capturedValue(ctr.owner, underlying)
             .getOrElse {
               report.error(
-                s"Unknown captured variable $name in $ctr of ${ctr.owner}"
+                s"Unknown captured variable $name in $ctr of ${ctr.owner}",
+                tree.srcPos
               )
               ref(defn.Predef_undefined)
             }

@@ -1,15 +1,17 @@
 package dotty.tools.dotc.evaluation
 
 import dotty.tools.dotc.EvaluationContext
-import dotty.tools.dotc.ast.untpd
-import dotty.tools.dotc.ast.untpd._
-import dotty.tools.dotc.core.Constants.Constant
-import dotty.tools.dotc.core.Contexts.Context
-import dotty.tools.dotc.core.Contexts.ctx
+import dotty.tools.dotc.ast.untpd.*
+import dotty.tools.dotc.core.Contexts.*
 import dotty.tools.dotc.core.Phases.Phase
 import dotty.tools.dotc.parsing.Parsers
 import dotty.tools.dotc.transform.MegaPhase.MiniPhase
 import dotty.tools.dotc.util.SourceFile
+import java.nio.charset.StandardCharsets
+import dotty.tools.io.VirtualFile
+import dotty.tools.dotc.util.SourcePosition
+import dotty.tools.dotc.util.Spans.Span
+import dotty.tools.dotc.util.NoSourcePosition
 
 /**
  * This phase:
@@ -93,12 +95,9 @@ class InsertExpression(using
         |""".stripMargin
 
   override def run(using Context): Unit =
-    val parsedExpression = parseExpression(evalCtx.expression)
-    val parsedEvaluationClass = parseEvaluationClass(evaluationClassSource)
-    val tree = ctx.compilationUnit.untpdTree
+    val inserter = Inserter(parseExpression, parseEvaluationClass)
     ctx.compilationUnit.untpdTree =
-      Inserter(parsedExpression, parsedEvaluationClass)
-        .transform(tree)
+      inserter.transform(ctx.compilationUnit.untpdTree)
 
   class Inserter(expression: Tree, expressionClass: Seq[Tree])
       extends UntypedTreeMap:
@@ -131,13 +130,27 @@ class InsertExpression(using
           mkExprBlock(expression, tree)
         case tree => super.transform(tree)
 
-  private def parseExpression(expression: String)(using Context): Tree =
-    val expressionSource =
-      s"""object Expression:
-         |  { $expression }
-         |""".stripMargin
-    val parsedExpression = parseSource("<wrapped-expression>", expressionSource)
-    parsedExpression
+  private def parseExpression(using Context): Tree =
+    val wrappedExpression =
+      s"""|object Expression:
+          |  {
+          |    ${evalCtx.expression}
+          |  }
+          |""".stripMargin
+    val expressionFile = SourceFile.virtual("<expression>", evalCtx.expression)
+    val wrappedExpressionFile = new VirtualFile(
+      "<wrapped-expression>",
+      wrappedExpression.getBytes(StandardCharsets.UTF_8)
+    )
+    val sourceFile =
+      new SourceFile(wrappedExpressionFile, scala.io.Codec.UTF8):
+        override def start: Int = -27
+        override def underlying: SourceFile = expressionFile
+        override def atSpan(span: Span): SourcePosition =
+          if (span.exists) SourcePosition(this, span)
+          else NoSourcePosition
+
+    parse(sourceFile)
       .asInstanceOf[PackageDef]
       .stats
       .head
@@ -146,18 +159,17 @@ class InsertExpression(using
       .body
       .head
 
-  private def parseEvaluationClass(
-      evaluationClassSource: String
-  )(using Context): Seq[Tree] =
-    val parsedExpressionClass =
-      parseSource("source", evaluationClassSource).asInstanceOf[PackageDef]
-    parsedExpressionClass.stats
+  private def parseEvaluationClass(using Context): Seq[Tree] =
+    val sourceFile =
+      SourceFile.virtual("<evaluation class>", evaluationClassSource)
+    parse(sourceFile).asInstanceOf[PackageDef].stats
 
-  private def parseSource(name: String, source: String)(using Context): Tree =
-    val parser = Parsers.Parser(SourceFile.virtual(name, source))
+  private def parse(sourceFile: SourceFile)(using Context): Tree =
+    val newCtx = ctx.fresh.setSource(sourceFile)
+    val parser = Parsers.Parser(sourceFile)(using newCtx)
     parser.parse()
 
-  private def isOnBreakpoint(tree: untpd.Tree)(using Context): Boolean =
+  private def isOnBreakpoint(tree: Tree)(using Context): Boolean =
     val startLine =
       if tree.span.exists then tree.sourcePos.startLine + 1 else -1
     startLine == evalCtx.breakpointLine

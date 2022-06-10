@@ -48,7 +48,7 @@ private[internal] class ExpressionEvaluator(
 
     val expressionFqcn =
       (fqcn.split("\\.").dropRight(1) :+ expressionClassName).mkString(".")
-    var error: Option[String] = None
+    var errors = Seq.empty[String]
     val classLoader = findClassLoader(thread)
     val evaluatedValue = for {
       // must be called before any invocation otherwise
@@ -64,14 +64,14 @@ private[internal] class ExpressionEvaluator(
           expression,
           names.map(_.value()).toSet,
           pckg,
-          errorMessage => error = Some(errorMessage),
+          error => errors :+= error,
           5.seconds
         )
       _ = {
         if (!compiled)
-          throw new ExpressionCompilationFailed(error.getOrElse(""))
+          throw new ExpressionCompilationFailed(errors)
       }
-      // // if everything went smooth we can load our expression class
+      // if everything went smooth we can load our expression class
       namesArray <-
         JdiArray("java.lang.String", names.size, classLoader)
       valuesArray <-

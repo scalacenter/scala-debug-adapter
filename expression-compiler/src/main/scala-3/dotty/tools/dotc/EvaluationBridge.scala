@@ -27,6 +27,7 @@ class EvaluationBridge:
       "-classpath",
       classPath,
       "-Yskip:pureStats",
+      "-color:never",
       // Debugging: Print the tree after phases of the debugger
       // "-Vprint:extract-expression,resolve-reflect-eval",
       sourceFile.toString
@@ -42,18 +43,11 @@ class EvaluationBridge:
     val driver = new Driver:
       protected override def newCompiler(using Context): EvaluationCompiler =
         EvaluationCompiler(using evalCtx)
-    val reporter = new StoreReporter
-
+    val reporter = EvaluationReporter(error => errorConsumer.accept(error))
     try
       driver.process(args, reporter)
-      val errors = reporter.allErrors
-      val error = errors.headOption.map(_.msg.message)
-      error.foreach(errorConsumer.accept)
-      // reporter.pendingMessages(using null).foreach(d => println(d.msg))
       !reporter.hasErrors
     catch
-      case NonFatal(t) =>
-        // reporter.pendingMessages(using null).foreach(d => println(d.msg))
-        t.printStackTrace()
-        errorConsumer.accept(t.getMessage)
-        false
+      case NonFatal(cause) =>
+        cause.printStackTrace()
+        throw cause
