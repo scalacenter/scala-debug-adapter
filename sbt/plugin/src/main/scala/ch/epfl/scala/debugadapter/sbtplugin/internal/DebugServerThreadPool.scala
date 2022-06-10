@@ -20,8 +20,8 @@ private[debugadapter] object DebugServerThreadPool {
   }
 
   val executor = new ThreadPoolExecutor(
-    1, /* corePoolSize */
-    4, /* maxPoolSize */
+    1, // corePoolSize
+    4, // maximumPoolSize
     2,
     java.util.concurrent.TimeUnit.SECONDS, // keep alive 2 seconds
     new java.util.concurrent.SynchronousQueue[Runnable](),
