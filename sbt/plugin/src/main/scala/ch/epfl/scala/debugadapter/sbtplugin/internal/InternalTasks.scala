@@ -12,8 +12,17 @@ import scala.util.Properties
 
 private[sbtplugin] object InternalTasks {
   def classPathEntries: Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.task {
-    val _ = Keys.compile.value // compile to fill the class directories
-    externalClassPathEntries.value ++ internalClassPathEntries.value
+    val fullClasspath =
+      Keys.fullClasspath.value // compile to fill the class directories
+    val managedEntries =
+      externalClassPathEntries.value ++ internalClassPathEntries.value
+    val managedClasspath = managedEntries.map(_.absolutePath).toSet
+    val unmanagedEntries =
+      fullClasspath
+        .map(_.data.getAbsoluteFile.toPath)
+        .filter(path => !managedClasspath.contains(path))
+        .map(path => ClassPathEntry(path, Seq.empty))
+    managedEntries ++ unmanagedEntries
   }
 
   def javaRuntime: Def.Initialize[Task[Option[JavaRuntime]]] = Def.task {
