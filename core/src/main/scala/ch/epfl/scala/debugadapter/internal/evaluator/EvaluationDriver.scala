@@ -21,7 +21,7 @@ private[internal] class EvaluationDriver(
       expression: String,
       defNames: Set[String],
       pckg: String,
-      errorConsumer: Consumer[String],
+      reportError: String => Unit,
       timeout: Duration
   ): Boolean = {
     try {
@@ -36,9 +36,7 @@ private[internal] class EvaluationDriver(
           expression,
           defNames.asJava,
           pckg,
-          { errorMessage =>
-            errorConsumer.accept(errorMessage)
-          }: Consumer[String],
+          { error => reportError(error) }: Consumer[String],
           java.lang.Long.valueOf(timeout.toMillis)
         )
         .asInstanceOf[Boolean]

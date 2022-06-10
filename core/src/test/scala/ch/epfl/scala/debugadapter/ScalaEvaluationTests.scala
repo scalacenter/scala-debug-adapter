@@ -11,6 +11,29 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
     extends ScalaEvaluationSuite(scalaVersion) {
 
   def tests: Tests = Tests {
+    "report source and position in error, and no colors" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    println("Hello, World!")
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(5)(
+          Evaluation.failedOrIgnore("\"foo\" + bar", isScala2) { msg =>
+            msg.format.contains("<expression>:1:8") &&
+            msg.format.contains("\"foo\" + bar")
+          },
+          Evaluation.failedOrIgnore("bar", isScala2) { msg =>
+            !msg.format.contains('\u001b')
+          }
+        )
+      )
+    }
+
     "evaluate local variables" - {
       val source =
         """|package example
