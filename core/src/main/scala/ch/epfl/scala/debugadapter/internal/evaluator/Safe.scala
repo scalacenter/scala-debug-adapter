@@ -16,7 +16,7 @@ import scala.util.{Failure, Success, Try}
  * Then the object references are not protected anymore and can be
  * normally garbage collected.
  */
-class Safe[A] private (
+class Safe[+A] private (
     private val result: Try[A],
     private val dispose: () => Unit
 ) {

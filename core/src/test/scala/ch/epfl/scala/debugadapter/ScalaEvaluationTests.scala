@@ -34,6 +34,29 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
+    "evaluate primitive values" - {
+      val source =
+        """|package example
+           |object App {
+           |  def main(args: Array[String]): Unit = {
+           |    println("Hello, World!")
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.App")(
+        Breakpoint(4)(
+          Evaluation.success("true", true),
+          Evaluation.success("0: Byte", 0: Byte),
+          Evaluation.success("'a'", 'a'),
+          Evaluation.success("1.0D", 1.0d),
+          Evaluation.success("0.42F", 0.42f),
+          Evaluation.success("42", 42),
+          Evaluation.success("42L", 42L),
+          Evaluation.success("42: Short", 42: Short)
+        )
+      )
+    }
+
     "evaluate local variables" - {
       val source =
         """|package example

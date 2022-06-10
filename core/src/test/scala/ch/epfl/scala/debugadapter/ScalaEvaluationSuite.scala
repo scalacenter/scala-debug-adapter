@@ -77,18 +77,20 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
     def success(expression: String, result: Any): Evaluation = {
       val assertion: Either[Message, String] => Unit = resp =>
         result match {
-          case str: String =>
-            assert(resp == Right('"' + str + '"'))
-          case () if isScala3 =>
-            assert(resp.exists(_.endsWith("\"()\"")))
+          case expected: String =>
+            assert(resp == Right('"' + expected + '"'))
           case () =>
-            assert(resp == Right("<void value>"))
-          case n: Int =>
-            assertMatch(resp) {
-              case Right(m) if m == n.toString => ()
-              case Right(m: String) if m.endsWith('"' + n.toString + '"') =>
-                ()
-            }
+            if (isScala3) assert(resp.exists(_.endsWith("\"()\"")))
+            else assert(resp == Right("<void value>"))
+          case expected @ (_: Boolean | _: Byte | _: Char | _: Int | _: Long |
+              _: Short) =>
+            assert(resp == Right(expected.toString))
+          case floating @ (_: Double | _: Float) =>
+            val expected = String.format(
+              "%f",
+              floating.toString().toDouble: java.lang.Double
+            )
+            assert(resp == Right(expected))
           case expected =>
             assert(resp.exists(_.endsWith("\"" + expected + "\"")))
         }
