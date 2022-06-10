@@ -15,9 +15,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       val source =
         """|package example
            |
-           |object Main:
-           |  def main(args: Array[String]): Unit =
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
            |    println("Hello, World!")
+           |  }
+           |}
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
         Breakpoint(5)(
