@@ -195,6 +195,12 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     getBody[OutputEvent](event)
   }
 
+  def outputedLine(
+      line: String,
+      timeout: Duration = 1.second
+  ): OutputEvent =
+    outputed(e => e.output == line + System.lineSeparator)
+
   def stopped(timeout: Duration = 1.second): StoppedEvent = {
     val event = receiveEvent(timeout)(e => e != null && e.event == "stopped")
     getBody[StoppedEvent](event)

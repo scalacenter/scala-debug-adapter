@@ -1,23 +1,28 @@
+import scala.util.Properties
 import scala.concurrent.ExecutionContext
 import ch.epfl.scala.debugadapter.testing.TestDebugClient
-import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
+import java.nio.file.Paths
 
-val checkDebugSession = inputKey[Unit]("Check the test suite debug session")
+val checkDebugSession = inputKey[Unit]("Check the main class debug session")
 
-libraryDependencies += "org.lmdbjava" % "lmdbjava" % "0.8.2"
-scalaVersion := "2.13.7"
+val jdkHome = Paths.get(Properties.jdkHome)
+val jdkSourceZip = jdkHome.resolve("src.zip")
 
+scalaVersion := "2.12.14"
+javaHome := Some(jdkHome.toFile)
 checkDebugSession := {
   implicit val ec: ExecutionContext = ExecutionContext.global
 
   val uri = (Compile / startMainClassDebugSession).evaluated
+  val source = (Compile / sources).value.head.toPath
+  val logger = streams.value.log
 
   val client = TestDebugClient.connect(uri)
   try {
     client.initialize()
     client.launch()
     client.configurationDone()
-    client.outputedLine("Success")
+    client.outputedLine("com.sun.jdi.Value")
     client.exited()
     client.terminated()
   } finally {
