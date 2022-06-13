@@ -37,5 +37,5 @@ object ScalaVersion {
   val `2.12` = Scala2("2.12.16")
   val `2.13` = Scala2("2.13.8")
   val `3.0` = Scala3("3.0.2")
-  val `3.1` = Scala3("3.1.2")
+  val `3.1` = Scala3("3.1.3-RC5")
 }
