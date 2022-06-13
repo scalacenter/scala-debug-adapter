@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        jdk: [8, 11, 'temurin:1.17']
+        jdk: [8, 11, 'temurin:1.18']
     name: Test on ${{ matrix.os }} -- ${{ matrix.jdk }}
     runs-on: ${{ matrix.os }}
     steps:
