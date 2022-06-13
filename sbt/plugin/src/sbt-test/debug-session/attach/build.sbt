@@ -1,7 +1,7 @@
 import scala.concurrent.ExecutionContext
 import ch.epfl.scala.debugadapter.testing.TestDebugClient
 
-val checkDebugSession = taskKey[Unit]("Check the attach debug session")
+val checkDebugSession = inputKey[Unit]("Check the attach debug session")
 
 scalaVersion := "2.12.14"
 fork := true
@@ -9,7 +9,7 @@ javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=10
 checkDebugSession := {
   implicit val ec: ExecutionContext = ExecutionContext.global
 
-  val uri = (Compile / startRemoteDebugSession).value
+  val uri = (Compile / startRemoteDebugSession).evaluated
   val source = (Compile / sources).value.head.toPath
   (Compile / bgRun).toTask("").value
 

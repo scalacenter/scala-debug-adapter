@@ -56,7 +56,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val startTestSuitesSelectionDebugSession = inputKey[URI](
       "Start a debug session for running test suites"
     ).withRank(KeyRanks.DTask)
-    val startRemoteDebugSession = taskKey[URI](
+    val startRemoteDebugSession = inputKey[URI](
       "Start a debug session on a remote process"
     ).withRank(KeyRanks.DTask)
 
@@ -96,7 +96,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
 
   def runSettings: Seq[Def.Setting[_]] = Seq(
     startMainClassDebugSession := mainClassSessionTask.evaluated,
-    startRemoteDebugSession := remoteSessionTask.value,
+    startRemoteDebugSession := remoteSessionTask.evaluated,
     stopDebugSession := stopSessionTask.value
   )
 
@@ -114,7 +114,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   def testSettings: Seq[Def.Setting[_]] = Seq(
     startTestSuitesDebugSession := testSuitesSessionTask.evaluated,
     startTestSuitesSelectionDebugSession := testSuitesSelectionSessionTask.evaluated,
-    startRemoteDebugSession := remoteSessionTask.value,
+    startRemoteDebugSession := remoteSessionTask.evaluated,
     stopDebugSession := stopSessionTask.value
   )
 
@@ -424,25 +424,28 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       .withEnvVars(forkOptions.envVars ++ additionalEnv)
   }
 
-  private def remoteSessionTask: Def.Initialize[Task[URI]] = Def.task {
-    val target = Keys.bspTargetIdentifier.value
-    val scalaVersion = Keys.scalaVersion.value
-    val classPathEntries = InternalTasks.classPathEntries.value
-    val javaRuntime = InternalTasks.javaRuntime.value
-    val evaluationClassLoader =
-      InternalTasks.tryResolveEvaluationClassLoader.value
-    val state = Keys.state.value
-    val logger = Keys.streams.value.log
+  private def remoteSessionTask: Def.Initialize[InputTask[URI]] =
+    Def.inputTask {
+      // consume all input and ignore
+      val _ = Parsers.any.*.parsed
+      val target = Keys.bspTargetIdentifier.value
+      val scalaVersion = Keys.scalaVersion.value
+      val classPathEntries = InternalTasks.classPathEntries.value
+      val javaRuntime = InternalTasks.javaRuntime.value
+      val evaluationClassLoader =
+        InternalTasks.tryResolveEvaluationClassLoader.value
+      val state = Keys.state.value
+      val logger = Keys.streams.value.log
 
-    val runner = new AttachRemoteRunner(
-      target,
-      scalaVersion,
-      classPathEntries,
-      javaRuntime,
-      evaluationClassLoader
-    )
-    startServer(state, target, runner, logger)
-  }
+      val runner = new AttachRemoteRunner(
+        target,
+        scalaVersion,
+        classPathEntries,
+        javaRuntime,
+        evaluationClassLoader
+      )
+      startServer(state, target, runner, logger)
+    }
 
   private def startServer(
       state: State,
