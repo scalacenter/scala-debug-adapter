@@ -180,8 +180,7 @@ object DebugServerSpec extends TestSuite {
         client.initialize()
         client.launch()
         client.configurationDone()
-        val outputEvent = client.outputed(_.category == Category.stdout)
-        assert(outputEvent.output == s"Hello, World!${System.lineSeparator}")
+        client.outputedLine("Hello, World!")
       } finally {
         server.close()
         client.close()
