@@ -23,9 +23,9 @@ private[internal] class ExpressionEvaluator(
   def evaluate(
       expression: String,
       thread: ThreadReference,
-      frame: StackFrame
+      depth: Int
   ): Try[Value] = {
-    val location = frame.location
+    val location = thread.frame(depth).location
     val sourcePath = location.sourcePath
     val breakpointLine = location.lineNumber
     val fqcn = location.declaringType.name
@@ -53,7 +53,7 @@ private[internal] class ExpressionEvaluator(
     val evaluatedValue = for {
       // must be called before any invocation otherwise
       // it throws an InvalidStackFrameException
-      (names, values) <- extractValuesAndNames(frame, classLoader)
+      (names, values) <- extractValuesAndNames(thread.frame(depth), classLoader)
       compiled = driver
         .run(
           expressionDir,
@@ -75,7 +75,7 @@ private[internal] class ExpressionEvaluator(
       namesArray <-
         JdiArray("java.lang.String", names.size, classLoader)
       valuesArray <-
-        JdiArray("java.lang.Object", values.size, classLoader) // add boxing
+        JdiArray("java.lang.Object", values.size, classLoader)
       _ = namesArray.setValues(names)
       _ = valuesArray.setValues(values)
       args = List(namesArray.reference, valuesArray.reference)
@@ -86,8 +86,8 @@ private[internal] class ExpressionEvaluator(
           expressionFqcn,
           args
         )
-
       evaluatedValue <- evaluateExpression(expressionInstance)
+      _ <- updateVariables(valuesArray, thread, depth)
       unboxedValue <- unboxIfPrimitive(evaluatedValue, thread)
     } yield unboxedValue
     evaluatedValue.getResult
@@ -192,10 +192,35 @@ private[internal] class ExpressionEvaluator(
         .map(_ => classLoader.mirrorOf("$this"))
         .traverse
     } yield {
-      val names = fieldNames ++ variableNames ++ thisObjectName
-      val values = fieldValues ++ variableValues ++ thisObjectValue
+      val names = variableNames ++ fieldNames ++ thisObjectName
+      val values = variableValues ++ fieldValues ++ thisObjectValue
       (names, values)
     }
+  }
+
+  private def updateVariables(
+      variableArray: JdiArray,
+      thread: ThreadReference,
+      depth: Int
+  ): Safe[Unit] = {
+    def localVariables(): List[LocalVariable] =
+      // we must get a new StackFrame object after each invocation
+      thread.frame(depth).visibleVariables().asScala.toList
+
+    val unboxedValues = localVariables()
+      .zip(variableArray.getValues)
+      .map { case (variable, value) =>
+        if (isPrimitive(variable)) unboxIfPrimitive(value, thread)
+        else Safe.lift(value)
+      }
+      .traverse
+
+    for (values <- unboxedValues)
+      yield {
+        for ((variable, value) <- localVariables().zip(values)) {
+          thread.frame(depth).setValue(variable, value)
+        }
+      }
   }
 
   private def findClassLoader(
@@ -227,7 +252,7 @@ private[internal] class ExpressionEvaluator(
         JdiPrimitive.box(value.value(), classLoader, thread)
       case value: ShortValue =>
         JdiPrimitive.box(value.value(), classLoader, thread)
-      case value => Safe(value)
+      case value => Safe.lift(value)
     }
 
   private val unboxMethods = Map(
@@ -248,12 +273,15 @@ private[internal] class ExpressionEvaluator(
     value match {
       case ref: ObjectReference =>
         val typeName = ref.referenceType().name()
-        println(typeName)
         unboxMethods
           .get(typeName)
           .map(methodName => new JdiObject(ref, thread).invoke(methodName, Nil))
-          .getOrElse(Safe(value))
-      case _ => Safe(value)
+          .getOrElse(Safe.lift(value))
+      case _ => Safe.lift(value)
     }
   }
+
+  private def isPrimitive(variable: LocalVariable): Boolean =
+    variable.`type`().isInstanceOf[PrimitiveType]
+
 }

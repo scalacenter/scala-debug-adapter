@@ -1032,29 +1032,25 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           Evaluation.successOrIgnore("x", 1, isScala2),
           Evaluation.successOrIgnore("x *= 2", (), isScala2),
           Evaluation.successOrIgnore("x", 2, isScala2),
-          // we can reassign neither y nor u because they are fields
-          Evaluation.failed("u = 2")(_ => true),
-          if (isScala3) Evaluation.failed("y += 1")(_ => true)
-          else Evaluation.success("y += 1", ()),
+          // we can reassign neither y nor u because they are local
+          Evaluation.successOrIgnore("u = 2; u", 2, isScala2),
+          Evaluation.successOrIgnore("u", 2, isScala2),
+          Evaluation.success("y += 1", ()),
           Evaluation.success("new B")(_.startsWith("A$B$1@")),
-          if (isScala3) Evaluation.success("yy()", 2)
-          else Evaluation.success("yy()", 3)
+          Evaluation.success("yy()", 3)
         ),
         Breakpoint(11)(
           // captured by method m
-          if (isScala3) Evaluation.success("y", 2)
-          else Evaluation.success("y", 3),
-          if (isScala3) Evaluation.failed("y += 1")(_ => true)
-          else Evaluation.success("y += 1", ())
+          Evaluation.success("y", 3),
+          Evaluation.success("y += 1; y", 4)
         ),
         Breakpoint(12)(
-          if (isScala3) Evaluation.success("y", 3)
-          else Evaluation.success("y", 5)
+          Evaluation.success("y", 5)
         ),
         Breakpoint(16)(
           // captured by class B
           Evaluation.successOrIgnore("z", 1, isScala2),
-          Evaluation.failedOrIgnore("z += 1", isScala2)(_ => true)
+          Evaluation.successOrIgnore("z += 1; z", 2, isScala2)
         )
       )
     }

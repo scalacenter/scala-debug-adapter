@@ -54,6 +54,18 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
                 variable
               )
               boxIfValueClass(variable, localValue)
+            case EvaluationStrategy.LocalValueAssign(variable) =>
+              val value = unboxIfValueClass(variable, args.head)
+              val typeSymbol = variable.info.typeSymbol
+              typeSymbol.fullName.toString match
+                case s"scala.runtime.${_}Ref" =>
+                  val elemField = typeSymbol.info.decl(termName("elem")).symbol
+                  setField(
+                    getLocalValue(variable.name.toString),
+                    elemField.asTerm,
+                    value
+                  )
+                case _ => setLocalValue(variable.name.toString, value)
             case EvaluationStrategy.ClassCapture(variable, cls) =>
               val capture = getClassCapture(qualifier, variable.name, cls)
                 .getOrElse {
@@ -65,6 +77,19 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
                 }
               val capturedValue = derefCapturedVar(capture, variable)
               boxIfValueClass(variable, capturedValue)
+            case EvaluationStrategy.ClassCaptureAssign(variable, cls) =>
+              val capture = getClassCapture(qualifier, variable.name, cls)
+                .getOrElse {
+                  report.error(
+                    s"No capture found for $variable in $cls",
+                    tree.srcPos
+                  )
+                  ref(defn.Predef_undefined)
+                }
+              val value = unboxIfValueClass(variable, args.head)
+              val typeSymbol = variable.info.typeSymbol
+              val elemField = typeSymbol.info.decl(termName("elem")).symbol
+              setField(capture, elemField.asTerm, value)
             case EvaluationStrategy.MethodCapture(variable, method) =>
               val capture = getMethodCapture(method, variable.name)
                 .getOrElse {
@@ -76,6 +101,19 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
                 }
               val capturedValue = derefCapturedVar(capture, variable)
               boxIfValueClass(variable, capturedValue)
+            case EvaluationStrategy.MethodCaptureAssign(variable, method) =>
+              val capture = getMethodCapture(method, variable.name)
+                .getOrElse {
+                  report.error(
+                    s"No capture found for $variable in $method",
+                    tree.srcPos
+                  )
+                  ref(defn.Predef_undefined)
+                }
+              val value = unboxIfValueClass(variable, args.head)
+              val typeSymbol = variable.info.typeSymbol
+              val elemField = typeSymbol.info.decl(termName("elem")).symbol
+              setField(capture, elemField.asTerm, value)
             case EvaluationStrategy.StaticObject(obj) => getStaticObject(obj)
             case EvaluationStrategy.Field(field) =>
               // if the field is lazy or if it is private in a value class
@@ -145,6 +183,12 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
       List(Literal(Constant(name)))
     )
 
+  private def setLocalValue(name: String, value: Tree)(using Context): Tree =
+    Apply(
+      Select(This(evalCtx.evaluationClass), termName("setLocalValue")),
+      List(Literal(Constant(name)), value)
+    )
+
   private def getOuter(qualifier: Tree, outerCls: ClassSymbol)(using
       Context
   ): Tree =
@@ -200,7 +244,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
       )
     )
 
-  private def setField(qualifier: Tree, field: TermSymbol, arg: Tree)(using
+  private def setField(qualifier: Tree, field: TermSymbol, value: Tree)(using
       Context
   ): Tree =
     Apply(
@@ -209,7 +253,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
         qualifier,
         Literal(Constant(JavaEncoding.encode(field.owner))),
         Literal(Constant(field.name.toString)),
-        arg
+        value
       )
     )
 

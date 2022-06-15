@@ -75,51 +75,44 @@ class ExtractExpression(using evalCtx: EvaluationContext)
         // non-static object
         case tree: (Ident | Select) if isNonStaticObject(tree.symbol) =>
           val qualifier = getTransformedQualifier(tree)
-          callMethod(tree)(qualifier, tree.symbol.asTerm, List.empty, tree.tpe)
+          callMethod(tree)(qualifier, tree.symbol.asTerm, List.empty)
 
         // local variable
         case tree: Ident if isLocalVariable(tree.symbol) =>
           if tree.symbol.is(Lazy) then
             report.error(
-              s"Evaluation of local lazy val not supported: ${tree.symbol}",
+              s"Evaluation of local lazy val not supported",
               tree.srcPos
             )
             tree
           else
-            // a local variable can be captured by a class or method
-            val owner = tree.symbol.owner
-            val candidates = evalCtx.expressionSymbol.ownersIterator
-              .takeWhile(_ != owner)
-              .filter(s => s.isClass || s.is(Method))
-              .toSeq
-            val capturer = candidates
-              .findLast(_.isClass)
-              .orElse(candidates.find(_.is(Method)))
-            capturer match
+            getCapturer(tree.symbol.asTerm) match
               case Some(capturer) =>
                 if capturer.isClass then
-                  getClassCapture(tree)(tree.symbol, capturer.asClass, tree.tpe)
-                else
-                  getMethodCapture(tree)(tree.symbol, capturer.asTerm, tree.tpe)
-              case None => getLocalValue(tree)(tree.symbol, tree.tpe)
+                  getClassCapture(tree)(tree.symbol, capturer.asClass)
+                else getMethodCapture(tree)(tree.symbol, capturer.asTerm)
+              case None => getLocalValue(tree)(tree.symbol)
 
         // assignement to local variable
-        case tree @ Assign(lhs, rhs) if isLocalVariable(lhs.symbol) =>
-          report.error(
-            s"Assignment to local variable not supported: ${lhs.symbol}",
-            tree.srcPos
-          )
-          Assign(lhs, transform(rhs))
+        case tree @ Assign(lhs, _) if isLocalVariable(lhs.symbol) =>
+          val variable = lhs.symbol.asTerm
+          val rhs = transform(tree.rhs)
+          getCapturer(variable) match
+            case Some(capturer) =>
+              if capturer.isClass then
+                setClassCapture(tree)(variable, capturer.asClass, rhs)
+              else setMethodCapture(tree)(variable, capturer.asTerm, rhs)
+            case None => setLocalValue(tree)(variable, rhs)
 
         // inaccessible fields
         case tree: Select if isInaccessibleField(tree.symbol) =>
           val qualifier = getTransformedQualifier(tree)
-          getField(tree)(qualifier, tree.symbol.asTerm, tree.tpe)
+          getField(tree)(qualifier, tree.symbol.asTerm)
 
         // assignment to inaccessible fields
         case tree @ Assign(lhs, rhs) if isInaccessibleField(lhs.symbol) =>
           val qualifier = getTransformedQualifier(lhs)
-          setField(tree)(qualifier, lhs.symbol.asTerm, transform(rhs), tree.tpe)
+          setField(tree)(qualifier, lhs.symbol.asTerm, transform(rhs))
 
         // this or outer this
         case tree @ This(Ident(name)) =>
@@ -130,20 +123,32 @@ class ExtractExpression(using evalCtx: EvaluationContext)
             if isInaccessibleConstructor(tree.symbol) =>
           val args = getTransformedArgs(tree)
           val qualifier = getTransformedQualifierOfNew(tree)
-          callConstructor(tree)(qualifier, tree.symbol.asTerm, args, tree.tpe)
+          callConstructor(tree)(qualifier, tree.symbol.asTerm, args)
 
         // inaccessible methods
         case tree: (Ident | Select | Apply | TypeApply)
             if isInaccessibleMethod(tree.symbol) =>
           val args = getTransformedArgs(tree)
           val qualifier = getTransformedQualifier(tree)
-          callMethod(tree)(qualifier, tree.symbol.asTerm, args, tree.tpe)
+          callMethod(tree)(qualifier, tree.symbol.asTerm, args)
 
         case Typed(tree, tpt)
             if tpt.symbol.isType && !isTypeAccessible(tpt.symbol.asType) =>
           transform(tree)
         case tree =>
           super.transform(tree)
+
+    private def getCapturer(variable: TermSymbol)(using
+        Context
+    ): Option[Symbol] =
+      // a local variable can be captured by a class or method
+      val candidates = evalCtx.expressionSymbol.ownersIterator
+        .takeWhile(_ != variable.owner)
+        .filter(s => s.isClass || s.is(Method))
+        .toSeq
+      candidates
+        .findLast(_.isClass)
+        .orElse(candidates.find(_.is(Method)))
 
     private def getTransformedArgs(tree: Tree)(using Context): List[Tree] =
       tree match
@@ -207,7 +212,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
 
   private def getThis(tree: Tree)(cls: ClassSymbol)(using Context): Tree =
     reflectEval(tree)(
-      None,
+      nullLiteral,
       EvaluationStrategy.This(cls),
       List.empty,
       Some(evalCtx.classOwners.head.thisType)
@@ -219,7 +224,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       Context
   ): Tree =
     reflectEval(tree)(
-      Some(qualifier),
+      qualifier,
       EvaluationStrategy.Outer(outerCls),
       List.empty,
       Some(tpe)
@@ -227,45 +232,78 @@ class ExtractExpression(using evalCtx: EvaluationContext)
 
   private def getLocalValue(
       tree: Tree
-  )(variable: Symbol, tpe: Type)(using Context): Tree =
+  )(variable: Symbol)(using Context): Tree =
     reflectEval(tree)(
-      None,
+      nullLiteral,
       EvaluationStrategy.LocalValue(variable.asTerm),
       List.empty,
-      Some(tpe)
+      Some(tree.tpe)
     )
 
-  private def getClassCapture(
-      tree: Tree
-  )(variable: Symbol, cls: ClassSymbol, tpe: Type)(using
+  private def setLocalValue(tree: Tree)(
+      variable: Symbol,
+      rhs: Tree
+  )(using
       Context
+  ): Tree =
+    reflectEval(tree)(
+      nullLiteral,
+      EvaluationStrategy.LocalValueAssign(variable.asTerm),
+      List(rhs),
+      Some(tree.tpe)
+    )
+
+  private def getClassCapture(tree: Tree)(variable: Symbol, cls: ClassSymbol)(
+      using Context
   ): Tree =
     reportErrorIfLocalInsideValueClass(cls, tree.srcPos)
     reflectEval(tree)(
-      Some(thisOrOuterValue(tree)(cls)),
-      EvaluationStrategy.ClassCapture(variable.asTerm, cls.asClass),
+      thisOrOuterValue(tree)(cls),
+      EvaluationStrategy.ClassCapture(variable.asTerm, cls),
       List.empty,
-      Some(tpe)
+      Some(tree.tpe)
+    )
+
+  private def setClassCapture(
+      tree: Tree
+  )(variable: Symbol, cls: ClassSymbol, value: Tree)(using Context) =
+    reportErrorIfLocalInsideValueClass(cls, tree.srcPos)
+    reflectEval(tree)(
+      thisOrOuterValue(tree)(cls),
+      EvaluationStrategy.ClassCaptureAssign(variable.asTerm, cls),
+      List(value),
+      Some(tree.tpe)
     )
 
   private def getMethodCapture(
       tree: Tree
-  )(variable: Symbol, method: TermSymbol, tpe: Type)(using
+  )(variable: Symbol, method: TermSymbol)(using
       Context
   ): Tree =
     reportErrorIfLocalInsideValueClass(method, tree.srcPos)
     reflectEval(tree)(
-      None,
+      nullLiteral,
       EvaluationStrategy.MethodCapture(variable.asTerm, method.asTerm),
       List.empty,
-      Some(tpe)
+      Some(tree.tpe)
+    )
+
+  private def setMethodCapture(
+      tree: Tree
+  )(variable: Symbol, method: Symbol, value: Tree)(using Context) =
+    reportErrorIfLocalInsideValueClass(method, tree.srcPos)
+    reflectEval(tree)(
+      nullLiteral,
+      EvaluationStrategy.MethodCaptureAssign(variable.asTerm, method.asTerm),
+      List(value),
+      Some(tree.tpe)
     )
 
   private def getStaticObject(
       tree: Tree
   )(obj: Symbol)(using ctx: Context): Tree =
     reflectEval(tree)(
-      None,
+      nullLiteral,
       EvaluationStrategy.StaticObject(obj.asClass),
       List.empty,
       None
@@ -273,63 +311,60 @@ class ExtractExpression(using evalCtx: EvaluationContext)
 
   private def getField(
       tree: Tree
-  )(qualifier: Tree, field: TermSymbol, tpe: Type)(using
+  )(qualifier: Tree, field: TermSymbol)(using
       Context
   ): Tree =
     reportErrorIfLocalInsideValueClass(field, tree.srcPos)
     reflectEval(tree)(
-      Some(qualifier),
+      qualifier,
       EvaluationStrategy.Field(field),
       List.empty,
-      Some(tpe)
+      Some(tree.tpe)
     )
 
   private def setField(tree: Tree)(
       qualifier: Tree,
       field: TermSymbol,
-      rhs: Tree,
-      tpe: Type
+      rhs: Tree
   )(using
       Context
   ): Tree =
     reportErrorIfLocalInsideValueClass(field, tree.srcPos)
     reflectEval(tree)(
-      Some(qualifier),
+      qualifier,
       EvaluationStrategy.FieldAssign(field),
       List(rhs),
-      Some(tpe)
+      Some(tree.tpe)
     )
 
   private def callMethod(tree: Tree)(
       qualifier: Tree,
       method: TermSymbol,
-      args: List[Tree],
-      tpe: Type
+      args: List[Tree]
   )(using Context): Tree =
     reportErrorIfLocalInsideValueClass(method, tree.srcPos)
     reflectEval(tree)(
-      Some(qualifier),
+      qualifier,
       EvaluationStrategy.MethodCall(method),
       args,
-      Some(tpe)
+      Some(tree.tpe)
     )
 
   private def callConstructor(tree: Tree)(
       qualifier: Tree,
       ctr: TermSymbol,
-      args: List[Tree],
-      tpe: Type
+      args: List[Tree]
   )(using Context): Tree =
     reportErrorIfLocalInsideValueClass(ctr, tree.srcPos)
     reflectEval(tree)(
-      Some(qualifier),
+      qualifier,
       EvaluationStrategy.ConstructorCall(ctr, ctr.owner.asClass),
       args,
-      Some(tpe)
+      Some(tree.tpe)
     )
 
   private def reflectEval(tree: Tree)(
-      qualifier: Option[Tree],
+      qualifier: Tree,
       strategy: EvaluationStrategy,
       args: List[Tree],
       tpe: Option[Type]
@@ -340,7 +375,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       cpy.Apply(tree)(
         Select(This(evalCtx.evaluationClass), termName("reflectEval")),
         List(
-          qualifier.getOrElse(nullLiteral),
+          qualifier,
           Literal(Constant(strategy.toString)),
           JavaSeqLiteral(args, TypeTree(ctx.definitions.ObjectType))
         )

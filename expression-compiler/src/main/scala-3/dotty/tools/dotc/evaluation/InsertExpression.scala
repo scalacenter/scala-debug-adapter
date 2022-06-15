@@ -27,16 +27,21 @@ class InsertExpression(using
   override def isCheckable: Boolean = false
 
   private val evaluationClassSource =
-    s"""|class ${evalCtx.evaluationClassName}(names: Array[String], values: Array[Object]):
+    s"""|class ${evalCtx.evaluationClassName}(names: Array[String], values: Array[Any]):
         |  import scala.util.Try
-        |
-        |  val valuesByName = names.zip(values).toMap
         |
         |  def evaluate(): Any =
         |    ()
         |
         |  def getLocalValue(name: String): Any =
-        |    valuesByName(name)
+        |    val idx = names.indexOf(name)
+        |    if idx == -1 then throw new NoSuchElementException(name)
+        |    else values(idx)
+        |
+        |  def setLocalValue(name: String, value: Any): Any =
+        |    val idx = names.indexOf(name)
+        |    if idx == -1 then throw new NoSuchElementException(name)
+        |    else values(idx) = value
         |
         |  def callMethod(obj: Any, className: String, methodName: String, paramTypesNames: Array[String], returnTypeName: String, args: Array[Object]): Any =
         |    val clazz = getClass.getClassLoader.loadClass(className)

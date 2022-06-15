@@ -2,7 +2,6 @@ package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.internal.DebugSession
 import ch.epfl.scala.debugadapter.testing.TestDebugClient
-import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
 import utest._
 
 import java.net.{ConnectException, SocketException, SocketTimeoutException}
