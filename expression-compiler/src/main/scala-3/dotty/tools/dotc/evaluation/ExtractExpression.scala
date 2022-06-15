@@ -206,7 +206,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
         .drop(1)
         .take(target)
         .foldLeft(ths) { (innerObj, outerSym) =>
-          getOuter(tree)(innerObj, outerSym, outerSym.thisType)
+          getOuter(tree)(innerObj, outerSym)
         }
     else nullLiteral
 
@@ -215,65 +215,43 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       nullLiteral,
       EvaluationStrategy.This(cls),
       List.empty,
-      Some(evalCtx.classOwners.head.thisType)
+      evalCtx.classOwners.head.typeRef
     )
 
   private def getOuter(
       tree: Tree
-  )(qualifier: Tree, outerCls: ClassSymbol, tpe: Type)(using
+  )(qualifier: Tree, outerCls: ClassSymbol)(using
       Context
   ): Tree =
-    reflectEval(tree)(
-      qualifier,
-      EvaluationStrategy.Outer(outerCls),
-      List.empty,
-      Some(tpe)
-    )
+    val strategy = EvaluationStrategy.Outer(outerCls)
+    reflectEval(tree)(qualifier, strategy, List.empty, outerCls.typeRef)
 
-  private def getLocalValue(
-      tree: Tree
-  )(variable: Symbol)(using Context): Tree =
-    reflectEval(tree)(
-      nullLiteral,
-      EvaluationStrategy.LocalValue(variable.asTerm),
-      List.empty,
-      Some(tree.tpe)
-    )
+  private def getLocalValue(tree: Tree)(variable: Symbol)(using Context): Tree =
+    val strategy = EvaluationStrategy.LocalValue(variable.asTerm)
+    reflectEval(tree)(nullLiteral, strategy, List.empty, tree.tpe)
 
   private def setLocalValue(tree: Tree)(
       variable: Symbol,
       rhs: Tree
-  )(using
-      Context
-  ): Tree =
-    reflectEval(tree)(
-      nullLiteral,
-      EvaluationStrategy.LocalValueAssign(variable.asTerm),
-      List(rhs),
-      Some(tree.tpe)
-    )
+  )(using Context): Tree =
+    val strategy = EvaluationStrategy.LocalValueAssign(variable.asTerm)
+    reflectEval(tree)(nullLiteral, strategy, List(rhs), tree.tpe)
 
   private def getClassCapture(tree: Tree)(variable: Symbol, cls: ClassSymbol)(
       using Context
   ): Tree =
     reportErrorIfLocalInsideValueClass(cls, tree.srcPos)
-    reflectEval(tree)(
-      thisOrOuterValue(tree)(cls),
-      EvaluationStrategy.ClassCapture(variable.asTerm, cls),
-      List.empty,
-      Some(tree.tpe)
-    )
+    val strategy = EvaluationStrategy.ClassCapture(variable.asTerm, cls)
+    val qualifier = thisOrOuterValue(tree)(cls)
+    reflectEval(tree)(qualifier, strategy, List.empty, tree.tpe)
 
   private def setClassCapture(
       tree: Tree
   )(variable: Symbol, cls: ClassSymbol, value: Tree)(using Context) =
     reportErrorIfLocalInsideValueClass(cls, tree.srcPos)
-    reflectEval(tree)(
-      thisOrOuterValue(tree)(cls),
-      EvaluationStrategy.ClassCaptureAssign(variable.asTerm, cls),
-      List(value),
-      Some(tree.tpe)
-    )
+    val strategy = EvaluationStrategy.ClassCaptureAssign(variable.asTerm, cls)
+    val qualifier = thisOrOuterValue(tree)(cls)
+    reflectEval(tree)(qualifier, strategy, List(value), tree.tpe)
 
   private def getMethodCapture(
       tree: Tree
@@ -281,33 +259,23 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       Context
   ): Tree =
     reportErrorIfLocalInsideValueClass(method, tree.srcPos)
-    reflectEval(tree)(
-      nullLiteral,
-      EvaluationStrategy.MethodCapture(variable.asTerm, method.asTerm),
-      List.empty,
-      Some(tree.tpe)
-    )
+    val strategy =
+      EvaluationStrategy.MethodCapture(variable.asTerm, method.asTerm)
+    reflectEval(tree)(nullLiteral, strategy, List.empty, tree.tpe)
 
   private def setMethodCapture(
       tree: Tree
   )(variable: Symbol, method: Symbol, value: Tree)(using Context) =
     reportErrorIfLocalInsideValueClass(method, tree.srcPos)
-    reflectEval(tree)(
-      nullLiteral,
-      EvaluationStrategy.MethodCaptureAssign(variable.asTerm, method.asTerm),
-      List(value),
-      Some(tree.tpe)
-    )
+    val strategy =
+      EvaluationStrategy.MethodCaptureAssign(variable.asTerm, method.asTerm)
+    reflectEval(tree)(nullLiteral, strategy, List(value), tree.tpe)
 
   private def getStaticObject(
       tree: Tree
   )(obj: Symbol)(using ctx: Context): Tree =
-    reflectEval(tree)(
-      nullLiteral,
-      EvaluationStrategy.StaticObject(obj.asClass),
-      List.empty,
-      None
-    )
+    val strategy = EvaluationStrategy.StaticObject(obj.asClass)
+    reflectEval(tree)(nullLiteral, strategy, List.empty, obj.typeRef)
 
   private def getField(
       tree: Tree
@@ -315,12 +283,8 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       Context
   ): Tree =
     reportErrorIfLocalInsideValueClass(field, tree.srcPos)
-    reflectEval(tree)(
-      qualifier,
-      EvaluationStrategy.Field(field),
-      List.empty,
-      Some(tree.tpe)
-    )
+    val strategy = EvaluationStrategy.Field(field)
+    reflectEval(tree)(qualifier, strategy, List.empty, tree.tpe)
 
   private def setField(tree: Tree)(
       qualifier: Tree,
@@ -330,12 +294,8 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       Context
   ): Tree =
     reportErrorIfLocalInsideValueClass(field, tree.srcPos)
-    reflectEval(tree)(
-      qualifier,
-      EvaluationStrategy.FieldAssign(field),
-      List(rhs),
-      Some(tree.tpe)
-    )
+    val strategy = EvaluationStrategy.FieldAssign(field)
+    reflectEval(tree)(qualifier, strategy, List(rhs), tree.tpe)
 
   private def callMethod(tree: Tree)(
       qualifier: Tree,
@@ -343,12 +303,8 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       args: List[Tree]
   )(using Context): Tree =
     reportErrorIfLocalInsideValueClass(method, tree.srcPos)
-    reflectEval(tree)(
-      qualifier,
-      EvaluationStrategy.MethodCall(method),
-      args,
-      Some(tree.tpe)
-    )
+    val strategy = EvaluationStrategy.MethodCall(method)
+    reflectEval(tree)(qualifier, strategy, args, tree.tpe)
 
   private def callConstructor(tree: Tree)(
       qualifier: Tree,
@@ -356,18 +312,14 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       args: List[Tree]
   )(using Context): Tree =
     reportErrorIfLocalInsideValueClass(ctr, tree.srcPos)
-    reflectEval(tree)(
-      qualifier,
-      EvaluationStrategy.ConstructorCall(ctr, ctr.owner.asClass),
-      args,
-      Some(tree.tpe)
-    )
+    val strategy = EvaluationStrategy.ConstructorCall(ctr, ctr.owner.asClass)
+    reflectEval(tree)(qualifier, strategy, args, tree.tpe)
 
   private def reflectEval(tree: Tree)(
       qualifier: Tree,
       strategy: EvaluationStrategy,
       args: List[Tree],
-      tpe: Option[Type]
+      tpe: Type
   )(using
       Context
   ): Tree =
@@ -381,13 +333,10 @@ class ExtractExpression(using evalCtx: EvaluationContext)
         )
       )
     reflectEval.putAttachment(EvaluationStrategy, strategy)
-    tpe.map(cast(reflectEval, _)).getOrElse(reflectEval)
-
-  private def cast(tree: Tree, tpe: Type)(using Context): Tree =
     val widenDealiasTpe = tpe.widenDealias
     if isTypeAccessible(widenDealiasTpe.typeSymbol.asType)
-    then tree.cast(widenDealiasTpe)
-    else tree
+    then reflectEval.cast(widenDealiasTpe)
+    else reflectEval
 
   /**
    * In the [[ResolveReflectEval]] phase we cannot find the symbol of a local method
