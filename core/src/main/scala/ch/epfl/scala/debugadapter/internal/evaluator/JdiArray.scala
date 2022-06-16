@@ -45,4 +45,6 @@ class JdiArray(reference: ArrayReference, thread: ThreadReference)
     reference.setValue(index, value)
 
   def setValues(values: List[Value]): Unit = reference.setValues(values.asJava)
+
+  def getValues(): Seq[Value] = reference.getValues().asScala
 }

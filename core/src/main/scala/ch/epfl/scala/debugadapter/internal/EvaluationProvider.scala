@@ -67,11 +67,13 @@ private[internal] class EvaluationProvider(
         val frame = thread.frames().get(depth)
         if (frame.location().sourcePath().endsWith(".java"))
           future.completeExceptionally(
-            new Exception("Cannot evaluate Java sources")
+            new UnsupportedOperationException(
+              "Evaluation in Java source file not supported"
+            )
           )
         else
           evaluationBlock {
-            evaluator.evaluate(expression, thread, frame) match {
+            evaluator.evaluate(expression, thread, depth) match {
               case Failure(exception) =>
                 future.completeExceptionally(exception)
               case Success(value) =>
