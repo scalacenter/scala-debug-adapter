@@ -986,7 +986,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
-    "read and write mutable variables" - {
+    "read and write mutable variables whose type is a value class" - {
       val source =
         """|package example
            |
@@ -1025,14 +1025,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           Evaluation.success("x", 1),
           Evaluation.success("u", 1),
           Evaluation.success("y", 1),
-          // we can reassign x because it is a field
           Evaluation.successOrIgnore("x = 2", (), isScala2),
           Evaluation.successOrIgnore("x", 2, isScala2),
           Evaluation.successOrIgnore("x = x - 1", (), isScala2),
           Evaluation.successOrIgnore("x", 1, isScala2),
           Evaluation.successOrIgnore("x *= 2", (), isScala2),
           Evaluation.successOrIgnore("x", 2, isScala2),
-          // we can reassign neither y nor u because they are local
           Evaluation.successOrIgnore("u = 2; u", 2, isScala2),
           Evaluation.successOrIgnore("u", 2, isScala2),
           Evaluation.success("y += 1", ()),
@@ -1322,6 +1320,67 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
           Evaluation.success("size", 2),
           Evaluation.success("size.value", 2),
           Evaluation.success("m(\"bar\")", "ba")
+        )
+      )
+    }
+
+    "read and write mutable variables" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    var x: A = new A(1)
+           |    var y: A = new A(1)
+           |    var z: A = new A(1)
+           |    z += new A(1)
+           |    def xx(): A = {
+           |      x += new A(1)
+           |      x
+           |    }
+           |    class B {
+           |      def yy(): A = {
+           |        y += new A(1)
+           |        y
+           |      }
+           |    }
+           |    val b = new B
+           |    val res = xx() + b.yy() + z
+           |    println(res)
+           |  }
+           |}
+           |
+           |class A(val value: Int) extends AnyVal {
+           |  def +(x: A): A = new A(value + x.value)
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(8)(
+          Evaluation.success("x", 1),
+          Evaluation.success("y", 1),
+          Evaluation.success("z", 1),
+          Evaluation.success("x = new A(2); x", 2),
+          Evaluation.success("x", 2),
+          Evaluation.success("y = x + new A(1)", ()),
+          Evaluation.success("y", 3),
+          Evaluation.successOrIgnore("z += new A(2); z", 3, isScala2),
+          Evaluation.successOrIgnore("z", 3, isScala2),
+          Evaluation.success("new B")(_.startsWith("Main$B$1@")),
+          Evaluation.success("xx()", 3)
+        ),
+        Breakpoint(10)(
+          // captured by method m
+          Evaluation.success("x", 3),
+          Evaluation.success("x += new A(1); x", 4)
+        ),
+        Breakpoint(11)(
+          Evaluation.success("x", 5)
+        ),
+        Breakpoint(15)(
+          // captured by class B
+          Evaluation.successOrIgnore("y", 3, isScala2),
+          Evaluation.successOrIgnore("y += new A(1); y", 4, isScala2)
         )
       )
     }
