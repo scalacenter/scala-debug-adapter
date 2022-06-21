@@ -5,17 +5,16 @@ import com.microsoft.java.debug.core.DebugSettings
 import com.microsoft.java.debug.core.adapter._
 import com.microsoft.java.debug.core.protocol.Types
 import com.sun.jdi._
-import io.reactivex.Observable
 
 import java.util
 import java.util.Collections
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 import com.microsoft.java.debug.core.protocol.Requests.CustomStepFilter
-import ch.epfl.scala.debugadapter.internal.decompiler.Decompiler
-import ch.epfl.scala.debugadapter.internal.decompiler.scalasig.ScalaSig
-import ch.epfl.scala.debugadapter.internal.decompiler.scalasig.MethodType
-import ch.epfl.scala.debugadapter.internal.decompiler.scalasig.MethodSymbol
+import ch.epfl.scala.debugadapter.internal.decompiler.scalasig._
+import ch.epfl.scala.debugadapter.internal.decompiler.scalasig
+import scala.collection.JavaConverters._
+import io.reactivex.Observable
 
 private[debugadapter] object DebugAdapter {
 
@@ -35,80 +34,115 @@ private[debugadapter] object DebugAdapter {
       DebugSettings.getCurrent().stepFilters.customStepFilter =
         new CustomStepFilter {
           override def skip(method: Method): Boolean = {
+            // Check wether the signature looks like a lambda
+            if (isLocalMethod(method) || isLocalClass(method.declaringType()))
+              false
+            else {
+              val fqcn = method.declaringType().name()
+              val res =
+                sourceLookUpProvider.getScalaSig(fqcn).map(skip(method, _))
 
-            val sig = method.signature()
-
-              // Check wether the signature looks like a lambda
-              if (method.name().contains("$anonfun$")) {
-                false
+              res match {
+                case None => println(s"No ScalaSig found for $method")
+                case Some(true) => println(s"Skipping $method")
+                case Some(false) => ()
               }
 
-              // Get the name of the class
-            val methodName = method.name()
-            val classReturn = method.returnTypeName()
-            val className = method
-              .location()
-              .sourcePath()
-              .replaceAll("/", ".")
-              .replace(".scala", "")
+              res.getOrElse(false)
 
-            println("getName: " + methodName)
-            println("Returns: " + classReturn)
-            println("sig: " + sig)
-            println("Path: " + className)
-            Console.flush()
-
-            val res: Option[Boolean] = for {
-              classFile <- sourceLookUpProvider.getClassFile(className)
-              bytes = classFile.getBytes()
-              scalaSig <- Decompiler.decompileMethodSymbol(bytes, className)
-            } yield skip(method, scalaSig)
-
-            res.getOrElse(false)
+            }
           }
 
-          def skip(method: Method, scalaSig: ScalaSig): Boolean = {
-            scalaSig.entries.find {
-              case m: MethodSymbol => {
-                println("method name: " + method.name())
-                println("mSymbol name: " + m.info.name.get)
+          private def isLocalMethod(method: Method): Boolean =
+            method.name().contains("$anonfun$")
 
-                // Check names
-                print("names " + (method.name() == m.info.name.get))
+          private def isLocalClass(tpe: ReferenceType): Boolean =
+            tpe.name().contains("$anon$")
 
-                val methodAttrType = method.argumentTypes()
+            private def skip(method: Method, scalaSig: ScalaSig): Boolean = {
+            scalaSig.entries
+              .collect { case m: MethodSymbol => m }
+              .forall(!matchSymbol(method, _))
+          }
 
-                val symbolAttr = m.attributes
+          private def matchSymbol(
+              javaMethod: Method,
+              scalaMethod: MethodSymbol
+          ): Boolean = {
+            // println(s"name: ${scalaMethod.name}")
+            if (scalaMethod.aliasRef.nonEmpty)
+              println(
+                s"aliasRef for ${scalaMethod.name}: ${scalaMethod.aliasRef}"
+              )
+            // if (scalaMethod.attributes.nonEmpty) println(s"attributes for ${scalaMethod.name}: ${scalaMethod.attributes}")
+            if (scalaMethod.isSyntheticMethod)
+              println(s"${scalaMethod.name} isSyntheticMethod")
+            if (scalaMethod.isMonomorphic)
+              println(s"${scalaMethod.name} isMonomorphic")
+            if (scalaMethod.isMixedIn) println(s"${scalaMethod.name} isMixedIn")
+            // println(s"MethodType: $methodType")
+            javaMethod.name == scalaMethod.name &&
+            matchArguments(javaMethod, scalaMethod.info.info.get) &&
+            matchOwner(javaMethod.declaringType(), scalaMethod.parent.get)
+          }
 
-                  // Check return type
-                  val methodRetType = method.returnType()
-                  val symRetType = m.info
-
-                  // Check number of args
-                  print("Attr num " + (methodAttrType.size == symbolAttr.size))
-
-                  // Check attribute type
-                print(
-                    "Attr type " + (symbolAttr.foldLeft(true)((cond, a) =>
-                    cond && methodAttrType.contains(a.symbol.name)
-                  ))
-                )
-
-                    false
-    
+          private def matchOwner(
+              javaClass: ReferenceType,
+              scalaOwner: Symbol
+          ): Boolean = {
+            // println(s"matchOwner(${javaClass.name()}, ${scalaOwner.name})")
+            val fqcn = javaClass.name()
+            // TODO improve
+            getOwners(scalaOwner).reverse
+              .foldLeft(Option(fqcn)) { (acc, sym) =>
+                for (fqcn <- acc if fqcn.contains(sym.name)) yield {
+                  fqcn
+                    .split(sym.name)
+                    .drop(1)
+                    .mkString(sym.name)
+                }
               }
-              // Similar vut with MethodType
-              // case m: MethodType =>
-              //   m.paramRefs.foreach(r => r.get.attributes.foreach(a => a.infoRef.get))
+              .exists { remainder =>
+                remainder.forall(c => c.isDigit || c == '$')
+              }
+          }
 
-              //   print(m.resultType.get)
+          private def getOwners(sym: Symbol): Seq[Symbol] = {
+            Iterator
+              .iterate(Option(sym))(opt => opt.flatMap(_.parent))
+              .takeWhile(_.isDefined)
+              .flatten
+              .toSeq
+          }
 
-                //   false
-
-                case _ => false
+          private def matchArguments(
+              javaMethod: Method,
+              methodType: scalasig.Type
+          ): Boolean = {
+            val javaArgs = javaMethod.arguments().asScala.toSeq
+            val scalaArgs = extractArguments(methodType)
+            javaArgs.size == scalaArgs.size &&
+            javaArgs.zip(scalaArgs).forall { case (javaArg, scalaArg) =>
+              matchArgument(javaArg, scalaArg)
             }
+          }
 
-            false
+            private def matchArgument(
+              javaArg: LocalVariable,
+              scalaArg: Symbol
+          ): Boolean = {
+            // println(scalaArg)
+            javaArg.name() == scalaArg.name
+          }
+
+              // private def matchType(javaType: jdi.Type)
+
+          private def extractArguments(methodType: scalasig.Type): Seq[Symbol] = {
+            methodType match {
+              case m: MethodType => m.paramRefs
+              case m: NullaryMethodType => Seq.empty
+              case m: PolyType => extractArguments(m.typeRef.get)
+            }
           }
         }
 

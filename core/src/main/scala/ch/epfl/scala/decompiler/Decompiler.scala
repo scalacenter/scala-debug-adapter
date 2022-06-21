@@ -8,6 +8,7 @@ import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.AnnotationVisitor
 import org.objectweb.asm.Opcodes
+import ch.epfl.scala.debugadapter.internal.ClassFile
 
 object Decompiler {
   val BYTES_VALUE = "bytes"
@@ -18,16 +19,8 @@ object Decompiler {
 
   private val ScalaSigBytes = "ScalaSig".getBytes(UTF_8)
 
-  def decompileMethodSymbol(
-      bytes: Array[Byte],
-      fileName: String
-  ): Option[ScalaSig] = {
-
-    if (fileName.endsWith(".sig")) {
-      return Some(Parser.parseScalaSig(bytes, fileName))
-    }
-
-    println("Decompiling\n")
+  def decompile(classFile: ClassFile): Option[ScalaSig] = {
+    val bytes = classFile.getBytes()
     if (!containsMarker(bytes)) return None
 
     // Parse the file
@@ -39,7 +32,6 @@ object Decompiler {
     val scalaVisitor = new AnnotationVisitor(Opcodes.ASM9) {
 
       override def visitArray(name: String): AnnotationVisitor = {
-        println("visitArray\n")
         if (name == "bytes") {
           new AnnotationVisitor(Opcodes.ASM9) {
             override def visit(name: String, value: Any): Unit = {
@@ -52,7 +44,6 @@ object Decompiler {
       }
 
       override def visit(name: String, value: Any): Unit = {
-        println("visit\n")
         if (name == "bytes") {
           scalaAnnotations += value.asInstanceOf[String]
         }
@@ -80,10 +71,10 @@ object Decompiler {
     if (scalaAnnotations.isEmpty) None
     else {
       val decoded = decode(scalaAnnotations.toList.map(_.getBytes()))
-      Some(Parser.parseScalaSig(decoded, fileName))
+      Some(Parser.parseScalaSig(decoded, classFile.fullyQualifiedName))
     }
-
   }
+
   def sourceNameAndText(
       fileName: String,
       className: String,
@@ -94,7 +85,6 @@ object Decompiler {
       return tryDecompileSigFile(fileName, bytes)
     }
 
-    println("Decompiling\n")
     if (!containsMarker(bytes)) return None
 
     // Parse the file
@@ -106,7 +96,6 @@ object Decompiler {
     val scalaVisitor = new AnnotationVisitor(Opcodes.ASM9) {
 
       override def visitArray(name: String): AnnotationVisitor = {
-        println("visitArray\n")
         if (name == "bytes") {
           new AnnotationVisitor(Opcodes.ASM9) {
             override def visit(name: String, value: Any): Unit = {
@@ -119,7 +108,6 @@ object Decompiler {
       }
 
       override def visit(name: String, value: Any): Unit = {
-        println("visit\n")
         if (name == "bytes") {
           scalaAnnotations += value.asInstanceOf[String]
         }

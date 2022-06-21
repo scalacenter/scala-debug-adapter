@@ -18,22 +18,65 @@ object SmartStepTests extends TestSuite {
       val source =
         """|package example
            |
+           |trait A {
+           |  def m(): String = "A.m()"
+           |}
+           |
            |object Main {
            |  def main(args: Array[String]): Unit = {
-           |    val b = new B()
-           |    println(b.foo)
+           |    val b = new B
+           |    println(b.m())
+           |    val c = new C
+           |    println(c.m())
+           |    val d = new D
+           |    println(d.m())
+           |    val e = new E
+           |    println(e.m())
+           |    println(F.m())
+           |    val g = new G
+           |    println(g.m())
+           |    val h = new H
+           |    println(h.m())
+           |    val a1 = new A {}
+           |    println(a1.m())
+           |    val a2 = new A {
+           |      override def m(): String = "g.m()"
+           |    }
+           |    println(a2.m())
            |  }
+           |
+           |  private class G extends A {
+           |    override def m(): String = "G.m()"
+           |  }
+           |
+           |  class H extends A
            |}
            |
-           |trait A {
-           |  def foo: String = "foo"
+           |class B extends A
+           |
+           |class C extends A {
+           |  def m(x: Int): String = s"C.m($x)"
            |}
            |
-           |class B() extends A
+           |class D extends A {
+           |  override def m(): String = "D.m()"
+           |}
+           |
+           |class E extends D
+           |
+           |object F extends A
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
-        // at a breakpoint on line 6, it should step into line 11
-        Breakpoint(6)(StepInto(11))
+        Breakpoint(10)(StepInto(4)),
+        Breakpoint(12)(StepInto(4)),
+        Breakpoint(14)(StepInto(44)),
+        Breakpoint(16)(StepInto(44)),
+        Breakpoint(17)(StepInto(4)),
+        Breakpoint(19)(StepInto(31)),
+        Breakpoint(21)(StepInto(4)),
+        // cannot skip method in local class
+        Breakpoint(23)(StepInto(22)),
+        Breakpoint(27)(StepInto(25))
       )
     }
   }
@@ -55,19 +98,22 @@ object SmartStepTests extends TestSuite {
       client.launch()
 
       val lines = breakpoints.map(_.line).distinct.toArray
-      val resp = client.setBreakpoints(runner.source, lines)
+      val resp = client.setBreakpoints(runner.sourceFiles.head, lines)
       assert(resp.length == lines.length)
       assert(resp.forall(_.verified))
       client.configurationDone()
 
       breakpoints.foreach { breakpoint =>
         val stopped = client.stopped()
-        val threadId = stopped.threadId
         assert(stopped.reason == "breakpoint")
+        val threadId = stopped.threadId
+        val stackTrace = client.stackTrace(threadId)
+        assert(stackTrace.stackFrames.head.line == breakpoint.line)
 
         breakpoint.steps.foreach { step =>
+          println(s"\nStepping into, at line ${breakpoint.line}")
           client.stepIn(threadId)
-          client.stopped(4.seconds)
+          client.stopped(300.seconds)
           val stackTrace = client.stackTrace(threadId)
           val obtained = stackTrace.stackFrames.head.line
           val expected = step.line

@@ -10,6 +10,8 @@ import scala.collection.mutable
 import ClassEntryLookUp.readSourceContent
 
 import scala.util.matching.Regex
+import ch.epfl.scala.debugadapter.internal.decompiler.Decompiler
+import ch.epfl.scala.debugadapter.internal.decompiler.scalasig.ScalaSig
 
 private case class SourceLine(uri: URI, lineNumber: Int)
 
@@ -24,15 +26,15 @@ private case class ClassFile(
   def fullPackageAsPath: String = fullPackage.replace(".", "/")
   def folderPath: String = relativePath.stripSuffix(s"/$className.class")
 
-  def getBytes(): Array[Byte] = {
-    println(fullyQualifiedName.replaceAll(".", "/"))
-    Console.flush()
-    classSystem.bytes(fullyQualifiedName.replaceAll(".", "/"))
-  }
+  def getBytes(): Array[Byte] =
+    classSystem.within { (_, root) =>
+      val classFile = root.resolve(relativePath)
+      Files.readAllBytes(classFile)
+    }.get
 }
 
 private class ClassEntryLookUp(
-    classNameToClassFile: Map[String, ClassFile],
+    fqcnToClassFile: Map[String, ClassFile],
     sourceUriToSourceFile: Map[URI, SourceFile],
     sourceUriToClassFiles: Map[URI, Seq[ClassFile]],
     classNameToSourceFile: Map[String, SourceFile],
@@ -125,8 +127,36 @@ private class ClassEntryLookUp(
     classNameToSourceFile.get(fqcn).map(_.uri)
   }
 
-  def getClassFile(className: String): Option[ClassFile] = {
-    classNameToClassFile.get(className)
+  def getClassFiles(sourceUri: URI): Seq[ClassFile] = {
+    sourceUriToClassFiles.get(sourceUri).getOrElse(Seq.empty)
+  }
+
+  def getClassFile(fqcn: String): Option[ClassFile] = {
+    fqcnToClassFile.get(fqcn)
+  }
+
+  private[internal] def getScalaSig(fqcn: String): Option[ScalaSig] = {
+    def fromClass = for {
+      classFile <- getClassFile(fqcn)
+      if classFile.sourceName.exists(_.endsWith(".scala"))
+      scalaSig <- Decompiler.decompile(classFile)
+    } yield scalaSig
+
+    def fromSource = {
+      val scalaSigs =
+        for {
+          sourceFile <- getSourceFile(fqcn).toSeq
+          if sourceFile.toString.endsWith(".scala")
+          classFile <- getClassFiles(sourceFile)
+          if fqcn.startsWith(classFile.fullyQualifiedName + "$")
+          scalaSig <- Decompiler.decompile(classFile)
+        } yield scalaSig
+      if (scalaSigs.size > 1)
+        throw new Exception(s"More than one ScalaSig found for $fqcn")
+      else scalaSigs.headOption
+    }
+
+    fromClass.orElse(fromSource)
   }
 }
 
@@ -163,12 +193,6 @@ private object ClassEntryLookUp {
           .getOrElse(Vector.empty)
       }
 
-      // println("Qualif name : " + classFiles.head.fullyQualifiedName + "\nName: " + classFiles.head.className + "\nPath: " + classFiles.head.relativePath)
-      // Console.flush()
-      for (c <- classFiles if c.fullyQualifiedName.contains("example"))
-        println(c.fullyQualifiedName)
-
-      // println(classFiles.forall(c => !c.fullyQualifiedName.contains("com.sun.tools")))
       val classNameToClassFile =
         classFiles.map(c => (c.fullyQualifiedName, c)).toMap
 
