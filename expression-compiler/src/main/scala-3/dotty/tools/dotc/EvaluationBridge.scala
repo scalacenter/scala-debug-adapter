@@ -28,7 +28,7 @@ class EvaluationBridge:
       classPath,
       "-Yskip:pureStats",
       // Debugging: Print the tree after phases of the debugger
-      "-Vprint:extract-expression,resolve-reflect-eval",
+      // "-Vprint:typer,extract-expression,resolve-reflect-eval",
       sourceFile.toString
     )
     val evalCtx = EvaluationContext(

@@ -380,10 +380,11 @@ class ExtractExpression(using evalCtx: EvaluationContext)
    * either because it is private or it belongs to an inaccessible type
    */
   private def isInaccessibleMethod(symbol: Symbol)(using Context): Boolean =
-    symbol.isRealMethod && (
-      !symbol.owner.isType ||
-        !isTermAccessible(symbol.asTerm, symbol.owner.asType)
-    )
+    symbol.isRealMethod &&
+      symbol.ownersIterator.forall(_ != evalCtx.evaluateMethod) && (
+        !symbol.owner.isType ||
+          !isTermAccessible(symbol.asTerm, symbol.owner.asType)
+      )
 
   /**
    * The symbol is a constructor and the expression class cannot access it
