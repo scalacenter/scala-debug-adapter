@@ -1643,5 +1643,32 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
         )
       )
     }
+
+    "evaluate local def in expression" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit =
+           |    println("Hello World!")
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(5)(
+          Evaluation.successOrIgnore(
+            """|def m(x: Int) = println(x)
+               |m(1)""".stripMargin,
+            (),
+            isScala2
+          ),
+          Evaluation.successOrIgnore(
+            "def m(x: Int) = println(x); m(1)",
+            (),
+            isScala2
+          )
+        )
+      )
+    }
   }
 }
