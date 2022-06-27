@@ -4,8 +4,9 @@ import dotty.tools.dotc.core.Types.*
 import dotty.tools.dotc.core.Contexts.*
 import dotty.tools.dotc.core.Symbols.*
 import dotty.tools.dotc.core.Flags.*
-
+import dotty.tools.dotc.core.Names.*
 import dotty.tools.backend.jvm.DottyBackendInterface.symExtensions
+import dotty.tools.dotc.util.NameTransformer
 
 // Inspired by https://github.com/lampepfl/dotty/blob/main/compiler/src/dotty/tools/backend/sjs/JSEncoding.scala
 object JavaEncoding:
@@ -13,16 +14,19 @@ object JavaEncoding:
     tpe.widenDealias match
       // Array type such as Array[Int] (kept by erasure)
       case JavaArrayType(el) => s"[${binaryName(el)}"
-      case tpe: TypeRef => encode(tpe.symbol)
+      case tpe: TypeRef => encode(tpe.symbol.asType)
       case AnnotatedType(t, _) => encode(t)
 
-  def encode(sym: Symbol)(using Context): String =
+  def encode(sym: TypeSymbol)(using Context): String =
     /* When compiling Array.scala, the type parameter T is not erased and shows up in method
      * signatures, e.g. `def apply(i: Int): T`. A TypeRef to T is replaced by ObjectReference.
      */
     if !sym.isClass then "java.lang.Object"
     else if sym.isPrimitiveValueClass then primitiveName(sym)
     else className(sym)
+
+  def encode(name: TermName)(using Context): String =
+    NameTransformer.encode(name.toSimpleName).toString
 
   private def binaryName(tpe: Type)(using Context): String =
     tpe match
