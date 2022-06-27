@@ -28,7 +28,7 @@ class InsertExpression(using
   override def isCheckable: Boolean = false
 
   private val evaluationClassSource =
-    s"""|class ${evalCtx.evaluationClassName}(names: Array[String], values: Array[Any]):
+    s"""|class ${evalCtx.expressionClassName}(names: Array[String], values: Array[Any]):
         |  import scala.util.Try
         |
         |  def evaluate(): Any =
@@ -71,13 +71,13 @@ class InsertExpression(using
         |    field.setAccessible(true)
         |    field.get(obj)
         |
-        |  private def setField(obj: Any, className: String, fieldName: String, value: Any): Unit =
+        |  def setField(obj: Any, className: String, fieldName: String, value: Any): Unit =
         |    val clazz = getClass.getClassLoader.loadClass(className)
         |    val field = clazz.getDeclaredField(fieldName)
         |    field.setAccessible(true)
         |    field.set(obj, value)
         |
-        |  private def getOuter(obj: Any, outerTypeName: String): Any =
+        |  def getOuter(obj: Any, outerTypeName: String): Any =
         |    val clazz = obj.getClass
         |    val field = getSuperclassIterator(clazz)
         |      .flatMap(_.getDeclaredFields)
@@ -86,18 +86,18 @@ class InsertExpression(using
         |    field.setAccessible(true)
         |    field.get(obj)
         |
-        |  private def getStaticObject(className: String): Any =
+        |  def getStaticObject(className: String): Any =
         |    val clazz = getClass.getClassLoader.loadClass(className)
         |    val field = clazz.getDeclaredField("MODULE$$")
         |    field.setAccessible(true)
         |    field.get(null)
         |
-        |  private def getSuperclassIterator(clazz: Class[?]): Iterator[Class[?]] =
+        |  def getSuperclassIterator(clazz: Class[?]): Iterator[Class[?]] =
         |    Iterator.iterate(clazz)(_.getSuperclass).takeWhile(_ != null)
         |
         |  // a fake method that is used between the extract-expression and the resolve-reflect-eval phases, 
         |  // which transforms them to calls of one of the methods defined above.
-        |  private def reflectEval(qualifier: Object, term: String, args: Array[Object]): Any = ???
+        |  def reflectEval(qualifier: Object, term: String, args: Array[Object]): Any = ???
         |""".stripMargin
 
   override def run(using Context): Unit =

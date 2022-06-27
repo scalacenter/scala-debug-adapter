@@ -46,8 +46,8 @@ class ExtractExpression(using evalCtx: EvaluationContext)
         tree match
           case PackageDef(pid, stats) =>
             val evaluationClassDef =
-              stats.find(_.symbol == evalCtx.evaluationClass)
-            val others = stats.filter(_.symbol != evalCtx.evaluationClass)
+              stats.find(_.symbol == evalCtx.expressionClass)
+            val others = stats.filter(_.symbol != evalCtx.expressionClass)
             val transformedStats = (others ++ evaluationClassDef).map(transform)
             PackageDef(pid, transformedStats)
           case tree: ValDef if isExpressionVal(tree.symbol) =>
@@ -75,7 +75,8 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           getStaticObject(tree)(tree.symbol.moduleClass)
 
         // non-static object
-        case tree: (Ident | Select) if isNonStaticObject(tree.symbol) =>
+        case tree: (Ident | Select)
+            if isInaccessibleNonStaticObject(tree.symbol) =>
           val qualifier = getTransformedQualifier(tree)
           callMethod(tree)(qualifier, tree.symbol.asTerm, List.empty)
 
@@ -117,7 +118,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           setField(tree)(qualifier, lhs.symbol.asTerm, transform(rhs))
 
         // this or outer this
-        case tree @ This(Ident(name)) =>
+        case tree @ This(Ident(name)) if !isOwnedByExpression(tree.symbol) =>
           thisOrOuterValue(tree)(tree.symbol.enclosingClass.asClass)
 
         // inaccessible constructors
@@ -327,7 +328,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
   ): Tree =
     val reflectEval =
       cpy.Apply(tree)(
-        Select(This(evalCtx.evaluationClass), termName("reflectEval")),
+        Select(This(evalCtx.expressionClass), termName("reflectEval")),
         List(
           qualifier,
           Literal(Constant(strategy.toString)),
@@ -362,33 +363,39 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       )
 
   private def isStaticObject(symbol: Symbol)(using Context): Boolean =
-    symbol.is(Module) && symbol.isStatic && !symbol.is(
-      JavaDefined
-    ) && !symbol.isRoot
+    symbol.is(Module) &&
+      symbol.isStatic &&
+      !symbol.is(JavaDefined) &&
+      !symbol.isRoot
 
-  private def isNonStaticObject(symbol: Symbol)(using Context): Boolean =
-    symbol.is(Module) && !symbol.isStatic && !symbol.isRoot
+  private def isInaccessibleNonStaticObject(symbol: Symbol)(using
+      Context
+  ): Boolean =
+    symbol.is(Module) &&
+      !symbol.isStatic &&
+      !symbol.isRoot &&
+      !isOwnedByExpression(symbol)
 
   /**
    * The symbol is a field and the expression class cannot access it
    * either because it is private or it belongs to an inacessible type
    */
   private def isInaccessibleField(symbol: Symbol)(using Context): Boolean =
-    symbol.isField && symbol.owner.isType && !isTermAccessible(
-      symbol.asTerm,
-      symbol.owner.asType
-    )
+    symbol.isField &&
+      symbol.owner.isType &&
+      !isTermAccessible(symbol.asTerm, symbol.owner.asType)
 
   /**
    * The symbol is a real method and the expression class cannot access it
    * either because it is private or it belongs to an inaccessible type
    */
   private def isInaccessibleMethod(symbol: Symbol)(using Context): Boolean =
-    symbol.isRealMethod &&
-      symbol.ownersIterator.forall(_ != evalCtx.evaluateMethod) && (
-        !symbol.owner.isType ||
-          !isTermAccessible(symbol.asTerm, symbol.owner.asType)
-      )
+    !isOwnedByExpression(symbol) &&
+      symbol.isRealMethod &&
+      (!symbol.owner.isType || !isTermAccessible(
+        symbol.asTerm,
+        symbol.owner.asType
+      ))
 
   /**
    * The symbol is a constructor and the expression class cannot access it
@@ -397,25 +404,33 @@ class ExtractExpression(using evalCtx: EvaluationContext)
   private def isInaccessibleConstructor(symbol: Symbol)(using
       Context
   ): Boolean =
-    symbol.isConstructor &&
+    !isOwnedByExpression(symbol) &&
+      symbol.isConstructor &&
       (isInaccessibleMethod(symbol) || !symbol.owner.isStatic)
 
   private def isLocalVariable(symbol: Symbol)(using Context): Boolean =
-    !symbol.is(Method) &&
-      symbol.isLocalToBlock &&
-      symbol.ownersIterator.forall(_ != evalCtx.evaluateMethod)
+    !symbol.is(Method) && symbol.isLocalToBlock && !isOwnedByExpression(symbol)
 
   // Check if a term is accessible from the expression class
   private def isTermAccessible(symbol: TermSymbol, owner: TypeSymbol)(using
       Context
   ): Boolean =
-    !symbol.isPrivate && isTypeAccessible(owner)
+    isOwnedByExpression(symbol) || (
+      !symbol.isPrivate && isTypeAccessible(owner)
+    )
 
     // Check if a type is accessible from the expression class
   private def isTypeAccessible(symbol: TypeSymbol)(using Context): Boolean =
-    !symbol.isLocal && symbol.ownersIterator.forall(sym =>
-      sym.isPublic || sym.privateWithin.is(PackageClass)
+    isOwnedByExpression(symbol) || (
+      !symbol.isLocal &&
+        symbol.ownersIterator.forall(s =>
+          s.isPublic || s.privateWithin.is(PackageClass)
+        )
     )
+
+  private def isOwnedByExpression(symbol: Symbol)(using Context): Boolean =
+    val evaluateMethod = evalCtx.evaluateMethod
+    symbol.ownersIterator.exists(_ == evaluateMethod)
 
 object ExtractExpression:
   val name: String = "extract-expression"

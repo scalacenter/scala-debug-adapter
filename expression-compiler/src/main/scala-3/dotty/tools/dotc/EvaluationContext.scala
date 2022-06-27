@@ -16,7 +16,7 @@ class EvaluationContext(
     val pckg: String
 ):
   val expressionTermName: TermName = termName(uniqueName.toLowerCase.toString)
-  val evaluationClassName: TypeName = typeName(uniqueName)
+  val expressionClassName: TypeName = typeName(uniqueName)
 
   var expressionSymbol: TermSymbol = _
   // all classes and def in the chain of owners of the expression from local to global
@@ -35,9 +35,9 @@ class EvaluationContext(
       ) // the first local class or method
       .collect { case sym if sym.is(Method) => sym.asTerm } // if it is a method
 
-  def evaluationClass(using Context): ClassSymbol =
-    if pckg.isEmpty then requiredClass(evaluationClassName)
-    else requiredClass(s"$pckg.$evaluationClassName")
+  def expressionClass(using Context): ClassSymbol =
+    if pckg.isEmpty then requiredClass(expressionClassName)
+    else requiredClass(s"$pckg.$expressionClassName")
 
   def evaluateMethod(using Context): Symbol =
-    evaluationClass.info.decl(termName("evaluate")).symbol
+    expressionClass.info.decl(termName("evaluate")).symbol
