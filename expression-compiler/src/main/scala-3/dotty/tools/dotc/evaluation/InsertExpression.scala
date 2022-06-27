@@ -12,6 +12,7 @@ import dotty.tools.io.VirtualFile
 import dotty.tools.dotc.util.SourcePosition
 import dotty.tools.dotc.util.Spans.Span
 import dotty.tools.dotc.util.NoSourcePosition
+import dotty.tools.dotc.report
 
 /**
  * This phase:
@@ -128,11 +129,19 @@ class InsertExpression(using
             tpt,
             mkExprBlock(expression, tree.rhs)
           )
-        case tree @ ValDef(name, tpt, _) if isOnBreakpoint(tree) =>
+        case tree @ Match(selector, caseDefs)
+            if isOnBreakpoint(tree) || caseDefs.exists(isOnBreakpoint) =>
+          // the expression is on the match or a case of the match
+          // if it is on the case of the match the program could pause on the pattern, the guard or the body
+          // we assume it pauses on the pattern because that is the first instruction
+          // in that case we cannot compile the expression val in the pattern, but we can compile it in the selector
+          cpy.Match(tree)(mkExprBlock(expression, selector), caseDefs)
+        case tree @ ValDef(name, tpt, rhs) if isOnBreakpoint(tree) =>
           cpy.ValDef(tree)(name, tpt, mkExprBlock(expression, tree.rhs))
         case tree: (Ident | Select | GenericApply | Literal | This | New |
               InterpolatedString | OpTree | Tuple) if isOnBreakpoint(tree) =>
           mkExprBlock(expression, tree)
+
         case tree => super.transform(tree)
 
   private def parseExpression(using Context): Tree =
@@ -185,8 +194,7 @@ class InsertExpression(using
       Context
   ): Block =
     if expressionInserted then
-      // TODO replace with warning
-      throw new Exception("expression already inserted")
+      report.error("expression already inserted", tree.srcPos)
     expressionInserted = true
     val valDef = ValDef(evalCtx.expressionTermName, TypeTree(), expr)
     Block(List(valDef), tree)

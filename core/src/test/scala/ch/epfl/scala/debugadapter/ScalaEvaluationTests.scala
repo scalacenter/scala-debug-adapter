@@ -1747,5 +1747,63 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
         )
       )
     }
+
+    "evaluate expression in match case" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def m(list: List[String]): Unit = {
+           |    list match {
+           |      case a :: b :: tail =>
+           |        println(a + b)
+           |      case a :: tail => println(a)
+           |      case _ => ()
+           |    }
+           |  }
+           |  
+           |  def main(args: Array[String]): Unit = {
+           |    m(List("a", "b", "c"))
+           |    m(List("a"))
+           |    m(Nil)
+           |  }
+           |}
+           |""".stripMargin
+
+      val breakpoints = if (isScala3) {
+        Seq(
+          Breakpoint(5)(
+            Evaluation.success("list.size", 3)
+          ),
+          Breakpoint(7)(
+            Evaluation.success("b", "b")
+          ),
+          Breakpoint(5)(
+            Evaluation.success("list.size", 1)
+          ),
+          Breakpoint(8)(
+            Evaluation.success("list.size", 1)
+          ),
+          Breakpoint(5)(
+            Evaluation.success("list.size", 0)
+          ),
+          Breakpoint(9)(
+            Evaluation.success("list.size", 0)
+          )
+        )
+      } else {
+        // in scala2 it stops many times on line 5 and 8
+        // skipping those tests
+        Seq(
+          Breakpoint(7)(
+            Evaluation.success("b", "b")
+          ),
+          Breakpoint(9)(
+            Evaluation.successOrIgnore("list.size", 0, isScala2)
+          )
+        )
+      }
+      assertInMainClass(source, "example.Main")(breakpoints: _*)
+    }
   }
 }
