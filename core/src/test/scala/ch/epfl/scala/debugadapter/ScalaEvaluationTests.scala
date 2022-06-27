@@ -1670,5 +1670,26 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
         )
       )
     }
+
+    "evaluate static Java methods" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit =
+           |    println("Hello, World!")
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(5)(
+          Evaluation.success(
+            """|import java.nio.file.Paths
+               |Paths.get(".").toString""".stripMargin,
+            "."
+          )
+        )
+      )
+    }
   }
 }

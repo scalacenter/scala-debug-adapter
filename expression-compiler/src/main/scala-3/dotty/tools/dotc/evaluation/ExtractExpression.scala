@@ -68,6 +68,8 @@ class ExtractExpression(using evalCtx: EvaluationContext)
         case _ => tree
 
       desugaredIdent match
+        case tree: ImportOrExport => tree
+
         // static object
         case tree: (Ident | Select) if isStaticObject(tree.symbol) =>
           getStaticObject(tree)(tree.symbol.moduleClass)
@@ -360,7 +362,9 @@ class ExtractExpression(using evalCtx: EvaluationContext)
       )
 
   private def isStaticObject(symbol: Symbol)(using Context): Boolean =
-    symbol.is(Module) && symbol.isStatic && !symbol.isRoot
+    symbol.is(Module) && symbol.isStatic && !symbol.is(
+      JavaDefined
+    ) && !symbol.isRoot
 
   private def isNonStaticObject(symbol: Symbol)(using Context): Boolean =
     symbol.is(Module) && !symbol.isStatic && !symbol.isRoot
