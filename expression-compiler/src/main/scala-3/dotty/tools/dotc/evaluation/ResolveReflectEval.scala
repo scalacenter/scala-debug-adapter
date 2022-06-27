@@ -49,23 +49,25 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
             case EvaluationStrategy.Outer(outerCls) =>
               getOuter(qualifier, outerCls)
             case EvaluationStrategy.LocalValue(variable) =>
+              val variableName = JavaEncoding.encode(variable.name)
               val localValue = derefCapturedVar(
-                getLocalValue(variable.name.toString),
+                getLocalValue(variableName),
                 variable
               )
               boxIfValueClass(variable, localValue)
             case EvaluationStrategy.LocalValueAssign(variable) =>
               val value = unboxIfValueClass(variable, args.head)
-              val typeSymbol = variable.info.typeSymbol
-              typeSymbol.fullName.toString match
+              val typeSymbol = variable.info.typeSymbol.asType
+              val variableName = JavaEncoding.encode(variable.name)
+              JavaEncoding.encode(typeSymbol) match
                 case s"scala.runtime.${_}Ref" =>
                   val elemField = typeSymbol.info.decl(termName("elem")).symbol
                   setField(
-                    getLocalValue(variable.name.toString),
+                    getLocalValue(variableName),
                     elemField.asTerm,
                     value
                   )
-                case _ => setLocalValue(variable.name.toString, value)
+                case _ => setLocalValue(variableName, value)
             case EvaluationStrategy.ClassCapture(variable, cls) =>
               val capture = getClassCapture(qualifier, variable.name, cls)
                 .getOrElse {
@@ -116,17 +118,20 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               setField(capture, elemField.asTerm, value)
             case EvaluationStrategy.StaticObject(obj) => getStaticObject(obj)
             case EvaluationStrategy.Field(field) =>
-              // if the field is lazy or if it is private in a value class
+              // if the field is lazy, if it is private in a value class or a trait
               // then we must call the getter method
               val fieldValue =
-                if field.is(Lazy) || field.owner.isValueClass then
-                  assert(field.is(Method))
-                  callMethod(tree)(qualifier, field, Nil)
+                if field.is(Lazy) ||
+                  field.owner.isValueClass ||
+                  field.owner.is(Trait)
+                then callMethod(tree)(qualifier, field.getter.asTerm, Nil)
                 else getField(qualifier, field)
               boxIfValueClass(field, fieldValue)
             case EvaluationStrategy.FieldAssign(field) =>
               val arg = unboxIfValueClass(field, args.head)
-              setField(qualifier, field, arg)
+              if field.owner.is(Trait) then
+                callMethod(tree)(qualifier, field.setter.asTerm, List(arg))
+              else setField(qualifier, field, arg)
             case EvaluationStrategy.MethodCall(method) =>
               callMethod(tree)(qualifier, method, args)
             case EvaluationStrategy.ConstructorCall(ctr, cls) =>
@@ -141,8 +146,8 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
   private def derefCapturedVar(tree: Tree, term: TermSymbol)(using
       Context
   ): Tree =
-    val typeSymbol = term.info.typeSymbol
-    typeSymbol.fullName.toString match
+    val typeSymbol = term.info.typeSymbol.asType
+    JavaEncoding.encode(typeSymbol) match
       case s"scala.runtime.${_}Ref" =>
         val elemField = typeSymbol.info.decl(termName("elem")).symbol
         getField(tree, elemField.asTerm)
@@ -223,7 +228,10 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
         case DerivedName(n, _) => n == originalName
         case _ => false
       }
-      .map(param => getLocalValue(param.toString))
+      .map { param =>
+        val paramName = JavaEncoding.encode(param)
+        getLocalValue(paramName)
+      }
 
   private def getStaticObject(obj: ClassSymbol)(using Context): Tree =
     val className = JavaEncoding.encode(obj)
@@ -235,24 +243,26 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
   private def getField(qualifier: Tree, field: TermSymbol)(using
       Context
   ): Tree =
+    val fieldName = JavaEncoding.encode(field.name)
     Apply(
       Select(This(evalCtx.evaluationClass), termName("getField")),
       List(
         qualifier,
-        Literal(Constant(JavaEncoding.encode(field.owner))),
-        Literal(Constant(field.name.toString))
+        Literal(Constant(JavaEncoding.encode(field.owner.asType))),
+        Literal(Constant(fieldName))
       )
     )
 
   private def setField(qualifier: Tree, field: TermSymbol, value: Tree)(using
       Context
   ): Tree =
+    val fieldName = JavaEncoding.encode(field.name)
     Apply(
       Select(This(evalCtx.evaluationClass), termName("setField")),
       List(
         qualifier,
-        Literal(Constant(JavaEncoding.encode(field.owner))),
-        Literal(Constant(field.name.toString)),
+        Literal(Constant(JavaEncoding.encode(field.owner.asType))),
+        Literal(Constant(fieldName)),
         value
       )
     )
@@ -294,12 +304,13 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
       }
 
     val returnTypeName = JavaEncoding.encode(methodType.resType)
+    val methodName = JavaEncoding.encode(method.name)
     val result = Apply(
       Select(This(evalCtx.evaluationClass), termName("callMethod")),
       List(
         qualifier,
-        Literal(Constant(JavaEncoding.encode(method.owner))),
-        Literal(Constant(method.name.toString)),
+        Literal(Constant(JavaEncoding.encode(method.owner.asType))),
+        Literal(Constant(methodName)),
         paramTypesArray,
         Literal(Constant(returnTypeName)),
         JavaSeqLiteral(
@@ -335,7 +346,9 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               )
               ref(defn.Predef_undefined)
             }
-        case name => getLocalValue(name.toString)
+        case name =>
+          val paramName = JavaEncoding.encode(name)
+          getLocalValue(paramName)
       }
 
     val erasedCtrInfo = atPhase(Phases.elimErasedValueTypePhase)(ctr.info)
@@ -365,13 +378,14 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
   private def capturedValue(sym: Symbol, originalName: TermName)(using
       Context
   ): Option[Tree] =
+    val encodedName = JavaEncoding.encode(originalName)
     if evalCtx.classOwners.contains(sym)
     then capturedByClass(sym.asClass, originalName)
     else
     // if the captured value is not a local variables
     // then it must have been captured by the outer method
-    if evalCtx.localVariables.contains(originalName.toString)
-    then Some(getLocalValue(originalName.toString))
+    if evalCtx.localVariables.contains(encodedName)
+    then Some(getLocalValue(encodedName))
     else evalCtx.capturingMethod.flatMap(getMethodCapture(_, originalName))
 
   private def capturedByClass(cls: ClassSymbol, originalName: TermName)(using

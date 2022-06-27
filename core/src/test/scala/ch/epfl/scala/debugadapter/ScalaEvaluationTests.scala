@@ -1691,5 +1691,61 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
         )
       )
     }
+
+    "evaluate private field in trait" - {
+      val source =
+        """|package example
+           |
+           |trait A {
+           |  private var a: String = "A.a"
+           |
+           |  def m(): Unit =
+           |    println(a)
+           |}
+           |
+           |class B extends A
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val b = new B
+           |    b.m()
+           |  }
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(7)(
+          Evaluation.success("a", "A.a"),
+          Evaluation.success("a = \"foo\";a", "foo")
+        )
+      )
+    }
+
+    "encode operator symbols" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val ! = "!"
+           |    println(| + new <> + &(":") + !)
+           |  }
+           |  private val | = "|"
+           |  private class <> {
+           |    override def toString(): String = "<>"
+           |  }
+           |  private def &(`:`: String): String = s"&(${`:`})"
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(6)(
+          Evaluation.successOrIgnore("!", "!", isScala2),
+          Evaluation.successOrIgnore("|", "|", isScala2),
+          Evaluation.success("(new <>).toString", "<>"),
+          Evaluation.successOrIgnore("&(\":\")", "&(:)", isScala2)
+        )
+      )
+    }
   }
 }
