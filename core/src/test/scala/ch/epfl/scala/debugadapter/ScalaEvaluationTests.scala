@@ -1805,5 +1805,46 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       }
       assertInMainClass(source, "example.Main")(breakpoints: _*)
     }
+
+    "evaluate class def" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val msg = "Hello, World!"
+           |    println(msg)
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(6)(
+          Evaluation.successOrIgnore(
+            """|class A(a: Int) {
+               |  override def toString(): String = s"A($a)"
+               |}
+               |new A(1).toString""".stripMargin,
+            "A(1)",
+            isScala2
+          ),
+          Evaluation.successOrIgnore(
+            """|case class A() {
+               |  override def toString(): String = "A"
+               |}
+               |A().toString""".stripMargin,
+            "A",
+            isScala2
+          ),
+          Evaluation.successOrIgnore(
+            """|class A() {
+               |  def getMsg: String = msg
+               |}
+               |A().getMsg""".stripMargin,
+            "Hello, World!",
+            isScala2
+          )
+        )
+      )
+    }
   }
 }
