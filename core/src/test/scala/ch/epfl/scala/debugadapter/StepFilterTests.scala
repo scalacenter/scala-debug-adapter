@@ -6,7 +6,7 @@ import scala.concurrent.ExecutionContext
 import ch.epfl.scala.debugadapter.testing.TestDebugClient
 import scala.concurrent.duration._
 
-object SmartStepTests extends TestSuite {
+object StepFilterTests extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
   private val executorService = Executors.newFixedThreadPool(1)
   private implicit val ec =
