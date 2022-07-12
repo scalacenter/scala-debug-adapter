@@ -95,15 +95,18 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |  def foo(x: String): Unit = {
            |    println(x)
            |  }
-           |  
+           |
            |  def main(args: Array[String]): Unit = {
            |    foo(x1)
            |    foo(x2)
            |    foo(x3)
            |    foo(x4)
-           |    
+           |
            |    val c = new C("c1", "c2")
            |    c.m()
+           |
+           |    val d = D("d1")
+           |    foo(d.d1)
            |  }
            |}
            |
@@ -121,7 +124,7 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |  override val a1: String = "a1"
            |  override val a2: String = "a2"
            |  private val c3: String = "c3"
-           |  
+           |
            |  def m(): Unit = {
            |    Main.foo(a1)
            |    Main.foo(a2)
@@ -133,19 +136,79 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |  }
            |}
            |
+           |case class D(d1: String)
+           |
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
         Breakpoint(14)(StepInto(10)),
         Breakpoint(15)(StepInto(10)),
         Breakpoint(16)(StepInto(10)),
         Breakpoint(17)(StepInto(10)),
-        Breakpoint(40)(StepInto(10)),
-        Breakpoint(41)(StepInto(10)),
-        Breakpoint(42)(StepInto(10)),
         Breakpoint(43)(StepInto(10)),
         Breakpoint(44)(StepInto(10)),
         Breakpoint(45)(StepInto(10)),
-        Breakpoint(46)(StepInto(10))
+        Breakpoint(46)(StepInto(10)),
+        Breakpoint(47)(StepInto(10)),
+        Breakpoint(48)(StepInto(10)),
+        Breakpoint(49)(StepInto(10)),
+        Breakpoint(23)(StepInto(10))
+      )
+    }
+
+    "should not step into setters" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  var x1 = "x1"
+           |  private var x2 = "x2"
+           |  
+           |  def main(args: Array[String]): Unit = {
+           |    x1 = "x1"
+           |    x2 = "x2"
+           |    
+           |    val c = new C("c1", "c2")
+           |    c.m()
+           |  }
+           |}
+           |
+           |trait A {
+           |  var a1: String
+           |}
+           |
+           |abstract class B {
+           |  var b1: String = "b1"
+           |  protected var b2: String = "b2"
+           |}
+           |
+           |class C(var c1: String, private var c2: String) extends B with A {
+           |  override var a1: String = "a1"
+           |  private var c3: String = "c3"
+           |  
+           |  def m(): Unit = {
+           |    a1 = "a1"
+           |    b1 = "b1"
+           |    b2 = "b2"
+           |    c1 = "c1"
+           |    c2 = "c2"
+           |    c3 = "c3"
+           |  }
+           |}
+           |
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(8)(
+          StepInto(9),
+          StepInto(11)
+        ),
+        Breakpoint(30)(
+          StepInto(31),
+          StepInto(32),
+          StepInto(33),
+          StepInto(34),
+          StepInto(35),
+          StepInto(12)
+        )
       )
     }
   }
@@ -179,14 +242,16 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
         val stackTrace = client.stackTrace(threadId)
         assert(stackTrace.stackFrames.head.line == breakpoint.line)
 
+        var currentLine = breakpoint.line
         breakpoint.steps.foreach { step =>
-          println(s"\nStepping into, at line ${breakpoint.line}")
+          println(s"\nStepping into, at line $currentLine")
           client.stepIn(threadId)
           client.stopped(300.seconds)
           val stackTrace = client.stackTrace(threadId)
           val obtained = stackTrace.stackFrames.head.line
           val expected = step.line
           assert(obtained == expected)
+          currentLine == obtained
         }
         client.continue(threadId)
       }
