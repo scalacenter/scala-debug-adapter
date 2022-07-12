@@ -41,16 +41,28 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
     tpe.name().contains("$anon$")
 
   private def skip(method: Method, scalaSig: ScalaSig): Boolean = {
-    scalaSig.entries
-      .collect { case m: MethodSymbol => m }
-      .forall(!matchSymbol(method, _))
+    val matchingSymbols = scalaSig.entries
+      .collect { case m: MethodSymbol if m.isMethod => m }
+      .filter(matchSymbol(method, _))
+
+    if (matchingSymbols.size > 1) {
+      println(s"WARNING: found ${matchingSymbols.size} matching symbols")
+      matchingSymbols.foreach { s =>
+        println(s"${s.info.info.get}")
+      }
+    }
+
+    matchingSymbols.headOption.forall(skip)
+  }
+
+  private def skip(scalaMethod: MethodSymbol): Boolean = {
+    scalaMethod.isAccessor
   }
 
   private def matchSymbol(
       javaMethod: Method,
       scalaMethod: MethodSymbol
   ): Boolean = {
-    // println(s"name: ${scalaMethod.name}")
     if (scalaMethod.aliasRef.nonEmpty)
       println(
         s"aliasRef for ${scalaMethod.name}: ${scalaMethod.aliasRef}"
@@ -123,6 +135,9 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
       case m: MethodType => m.paramRefs
       case m: NullaryMethodType => Seq.empty
       case m: PolyType => extractArguments(m.typeRef.get)
+      case other =>
+        val className = other.getClass.getSimpleName()
+        throw new Exception(s"unexpected type found: $className")
     }
   }
 }

@@ -79,6 +79,73 @@ object StepFilterTests extends TestSuite {
         Breakpoint(27)(StepInto(25))
       )
     }
+
+    "should not step into getters" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  val x1 = "x1"
+           |  private val x2 = "x2"
+           |  var x3 = "x3"
+           |  private var x4 = "x4"
+           |
+           |  def foo(x: String): Unit = {
+           |    println(x)
+           |  }
+           |  
+           |  def main(args: Array[String]): Unit = {
+           |    foo(x1)
+           |    foo(x2)
+           |    foo(x3)
+           |    foo(x4)
+           |    
+           |    val c = new C("c1", "c2")
+           |    c.m()
+           |  }
+           |}
+           |
+           |trait A {
+           |  val a1: String
+           |  def a2: String
+           |}
+           |
+           |abstract class B {
+           |  val b1: String = "b1"
+           |  protected val b2: String = "b2"
+           |}
+           |
+           |class C(val c1: String, c2: String) extends B with A {
+           |  override val a1: String = "a1"
+           |  override val a2: String = "a2"
+           |  private val c3: String = "c3"
+           |  
+           |  def m(): Unit = {
+           |    Main.foo(a1)
+           |    Main.foo(a2)
+           |    Main.foo(b1)
+           |    Main.foo(b2)
+           |    Main.foo(c1)
+           |    Main.foo(c2)
+           |    Main.foo(c3)
+           |  }
+           |}
+           |
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(14)(StepInto(10)),
+        Breakpoint(15)(StepInto(10)),
+        Breakpoint(16)(StepInto(10)),
+        Breakpoint(17)(StepInto(10)),
+        Breakpoint(40)(StepInto(10)),
+        Breakpoint(41)(StepInto(10)),
+        Breakpoint(42)(StepInto(10)),
+        Breakpoint(43)(StepInto(10)),
+        Breakpoint(44)(StepInto(10)),
+        Breakpoint(45)(StepInto(10)),
+        Breakpoint(46)(StepInto(10))
+      )
+    }
   }
 
   case class Breakpoint(line: Int)(val steps: StepInto*)
