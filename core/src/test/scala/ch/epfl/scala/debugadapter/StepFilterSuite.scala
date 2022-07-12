@@ -236,6 +236,28 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
         Breakpoint(14)(StepInto(8))
       )
     }
+
+    "should step into methods of value classes" - {
+      val source =
+        """|package example
+           |
+           |class A(val x: String) extends AnyVal {
+           |  def m(): String = {
+           |    x + x
+           |  }
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a: A = new A("x")
+           |    println(a.m())
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(12)(StepInto(5))
+      )
+    }
   }
 
   case class Breakpoint(line: Int)(val steps: StepInto*)
