@@ -1,7 +1,6 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter.internal.decompiler.scalasig
-import ch.epfl.scala.debugadapter.internal.decompiler.scalasig._
+import ch.epfl.scala.debugadapter.internal.scalasig._
 import com.microsoft.java.debug.core.adapter.{
   StepFilterProvider => JavaStepFilterProvider
 }

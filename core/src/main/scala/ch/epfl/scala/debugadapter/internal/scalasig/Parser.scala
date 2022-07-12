@@ -1,10 +1,10 @@
-package ch.epfl.scala.debugadapter.internal.decompiler.scalasig
+package ch.epfl.scala.debugadapter.internal.scalasig
 
 import java.io.IOException
 import java.lang.Double.longBitsToDouble
 import java.lang.Float.intBitsToFloat
 
-import ch.epfl.scala.debugadapter.internal.decompiler.scalasig.TagGroups._
+import ch.epfl.scala.debugadapter.internal.scalasig.TagGroups._
 
 import scala.annotation.switch
 import scala.reflect.ClassTag

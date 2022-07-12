@@ -1,4 +1,4 @@
-package ch.epfl.scala.debugadapter.internal.decompiler
+package ch.epfl.scala.debugadapter.internal
 
 import java.lang.StringBuilder
 import java.nio.charset.StandardCharsets.UTF_8
@@ -8,7 +8,6 @@ import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.AnnotationVisitor
 import org.objectweb.asm.Opcodes
-import ch.epfl.scala.debugadapter.internal.ClassFile
 
 object Decompiler {
   val BYTES_VALUE = "bytes"

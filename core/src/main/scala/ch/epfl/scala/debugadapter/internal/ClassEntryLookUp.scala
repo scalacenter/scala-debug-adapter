@@ -10,8 +10,7 @@ import scala.collection.mutable
 import ClassEntryLookUp.readSourceContent
 
 import scala.util.matching.Regex
-import ch.epfl.scala.debugadapter.internal.decompiler.Decompiler
-import ch.epfl.scala.debugadapter.internal.decompiler.scalasig.ScalaSig
+import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSig
 
 private case class SourceLine(uri: URI, lineNumber: Int)
 

@@ -1,4 +1,4 @@
-package ch.epfl.scala.debugadapter.internal.decompiler.scalasig
+package ch.epfl.scala.debugadapter.internal.scalasig
 
 /**
  * Nikolay.Tropin

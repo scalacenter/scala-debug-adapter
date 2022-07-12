@@ -1,4 +1,4 @@
-package ch.epfl.scala.debugadapter.internal.decompiler.scalasig
+package ch.epfl.scala.debugadapter.internal.scalasig
 
 //import scala.collection.immutable.ArraySeq
 import scala.collection.mutable

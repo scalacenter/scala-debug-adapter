@@ -1,4 +1,4 @@
-package ch.epfl.scala.debugadapter.internal.decompiler.scalasig
+package ch.epfl.scala.debugadapter.internal.scalasig
 
 trait Flags {
   def hasFlag(flag: Long): Boolean
