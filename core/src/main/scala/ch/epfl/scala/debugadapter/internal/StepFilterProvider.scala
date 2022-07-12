@@ -15,7 +15,7 @@ import scala.collection.JavaConverters._
 class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
     extends JavaStepFilterProvider() {
   override def skip(method: Method, filters: StepFilters): Boolean = {
-    if (super.skip(method, filters)) {
+    if (method.isBridge || super.skip(method, filters)) {
       true
     } else if (isLocalMethod(method) || isLocalClass(method.declaringType())) {
       false
@@ -67,13 +67,12 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
       println(
         s"aliasRef for ${scalaMethod.name}: ${scalaMethod.aliasRef}"
       )
-    // if (scalaMethod.attributes.nonEmpty) println(s"attributes for ${scalaMethod.name}: ${scalaMethod.attributes}")
     if (scalaMethod.isSyntheticMethod)
       println(s"${scalaMethod.name} isSyntheticMethod")
     if (scalaMethod.isMonomorphic)
       println(s"${scalaMethod.name} isMonomorphic")
     if (scalaMethod.isMixedIn) println(s"${scalaMethod.name} isMixedIn")
-    // println(s"MethodType: $methodType")
+
     javaMethod.name == scalaMethod.name &&
     matchArguments(javaMethod, scalaMethod.info.info.get) &&
     matchOwner(javaMethod.declaringType(), scalaMethod.parent.get)
@@ -124,11 +123,8 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
       javaArg: LocalVariable,
       scalaArg: Symbol
   ): Boolean = {
-    // println(scalaArg)
     javaArg.name() == scalaArg.name
   }
-
-  // private def matchType(javaType: jdi.Type)
 
   private def extractArguments(methodType: scalasig.Type): Seq[Symbol] = {
     methodType match {

@@ -211,6 +211,31 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
         )
       )
     }
+
+    "should not step into bridges" - {
+      val source =
+        """|package example
+           |
+           |class A {
+           |  def m(): Object = "object"
+           |}
+           |
+           |class B extends A {
+           |  override def m(): String = "string"
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val b: A = new B
+           |    println(b.m())
+           |  }
+           |}
+           |
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(14)(StepInto(8))
+      )
+    }
   }
 
   case class Breakpoint(line: Int)(val steps: StepInto*)
