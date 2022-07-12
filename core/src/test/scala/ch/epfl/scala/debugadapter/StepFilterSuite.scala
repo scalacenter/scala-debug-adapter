@@ -6,12 +6,14 @@ import scala.concurrent.ExecutionContext
 import ch.epfl.scala.debugadapter.testing.TestDebugClient
 import scala.concurrent.duration._
 
-object StepFilterTests extends TestSuite {
+object Scala212StepFilterTests extends StepFilterSuite(ScalaVersion.`2.12`)
+object Scala213StepFilterTests extends StepFilterSuite(ScalaVersion.`2.13`)
+
+abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
   private val executorService = Executors.newFixedThreadPool(1)
   private implicit val ec =
     ExecutionContext.fromExecutorService(executorService)
-  private val scalaVersion = ScalaVersion.`2.12`
 
   def tests: Tests = Tests {
     "should not step into mixin forwarder" - {
