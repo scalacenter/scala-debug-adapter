@@ -9,27 +9,33 @@ import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.AnnotationVisitor
 import org.objectweb.asm.Opcodes
 
-object Decompiler {
-  val BYTES_VALUE = "bytes"
-  val SCALA_SIG_ANNOTATION: String = "Lscala/reflect/ScalaSignature;"
-  val SCALA_LONG_SIG_ANNOTATION: String = "Lscala/reflect/ScalaLongSignature;"
+import ch.epfl.scala.debugadapter.internal.scalasig._
 
-  import scalasig._
+object Decompiler {
+  private val BYTES_VALUE = "bytes"
+  private val SCALA_SIG_ANNOTATION: String = "Lscala/reflect/ScalaSignature;"
+  private val SCALA_LONG_SIG_ANNOTATION: String =
+    "Lscala/reflect/ScalaLongSignature;"
 
   private val ScalaSigBytes = "ScalaSig".getBytes(UTF_8)
 
   def decompile(classFile: ClassFile): Option[ScalaSig] = {
-    val bytes = classFile.getBytes()
-    if (!containsMarker(bytes)) return None
+    val bytes = classFile.readBytes()
+    decompile(bytes, classFile.fullyQualifiedName)
+  }
 
-    // Parse the file
-    val reader = new ClassReader(bytes)
+  private[internal] def decompile(
+      classBytes: Array[Byte],
+      fqcn: String
+  ): Option[ScalaSig] = {
+    if (!containsMarker(classBytes)) return None
+
+    val reader = new ClassReader(classBytes)
 
     val scalaAnnotations = scala.collection.mutable.Buffer[String]()
 
     val emptyVisitor = new AnnotationVisitor(Opcodes.ASM9) {}
     val scalaVisitor = new AnnotationVisitor(Opcodes.ASM9) {
-
       override def visitArray(name: String): AnnotationVisitor = {
         if (name == "bytes") {
           new AnnotationVisitor(Opcodes.ASM9) {
@@ -58,10 +64,8 @@ object Decompiler {
         descriptor match {
           case SCALA_SIG_ANNOTATION | SCALA_LONG_SIG_ANNOTATION =>
             scalaVisitor
-
           case _ => emptyVisitor
         }
-
       }
     }
 
@@ -70,94 +74,8 @@ object Decompiler {
     if (scalaAnnotations.isEmpty) None
     else {
       val decoded = decode(scalaAnnotations.toList.map(_.getBytes()))
-      Some(Parser.parseScalaSig(decoded, classFile.fullyQualifiedName))
+      Some(Parser.parseScalaSig(decoded, fqcn))
     }
-  }
-
-  def sourceNameAndText(
-      fileName: String,
-      className: String,
-      bytes: Array[Byte]
-  ): Option[String] = {
-
-    if (fileName.endsWith(".sig")) {
-      return tryDecompileSigFile(fileName, bytes)
-    }
-
-    if (!containsMarker(bytes)) return None
-
-    // Parse the file
-    val reader = new ClassReader(bytes)
-
-    val scalaAnnotations = scala.collection.mutable.Buffer[String]()
-
-    val emptyVisitor = new AnnotationVisitor(Opcodes.ASM9) {}
-    val scalaVisitor = new AnnotationVisitor(Opcodes.ASM9) {
-
-      override def visitArray(name: String): AnnotationVisitor = {
-        if (name == "bytes") {
-          new AnnotationVisitor(Opcodes.ASM9) {
-            override def visit(name: String, value: Any): Unit = {
-              scalaAnnotations += value.asInstanceOf[String]
-            }
-          }
-        } else {
-          emptyVisitor
-        }
-      }
-
-      override def visit(name: String, value: Any): Unit = {
-        if (name == "bytes") {
-          scalaAnnotations += value.asInstanceOf[String]
-        }
-      }
-
-    }
-
-    val visitor = new ClassVisitor(Opcodes.ASM9) {
-      override def visitAnnotation(
-          descriptor: String,
-          visible: Boolean
-      ): AnnotationVisitor = {
-        descriptor match {
-          case "Lscala/reflect/ScalaSignature;" |
-              "Lscala/reflect/ScalaLongSignature;" =>
-            scalaVisitor
-
-          case _ => emptyVisitor
-        }
-
-      }
-    }
-
-    reader.accept(visitor, 256)
-
-    if (scalaAnnotations.isEmpty) None
-    else {
-      val decoded = decode(scalaAnnotations.toList.map(_.getBytes()))
-      val signature = Parser.parseScalaSig(decoded, fileName)
-      signature.entries
-        .collect { case s: MethodSymbol => s.infoType }
-        .collect { case s: MethodType => s }
-        .foreach(s => println(s))
-      decompiledText(signature, className, fileName == "package.class")
-    }
-
-    /**
-     *    val parsed = new ClassParser(new ByteArrayInputStream(bytes), fileName).parse()
-     *    for {
-     *      annotation <- parsed.getAnnotationEntries.find(isScalaSignatureAnnotation)
-     *      pair <- annotation.getElementValuePairs.find(_.getNameString == "bytes")
-     *
-     *      simpleValues = collectSimple(pair.getValue)
-     *      strings = simpleValues.map(valueBytes)
-     *
-     *      bytes = decode(strings)
-     *      signature = Parser.parseScalaSig(bytes, fileName)
-     *
-     *      text <- decompiledText(signature, parsed.getClassName, fileName == "package.class")
-     *    } yield (parsed.getSourceFileName, StringUtil.convertLineSeparators(text))
-     */
   }
 
   private def tryDecompileSigFile(
@@ -177,25 +95,6 @@ object Decompiler {
     }
   }
 
-  /**
-   *  private def isScalaSignatureAnnotation(entry: AnnotationEntry) =
-   *    entry.getAnnotationType match {
-   *      case "Lscala/reflect/ScalaSignature;" |
-   *           "Lscala/reflect/ScalaLongSignature;" => true
-   *      case _ => false
-   *    }
-   *
-   *  private def collectSimple(value: ElementValue) = value match {
-   *    case simpleValue: SimpleElementValue => simpleValue :: Nil
-   *    case arrayValue: ArrayElementValue =>
-   *      arrayValue.getElementValuesArray.collect {
-   *        case simpleValue: SimpleElementValue => simpleValue
-   *      }.toList
-   *  }
-   *
-   *  private def valueBytes(value: SimpleElementValue) =
-   *    value.getValueString.getBytes(UTF_8)
-   */
   private def decode(strings: List[Array[Byte]]) = {
     val bytes = Array.concat(strings: _*)
     ByteCodecs.decode(bytes)

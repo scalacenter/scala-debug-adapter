@@ -25,11 +25,7 @@ private case class ClassFile(
   def fullPackageAsPath: String = fullPackage.replace(".", "/")
   def folderPath: String = relativePath.stripSuffix(s"/$className.class")
 
-  def getBytes(): Array[Byte] =
-    classSystem.within { (_, root) =>
-      val classFile = root.resolve(relativePath)
-      Files.readAllBytes(classFile)
-    }.get
+  def readBytes(): Array[Byte] = classSystem.readBytes(relativePath)
 }
 
 private class ClassEntryLookUp(
