@@ -69,16 +69,16 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |object F extends A
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(10)(StepInto(4)),
-        Breakpoint(12)(StepInto(4)),
-        Breakpoint(14)(StepInto(44)),
-        Breakpoint(16)(StepInto(44)),
-        Breakpoint(17)(StepInto(4)),
-        Breakpoint(19)(StepInto(31)),
-        Breakpoint(21)(StepInto(4)),
+        Breakpoint(10)(StepInto(4), StepOut(10)),
+        Breakpoint(12)(StepInto(4), StepOut(12)),
+        Breakpoint(14)(StepInto(44), StepOut(14)),
+        Breakpoint(16)(StepInto(44), StepOut(16)),
+        Breakpoint(17)(StepInto(4), StepOut(17)),
+        Breakpoint(19)(StepInto(31), StepOut(19)),
+        Breakpoint(21)(StepInto(4), StepOut(21)),
         // cannot skip method in local class
-        Breakpoint(23)(StepInto(22)),
-        Breakpoint(27)(StepInto(25))
+        Breakpoint(23)(StepInto(22), StepOut(23)),
+        Breakpoint(27)(StepInto(25), StepOut(27))
       )
     }
 
@@ -233,7 +233,7 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(14)(StepInto(8))
+        Breakpoint(14)(StepInto(8), StepOut(14))
       )
     }
 
@@ -255,13 +255,16 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |}
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(12)(StepInto(5))
+        Breakpoint(12)(StepInto(5), StepOut(12))
       )
     }
   }
 
-  case class Breakpoint(line: Int)(val steps: StepInto*)
-  case class StepInto(line: Int)
+  case class Breakpoint(line: Int)(val steps: Step*)
+
+  sealed trait Step
+  case class StepInto(line: Int) extends Step
+  case class StepOut(line: Int) extends Step
 
   private def assertInMainClass(
       source: String,
@@ -290,15 +293,21 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
         assert(stackTrace.stackFrames.head.line == breakpoint.line)
 
         var currentLine = breakpoint.line
-        breakpoint.steps.foreach { step =>
-          println(s"\nStepping into, at line $currentLine")
-          client.stepIn(threadId)
-          client.stopped(300.seconds)
-          val stackTrace = client.stackTrace(threadId)
-          val obtained = stackTrace.stackFrames.head.line
-          val expected = step.line
-          assert(obtained == expected)
-          currentLine == obtained
+        breakpoint.steps.foreach {
+          case StepInto(expected) =>
+            println(s"\nStepping into, at line $currentLine")
+            client.stepIn(threadId)
+            client.stopped(4.seconds)
+            val stackTrace = client.stackTrace(threadId)
+            currentLine = stackTrace.stackFrames.head.line
+            assert(currentLine == expected)
+          case StepOut(expected) =>
+            println(s"\nStepping out, at line $currentLine")
+            client.stepOut(threadId)
+            client.stopped(4.seconds)
+            val stackTrace = client.stackTrace(threadId)
+            currentLine = stackTrace.stackFrames.head.line
+            assert(currentLine == expected)
         }
         client.continue(threadId)
       }

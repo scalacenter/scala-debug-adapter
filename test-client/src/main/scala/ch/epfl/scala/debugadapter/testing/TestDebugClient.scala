@@ -141,6 +141,13 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     val response = sendRequest(request, timeout)
   }
 
+  def stepOut(threadId: Long, timeout: Duration = 1.second): Unit = {
+    val args = new StepOutArguments()
+    args.threadId = threadId
+    val request = createRequest(Command.STEPOUT, args)
+    val response = sendRequest(request, timeout)
+  }
+
   def evaluate(
       expression: String,
       frameId: Int,
