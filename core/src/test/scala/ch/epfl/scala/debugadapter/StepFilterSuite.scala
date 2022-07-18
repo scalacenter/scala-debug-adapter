@@ -5,6 +5,7 @@ import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 import ch.epfl.scala.debugadapter.testing.TestDebugClient
 import scala.concurrent.duration._
+import scala.tools.ant.sabbus.Break
 
 object Scala212StepFilterTests extends StepFilterSuite(ScalaVersion.`2.12`)
 object Scala213StepFilterTests extends StepFilterSuite(ScalaVersion.`2.13`)
@@ -282,6 +283,41 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
         Breakpoint(6)(StepInto(10), StepInto(16), StepOut(10), StepOut(6))
+      )
+    }
+
+    "should step into lazy initializer" - {
+      val source =
+        """|package example
+           |
+           |object A extends B {
+           |  lazy val a = {
+           |    "a".toString
+           |  }
+           |
+           |  def main(args: Array[String]): Unit = {
+           |    foo(a)
+           |    foo(a)
+           |    foo(b)
+           |    foo(b)
+           |  }
+           |
+           |  def foo(x: String): Unit = {
+           |    println(x)
+           |  }
+           |}
+           |
+           |trait B {
+           |  lazy val b = {
+           |    "b".toString
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.A")(
+        Breakpoint(9)(StepInto(4), StepInto(5), StepOut(9), StepInto(16)),
+        Breakpoint(10)(StepInto(16)),
+        Breakpoint(11)(StepInto(22), StepOut(11), StepInto(16)),
+        Breakpoint(12)(StepInto(16))
       )
     }
   }

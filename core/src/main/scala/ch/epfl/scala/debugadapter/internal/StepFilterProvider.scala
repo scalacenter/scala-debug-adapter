@@ -8,6 +8,8 @@ import com.microsoft.java.debug.core.protocol.Requests.StepFilters
 import com.sun.jdi.LocalVariable
 import com.sun.jdi.Method
 import com.sun.jdi.ReferenceType
+import com.sun.jdi.ClassType
+import com.sun.jdi.InterfaceType
 
 import scala.collection.JavaConverters._
 
@@ -16,8 +18,23 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
   override def skip(method: Method, filters: StepFilters): Boolean = {
     if (method.isBridge || super.skip(method, filters)) {
       true
-    } else if (isLocalMethod(method) || isLocalClass(method.declaringType())) {
+    } else if (
+      isJava(method) || isLocalMethod(method) || isLocalClass(
+        method.declaringType()
+      )
+    ) {
       false
+    } else if (isLazyInitializer(method)) {
+      val fieldName = method.name.dropRight(11)
+      method.declaringType match {
+        case cls: ClassType =>
+          cls.allInterfaces.asScala.exists(interface =>
+            containsLazyField(interface, fieldName)
+          )
+        case _ =>
+          // TODO should warn
+          false
+      }
     } else {
       val fqcn = method.declaringType().name()
       val res =
@@ -33,11 +50,35 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
     }
   }
 
+  private def isJava(method: Method): Boolean =
+    method.declaringType.sourceName.endsWith(".java")
+
   private def isLocalMethod(method: Method): Boolean =
     method.name().contains("$anonfun$")
 
   private def isLocalClass(tpe: ReferenceType): Boolean =
     tpe.name().contains("$anon$")
+
+  private def isLazyInitializer(method: Method): Boolean =
+    method.name.endsWith("$lzycompute")
+
+  private def containsLazyField(
+      interface: InterfaceType,
+      fieldName: String
+  ): Boolean = {
+    val fqcn = interface.name
+    sourceLookUp.getScalaSig(fqcn).exists(containsLazyField(_, fieldName))
+  }
+
+  private def containsLazyField(
+      scalaSig: ScalaSig,
+      fieldName: String
+  ): Boolean = {
+    scalaSig.entries.exists {
+      case m: MethodSymbol => m.isLazy && m.name == fieldName
+      case _ => false
+    }
+  }
 
   private def skip(method: Method, scalaSig: ScalaSig): Boolean = {
     val matchingSymbols = scalaSig.entries
@@ -55,7 +96,9 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
   }
 
   private def skip(scalaMethod: MethodSymbol): Boolean = {
-    scalaMethod.isAccessor
+    // we skip if it is an accessor, except if it is the accessor of a lazy field in a trait
+    // because the accessor of a lazy field in a trait is its initializer
+    scalaMethod.isAccessor && (!scalaMethod.isLazy || !scalaMethod.parent.get.isTrait)
   }
 
   private def matchSymbol(
@@ -70,7 +113,6 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
       println(s"${scalaMethod.name} isSyntheticMethod")
     if (scalaMethod.isMonomorphic)
       println(s"${scalaMethod.name} isMonomorphic")
-    if (scalaMethod.isMixedIn) println(s"${scalaMethod.name} isMixedIn")
 
     javaMethod.name == scalaMethod.name &&
     matchArguments(javaMethod, scalaMethod.info.info.get) &&

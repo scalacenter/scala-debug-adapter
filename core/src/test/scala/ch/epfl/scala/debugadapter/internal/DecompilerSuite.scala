@@ -40,6 +40,33 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
       assertNoScalaSig(runner, "example/A$B$1$.class")
       assertNoScalaSig(runner, "example/A$C$1.class")
     }
+
+    "lazy field" - {
+      val source =
+        """|package example
+           |
+           |class A extends B {
+           |  lazy val a = "a"
+           |}
+           |
+           |trait B {
+           |  lazy val b = "b"
+           |}
+           |""".stripMargin
+
+      val runner =
+        MainDebuggeeRunner.mainClassRunner(source, "", scalaVersion)
+
+      decompile(runner, "example/A.class") { scalaSig =>
+        val methods = scalaSig.entries.collect { case m: MethodSymbol => m }
+        assert(methods.size == 2) // init and a
+      }
+
+      decompile(runner, "example/B.class") { scalaSig =>
+        val methods = scalaSig.entries.collect { case m: MethodSymbol => m }
+        assert(methods.size == 2) // init and b
+      }
+    }
   }
 
   private def decompile(runner: MainDebuggeeRunner, classFile: String)(
