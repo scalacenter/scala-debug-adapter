@@ -101,7 +101,7 @@ object Decompiler {
     bytes
   }
 
-  private def decompiledText(
+  def decompiledText(
       scalaSig: ScalaSig,
       className: String,
       isPackageObject: Boolean

@@ -258,6 +258,32 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
         Breakpoint(12)(StepInto(5), StepOut(12))
       )
     }
+
+    "should step into methods with several parameter lists" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A
+           |    println(m()(a))
+           |  }
+           |
+           |  def m()(a: A): String = {
+           |    a.toString()
+           |  }
+           |}
+           |
+           |class A {
+           |  override def toString(): String = {
+           |    "B"
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(6)(StepInto(10), StepInto(16), StepOut(10), StepOut(6))
+      )
+    }
   }
 
   case class Breakpoint(line: Int)(val steps: Step*)

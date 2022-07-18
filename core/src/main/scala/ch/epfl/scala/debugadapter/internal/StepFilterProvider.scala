@@ -111,7 +111,7 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
       methodType: scalasig.Type
   ): Boolean = {
     val javaArgs = javaMethod.arguments().asScala.toSeq
-    val scalaArgs = extractArguments(methodType)
+    val scalaArgs = extractParameters(methodType)
     javaArgs.size == scalaArgs.size &&
     javaArgs.zip(scalaArgs).forall { case (javaArg, scalaArg) =>
       matchArgument(javaArg, scalaArg)
@@ -125,11 +125,13 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
     javaArg.name() == scalaArg.name
   }
 
-  private def extractArguments(methodType: scalasig.Type): Seq[Symbol] = {
+  private def extractParameters(methodType: scalasig.Type): Seq[Symbol] = {
     methodType match {
-      case m: MethodType => m.paramRefs
+      case m: FunctionType =>
+        m.paramSymbols ++ extractParameters(m.resultType.get)
       case m: NullaryMethodType => Seq.empty
-      case m: PolyType => extractArguments(m.typeRef.get)
+      case m: PolyType => extractParameters(m.typeRef.get)
+      case _: TypeRefType => Seq.empty
       case other =>
         val className = other.getClass.getSimpleName()
         throw new Exception(s"unexpected type found: $className")
