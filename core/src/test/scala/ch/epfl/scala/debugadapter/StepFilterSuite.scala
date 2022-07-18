@@ -323,14 +323,14 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
           case StepInto(expected) =>
             println(s"\nStepping into, at line $currentLine")
             client.stepIn(threadId)
-            client.stopped(4.seconds)
+            client.stopped(8.seconds)
             val stackTrace = client.stackTrace(threadId)
             currentLine = stackTrace.stackFrames.head.line
             assert(currentLine == expected)
           case StepOut(expected) =>
             println(s"\nStepping out, at line $currentLine")
             client.stepOut(threadId)
-            client.stopped(4.seconds)
+            client.stopped(8.seconds)
             val stackTrace = client.stackTrace(threadId)
             currentLine = stackTrace.stackFrames.head.line
             assert(currentLine == expected)
