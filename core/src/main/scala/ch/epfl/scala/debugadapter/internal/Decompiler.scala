@@ -11,6 +11,10 @@ import org.objectweb.asm.Opcodes
 
 import ch.epfl.scala.debugadapter.internal.scalasig._
 
+/**
+ * Originally copied from https://github.com/JetBrains/intellij-scala
+ * https://github.com/JetBrains/intellij-scala/blob/074e8f98d9789b3e7def3ade8d39e7ae770beccf/scala/decompiler/src/org/jetbrains/plugins/scala/decompiler/scalasig/Decompiler.scala
+ */
 object Decompiler {
   private val BYTES_VALUE = "bytes"
   private val SCALA_SIG_ANNOTATION: String = "Lscala/reflect/ScalaSignature;"

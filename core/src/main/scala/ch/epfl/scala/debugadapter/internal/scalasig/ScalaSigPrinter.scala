@@ -10,11 +10,14 @@ package ch.epfl.scala.debugadapter.internal.scalasig
 import java.lang.StringBuilder
 import java.util.regex.Pattern
 
-//import org.apache.commons.lang.{StringEscapeUtils, StringUtils}
-
 import scala.annotation.{switch, tailrec}
 import scala.collection.mutable
 import scala.reflect.NameTransformer
+
+/**
+ * Originally copied scalap then from https://github.com/JetBrains/intellij-scala
+ * https://github.com/JetBrains/intellij-scala/blob/074e8f98d9789b3e7def3ade8d39e7ae770beccf/scala/decompiler/src/org/jetbrains/plugins/scala/decompiler/scalasig/ScalaSigPrinter.scala
+ */
 
 //This class is from scalap, refactored to work with new types
 class ScalaSigPrinter(builder: StringBuilder) {

@@ -1,10 +1,12 @@
 package ch.epfl.scala.debugadapter.internal.scalasig
 
-//import scala.collection.immutable.ArraySeq
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 /**
+ * Originally copied from https://github.com/JetBrains/intellij-scala
+ * https://github.com/JetBrains/intellij-scala/blob/074e8f98d9789b3e7def3ade8d39e7ae770beccf/scala/decompiler/src/org/jetbrains/plugins/scala/decompiler/scalasig/ScalaSig.scala
+ *
  * Nikolay.Tropin
  * 19-Jul-17
  */

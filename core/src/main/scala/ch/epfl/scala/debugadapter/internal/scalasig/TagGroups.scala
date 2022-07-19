@@ -3,6 +3,9 @@ package ch.epfl.scala.debugadapter.internal.scalasig
 import scala.reflect.internal.pickling.PickleFormat._
 
 /**
+ * Originally copied from https://github.com/JetBrains/intellij-scala
+ * https://github.com/JetBrains/intellij-scala/blob/074e8f98d9789b3e7def3ade8d39e7ae770beccf/scala/decompiler/src/org/jetbrains/plugins/scala/decompiler/scalasig/TagGroups.scala
+ *
  * Nikolay.Tropin
  * 19-Jul-17
  */
