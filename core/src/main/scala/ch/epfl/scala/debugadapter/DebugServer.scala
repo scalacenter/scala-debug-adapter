@@ -68,7 +68,7 @@ final class DebugServer private (
         } catch {
           case NonFatal(e) =>
             logger.warn(
-              s"Could not close debug server listening on [$uri due to: ${e.getMessage}]"
+              s"Could not close debug server listening on $uri due to: ${e.getMessage}]"
             )
         }
       }

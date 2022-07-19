@@ -180,8 +180,11 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
         client.continue(threadId)
       }
 
-      client.exited()
-      client.terminated()
+      // This is flaky, terminated can happen before exited
+      if (GithubUtils.isCI()) {
+        client.exited()
+        client.terminated()
+      }
     } finally {
       server.close()
       client.close()

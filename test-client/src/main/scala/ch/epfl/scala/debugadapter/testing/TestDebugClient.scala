@@ -184,7 +184,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     getBody[TerminatedEvent](event)
   }
 
-  def exited(timeout: Duration = 16.seconds): ExitedEvent = {
+  def exited(timeout: Duration = 4.seconds): ExitedEvent = {
     val event = receiveEvent(timeout)(e => e.event == "exited")
     getBody[ExitedEvent](event)
   }
@@ -235,7 +235,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
 object TestDebugClient {
   def connect(
       uri: URI,
-      timeout: Duration = 2.seconds,
+      timeout: Duration = 4.seconds,
       debug: String => Unit = _ => ()
   )(implicit ec: ExecutionContext): TestDebugClient = {
     val socket = new Socket()
