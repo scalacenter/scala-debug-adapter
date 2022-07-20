@@ -181,7 +181,7 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
       }
 
       // This is flaky, terminated can happen before exited
-      if (GithubUtils.isCI()) {
+      if (!GithubUtils.isCI()) {
         client.exited()
         client.terminated()
       }

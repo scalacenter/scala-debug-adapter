@@ -374,7 +374,7 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
       }
 
       // This is flaky, terminated can happen before exited
-      if (GithubUtils.isCI()) {
+      if (!GithubUtils.isCI()) {
         client.exited()
         client.terminated()
       }

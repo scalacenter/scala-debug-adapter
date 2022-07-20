@@ -66,7 +66,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
 
   def continue(
       threadId: Long,
-      timeout: Duration = 4.seconds
+      timeout: Duration = 8.seconds
   ): Messages.Response = {
     val args = new ContinueArguments()
     args.threadId = threadId
