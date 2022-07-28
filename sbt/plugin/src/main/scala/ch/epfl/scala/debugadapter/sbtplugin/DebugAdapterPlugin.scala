@@ -196,7 +196,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val target = Keys.bspTargetIdentifier.value
       val scalaVersion = Keys.scalaVersion.value
       val javaHome = Keys.javaHome.value
-      val workingDirectory = Keys.baseDirectory.value
+      val workingDirectory = (Keys.run / Keys.baseDirectory).value
       val classPathEntries = InternalTasks.classPathEntries.value
       val javaRuntime = InternalTasks.javaRuntime.value
       val envVars = Keys.envVars.value
