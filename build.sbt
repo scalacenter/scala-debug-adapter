@@ -129,10 +129,6 @@ lazy val expressionCompiler = project
       "2.12.11",
       "2.12.10"
     ),
-    Compile / doc := {
-      // Scaladoc fails
-      new File("")
-    },
     crossTarget := target.value / s"scala-${scalaVersion.value}",
     crossVersion := CrossVersion.full,
     Compile / unmanagedSourceDirectories ++= {
