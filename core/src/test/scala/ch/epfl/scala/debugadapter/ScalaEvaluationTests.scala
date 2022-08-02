@@ -1748,7 +1748,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
       )
     }
 
-    "evaluate expression in match case" - {
+    "evaluate on match case" - {
       val source =
         """|package example
            |
@@ -1804,6 +1804,25 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
         )
       }
       assertInMainClass(source, "example.Main")(breakpoints: _*)
+    }
+
+    "evaluate on assignment" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    var msg = "Hello"
+           |    msg = "Bye" + "Bye"
+           |    println(msg)
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(6)(
+          Evaluation.success("1+1", 2)
+        )
+      )
     }
 
     "evaluate class def" - {
