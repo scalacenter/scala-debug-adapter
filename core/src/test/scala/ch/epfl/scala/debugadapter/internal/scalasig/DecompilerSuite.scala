@@ -1,9 +1,8 @@
-package ch.epfl.scala.debugadapter.internal
+package ch.epfl.scala.debugadapter.internal.scalasig
 
 import utest._
 import ch.epfl.scala.debugadapter.MainDebuggeeRunner
 import ch.epfl.scala.debugadapter.ScalaVersion
-import ch.epfl.scala.debugadapter.internal.scalasig._
 
 object Scala212DecompilerTests extends DecompilerSuite(ScalaVersion.`2.12`)
 object Scala213DecompilerTests extends DecompilerSuite(ScalaVersion.`2.13`)
@@ -127,7 +126,7 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
   // only used for debugging
   private def info(entry: Entry): String = {
     entry match {
-      case sym: scalasig.Symbol => info(sym)
+      case sym: Symbol => info(sym)
       case SymAnnot(symbol, infoRef, annotArgs, named) => "SymAnnot"
       case AnnotInfo => "AnnotInfo"
       case Modifiers(flags, privateWithin) => "Modifiers"

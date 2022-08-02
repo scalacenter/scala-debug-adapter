@@ -11,6 +11,7 @@ import ClassEntryLookUp.readSourceContent
 
 import scala.util.matching.Regex
 import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSig
+import ch.epfl.scala.debugadapter.internal.scalasig.Decompiler
 
 private case class SourceLine(uri: URI, lineNumber: Int)
 
