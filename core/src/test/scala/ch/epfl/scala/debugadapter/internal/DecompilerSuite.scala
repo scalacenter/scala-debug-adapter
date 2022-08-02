@@ -9,9 +9,10 @@ object Scala212DecompilerTests extends DecompilerSuite(ScalaVersion.`2.12`)
 object Scala213DecompilerTests extends DecompilerSuite(ScalaVersion.`2.13`)
 
 abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
+  val isScala212: Boolean = scalaVersion.binaryVersion == "2.12"
 
   override val tests: Tests = Tests {
-    "local methods and classes" - {
+    "cannot decompile local methods and classes" - {
       val source =
         """|package example
            |
@@ -41,7 +42,7 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
       assertNoScalaSig(runner, "example/A$C$1.class")
     }
 
-    "lazy field" - {
+    "decompiles a lazy field" - {
       val source =
         """|package example
            |
@@ -66,6 +67,42 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
         val methods = scalaSig.entries.collect { case m: MethodSymbol => m }
         assert(methods.size == 2) // init and b
       }
+    }
+
+    "decompiles a case class" - {
+      val source =
+        """|package example
+           |case class A(a: String)
+           |""".stripMargin
+
+      val runner =
+        MainDebuggeeRunner.mainClassRunner(source, "", scalaVersion)
+
+      decompile(runner, "example/A.class") { scalaSig =>
+        val methods =
+          scalaSig.entries
+            .collect { case m: MethodSymbol => m }
+            .filter(m => m.isMethod)
+            .toSeq
+
+        val (methodsOfObject, methodsOfClass) =
+          methods.partition(m => m.parent.get.isModule)
+
+        val (syntheticMethods, nonSyntheticMethods) =
+          methodsOfClass.partition(m => m.isSynthetic)
+        assert(nonSyntheticMethods.size == 2) // init and getter
+
+        val syntheticMethodCount = if (isScala212) 10 else 11
+        assert(
+          syntheticMethods.size == syntheticMethodCount
+        ) // copy, toString, equals, hashCode, productArity...
+
+        assert(
+          methodsOfObject.size == 5
+        ) // init, apply, unapply, toString and writeReplace
+      }
+
+      assertNoScalaSig(runner, "example/A$.class")
     }
   }
 
@@ -141,7 +178,8 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
         s"ClassInfoType(${symbol.name}, ${typeRefs.map(ref => info(ref.get)).mkString("[", ",", "]")})"
       case ClassInfoTypeWithCons(symbol, typeRefs, cons) =>
         s"ClassInfoTypeWithCons(???, ???, ???)"
-      case MethodType(resultType, paramRefs) => s"MethodType(???, ???)"
+      case MethodType(resultType, paramRefs) =>
+        s"MethodType(${info(resultType.get)}, ${paramRefs.map(r => info(r.get)).mkString("[", ", ", "]")})"
       case NullaryMethodType(resultType) => s"NullaryMethodType(???)"
       case PolyType(typeRef, paramRefs) => s"PolyType(???, ???)"
       case PolyTypeWithCons(typeRef, paramRefs, cons) =>

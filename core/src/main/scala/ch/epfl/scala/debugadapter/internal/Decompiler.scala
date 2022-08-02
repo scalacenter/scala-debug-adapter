@@ -127,11 +127,7 @@ object Decompiler {
 
       val symbols = scalaSig.topLevelClasses ++ scalaSig.topLevelObjects
 
-      // Check flags work
-      for (s <- symbols) println(s)
-
       // Print package with special treatment for package objects
-
       for {
         symbol <- symbols.headOption
         parent <- symbol.parent

@@ -19,9 +19,9 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
     if (method.isBridge || super.skip(method, filters)) {
       true
     } else if (
-      isJava(method) || isLocalMethod(method) || isLocalClass(
-        method.declaringType()
-      )
+      isJava(method) ||
+      isLocalMethod(method) ||
+      isLocalClass(method.declaringType)
     ) {
       false
     } else if (isLazyInitializer(method)) {
@@ -36,17 +36,32 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
           false
       }
     } else {
-      val fqcn = method.declaringType().name()
-      val res =
-        sourceLookUp.getScalaSig(fqcn).map(skip(method, _))
+      val fqcn = method.declaringType.name
+      val matchingMethods = for {
+        scalaSig <- sourceLookUp.getScalaSig(fqcn).toSeq
+        val isObject = fqcn.endsWith("$")
+        scalaMethod <- scalaSig.entries.toSeq
+          .collect { case m: MethodSymbol if m.isMethod => m }
+        if scalaMethod.parent.exists(p => p.isModule == isObject)
+        if matchSymbol(method, scalaMethod)
+      } yield scalaMethod
 
-      res match {
-        case None => println(s"No ScalaSig found for $method")
-        case Some(true) => println(s"Skipping $method")
-        case Some(false) => ()
+      if (matchingMethods.size > 1) {
+        val formattedMethods =
+          matchingMethods.map(s => s"$s ${s.info.flags}: ${s.infoType}")
+        throw new Exception(
+          s"found ${matchingMethods.size} matching symbols: " + formattedMethods
+            .mkString(", ")
+        )
       }
 
-      res.getOrElse(false)
+      val res = matchingMethods.headOption.forall(skip)
+
+      if (res) {
+        println(s"Skipping $method")
+      }
+
+      res
     }
   }
 
@@ -80,25 +95,11 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
     }
   }
 
-  private def skip(method: Method, scalaSig: ScalaSig): Boolean = {
-    val matchingSymbols = scalaSig.entries
-      .collect { case m: MethodSymbol if m.isMethod => m }
-      .filter(matchSymbol(method, _))
-
-    if (matchingSymbols.size > 1) {
-      println(s"WARNING: found ${matchingSymbols.size} matching symbols")
-      matchingSymbols.foreach { s =>
-        println(s"${s.info.info.get}")
-      }
-    }
-
-    matchingSymbols.headOption.forall(skip)
-  }
-
   private def skip(scalaMethod: MethodSymbol): Boolean = {
+    scalaMethod.isSynthetic ||
     // we skip if it is an accessor, except if it is the accessor of a lazy field in a trait
     // because the accessor of a lazy field in a trait is its initializer
-    scalaMethod.isAccessor && (!scalaMethod.isLazy || !scalaMethod.parent.get.isTrait)
+    (scalaMethod.isAccessor && (!scalaMethod.isLazy || !scalaMethod.parent.get.isTrait))
   }
 
   private def matchSymbol(
@@ -115,7 +116,7 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
       println(s"${scalaMethod.name} isMonomorphic")
 
     javaMethod.name == scalaMethod.name &&
-    matchArguments(javaMethod, scalaMethod.info.info.get) &&
+    matchArguments(javaMethod, scalaMethod.infoType) &&
     matchOwner(javaMethod.declaringType(), scalaMethod.parent.get)
   }
 

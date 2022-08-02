@@ -5,6 +5,7 @@ import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 import ch.epfl.scala.debugadapter.testing.TestDebugClient
 import scala.concurrent.duration._
+import com.microsoft.java.debug.core.protocol.Types.StackFrame
 
 object Scala212StepFilterTests extends StepFilterSuite(ScalaVersion.`2.12`)
 object Scala213StepFilterTests extends StepFilterSuite(ScalaVersion.`2.13`)
@@ -69,16 +70,16 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |object F extends A
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(10)(StepInto(4), StepOut(10)),
-        Breakpoint(12)(StepInto(4), StepOut(12)),
-        Breakpoint(14)(StepInto(44), StepOut(14)),
-        Breakpoint(16)(StepInto(44), StepOut(16)),
-        Breakpoint(17)(StepInto(4), StepOut(17)),
-        Breakpoint(19)(StepInto(31), StepOut(19)),
-        Breakpoint(21)(StepInto(4), StepOut(21)),
+        Breakpoint(10)(StepInto.line(4), StepOut.line(10)),
+        Breakpoint(12)(StepInto.line(4), StepOut.line(12)),
+        Breakpoint(14)(StepInto.line(44), StepOut.line(14)),
+        Breakpoint(16)(StepInto.line(44), StepOut.line(16)),
+        Breakpoint(17)(StepInto.line(4), StepOut.line(17)),
+        Breakpoint(19)(StepInto.line(31), StepOut.line(19)),
+        Breakpoint(21)(StepInto.line(4), StepOut.line(21)),
         // cannot skip method in local class
-        Breakpoint(23)(StepInto(22), StepOut(23)),
-        Breakpoint(27)(StepInto(25), StepOut(27))
+        Breakpoint(23)(StepInto.line(22), StepOut.line(23)),
+        Breakpoint(27)(StepInto.line(25), StepOut.line(27))
       )
     }
 
@@ -140,18 +141,18 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(14)(StepInto(10)),
-        Breakpoint(15)(StepInto(10)),
-        Breakpoint(16)(StepInto(10)),
-        Breakpoint(17)(StepInto(10)),
-        Breakpoint(43)(StepInto(10)),
-        Breakpoint(44)(StepInto(10)),
-        Breakpoint(45)(StepInto(10)),
-        Breakpoint(46)(StepInto(10)),
-        Breakpoint(47)(StepInto(10)),
-        Breakpoint(48)(StepInto(10)),
-        Breakpoint(49)(StepInto(10)),
-        Breakpoint(23)(StepInto(10))
+        Breakpoint(14)(StepInto.line(10)),
+        Breakpoint(15)(StepInto.line(10)),
+        Breakpoint(16)(StepInto.line(10)),
+        Breakpoint(17)(StepInto.line(10)),
+        Breakpoint(43)(StepInto.line(10)),
+        Breakpoint(44)(StepInto.line(10)),
+        Breakpoint(45)(StepInto.line(10)),
+        Breakpoint(46)(StepInto.line(10)),
+        Breakpoint(47)(StepInto.line(10)),
+        Breakpoint(48)(StepInto.line(10)),
+        Breakpoint(49)(StepInto.line(10)),
+        Breakpoint(23)(StepInto.line(10))
       )
     }
 
@@ -198,16 +199,16 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
         Breakpoint(8)(
-          StepInto(9),
-          StepInto(11)
+          StepInto.line(9),
+          StepInto.line(11)
         ),
         Breakpoint(30)(
-          StepInto(31),
-          StepInto(32),
-          StepInto(33),
-          StepInto(34),
-          StepInto(35),
-          StepInto(12)
+          StepInto.line(31),
+          StepInto.line(32),
+          StepInto.line(33),
+          StepInto.line(34),
+          StepInto.line(35),
+          StepInto.line(12)
         )
       )
     }
@@ -233,7 +234,7 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(14)(StepInto(8), StepOut(14))
+        Breakpoint(14)(StepInto.line(8), StepOut.line(14))
       )
     }
 
@@ -255,7 +256,7 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |}
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(12)(StepInto(5), StepOut(12))
+        Breakpoint(12)(StepInto.line(5), StepOut.line(12))
       )
     }
 
@@ -281,7 +282,12 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |}
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(6)(StepInto(10), StepInto(16), StepOut(10), StepOut(6))
+        Breakpoint(6)(
+          StepInto.line(10),
+          StepInto.line(16),
+          StepOut.line(10),
+          StepOut.line(6)
+        )
       )
     }
 
@@ -313,19 +319,99 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |}
            |""".stripMargin
       assertInMainClass(source, "example.A")(
-        Breakpoint(9)(StepInto(4), StepInto(5), StepOut(9), StepInto(16)),
-        Breakpoint(10)(StepInto(16)),
-        Breakpoint(11)(StepInto(22), StepOut(11), StepInto(16)),
-        Breakpoint(12)(StepInto(16))
+        Breakpoint(9)(
+          StepInto.line(4),
+          StepInto.line(5),
+          StepOut.line(9),
+          StepInto.line(16)
+        ),
+        Breakpoint(10)(StepInto.line(16)),
+        Breakpoint(11)(StepInto.line(22), StepOut.line(11), StepInto.line(16)),
+        Breakpoint(12)(StepInto.line(16))
+      )
+    }
+
+    "should not step into synthetic method of case class" - {
+      val source =
+        """|package example
+           |
+           |case class A(a: String)
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A("a")
+           |    val b = new A("b")
+           |    a.productIterator // load a bunch of classes 
+           |    
+           |    a.toString
+           |    a.copy("b")
+           |    a.hashCode()
+           |    a.equals(b)
+           |    a.productArity
+           |    a.productPrefix
+           |    a.productElement(0)
+           |    a.productIterator
+           |    
+           |    val f = A
+           |    f("a")
+           |
+           |    val x = A.unapply(a)
+           |  }
+           |}""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(11)(StepInto.file("ScalaRunTime.scala"), StepOut.line(11)),
+        Breakpoint(12)(StepInto.method("A.<init>(String)"), StepOut.line(12)),
+        Breakpoint(13)(StepInto.file("ScalaRunTime.scala"), StepOut.line(13)),
+        Breakpoint(14)(StepInto.file("String.java"), StepOut.line(14)),
+        Breakpoint(15)(
+          StepInto.line(16),
+          StepInto.line(17),
+          StepInto.line(18),
+          StepInto.file("ScalaRunTime.scala")
+        )
       )
     }
   }
 
   case class Breakpoint(line: Int)(val steps: Step*)
 
-  sealed trait Step
-  case class StepInto(line: Int) extends Step
-  case class StepOut(line: Int) extends Step
+  sealed trait Step {
+    val assertion: StackFrame => Unit
+    def assert(frame: StackFrame): Unit = assertion(frame)
+  }
+  case class StepInto(assertion: StackFrame => Unit) extends Step
+  case class StepOut(assertion: StackFrame => Unit) extends Step
+
+  object StepInto {
+    def line(expectedLine: Int): StepInto = {
+      StepInto { frame =>
+        val obtainedLine = frame.line
+        assert(obtainedLine == expectedLine)
+      }
+    }
+
+    def file(expectedName: String): StepInto = {
+      StepInto { frame =>
+        val obtainedName = frame.source.name
+        assert(obtainedName == expectedName)
+      }
+    }
+
+    def method(expectedName: String): StepInto = {
+      StepInto { frame =>
+        val obtainedName = frame.name
+        assert(obtainedName == expectedName)
+      }
+    }
+  }
+
+  object StepOut {
+    def line(expectedLine: Int): StepOut = {
+      StepOut { frame =>
+        assert(frame.line == expectedLine)
+      }
+    }
+  }
 
   private def assertInMainClass(
       source: String,
@@ -354,21 +440,20 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
         assert(stackTrace.stackFrames.head.line == breakpoint.line)
 
         var currentLine = breakpoint.line
-        breakpoint.steps.foreach {
-          case StepInto(expected) =>
-            println(s"\nStepping into, at line $currentLine")
-            client.stepIn(threadId)
-            client.stopped(8.seconds)
-            val stackTrace = client.stackTrace(threadId)
-            currentLine = stackTrace.stackFrames.head.line
-            assert(currentLine == expected)
-          case StepOut(expected) =>
-            println(s"\nStepping out, at line $currentLine")
-            client.stepOut(threadId)
-            client.stopped(8.seconds)
-            val stackTrace = client.stackTrace(threadId)
-            currentLine = stackTrace.stackFrames.head.line
-            assert(currentLine == expected)
+        breakpoint.steps.foreach { step =>
+          step match {
+            case StepInto(_) =>
+              println(s"\nStepping into, at line $currentLine")
+              client.stepIn(threadId)
+            case StepOut(_) =>
+              println(s"\nStepping out, at line $currentLine")
+              client.stepOut(threadId)
+          }
+          client.stopped(8.seconds)
+          val stackTrace = client.stackTrace(threadId)
+          val topFrame = stackTrace.stackFrames.head
+          currentLine = topFrame.line
+          step.assert(topFrame)
         }
         client.continue(threadId)
       }
