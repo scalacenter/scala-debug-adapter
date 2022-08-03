@@ -14,7 +14,7 @@ object MoreScala3DebugTests extends TestSuite {
   def tests: Tests = Tests {
     "should support breakpoints in scala 3 with brace-less syntax" - {
       val runner = MainDebuggeeRunner.scala3Braceless()
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -47,7 +47,7 @@ object MoreScala3DebugTests extends TestSuite {
 
     "should support breakpoints in scala 3 with @main" - {
       val runner = MainDebuggeeRunner.scala3MainAnnotation()
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()

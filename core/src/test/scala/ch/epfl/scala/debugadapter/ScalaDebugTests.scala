@@ -18,7 +18,7 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
   def tests: Tests = Tests {
     "should support breakpoints in scala sources" - {
       val runner = MainDebuggeeRunner.scalaBreakpointTest(scalaVersion)
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -69,7 +69,7 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
 
     "should support breakpoints in fully qualified classes" - {
       val runner = MainDebuggeeRunner.scalaBreakpointTest(scalaVersion)
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -102,7 +102,7 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
 
     "should return stacktrace, scopes and variables when stopped by a breakpoint" - {
       val runner = MainDebuggeeRunner.scalaBreakpointTest(scalaVersion)
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -142,7 +142,7 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
 
     "should return variables after expression evaluation" - {
       val runner = MainDebuggeeRunner.scalaBreakpointTest(scalaVersion)
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -206,7 +206,7 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
         "example.Main",
         scalaVersion
       )
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
