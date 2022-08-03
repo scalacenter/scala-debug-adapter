@@ -93,6 +93,24 @@ private[internal] class ExpressionEvaluator(
     evaluatedValue.getResult
   }
 
+  private def findClassLoader(thread: ThreadReference): JdiClassLoader = {
+    val scalaLibClassLoader =
+      for {
+        scalaLibClass <- thread.virtualMachine.allClasses.asScala
+          .find(c => c.name.startsWith("scala.runtime"))
+        classLoader <- Option(scalaLibClass.classLoader)
+      } yield classLoader
+
+    val classLoader = Option(
+      thread.frame(0).location.method.declaringType.classLoader
+    )
+      .orElse(scalaLibClassLoader)
+      .getOrElse(
+        throw new Exception("Cannot find the classloader of the Scala library")
+      )
+    JdiClassLoader(classLoader, thread)
+  }
+
   private def evaluateExpression(
       expressionInstance: JdiObject
   ): Safe[Value] = {
@@ -221,15 +239,6 @@ private[internal] class ExpressionEvaluator(
           thread.frame(depth).setValue(variable, value)
         }
       }
-  }
-
-  private def findClassLoader(
-      thread: ThreadReference
-  ): JdiClassLoader = {
-    val someClass = thread.virtualMachine.allClasses.asScala
-      .find(_.classLoader() != null)
-      .head
-    JdiClassLoader(someClass.classLoader, thread)
   }
 
   private def boxIfPrimitive(
