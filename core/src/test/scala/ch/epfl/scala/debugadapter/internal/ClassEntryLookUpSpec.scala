@@ -8,13 +8,14 @@ import utest._
 
 import java.net.URI
 import java.nio.file.Files
+import ch.epfl.scala.debugadapter.NoopLogger
 
 object ClassEntryLookUpSpec extends TestSuite {
   def tests = Tests {
     "should map source files to class names and backward, in project" - {
       val runner =
         MainDebuggeeRunner.scalaBreakpointTest(ScalaVersion.`2.12`)
-      val lookUp = ClassEntryLookUp(runner.projectEntry)
+      val lookUp = ClassEntryLookUp(runner.projectEntry, NoopLogger)
 
       val expectedSourceFile = runner.sourceFiles.head.toUri
       val expectedClassName =
@@ -31,7 +32,7 @@ object ClassEntryLookUpSpec extends TestSuite {
     "should map source files to class names and backward, in dependency jars" - {
       val classPathEntry =
         Coursier.fetchOnly("org.typelevel", "cats-core_3", "2.6.1")
-      val lookUp = ClassEntryLookUp(classPathEntry)
+      val lookUp = ClassEntryLookUp(classPathEntry, NoopLogger)
 
       val sourceJar = classPathEntry.sourceEntries.collectFirst {
         case SourceJar(jar) => jar
@@ -51,7 +52,7 @@ object ClassEntryLookUpSpec extends TestSuite {
     "should get source file content, in project" - {
       val runner =
         MainDebuggeeRunner.scalaBreakpointTest(ScalaVersion.`2.12`)
-      val lookUp = ClassEntryLookUp(runner.projectEntry)
+      val lookUp = ClassEntryLookUp(runner.projectEntry, NoopLogger)
 
       val sourceFile = runner.sourceFiles.head.toUri
       val expectedSourceContent =
@@ -64,7 +65,7 @@ object ClassEntryLookUpSpec extends TestSuite {
     "should get source file content, in dependency jar" - {
       val classPathEntry =
         Coursier.fetchOnly("org.typelevel", "cats-core_2.12", "2.3.0")
-      val lookUp = ClassEntryLookUp(classPathEntry)
+      val lookUp = ClassEntryLookUp(classPathEntry, NoopLogger)
 
       val sourceJar = classPathEntry.sourceEntries.collectFirst {
         case SourceJar(jar) => jar
@@ -80,7 +81,7 @@ object ClassEntryLookUpSpec extends TestSuite {
     "should work in case of broken dependency jar" - {
       val classPathEntry =
         Coursier.fetchOnly("org.webjars", "swagger-ui", "4.2.1")
-      val lookUp = ClassEntryLookUp(classPathEntry)
+      val lookUp = ClassEntryLookUp(classPathEntry, NoopLogger)
       val sourceJar = classPathEntry.sourceEntries.collectFirst {
         case SourceJar(jar) => jar
       }

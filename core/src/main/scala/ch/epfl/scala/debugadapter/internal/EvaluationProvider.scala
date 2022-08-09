@@ -16,11 +16,13 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.util.Failure
 import scala.util.Success
+import ch.epfl.scala.debugadapter.Logger
 
 private[internal] object EvaluationProvider {
   def apply(
       runner: DebuggeeRunner,
-      sourceLookUpProvider: SourceLookUpProvider
+      sourceLookUpProvider: SourceLookUpProvider,
+      logger: Logger
   ): IEvaluationProvider = {
     val evaluator = runner.evaluationClassLoader
       .flatMap(EvaluationDriver(_))
@@ -29,7 +31,8 @@ private[internal] object EvaluationProvider {
           runner.scalaVersion,
           runner.classPath,
           sourceLookUpProvider,
-          _
+          _,
+          logger
         )
       )
     new EvaluationProvider(evaluator)

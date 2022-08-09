@@ -123,19 +123,23 @@ private object ClassEntryLookUp {
   private def empty: ClassEntryLookUp =
     new ClassEntryLookUp(Map.empty, Map.empty, Map.empty, Seq.empty, Seq.empty)
 
-  private[internal] def apply(entry: ClassEntry): ClassEntryLookUp = {
+  private[internal] def apply(
+      entry: ClassEntry,
+      logger: Logger
+  ): ClassEntryLookUp = {
     val sourceFiles =
       entry.sourceEntries.flatMap(SourceEntryLookUp.getAllSourceFiles)
-    ClassEntryLookUp(entry.classSystems, sourceFiles)
+    ClassEntryLookUp(entry, sourceFiles, logger)
   }
 
   def apply(
-      classSystems: Seq[ClassSystem],
-      sourceFiles: Seq[SourceFile]
+      entry: ClassEntry,
+      sourceFiles: Seq[SourceFile],
+      logger: Logger
   ): ClassEntryLookUp = {
     if (sourceFiles.isEmpty) ClassEntryLookUp.empty
     else {
-      val classFiles = classSystems.flatMap { classSystem =>
+      val classFiles = entry.classSystems.flatMap { classSystem =>
         classSystem
           .within(readAllClassFiles(classSystem))
           .getOrElse(Vector.empty)
@@ -208,6 +212,11 @@ private object ClassEntryLookUp {
             }
         }
       }
+
+      if (orphanClassFiles.size > 0)
+        logger.debug(
+          s"Found ${orphanClassFiles.size} orphan class files in ${entry.name}"
+        )
 
       new ClassEntryLookUp(
         sourceUriToSourceFile,

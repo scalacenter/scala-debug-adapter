@@ -20,30 +20,35 @@ private[debugadapter] object DebugAdapter {
    */
   DebugSettings.getCurrent.showStaticVariables = true
 
-  def context(runner: DebuggeeRunner, logger: Logger): IProviderContext = {
-    val context = new ProviderContext
-    val sourceLookUpProvider = SourceLookUpProvider(
-      runner.classPathEntries ++ runner.javaRuntime
-    )
-    context.registerProvider(
-      classOf[IHotCodeReplaceProvider],
-      HotCodeReplaceProvider
-    )
-    context.registerProvider(
-      classOf[IVirtualMachineManagerProvider],
-      VirtualMachineManagerProvider
-    )
-    context.registerProvider(
-      classOf[ISourceLookUpProvider],
-      sourceLookUpProvider
-    )
-    context.registerProvider(
-      classOf[IEvaluationProvider],
-      EvaluationProvider(runner, sourceLookUpProvider)
-    )
-    context.registerProvider(classOf[ICompletionsProvider], CompletionsProvider)
-    context
-  }
+  def context(runner: DebuggeeRunner, logger: Logger): IProviderContext =
+    TimeUtils.logTime(logger, "Configured debugger") {
+      val context = new ProviderContext
+      val sourceLookUpProvider = SourceLookUpProvider(
+        runner.classPathEntries ++ runner.javaRuntime,
+        logger
+      )
+      context.registerProvider(
+        classOf[IHotCodeReplaceProvider],
+        HotCodeReplaceProvider
+      )
+      context.registerProvider(
+        classOf[IVirtualMachineManagerProvider],
+        VirtualMachineManagerProvider
+      )
+      context.registerProvider(
+        classOf[ISourceLookUpProvider],
+        sourceLookUpProvider
+      )
+      context.registerProvider(
+        classOf[IEvaluationProvider],
+        EvaluationProvider(runner, sourceLookUpProvider, logger)
+      )
+      context.registerProvider(
+        classOf[ICompletionsProvider],
+        CompletionsProvider
+      )
+      context
+    }
 
   object CompletionsProvider extends ICompletionsProvider {
     override def codeComplete(

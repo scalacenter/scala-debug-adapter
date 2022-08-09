@@ -130,7 +130,7 @@ private[debugadapter] final class DebugSession private (
 
       case _ => DebugSession.Stopped
     }
-    logger.debug(s"closing connection with debugger $name")
+    logger.debug(s"Closing connection with debugger $name")
     socket.close()
     exitStatusPromise.trySuccess(DebugSession.Terminated)
   }
