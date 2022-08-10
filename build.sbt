@@ -84,7 +84,7 @@ lazy val testClient = project
   )
 
 lazy val sbtPlugin = project
-  .in(file("sbt/plugin"))
+  .in(file("sbt-plugin"))
   .enablePlugins(SbtPlugin, ContrabandPlugin, JsonCodecPlugin)
   .settings(
     name := "sbt-debug-adapter",

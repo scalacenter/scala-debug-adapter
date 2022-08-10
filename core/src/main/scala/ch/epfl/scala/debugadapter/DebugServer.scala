@@ -10,26 +10,17 @@ import scala.util.control.NonFatal
 
 final class DebugServer private (
     runner: DebuggeeRunner,
+    address: DebugServer.Address,
     logger: Logger,
     autoCloseSession: Boolean,
     gracePeriod: Duration
 )(implicit ec: ExecutionContext) {
-
-  private val address = new InetSocketAddress(0)
   private var closedServer = false
   private val ongoingSessions = new ConcurrentLinkedQueue[DebugSession]()
   private val lock = new Object()
 
-  /*
-   * Set backlog to 1 to recommend the OS to process one connection at a time,
-   * which can happen when a restart is request and the client immediately
-   * connects without waiting for the other session to finish.
-   */
-  private val serverSocket =
-    new ServerSocket(address.getPort, 1, address.getAddress)
-
-  def uri: URI =
-    URI.create(s"tcp://${address.getHostString}:${serverSocket.getLocalPort}")
+  private val serverSocket = address.serverSocket
+  val uri = address.uri
 
   /**
    * Wait for a connection then start a session
@@ -40,11 +31,11 @@ final class DebugServer private (
     for {
       session <- Future(connect())
       exitStatus <- session.exitStatus
-      restarted <- exitStatus match {
+      _ <- exitStatus match {
         case DebugSession.Restarted => start()
         case _ => Future.successful(())
       }
-    } yield restarted
+    } yield ()
   }
 
   /**
@@ -86,6 +77,21 @@ final class DebugServer private (
 }
 
 object DebugServer {
+
+  final class Address() {
+    private val address = new InetSocketAddress(0)
+    /*
+     * Set backlog to 1 to recommend the OS to process one connection at a time,
+     * which can happen when a restart is request and the client immediately
+     * connects without waiting for the other session to finish.
+     */
+    val serverSocket =
+      new ServerSocket(address.getPort, 1, address.getAddress)
+
+    def uri: URI =
+      URI.create(s"tcp://${address.getHostString}:${serverSocket.getLocalPort}")
+  }
+
   final class Handler(val uri: URI, val running: Future[Unit])
 
   /**
@@ -93,6 +99,7 @@ object DebugServer {
    * The server must then be started manually
    *
    * @param runner The debuggee process
+   * @param address
    * @param logger
    * @param autoCloseSession If true the session closes itself after receiving terminated event from the debuggee
    * @param gracePeriod When closed the session waits for the debuggee to terminated gracefully
@@ -101,11 +108,12 @@ object DebugServer {
    */
   def apply(
       runner: DebuggeeRunner,
+      address: DebugServer.Address,
       logger: Logger,
       autoCloseSession: Boolean = false,
       gracePeriod: Duration = Duration(5, TimeUnit.SECONDS)
   )(implicit ec: ExecutionContext): DebugServer = {
-    new DebugServer(runner, logger, autoCloseSession, gracePeriod)
+    new DebugServer(runner, address, logger, autoCloseSession, gracePeriod)
   }
 
   /**
@@ -127,7 +135,9 @@ object DebugServer {
       autoCloseSession: Boolean = false,
       gracePeriod: Duration = Duration(2, TimeUnit.SECONDS)
   )(implicit ec: ExecutionContext): Handler = {
-    val server = new DebugServer(runner, logger, autoCloseSession, gracePeriod)
+    val address = new DebugServer.Address()
+    val server =
+      new DebugServer(runner, address, logger, autoCloseSession, gracePeriod)
     val running = server.start()
     running.onComplete(_ => server.close())
     new Handler(server.uri, running)

@@ -10,12 +10,14 @@ import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.util.Try
 import java.nio.charset.StandardCharsets
+import ch.epfl.scala.debugadapter.Logger
 
 private[internal] class ExpressionEvaluator(
     scalaVersion: String,
     classPath: Seq[Path],
     sourceLookUpProvider: ISourceLookUpProvider,
-    driver: EvaluationDriver
+    driver: EvaluationDriver,
+    logger: Logger
 ) {
   private val classPathString =
     classPath.mkString(File.pathSeparator)
@@ -25,6 +27,7 @@ private[internal] class ExpressionEvaluator(
       thread: ThreadReference,
       depth: Int
   ): Try[Value] = {
+    logger.debug(s"Evaluating '$expression'")
     val location = thread.frame(depth).location
     val sourcePath = location.sourcePath
     val breakpointLine = location.lineNumber
@@ -68,8 +71,10 @@ private[internal] class ExpressionEvaluator(
           5.seconds
         )
       _ = {
-        if (!compiled)
+        if (!compiled) {
+          logger.debug(s"Failed compilation:\n${errors.mkString("\n")}")
           throw new ExpressionCompilationFailed(errors)
+        }
       }
       // if everything went smooth we can load our expression class
       namesArray <-

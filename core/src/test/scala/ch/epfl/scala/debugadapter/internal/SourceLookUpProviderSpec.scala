@@ -5,6 +5,7 @@ import coursier._
 import java.io.File
 import ch.epfl.scala.debugadapter.ClassPathEntry
 import ch.epfl.scala.debugadapter.SourceJar
+import ch.epfl.scala.debugadapter.NoopLogger
 
 object SourceLookUpProviderSpec extends TestSuite {
   def tests: Tests = Tests {
@@ -41,7 +42,7 @@ object SourceLookUpProviderSpec extends TestSuite {
         }
         .toSeq
 
-      for (_ <- 0 until 10) SourceLookUpProvider(classPath)
+      for (_ <- 0 until 10) SourceLookUpProvider(classPath, NoopLogger)
     }
   }
 

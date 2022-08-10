@@ -4,6 +4,7 @@ import ch.epfl.scala.debugadapter.ClassEntry
 import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 
 import java.net.URI
+import ch.epfl.scala.debugadapter.Logger
 
 private[debugadapter] final class SourceLookUpProvider(
     private[internal] val classPathEntries: Seq[ClassEntryLookUp],
@@ -56,15 +57,16 @@ private[debugadapter] final class SourceLookUpProvider(
 }
 
 private[debugadapter] object SourceLookUpProvider {
-  def apply(entries: Seq[ClassEntry]): SourceLookUpProvider = {
+  def apply(entries: Seq[ClassEntry], logger: Logger): SourceLookUpProvider = {
     val sourceEntries = entries.flatMap(_.sourceEntries).distinct
     val sourceFilesByEntry = sourceEntries.par
       .map(entry => entry -> SourceEntryLookUp.getAllSourceFiles(entry))
       .toMap
     val allLookUps = entries.par.map { entry =>
       ClassEntryLookUp(
-        entry.classSystems,
-        entry.sourceEntries.flatMap(sourceFilesByEntry.apply)
+        entry,
+        entry.sourceEntries.flatMap(sourceFilesByEntry.apply),
+        logger
       )
     }.seq
     val sourceUriToClassPathEntry = allLookUps

@@ -25,7 +25,12 @@ object DebugServerSpec extends TestSuite {
   def tests: Tests = Tests {
     "should prevent connection when closed" - {
       val runner = new MockDebuggeeRunner()
-      val server = DebugServer(runner, NoopLogger, gracePeriod = Duration.Zero)
+      val server = DebugServer(
+        runner,
+        new DebugServer.Address(),
+        NoopLogger,
+        gracePeriod = Duration.Zero
+      )
       server.close()
       try {
         TestDebugClient.connect(server.uri)
@@ -41,7 +46,12 @@ object DebugServerSpec extends TestSuite {
 
     "should start session when client connects" - {
       val runner = new MockDebuggeeRunner()
-      val server = DebugServer(runner, NoopLogger, gracePeriod = Duration.Zero)
+      val server = DebugServer(
+        runner,
+        new DebugServer.Address(),
+        NoopLogger,
+        gracePeriod = Duration.Zero
+      )
       val client = TestDebugClient.connect(server.uri)
       try {
         val session = server.connect()
@@ -56,7 +66,12 @@ object DebugServerSpec extends TestSuite {
 
     "should stop session when closed" - {
       val runner = new MockDebuggeeRunner()
-      val server = DebugServer(runner, NoopLogger, gracePeriod = Duration.Zero)
+      val server = DebugServer(
+        runner,
+        new DebugServer.Address(),
+        NoopLogger,
+        gracePeriod = Duration.Zero
+      )
       val client = TestDebugClient.connect(server.uri)
       try {
         val session = server.connect()
@@ -70,7 +85,12 @@ object DebugServerSpec extends TestSuite {
 
     "should initialize only one connection" - {
       val runner = new MockDebuggeeRunner()
-      val server = DebugServer(runner, NoopLogger, gracePeriod = Duration.Zero)
+      val server = DebugServer(
+        runner,
+        new DebugServer.Address(),
+        NoopLogger,
+        gracePeriod = Duration.Zero
+      )
       val client1 = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -96,7 +116,12 @@ object DebugServerSpec extends TestSuite {
 
     "should not launch if the debuggee has not started a jvm" - {
       val runner = new MockDebuggeeRunner()
-      val server = DebugServer(runner, NoopLogger, gracePeriod = Duration.Zero)
+      val server = DebugServer(
+        runner,
+        new DebugServer.Address(),
+        NoopLogger,
+        gracePeriod = Duration.Zero
+      )
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -110,7 +135,7 @@ object DebugServerSpec extends TestSuite {
 
     "should set debug address when debuggee starts the jvm" - {
       val runner = MainDebuggeeRunner.sleep()
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         val session = server.connect()
@@ -123,7 +148,12 @@ object DebugServerSpec extends TestSuite {
 
     "should respond failure to launch request if debugee throws an exception" - {
       val runner = new MockDebuggeeRunner()
-      val server = DebugServer(runner, NoopLogger, gracePeriod = Duration.Zero)
+      val server = DebugServer(
+        runner,
+        new DebugServer.Address(),
+        NoopLogger,
+        gracePeriod = Duration.Zero
+      )
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -138,7 +168,7 @@ object DebugServerSpec extends TestSuite {
 
     "should launch and send initialized event if the debuggee has started a jvm" - {
       val runner = MainDebuggeeRunner.sleep()
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -154,7 +184,7 @@ object DebugServerSpec extends TestSuite {
 
     "should send terminated events when closed" - {
       val runner = MainDebuggeeRunner.sleep()
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -172,7 +202,7 @@ object DebugServerSpec extends TestSuite {
 
     "should send output event when debuggee prints to stdout" - {
       val runner = MainDebuggeeRunner.helloWorld()
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -188,7 +218,7 @@ object DebugServerSpec extends TestSuite {
 
     "should send exited and terminated events when debuggee exits successfully" - {
       val runner = MainDebuggeeRunner.helloWorld()
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -208,7 +238,7 @@ object DebugServerSpec extends TestSuite {
 
     "should send exited and terminated events when debuggee exits in error" - {
       val runner = MainDebuggeeRunner.sysExit()
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -231,7 +261,7 @@ object DebugServerSpec extends TestSuite {
 
     "should support breakpoints in java classes" - {
       val runner = MainDebuggeeRunner.javaBreakpointTest()
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -273,7 +303,7 @@ object DebugServerSpec extends TestSuite {
 
     "should cancel debuggee after receiving disconnect request" - {
       val runner = new MockDebuggeeRunner()
-      val server = DebugServer(runner, NoopLogger)
+      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
       val client = TestDebugClient.connect(server.uri)
 
       try {

@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter.internal
 import ch.epfl.scala.debugadapter.MainDebuggeeRunner
 import ch.epfl.scala.debugadapter.ScalaVersion
 import utest._
+import ch.epfl.scala.debugadapter.NoopLogger
 
 object MetalsClassBreakpointSuite extends TestSuite {
   val tests = Tests {
@@ -177,7 +178,7 @@ object MetalsClassBreakpointSuite extends TestSuite {
         "Main", // incorrect but not used
         scalaVersion
       )
-      val lookUp = ClassEntryLookUp(runner.projectEntry)
+      val lookUp = ClassEntryLookUp(runner.projectEntry, NoopLogger)
 
       val sourceFile = runner.sourceFiles.head.toUri
 

@@ -6,6 +6,7 @@ import coursier.jvm.JvmCache
 import ch.epfl.scala.debugadapter.Coursier
 import ch.epfl.scala.debugadapter.JavaRuntime
 import ch.epfl.scala.debugadapter.ClassEntry
+import ch.epfl.scala.debugadapter.NoopLogger
 
 /**
  * This is a test class that also
@@ -186,7 +187,8 @@ object ClassEntryLookUpStats extends TestSuite {
       classCountAssertion: Int => Boolean,
       orphanAssertion: Int => Boolean
   ): Unit = {
-    val (duration, lookup) = Stats.timed(ClassEntryLookUp(entry))
+    val (duration, lookup) =
+      TimeUtils.timed(ClassEntryLookUp(entry, NoopLogger))
     val classCount = lookup.fullyQualifiedNames.size
     val orphanClassCount = lookup.orphanClassFiles.size
     println(s"$name:")

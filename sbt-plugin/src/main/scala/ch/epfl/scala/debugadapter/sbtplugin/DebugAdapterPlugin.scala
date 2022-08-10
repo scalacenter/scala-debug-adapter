@@ -24,6 +24,8 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContextExecutor
 import scala.util.Failure
 import scala.util.Success
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
 
 object DebugAdapterPlugin extends sbt.AutoPlugin {
   private final val DebugSessionStart: String = "debugSession/start"
@@ -200,7 +202,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val classPathEntries = InternalTasks.classPathEntries.value
       val javaRuntime = InternalTasks.javaRuntime.value
       val envVars = Keys.envVars.value
-      val logger = Keys.streams.value.log
+      val jobService = Keys.bgJobService.value
+      val scope = Keys.resolvedScoped.value
       val state = Keys.state.value
       val evaluationClassLoader =
         InternalTasks.tryResolveEvaluationClassLoader.value
@@ -246,7 +249,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           Keys.state.value.respondError(error.code, error.message)
           throw new MessageOnlyException(error.message)
         case Right(runner) =>
-          startServer(state, target, runner, logger)
+          startServer(jobService, scope, state, target, runner)
       }
     }
 
@@ -309,7 +312,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val testExec = (Keys.test / Keys.testExecution).value
       val parallelExec = (Keys.test / Keys.testForkedParallel).value
       val state = Keys.state.value
-      val logger = Keys.streams.value.log
+      val jobService = Keys.bgJobService.value
+      val scope = Keys.resolvedScoped.value
       val evaluationClassLoader =
         InternalTasks.tryResolveEvaluationClassLoader.value
 
@@ -390,7 +394,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           state.respondError(error.code, error.message)
           throw new MessageOnlyException(error.message)
         case Right(runner) =>
-          startServer(state, target, runner, logger)
+          startServer(jobService, scope, state, target, runner)
       }
     }
 
@@ -435,8 +439,10 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val evaluationClassLoader =
         InternalTasks.tryResolveEvaluationClassLoader.value
       val state = Keys.state.value
-      val logger = Keys.streams.value.log
+      val jobService = Keys.bgJobService.value
+      val scope = Keys.resolvedScoped.value
 
+      Keys.taskDefinitionKey
       val runner = new AttachRemoteRunner(
         target,
         scalaVersion,
@@ -444,23 +450,32 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         javaRuntime,
         evaluationClassLoader
       )
-      startServer(state, target, runner, logger)
+      startServer(jobService, scope, state, target, runner)
     }
 
   private def startServer(
+      jobService: BackgroundJobService,
+      scope: ScopedKey[_],
       state: State,
       target: BuildTargetIdentifier,
-      runner: DebuggeeRunner,
-      logger: sbt.util.Logger
+      runner: DebuggeeRunner
   ): URI = {
-    // if there is a server for this target then close it
-    debugServers.get(target).foreach(_.close())
-    val server =
-      DebugServer(runner, new LoggerAdapter(logger), autoCloseSession = true)
-    server.start()
-    debugServers.update(target, server)
-    state.respondEvent(DebugSessionAddress(server.uri))
-    server.uri
+    val address = new DebugServer.Address()
+    jobService.runInBackground(scope, state) { (logger, _) =>
+      // if there is a server for this target then close it
+      debugServers.get(target).foreach(_.close())
+      val server =
+        DebugServer(
+          runner,
+          address,
+          new LoggerAdapter(logger),
+          autoCloseSession = true
+        )
+      debugServers.update(target, server)
+      Await.result(server.start(), Duration.Inf)
+    }
+    state.respondEvent(DebugSessionAddress(address.uri))
+    address.uri
   }
 
   private def singleBuildTarget(
