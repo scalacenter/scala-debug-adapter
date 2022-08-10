@@ -4,7 +4,7 @@ import ch.epfl.scala.debugadapter.ClassEntry
 import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 import java.net.URI
 import ch.epfl.scala.debugadapter.Logger
-import ch.epfl.scala.debugadapter.internal.decompiler.scalasig.ScalaSig
+import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSig
 
 private[debugadapter] final class SourceLookUpProvider(
     private[internal] val classPathEntries: Seq[ClassEntryLookUp],

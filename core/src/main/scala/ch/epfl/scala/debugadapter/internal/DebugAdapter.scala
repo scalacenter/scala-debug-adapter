@@ -44,10 +44,13 @@ private[debugadapter] object DebugAdapter {
         classOf[IEvaluationProvider],
         EvaluationProvider(runner, sourceLookUpProvider, logger)
       )
-      context.registerProvider(classOf[ICompletionsProvider], CompletionsProvider)
+      context.registerProvider(
+        classOf[ICompletionsProvider],
+        CompletionsProvider
+      )
       context.registerProvider(
         classOf[IStepFilterProvider],
-        new StepFilterProvider(sourceLookUpProvider),
+        new StepFilterProvider(sourceLookUpProvider)
       )
       context
     }

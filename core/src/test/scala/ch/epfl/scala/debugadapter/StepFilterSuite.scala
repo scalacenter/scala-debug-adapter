@@ -419,7 +419,7 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
   )(breakpoints: Breakpoint*): Unit = {
     val runner =
       MainDebuggeeRunner.mainClassRunner(source, mainClass, scalaVersion)
-    val server = DebugServer(runner, NoopLogger)
+    val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
     val client = TestDebugClient.connect(server.uri, 20.seconds)
     try {
       server.connect()
