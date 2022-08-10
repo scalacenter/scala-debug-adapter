@@ -207,6 +207,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val state = Keys.state.value
       val evaluationClassLoader =
         InternalTasks.tryResolveEvaluationClassLoader.value
+      val javaOptions = (Keys.run / Keys.javaOptions).value
 
       val runner = for {
         json <- jsonParser.parsed
@@ -222,7 +223,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           outputStrategy = None,
           bootJars = Vector.empty[File],
           workingDirectory = Option(workingDirectory),
-          runJVMOptions = params.jvmOptions,
+          runJVMOptions = javaOptions.toVector ++ params.jvmOptions,
           connectInput = false,
           envVars = envVars ++ params.environmentVariables
             .flatMap(_.split("=", 2).toList match {
@@ -442,7 +443,6 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val jobService = Keys.bgJobService.value
       val scope = Keys.resolvedScoped.value
 
-      Keys.taskDefinitionKey
       val runner = new AttachRemoteRunner(
         target,
         scalaVersion,
