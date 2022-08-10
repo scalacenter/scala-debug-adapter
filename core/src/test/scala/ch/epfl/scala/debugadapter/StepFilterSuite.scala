@@ -48,7 +48,8 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
   object StepOut {
     def line(expectedLine: Int): StepOut = {
       StepOut { frame =>
-        assert(frame.line == expectedLine)
+        val obtainedLine = frame.line
+        assert(obtainedLine == expectedLine)
       }
     }
   }
@@ -83,10 +84,10 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
         breakpoint.steps.foreach { step =>
           step match {
             case StepInto(_) =>
-              println(s"\nStepping into, at line $currentLine")
+              println(s"Stepping into, at line $currentLine")
               client.stepIn(threadId)
             case StepOut(_) =>
-              println(s"\nStepping out, at line $currentLine")
+              println(s"Stepping out, at line $currentLine")
               client.stepOut(threadId)
           }
           client.stopped(8.seconds)

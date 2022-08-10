@@ -10,63 +10,43 @@ import com.sun.jdi.Method
 import com.sun.jdi.ReferenceType
 import com.sun.jdi.ClassType
 import com.sun.jdi.InterfaceType
+import com.sun.jdi.AbsentInformationException
 
 import scala.collection.JavaConverters._
 import ch.epfl.scala.debugadapter.Logger
 
 class StepFilterProvider(sourceLookUp: SourceLookUpProvider, logger: Logger)
     extends JavaStepFilterProvider() {
+
   override def skip(method: Method, filters: StepFilters): Boolean = {
-    if (method.isBridge || super.skip(method, filters)) {
-      true
-    } else if (
-      isJava(method) ||
-      isLocalMethod(method) ||
-      isLocalClass(method.declaringType)
-    ) {
-      false
-    } else if (isLazyInitializer(method)) {
-      val fieldName = method.name.dropRight(11)
-      method.declaringType match {
-        case cls: ClassType =>
-          cls.allInterfaces.asScala.exists(interface =>
-            containsLazyField(interface, fieldName)
-          )
-        case t =>
-          logger.warn(
-            s"Expected declaring type of $method to be a class, found ${t.getClass.getSimpleName}"
-          )
-          false
-      }
-    } else {
-      val fqcn = method.declaringType.name
-      val matchingMethods = for {
-        scalaSig <- sourceLookUp.getScalaSig(fqcn).toSeq
-        val isObject = fqcn.endsWith("$")
-        scalaMethod <- scalaSig.entries.toSeq
-          .collect { case m: MethodSymbol if m.isMethod => m }
-        if scalaMethod.parent.exists(p => p.isModule == isObject)
-        if matchSymbol(method, scalaMethod)
-      } yield scalaMethod
-
-      if (matchingMethods.size > 1) {
-        val formattedMethods =
-          matchingMethods.map(s => s"$s ${s.info.flags}: ${s.infoType}")
-        throw new Exception(
-          s"found ${matchingMethods.size} matching symbols: " + formattedMethods
-            .mkString(", ")
+    try {
+      if (method.isBridge) true
+      else if (isDynamicClass(method.declaringType)) true
+      else if (super.skip(method, filters)) true
+      else if (isJava(method)) false
+      else if (isLocalMethod(method)) false
+      else if (isLocalClass(method.declaringType)) false
+      else if (isLazyInitializer(method)) skipLazyInitializer(method)
+      else skipScalaMethod(method)
+    } catch {
+      case e: Exception =>
+        logger.error(
+          s"Failed to determine if ${method} should be skipped: ${e.getMessage}"
         )
-      }
-
-      val res = matchingMethods.headOption.forall(skip)
-
-      if (res) {
-        logger.debug(s"Skipping $method")
-      }
-
-      res
+        logger.trace(e)
+        false
     }
   }
+
+  private def isDynamicClass(tpe: ReferenceType): Boolean =
+    try {
+      tpe.sourceName()
+      false
+    } catch {
+      case _: AbsentInformationException =>
+        // We assume that a ReferenceType with no source name is necessarily a dynamic class
+        true
+    }
 
   private def isJava(method: Method): Boolean =
     method.declaringType.sourceName.endsWith(".java")
@@ -79,6 +59,50 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider, logger: Logger)
 
   private def isLazyInitializer(method: Method): Boolean =
     method.name.endsWith("$lzycompute")
+
+  private def skipLazyInitializer(method: Method): Boolean = {
+    val fieldName = method.name.dropRight(11)
+    method.declaringType match {
+      case cls: ClassType =>
+        cls.allInterfaces.asScala.exists(interface =>
+          containsLazyField(interface, fieldName)
+        )
+      case t =>
+        logger.warn(
+          s"Expected declaring type of $method to be a class, found ${t.getClass.getSimpleName}"
+        )
+        false
+    }
+  }
+
+  private def skipScalaMethod(method: Method): Boolean = {
+    val fqcn = method.declaringType.name
+    val matchingMethods = for {
+      scalaSig <- sourceLookUp.getScalaSig(fqcn).toSeq
+      val isObject = fqcn.endsWith("$")
+      scalaMethod <- scalaSig.entries.toSeq
+        .collect { case m: MethodSymbol if m.isMethod => m }
+      if scalaMethod.parent.exists(p => p.isModule == isObject)
+      if matchSymbol(method, scalaMethod)
+    } yield scalaMethod
+
+    if (matchingMethods.size > 1) {
+      val formattedMethods =
+        matchingMethods.map(s => s"$s ${s.info.flags}: ${s.infoType}")
+      throw new Exception(
+        s"Found ${matchingMethods.size} matching symbols: " + formattedMethods
+          .mkString(", ")
+      )
+    }
+
+    val res = matchingMethods.headOption.forall(skip)
+
+    if (res) {
+      logger.debug(s"Skipping $method")
+    }
+
+    res
+  }
 
   private def containsLazyField(
       interface: InterfaceType,

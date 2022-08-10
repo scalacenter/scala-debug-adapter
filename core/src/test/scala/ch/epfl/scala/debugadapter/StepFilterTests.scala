@@ -363,5 +363,21 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
         )
       )
     }
+
+    "should step in and out of a lambda" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val f = (x: Int) => x + 3
+           |    f(3)
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(6)(StepInto.line(5), StepOut.line(6))
+      )
+    }
   }
 }
