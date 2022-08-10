@@ -9,6 +9,7 @@ import ch.epfl.scala.debugadapter.internal.scalasig.TagGroups._
 import scala.annotation.switch
 import scala.reflect.ClassTag
 import scala.reflect.internal.pickling.PickleFormat._
+import ch.epfl.scala.debugadapter.Logger
 
 /**
  * Originally copied from https://github.com/JetBrains/intellij-scala
@@ -21,16 +22,19 @@ import scala.reflect.internal.pickling.PickleFormat._
 //Some parts of scala.reflect.internal.pickling.UnPickler used
 object Parser {
 
-  def parseScalaSig(bytes: Array[Byte], className: String): ScalaSig = {
+  def parseScalaSig(
+      bytes: Array[Byte],
+      className: String,
+      logger: Logger
+  ): ScalaSig = {
     try {
       new Builder(bytes).readAll()
     } catch {
       case ex: IOException =>
         throw ex
       case ex: Throwable =>
-        val message = s"Error parsing scala signature of $className"
-        System.err.println(message)
-        ex.printStackTrace()
+        logger.error(s"Error parsing scala signature of $className")
+        logger.trace(ex)
         throw ex
     }
   }

@@ -10,6 +10,7 @@ import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.AnnotationVisitor
 import org.objectweb.asm.Opcodes
+import ch.epfl.scala.debugadapter.Logger
 
 /**
  * Originally copied from https://github.com/JetBrains/intellij-scala
@@ -23,14 +24,15 @@ private[internal] object Decompiler {
 
   private val ScalaSigBytes = "ScalaSig".getBytes(UTF_8)
 
-  def decompile(classFile: ClassFile): Option[ScalaSig] = {
+  def decompile(classFile: ClassFile, logger: Logger): Option[ScalaSig] = {
     val bytes = classFile.readBytes()
-    decompile(bytes, classFile.fullyQualifiedName)
+    decompile(bytes, classFile.fullyQualifiedName, logger)
   }
 
   private[internal] def decompile(
       classBytes: Array[Byte],
-      fqcn: String
+      fqcn: String,
+      logger: Logger
   ): Option[ScalaSig] = {
     if (!containsMarker(classBytes)) return None
 
@@ -78,24 +80,7 @@ private[internal] object Decompiler {
     if (scalaAnnotations.isEmpty) None
     else {
       val decoded = decode(scalaAnnotations.toList.map(_.getBytes()))
-      Some(Parser.parseScalaSig(decoded, fqcn))
-    }
-  }
-
-  private def tryDecompileSigFile(
-      fileName: String,
-      bytes: Array[Byte]
-  ): Option[String] = {
-    try {
-      val scalaSig = Parser.parseScalaSig(bytes, fileName)
-      val isPackageObject = fileName == "package.sig"
-      val sourceNameGuess = fileName.stripSuffix(".sig") + ".scala"
-
-      decompiledText(scalaSig, fileName, isPackageObject)
-    } catch {
-      case e: Exception =>
-        // not every `.sig` file is a scala signature file
-        None
+      Some(Parser.parseScalaSig(decoded, fqcn, logger))
     }
   }
 

@@ -50,7 +50,7 @@ private[debugadapter] object DebugAdapter {
       )
       context.registerProvider(
         classOf[IStepFilterProvider],
-        new StepFilterProvider(sourceLookUpProvider)
+        new StepFilterProvider(sourceLookUpProvider, logger)
       )
       context
     }

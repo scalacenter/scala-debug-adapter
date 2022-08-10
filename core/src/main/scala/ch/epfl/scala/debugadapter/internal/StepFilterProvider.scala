@@ -12,8 +12,9 @@ import com.sun.jdi.ClassType
 import com.sun.jdi.InterfaceType
 
 import scala.collection.JavaConverters._
+import ch.epfl.scala.debugadapter.Logger
 
-class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
+class StepFilterProvider(sourceLookUp: SourceLookUpProvider, logger: Logger)
     extends JavaStepFilterProvider() {
   override def skip(method: Method, filters: StepFilters): Boolean = {
     if (method.isBridge || super.skip(method, filters)) {
@@ -31,8 +32,10 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
           cls.allInterfaces.asScala.exists(interface =>
             containsLazyField(interface, fieldName)
           )
-        case _ =>
-          // TODO should warn
+        case t =>
+          logger.warn(
+            s"Expected declaring type of $method to be a class, found ${t.getClass.getSimpleName}"
+          )
           false
       }
     } else {
@@ -58,7 +61,7 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
       val res = matchingMethods.headOption.forall(skip)
 
       if (res) {
-        println(s"Skipping $method")
+        logger.debug(s"Skipping $method")
       }
 
       res
@@ -107,13 +110,13 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
       scalaMethod: MethodSymbol
   ): Boolean = {
     if (scalaMethod.aliasRef.nonEmpty)
-      println(
+      logger.debug(
         s"aliasRef for ${scalaMethod.name}: ${scalaMethod.aliasRef}"
       )
     if (scalaMethod.isSyntheticMethod)
-      println(s"${scalaMethod.name} isSyntheticMethod")
+      logger.debug(s"${scalaMethod.name} isSyntheticMethod")
     if (scalaMethod.isMonomorphic)
-      println(s"${scalaMethod.name} isMonomorphic")
+      logger.debug(s"${scalaMethod.name} isMonomorphic")
 
     javaMethod.name == scalaMethod.name &&
     matchArguments(javaMethod, scalaMethod.infoType) &&
@@ -124,7 +127,6 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider)
       javaClass: ReferenceType,
       scalaOwner: Symbol
   ): Boolean = {
-    // println(s"matchOwner(${javaClass.name()}, ${scalaOwner.name})")
     val fqcn = javaClass.name()
     // TODO improve
     getOwners(scalaOwner).reverse

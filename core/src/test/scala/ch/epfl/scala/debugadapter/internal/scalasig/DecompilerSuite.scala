@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter.internal.scalasig
 import utest._
 import ch.epfl.scala.debugadapter.MainDebuggeeRunner
 import ch.epfl.scala.debugadapter.ScalaVersion
+import ch.epfl.scala.debugadapter.NoopLogger
 
 object Scala212DecompilerTests extends DecompilerSuite(ScalaVersion.`2.12`)
 object Scala213DecompilerTests extends DecompilerSuite(ScalaVersion.`2.13`)
@@ -109,7 +110,7 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
       assertion: ScalaSig => Unit
   ): Unit = {
     val classBytes = runner.projectEntry.readBytes(classFile)
-    val scalaSig = Decompiler.decompile(classBytes, classFile)
+    val scalaSig = Decompiler.decompile(classBytes, classFile, NoopLogger)
     assert(scalaSig.isDefined)
     assertion(scalaSig.get)
   }
@@ -119,7 +120,7 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
       classFile: String
   ): Unit = {
     val classBytes = runner.projectEntry.readBytes(classFile)
-    val scalaSig = Decompiler.decompile(classBytes, classFile)
+    val scalaSig = Decompiler.decompile(classBytes, classFile, NoopLogger)
     assert(scalaSig.isEmpty)
   }
 

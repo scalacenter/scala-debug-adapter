@@ -35,7 +35,8 @@ private class ClassEntryLookUp(
     sourceUriToClassFiles: Map[URI, Seq[ClassFile]],
     classNameToSourceFile: Map[String, SourceFile],
     missingSourceFileClassFiles: Seq[ClassFile],
-    private[internal] val orphanClassFiles: Seq[ClassFile]
+    private[internal] val orphanClassFiles: Seq[ClassFile],
+    logger: Logger
 ) {
   private val cachedSourceLines = mutable.Map[SourceLine, Seq[ClassFile]]()
 
@@ -135,7 +136,7 @@ private class ClassEntryLookUp(
     def fromClass = for {
       classFile <- getClassFile(fqcn)
       if classFile.sourceName.exists(_.endsWith(".scala"))
-      scalaSig <- Decompiler.decompile(classFile)
+      scalaSig <- Decompiler.decompile(classFile, logger)
     } yield scalaSig
 
     def fromSource = {
@@ -145,7 +146,7 @@ private class ClassEntryLookUp(
           if sourceFile.toString.endsWith(".scala")
           classFile <- getClassFiles(sourceFile)
           if fqcn.startsWith(classFile.fullyQualifiedName + "$")
-          scalaSig <- Decompiler.decompile(classFile)
+          scalaSig <- Decompiler.decompile(classFile, logger)
         } yield scalaSig
       if (scalaSigs.size > 1)
         throw new Exception(s"More than one ScalaSig found for $fqcn")
@@ -157,14 +158,15 @@ private class ClassEntryLookUp(
 }
 
 private object ClassEntryLookUp {
-  private def empty: ClassEntryLookUp =
+  private def empty(logger: Logger): ClassEntryLookUp =
     new ClassEntryLookUp(
       Map.empty,
       Map.empty,
       Map.empty,
       Map.empty,
       Seq.empty,
-      Seq.empty
+      Seq.empty,
+      logger
     )
 
   private[internal] def apply(
@@ -181,7 +183,7 @@ private object ClassEntryLookUp {
       sourceFiles: Seq[SourceFile],
       logger: Logger
   ): ClassEntryLookUp = {
-    if (sourceFiles.isEmpty) ClassEntryLookUp.empty
+    if (sourceFiles.isEmpty) ClassEntryLookUp.empty(logger)
     else {
       val classFiles = entry.classSystems.flatMap { classSystem =>
         classSystem
@@ -272,7 +274,8 @@ private object ClassEntryLookUp {
         sourceUriToClassFiles.toMap,
         classNameToSourceFile.toMap,
         missingSourceFileClassFiles,
-        orphanClassFiles
+        orphanClassFiles,
+        logger
       )
     }
   }
