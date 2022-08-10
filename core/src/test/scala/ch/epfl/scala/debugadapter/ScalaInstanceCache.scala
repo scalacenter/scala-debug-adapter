@@ -31,7 +31,8 @@ case class ScalaInstance(
       "-d",
       classDir.toString,
       "-classpath",
-      classPath.map(_.absolutePath).mkString(File.pathSeparator)
+      classPath.map(_.absolutePath).mkString(File.pathSeparator),
+      "-deprecation"
     ) ++ sourceFiles.map(_.toString)
     scalaVersion match {
       case Scala2(_) => compileScala2(args)

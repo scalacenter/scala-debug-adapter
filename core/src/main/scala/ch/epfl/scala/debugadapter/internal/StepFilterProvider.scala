@@ -201,6 +201,7 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider, logger: Logger)
       case m: NullaryMethodType => Seq.empty
       case m: PolyType => extractParameters(m.typeRef.get)
       case _: TypeRefType => Seq.empty
+      case _: ThisType => Seq.empty
       case other =>
         val className = other.getClass.getSimpleName()
         throw new Exception(s"unexpected type found: $className")

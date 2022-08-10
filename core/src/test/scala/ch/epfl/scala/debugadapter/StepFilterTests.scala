@@ -379,5 +379,31 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
         Breakpoint(6)(StepInto.line(5), StepOut.line(6))
       )
     }
+
+    "should step in method that return this.type" - {
+      val source =
+        """|package example
+           |
+           |class A {
+           |  def m(): this.type = this
+           |}
+           |
+           |class B extends A
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = new A
+           |    a.m()
+           |
+           |    val b = new B
+           |    b.m()
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(12)(StepInto.line(4)),
+        Breakpoint(15)(StepInto.line(4))
+      )
+    }
   }
 }
