@@ -26,6 +26,7 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider, logger: Logger)
       else if (isJava(method)) false
       else if (isLocalMethod(method)) false
       else if (isLocalClass(method.declaringType)) false
+      else if (isDefaultValue(method)) false
       else if (isLazyInitializer(method)) skipLazyInitializer(method)
       else skipScalaMethod(method)
     } catch {
@@ -52,10 +53,13 @@ class StepFilterProvider(sourceLookUp: SourceLookUpProvider, logger: Logger)
     method.declaringType.sourceName.endsWith(".java")
 
   private def isLocalMethod(method: Method): Boolean =
-    method.name().contains("$anonfun$")
+    method.name.contains("$anonfun$")
+
+  private def isDefaultValue(method: Method): Boolean =
+    method.name.contains("$default$")
 
   private def isLocalClass(tpe: ReferenceType): Boolean =
-    tpe.name().contains("$anon$")
+    tpe.name.contains("$anon$")
 
   private def isLazyInitializer(method: Method): Boolean =
     method.name.endsWith("$lzycompute")

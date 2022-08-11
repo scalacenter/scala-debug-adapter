@@ -405,5 +405,49 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
         Breakpoint(15)(StepInto.line(4))
       )
     }
+
+    "should step into default value method" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    new A; new B
+           |    m("foo")
+           |    A()
+           |    new B()
+           |  }
+           |
+           |  def m(x: String = "", y: Int = 2): String = {
+           |    x * 2
+           |  }
+           |}
+           |
+           |case class A(a1: String = "", y: Int = 2)
+           |
+           |class B(b: String = B.default)
+           |
+           |object B {
+           | def default: String = "b"
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(6)(StepInto.line(11), StepInto.line(6), StepInto.line(12)),
+        Breakpoint(7)(
+          StepInto.line(16),
+          StepInto.line(7),
+          StepInto.line(16),
+          StepInto.line(7),
+          StepInto.line(16)
+        ),
+        Breakpoint(8)(
+          StepInto.line(18),
+          StepInto.line(21),
+          StepOut.line(18),
+          StepOut.line(8),
+          StepInto.line(18)
+        )
+      )
+    }
   }
 }
