@@ -33,10 +33,9 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
       val runner =
         MainDebuggeeRunner.mainClassRunner(source, "", scalaVersion)
 
-      decompile(runner, "example/A.class") { scalaSig =>
-        val methods = scalaSig.entries.collect { case m: MethodSymbol => m }
-        assert(methods.size == 2) // init and m
-      }
+      val scalaSig = decompile(runner, "example/A.class")
+      val methods = scalaSig.entries.collect { case m: MethodSymbol => m }
+      assert(methods.size == 2) // init and m
 
       assertNoScalaSig(runner, "example/A$B$1$.class")
       assertNoScalaSig(runner, "example/A$C$1.class")
@@ -58,15 +57,13 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
       val runner =
         MainDebuggeeRunner.mainClassRunner(source, "", scalaVersion)
 
-      decompile(runner, "example/A.class") { scalaSig =>
-        val methods = scalaSig.entries.collect { case m: MethodSymbol => m }
-        assert(methods.size == 2) // init and a
-      }
+      val scalaSigA = decompile(runner, "example/A.class")
+      val methodsA = scalaSigA.entries.collect { case m: MethodSymbol => m }
+      assert(methodsA.size == 2) // init and a
 
-      decompile(runner, "example/B.class") { scalaSig =>
-        val methods = scalaSig.entries.collect { case m: MethodSymbol => m }
-        assert(methods.size == 2) // init and b
-      }
+      val scalaSigB = decompile(runner, "example/B.class")
+      val methodsB = scalaSigB.entries.collect { case m: MethodSymbol => m }
+      assert(methodsB.size == 2) // init and b
     }
 
     "decompiles a case class" - {
@@ -78,41 +75,41 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
       val runner =
         MainDebuggeeRunner.mainClassRunner(source, "", scalaVersion)
 
-      decompile(runner, "example/A.class") { scalaSig =>
-        val methods =
-          scalaSig.entries
-            .collect { case m: MethodSymbol => m }
-            .filter(m => m.isMethod)
-            .toSeq
+      val scalaSig = decompile(runner, "example/A.class")
+      val methods =
+        scalaSig.entries
+          .collect { case m: MethodSymbol => m }
+          .filter(m => m.isMethod)
+          .toSeq
 
-        val (methodsOfObject, methodsOfClass) =
-          methods.partition(m => m.parent.get.isModule)
+      val (methodsOfObject, methodsOfClass) =
+        methods.partition(m => m.parent.get.isModule)
 
-        val (syntheticMethods, nonSyntheticMethods) =
-          methodsOfClass.partition(m => m.isSynthetic)
-        assert(nonSyntheticMethods.size == 2) // init and getter
+      val (syntheticMethods, nonSyntheticMethods) =
+        methodsOfClass.partition(m => m.isSynthetic)
+      assert(nonSyntheticMethods.size == 2) // init and getter
 
-        val syntheticMethodCount = if (isScala212) 10 else 11
-        assert(
-          syntheticMethods.size == syntheticMethodCount
-        ) // copy, toString, equals, hashCode, productArity...
+      val syntheticMethodCount = if (isScala212) 10 else 11
+      assert(
+        syntheticMethods.size == syntheticMethodCount
+      ) // copy, toString, equals, hashCode, productArity...
 
-        assert(
-          methodsOfObject.size == 5
-        ) // init, apply, unapply, toString and writeReplace
-      }
+      assert(
+        methodsOfObject.size == 5
+      ) // init, apply, unapply, toString and writeReplace
 
       assertNoScalaSig(runner, "example/A$.class")
     }
   }
 
-  private def decompile(runner: MainDebuggeeRunner, classFile: String)(
-      assertion: ScalaSig => Unit
-  ): Unit = {
+  private def decompile(
+      runner: MainDebuggeeRunner,
+      classFile: String
+  ): ScalaSig = {
     val classBytes = runner.projectEntry.readBytes(classFile)
     val scalaSig = Decompiler.decompile(classBytes, classFile, NoopLogger)
     assert(scalaSig.isDefined)
-    assertion(scalaSig.get)
+    scalaSig.get
   }
 
   private def assertNoScalaSig(

@@ -61,6 +61,5 @@ object SourceLookUpProviderStats extends TestSuite {
       println(s"  - $orphanClassCount orphan classes ($orphanClassPercent%)")
     }
     assert(classCount == expectedClasses, orphanClassCount == expectedOrphans)
-
   }
 }

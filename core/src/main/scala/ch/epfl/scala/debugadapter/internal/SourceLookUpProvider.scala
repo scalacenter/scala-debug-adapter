@@ -46,6 +46,9 @@ private[debugadapter] final class SourceLookUpProvider(
     }
   }
 
+  def containsClass(fqcn: String): Boolean =
+    fqcnToClassPathEntry.contains(fqcn)
+
   private[internal] def allClassNames: Iterable[String] =
     classPathEntries.flatMap(_.fullyQualifiedNames)
   private[internal] def allOrphanClasses: Iterable[ClassFile] =

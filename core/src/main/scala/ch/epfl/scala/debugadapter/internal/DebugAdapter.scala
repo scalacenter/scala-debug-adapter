@@ -50,7 +50,11 @@ private[debugadapter] object DebugAdapter {
       )
       context.registerProvider(
         classOf[IStepFilterProvider],
-        new StepFilterProvider(sourceLookUpProvider, logger)
+        new StepFilterProvider(
+          sourceLookUpProvider,
+          runner.scalaVersion,
+          logger
+        )
       )
       context
     }

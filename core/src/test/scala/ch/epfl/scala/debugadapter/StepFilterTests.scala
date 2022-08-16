@@ -1,12 +1,15 @@
 package ch.epfl.scala.debugadapter
 
 import utest._
+import scala.tools.ant.sabbus.Break
 
 object Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
 object Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`)
 
 abstract class StepFilterTests(scalaVersion: ScalaVersion)
     extends StepFilterSuite(scalaVersion) {
+
+  def isScala213: Boolean = scalaVersion.version.startsWith("2.13")
 
   def tests: Tests = Tests {
     "should not step into mixin forwarder" - {
@@ -445,7 +448,143 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
           StepInto.line(21),
           StepOut.line(18),
           StepOut.line(8),
-          StepInto.line(18)
+          StepInto.method("B.<init>(String)")
+        )
+      )
+    }
+
+    "should match method on parameters and return type" - {
+      val source =
+        """|package example
+           |
+           |trait A {
+           |  def m(xs: List[Int]): Int = xs.sum
+           |}
+           |
+           |class B extends A {
+           |  def m(xs: List[String]): String = xs.mkString(", ")
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val b = new B
+           |    val strings = List("a", "b", "c")
+           |    val ints = List(1, 2, 3)
+           |    b.m(strings)
+           |    b.m(ints)
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(16)(StepInto.line(8)),
+        Breakpoint(17)(StepInto.line(4))
+      )
+    }
+
+    "should match all kinds of types" - {
+      // To determine if a method should be stepped into, the StepFilterProvider tries to find the Scala method
+      // whose signature could match the one of the runtime method, from the class file.
+      // In this test we check that all kind of Scala types can match their Java counterpart.
+      val source =
+        """|package example
+           |
+           |class annot
+           |  extends scala.annotation.Annotation
+           |  with scala.annotation.StaticAnnotation
+           |
+           |trait A {
+           |  class B
+           |}
+           |
+           |object Main extends A {
+           |  class B
+           |  def m(a : example.A): example.A = a
+           |  def mbis(b: A#B): A#B = b
+           |  def mbis(a: A)(b: a.B): a.B = b
+           |  def m(a: this.type): this.type = a
+           |  def mter(b: Main.super[A].B): Main.super[A].B = b
+           |  def mbis(a: A { def b: B }): A { def b: B } = a
+           |  def m(x: String @annot): String @annot = x
+           |  def m(x: Either[Int, X] forSome { type X }): Either[Y, Int] forSome { type Y } = x.swap
+           |  def m[T](x: T): T = x
+           |  def mbis(a: Main.type): Main.type = a
+           |
+           |  def main(args: Array[String]): Unit = {
+           |    m(Main: A): A
+           |    val b0: super[A].B = new super[A].B
+           |    mbis(b0)
+           |    val a1: A = Main
+           |    val b1: a1.B = new a1.B
+           |    mbis(a1)(b1)
+           |    m(Main)
+           |    mter(b0)
+           |    val a2 = new A { def b: B = new B } 
+           |    mbis(a2)
+           |    m("foo")
+           |    val x = Right(2)
+           |    m(x)
+           |    m(5)
+           |    mbis(Main)
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(25)(StepInto.line(13)),
+        Breakpoint(27)(StepInto.line(14)),
+        Breakpoint(30)(StepInto.line(15)),
+        Breakpoint(31)(StepInto.line(16)),
+        Breakpoint(32)(StepInto.line(17)),
+        Breakpoint(34)(StepInto.line(18)),
+        Breakpoint(35)(StepInto.line(19)),
+        Breakpoint(37)(StepInto.line(20)),
+        Breakpoint(38)(
+          StepInto.file("BoxesRunTime.java"),
+          StepOut.line(38),
+          StepInto.line(21)
+        ),
+        Breakpoint(39)(StepInto.line(22))
+      )
+    }
+
+    "step into method with constant result type" - {
+      if (isScala213) {
+        val source =
+          """|package example
+             |
+             |object Main {
+             |  def m(x: "a"): 1 = 1
+             |  
+             |  def main(args: Array[String]): Unit = {
+             |    m("a")
+             |  }
+             |}
+             |""".stripMargin
+        assertInMainClass(source, "example.Main")(
+          Breakpoint(7)(StepInto.line(4))
+        )
+      }
+    }
+
+    "step into method with alias result type" - {
+      val source =
+        """|package example
+           |
+           |class A
+           |
+           |object Main {
+           |  type Foo = A
+           |  type Bar = String
+           |  def m(x: Foo): Bar  = x.toString
+           |  
+           |  def main(args: Array[String]): Unit = {
+           |    val foo = new A
+           |    m(foo)
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(12)(
+          StepInto.line(8)
         )
       )
     }

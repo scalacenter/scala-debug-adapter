@@ -56,12 +56,14 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
 
   protected def assertInMainClass(
       source: String,
-      mainClass: String
+      mainClass: String,
+      logger: Logger = NoopLogger,
+      timeout: Duration = 8.seconds
   )(breakpoints: Breakpoint*): Unit = {
     val runner =
       MainDebuggeeRunner.mainClassRunner(source, mainClass, scalaVersion)
-    val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
-    val client = TestDebugClient.connect(server.uri, 20.seconds)
+    val server = DebugServer(runner, new DebugServer.Address(), logger)
+    val client = TestDebugClient.connect(server.uri)
     try {
       server.connect()
       client.initialize()
@@ -90,9 +92,10 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
               println(s"Stepping out, at line $currentLine")
               client.stepOut(threadId)
           }
-          client.stopped(8.seconds)
+          client.stopped(timeout)
           val stackTrace = client.stackTrace(threadId)
           val topFrame = stackTrace.stackFrames.head
+          // println(s"Stepped into ${topFrame.name}")
           currentLine = topFrame.line
           step.assert(topFrame)
         }
