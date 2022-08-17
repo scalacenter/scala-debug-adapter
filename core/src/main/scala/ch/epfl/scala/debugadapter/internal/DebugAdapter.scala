@@ -20,7 +20,11 @@ private[debugadapter] object DebugAdapter {
    */
   DebugSettings.getCurrent.showStaticVariables = true
 
-  def context(runner: DebuggeeRunner, logger: Logger): IProviderContext = {
+  def context(
+      runner: DebuggeeRunner,
+      logger: Logger,
+      testMode: Boolean
+  ): IProviderContext = {
     TimeUtils.logTime(logger, "Configured debugger") {
       val context = new ProviderContext
       val sourceLookUpProvider = SourceLookUpProvider(
@@ -53,7 +57,8 @@ private[debugadapter] object DebugAdapter {
         new StepFilterProvider(
           sourceLookUpProvider,
           runner.scalaVersion,
-          logger
+          logger,
+          testMode
         )
       )
       context

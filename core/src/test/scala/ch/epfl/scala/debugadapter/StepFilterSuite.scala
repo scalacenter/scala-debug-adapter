@@ -62,7 +62,8 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
   )(breakpoints: Breakpoint*): Unit = {
     val runner =
       MainDebuggeeRunner.mainClassRunner(source, mainClass, scalaVersion)
-    val server = DebugServer(runner, new DebugServer.Address(), logger)
+    val server =
+      DebugServer(runner, new DebugServer.Address(), logger, testMode = true)
     val client = TestDebugClient.connect(server.uri)
     try {
       server.connect()

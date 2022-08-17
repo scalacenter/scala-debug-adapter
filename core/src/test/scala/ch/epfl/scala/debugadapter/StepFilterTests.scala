@@ -647,5 +647,70 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
         Breakpoint(21)(StepInto.line(9))
       )
     }
+
+    "step into method with external nested class" - {
+      val source =
+        """|package example
+           |
+           |object WeekDay extends Enumeration {
+           |  type WeekDay = Value
+           |  val Mon, Tue, Wed, Thu, Fri, Sat, Sun = Value
+           |}
+           |
+           |object Main {
+           |  def today(): Enumeration#Value = WeekDay.Mon
+           |
+           |  def main(args: Array[String]): Unit = {
+           |    today()
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(12)(StepInto.line(9))
+      )
+    }
+
+    "step into method with external nested class" - {
+      val source =
+        """|package example
+           |
+           |object WeekDay extends Enumeration {
+           |  type WeekDay = Value
+           |  val Mon, Tue, Wed, Thu, Fri, Sat, Sun = Value
+           |}
+           |
+           |object Main {
+           |  def today(): Enumeration#Value = WeekDay.Mon
+           |
+           |  def main(args: Array[String]): Unit = {
+           |    today()
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(12)(StepInto.line(9))
+      )
+    }
+
+    "should match Null and Nothing" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def m(xs: Array[Int]): Nothing = ???
+           |  def m(xs: Array[String]): Null = null
+           |
+           |  def main(args: Array[String]): Unit = {
+           |    val ints = Array(1, 2)
+           |    m(args)
+           |    m(ints)
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(9)(StepInto.line(5)),
+        Breakpoint(10)(StepInto.line(4))
+      )
+    }
   }
 }

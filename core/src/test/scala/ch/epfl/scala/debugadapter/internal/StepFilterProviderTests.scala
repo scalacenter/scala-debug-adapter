@@ -54,7 +54,12 @@ abstract class StepFilterProviderTests(scalaVersion: ScalaVersion)
            |""".stripMargin
       val runner = MainDebuggeeRunner.mainClassRunner(source, "", scalaVersion)
       val stepFilter =
-        new StepFilterProvider(null, scalaVersion.version, NoopLogger)
+        new StepFilterProvider(
+          null,
+          scalaVersion.version,
+          NoopLogger,
+          testMode = true
+        )
 
       val scalaSig = decompile(runner, "example/Main.class")
       val methods = scalaSig.entries
@@ -99,7 +104,12 @@ abstract class StepFilterProviderTests(scalaVersion: ScalaVersion)
         val runner =
           MainDebuggeeRunner.mainClassRunner(source, "", scalaVersion)
         val stepFilter =
-          new StepFilterProvider(null, scalaVersion.version, NoopLogger)
+          new StepFilterProvider(
+            null,
+            scalaVersion.version,
+            NoopLogger,
+            testMode = true
+          )
 
         val scalaSig = decompile(runner, "example/Main.class")
         val method = scalaSig.entries
@@ -120,7 +130,12 @@ abstract class StepFilterProviderTests(scalaVersion: ScalaVersion)
         PrintLogger
       )
       val stepFilter =
-        new StepFilterProvider(sourceLookUp, scalaVersion.version, NoopLogger)
+        new StepFilterProvider(
+          sourceLookUp,
+          scalaVersion.version,
+          NoopLogger,
+          testMode = true
+        )
 
       stepFilter.scalaAliasesToJavaTypes.values.foreach { javaClass =>
         assert(sourceLookUp.containsClass(javaClass))

@@ -14,7 +14,8 @@ import ch.epfl.scala.debugadapter.Logger
 class StepFilterProvider(
     sourceLookUp: SourceLookUpProvider,
     scalaVersion: String,
-    logger: Logger
+    logger: Logger,
+    testMode: Boolean
 ) extends JavaStepFilterProvider() {
 
   override def skip(method: jdi.Method, filters: StepFilters): Boolean = {
@@ -30,10 +31,13 @@ class StepFilterProvider(
       else skipScalaMethod(method)
     } catch {
       case e: Exception =>
-        logger.error(
-          s"Failed to determine if ${method} should be skipped: ${e.getMessage}"
-        )
-        logger.trace(e)
+        if (testMode) throw e
+        else {
+          logger.error(
+            s"Failed to determine if ${method} should be skipped: ${e.getMessage}"
+          )
+          logger.trace(e)
+        }
         false
     }
   }
@@ -71,10 +75,13 @@ class StepFilterProvider(
           containsLazyField(interface, fieldName)
         )
       case t =>
-        logger.warn(
+        val message =
           s"Expected declaring type of $method to be a class, found ${t.getClass.getSimpleName}"
-        )
-        false
+        if (testMode) throw new Exception(message)
+        else {
+          logger.warn(message)
+          false
+        }
     }
   }
 
@@ -96,15 +103,16 @@ class StepFilterProvider(
       )
       val printer = new ScalaSigPrinter(builder)
       matchingMethods.foreach(printer.printSymbol)
-      logger.warn(builder.toString)
+
+      if (testMode) {
+        throw new Exception(builder.toString)
+      } else {
+        logger.warn(builder.toString)
+      }
     }
 
     val res = matchingMethods.headOption.forall(skip)
-
-    if (res) {
-      logger.debug(s"Skipping $method")
-    }
-
+    if (res) logger.debug(s"Skipping $method")
     res
   }
 
@@ -152,6 +160,7 @@ class StepFilterProvider(
       javaClass: jdi.ReferenceType,
       scalaClass: Symbol
   ): Boolean = {
+    // TODO try use tryEncode
     getOwners(scalaClass)
       .foldRight(Option(javaClass.name)) { (sym, acc) =>
         for (javaName <- acc if javaName.contains(sym.name)) yield {
@@ -264,8 +273,12 @@ class StepFilterProvider(
       case ExistentialType(typeRef, paramRefs) =>
         matchType(javaType, typeRef.get, declaringType)
       case other =>
-        logger.warn(s"Unexpected type found: ${other.getClass.getSimpleName}")
-        true
+        val message = s"Unexpected type found: ${other.getClass.getSimpleName}"
+        if (testMode) throw new Exception(message)
+        else {
+          logger.warn(message)
+          true
+        }
     }
   }
 
@@ -283,6 +296,8 @@ class StepFilterProvider(
 
   private[internal] val scalaAliasesToJavaTypes = {
     Map(
+      "scala.Nothing" -> "scala.runtime.Nothing$",
+      "scala.Null" -> "scala.runtime.Null$",
       "scala.Any" -> "java.lang.Object",
       "scala.AnyRef" -> "java.lang.Object",
       "scala.Predef.String" -> "java.lang.String",
@@ -364,11 +379,11 @@ class StepFilterProvider(
     val path = sym.path
     sym match {
       case TypeSymbol(info) =>
-        val lowerBound = info.info.get match {
-          case TypeBoundsType(lower, upper) => lower.get
+        val upperBound = info.info.get match {
+          case TypeBoundsType(lower, upper) => upper.get
           case other => other
         }
-        matchType(javaType, lowerBound, declaringType)
+        matchType(javaType, upperBound, declaringType)
       case AliasSymbol(info) =>
         val tpe = info.info.get
         matchType(javaType, tpe, declaringType)
@@ -379,33 +394,43 @@ class StepFilterProvider(
         } else if (scalaToJavaTypes.contains(path)) {
           // sym is a primitive or a type alias from the Scala library
           javaType.name == scalaToJavaTypes(path)
-        } else if (sourceLookUp.containsClass(encoded)) {
-          // sym is a real top level class
-          javaType.name == encoded
         } else {
-          // the symbol is not know by the class loader
-          // if it is a type alias, we don't know if it matches the java type
-          // so we return true, not to skip a method that should not be skipped
-          true
+          lazy val ifEmpty =
+            if (testMode) {
+              throw new Exception(s"Empty encoded value for $path")
+            } else {
+              // if the symbol cannot be encoded, we return true
+              // because we don't want to skip a method that should not be skipped
+              true
+            }
+          encoded.fold(ifEmpty)(_ == javaType.name)
         }
     }
   }
 
-  private def tryEncodeType(sym: Symbol): String = {
-    def encodePrefix(sym: Symbol): String = {
+  private def tryEncodeType(sym: Symbol): Option[String] = {
+    def encodePrefix(sym: Symbol): Option[String] = {
       sym match {
-        case NoSymbol => ""
+        case NoSymbol => Some("")
         case _: ExternalSymbol =>
-          // we weakly assume it is a package
-          // TODO use sourceLookUp to determine if its a package or a class
-          sym.parent.map(encodePrefix).getOrElse("") + sym.name + "."
-        case _ => sym.parent.map(encodePrefix).getOrElse("") + sym.name + "$"
+          val prefix =
+            sym.parent.fold(Option(""))(encodePrefix).map(_ + sym.name)
+          prefix.map { prefix =>
+            // if the encoded name of the symbol is not known by the sourceLookUp, we assume it is a package
+            if (sourceLookUp.containsClass(prefix)) prefix + "$"
+            else prefix + "."
+          }
+        case _ =>
+          val prefix =
+            sym.parent.map(encodePrefix).getOrElse("") + sym.name + "$"
+          Some(prefix).filter(sourceLookUp.containsClass)
       }
     }
-    sym match {
+    val encoded = sym match {
       case obj: ObjectSymbol =>
-        obj.parent.map(encodePrefix).getOrElse("") + obj.name + "$"
-      case _ => sym.parent.map(encodePrefix).getOrElse("") + sym.name
+        obj.parent.fold(Option(""))(encodePrefix).map(_ + obj.name + "$")
+      case _ => sym.parent.fold(Option(""))(encodePrefix).map(_ + sym.name)
     }
+    encoded.filter(sourceLookUp.containsClass)
   }
 }

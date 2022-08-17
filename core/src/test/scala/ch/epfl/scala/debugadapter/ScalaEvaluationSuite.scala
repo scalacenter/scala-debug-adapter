@@ -149,7 +149,12 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
       runner: MainDebuggeeRunner,
       allBreakpoints: Seq[Breakpoint]
   ): Unit = {
-    val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
+    val server = DebugServer(
+      runner,
+      new DebugServer.Address(),
+      NoopLogger,
+      testMode = true
+    )
     val client = TestDebugClient.connect(server.uri, 20.seconds)
     try {
       server.connect()
