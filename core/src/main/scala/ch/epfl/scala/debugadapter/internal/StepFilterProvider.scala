@@ -200,12 +200,17 @@ class StepFilterProvider(
         }
     }
     def matchReturnType: Boolean = {
-      javaMethod.isConstructor ||
-      matchType(
-        javaMethod.returnType,
-        scalaReturnType,
-        javaMethod.declaringType
-      )
+      try {
+        javaMethod.isConstructor ||
+        matchType(
+          javaMethod.returnType,
+          scalaReturnType,
+          javaMethod.declaringType
+        )
+      } catch {
+        // javaMethod.returnType can throw ClassNotLoadedException
+        case cause: jdi.ClassNotLoadedException => true
+      }
     }
     matchAllArguments && matchReturnType
   }

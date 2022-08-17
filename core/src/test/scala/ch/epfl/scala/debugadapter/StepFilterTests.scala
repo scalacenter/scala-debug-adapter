@@ -712,5 +712,25 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
         Breakpoint(10)(StepInto.line(4))
       )
     }
+
+    "should catch ClassNotLoadedException" - {
+      val source =
+        """|package example
+           |
+           |class Foo
+           |object Foo {
+           |  def m: Foo = new Foo
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    Foo.m
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(10)(StepInto.line(5))
+      )
+    }
   }
 }
