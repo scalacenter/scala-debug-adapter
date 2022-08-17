@@ -615,5 +615,37 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
         Breakpoint(17)(StepInto.line(12))
       )
     }
+
+    "step into method with parametric result type" - {
+      val source =
+        """|package example
+           |
+           |class A
+           |
+           |trait B {
+           |  type X <: A
+           |  
+           |  def m1(x: X): X = x
+           |  def m2[T <: X](x: T) = x  
+           |}
+           |
+           |class C extends B {
+           |  type X = A
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val c = new C
+           |    val a = new A
+           |    c.m1(a)
+           |    c.m2(a)
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(20)(StepInto.line(8)),
+        Breakpoint(21)(StepInto.line(9))
+      )
+    }
   }
 }

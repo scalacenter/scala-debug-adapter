@@ -363,10 +363,12 @@ class StepFilterProvider(
     val encoded = tryEncodeType(sym)
     val path = sym.path
     sym match {
-      case TypeSymbol(_) =>
-        // TODO get the lower bound
-        // TypeSymbol becomes java.lang.Object after erasure
-        javaType.name == "java.lang.Object"
+      case TypeSymbol(info) =>
+        val lowerBound = info.info.get match {
+          case TypeBoundsType(lower, upper) => lower.get
+          case other => other
+        }
+        matchType(javaType, lowerBound, declaringType)
       case AliasSymbol(info) =>
         val tpe = info.info.get
         matchType(javaType, tpe, declaringType)
