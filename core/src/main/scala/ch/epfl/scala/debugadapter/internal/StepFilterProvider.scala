@@ -258,9 +258,7 @@ class StepFilterProvider(
       case TypeRefType(prefix, sym, typeArgs) =>
         matchTypeSymbol(javaType, sym, declaringType)
       case RefinedType(sym, typeRefs) =>
-        typeRefs.headOption
-          .map(matchType(javaType, _, declaringType))
-          .getOrElse(javaType.name == "java.lang.Object")
+        typeRefs.exists(matchType(javaType, _, declaringType))
       case AnnotatedType(typeRef) =>
         matchType(javaType, typeRef.get, declaringType)
       case ExistentialType(typeRef, paramRefs) =>
@@ -285,6 +283,8 @@ class StepFilterProvider(
 
   private[internal] val scalaAliasesToJavaTypes = {
     Map(
+      "scala.Any" -> "java.lang.Object",
+      "scala.AnyRef" -> "java.lang.Object",
       "scala.Predef.String" -> "java.lang.String",
       "scala.Predef.Class" -> "java.lang.Class",
       "scala.Predef.Function" -> "scala.Function1",
@@ -364,6 +364,7 @@ class StepFilterProvider(
     val path = sym.path
     sym match {
       case TypeSymbol(_) =>
+        // TODO get the lower bound
         // TypeSymbol becomes java.lang.Object after erasure
         javaType.name == "java.lang.Object"
       case AliasSymbol(info) =>
@@ -371,6 +372,7 @@ class StepFilterProvider(
         matchType(javaType, tpe, declaringType)
       case _ =>
         if (path == "scala.Array") {
+          // TODO compare type parameter
           javaType.isInstanceOf[jdi.ArrayType]
         } else if (scalaToJavaTypes.contains(path)) {
           // sym is a primitive or a type alias from the Scala library
@@ -393,6 +395,7 @@ class StepFilterProvider(
         case NoSymbol => ""
         case _: ExternalSymbol =>
           // we weakly assume it is a package
+          // TODO use sourceLookUp to determine if its a package or a class
           sym.parent.map(encodePrefix).getOrElse("") + sym.name + "."
         case _ => sym.parent.map(encodePrefix).getOrElse("") + sym.name + "$"
       }

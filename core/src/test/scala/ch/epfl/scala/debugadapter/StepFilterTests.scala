@@ -1,7 +1,6 @@
 package ch.epfl.scala.debugadapter
 
 import utest._
-import scala.tools.ant.sabbus.Break
 
 object Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
 object Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`)
@@ -586,6 +585,34 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
         Breakpoint(12)(
           StepInto.line(8)
         )
+      )
+    }
+
+    "step into method with refined result type" - {
+      val source =
+        """|package example
+           |
+           |trait A
+           |trait B extends A
+           |
+           |object Main {
+           |  def m1(): A with B { def foo: String }  = {
+           |    new A  with B { def foo: String = toString }
+           |  }
+           |  
+           |  def m2(): { def foo: String } = {
+           |    new { def foo: String = toString }
+           |  }
+           |  
+           |  def main(args: Array[String]): Unit = {
+           |    m1()
+           |    m2()
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(16)(StepInto.line(8)),
+        Breakpoint(17)(StepInto.line(12))
       )
     }
   }
