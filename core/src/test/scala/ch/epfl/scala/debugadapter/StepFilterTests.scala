@@ -732,5 +732,24 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
         Breakpoint(10)(StepInto.line(5))
       )
     }
+
+    "should match on Array[T] whose erasure is Object" - {
+      val source =
+        """|package example
+           |
+           |import scala.collection.immutable.ArraySeq
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val xs = Array("a", "b")
+           |    println(classOf[ArraySeq[Any]])
+           |    ArraySeq.unsafeWrapArray(xs)
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(9)(StepInto.method("ArraySeq$.unsafeWrapArray(Object)"))
+      )
+    }
   }
 }

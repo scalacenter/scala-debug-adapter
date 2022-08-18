@@ -395,7 +395,9 @@ class StepFilterProvider(
       case _ =>
         if (path == "scala.Array") {
           // TODO compare type parameter
-          javaType.isInstanceOf[jdi.ArrayType]
+          // if the type parameter is an unbounded T then the erasure is java.lang.Object
+          javaType.isInstanceOf[jdi.ArrayType] ||
+          javaType.name == "java.lang.Object"
         } else if (scalaToJavaTypes.contains(path)) {
           // sym is a primitive or a type alias from the Scala library
           javaType.name == scalaToJavaTypes(path)
