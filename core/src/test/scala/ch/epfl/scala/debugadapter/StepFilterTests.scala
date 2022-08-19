@@ -737,26 +737,23 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
       val source =
         """|package example
            |
-           |import scala.collection.immutable.ArraySeq
-           |
            |object Main {
+           |  def m[T](xs: Array[T]): Array[T] = xs
+           |
            |  def main(args: Array[String]): Unit = {
            |    val xs = Array("a", "b")
-           |    println(classOf[ArraySeq[Any]])
-           |    ArraySeq.unsafeWrapArray(xs)
+           |    m(xs)
            |  }
            |}
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(9)(StepInto.method("ArraySeq$.unsafeWrapArray(Object)"))
+        Breakpoint(8)(StepInto.line(4))
       )
     }
 
     "should match on PolyType" - {
       val source =
         """|package example
-           |
-           |import scala.collection.immutable.ArraySeq
            |
            |class A[B[_]] {
            |  def m[T](x: B[T]): B[T] = x
@@ -774,8 +771,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |}
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(15)(StepInto.line(6)),
-        Breakpoint(16)(StepInto.line(6))
+        Breakpoint(13)(StepInto.line(4)),
+        Breakpoint(14)(StepInto.line(4))
       )
     }
   }
