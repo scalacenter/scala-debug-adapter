@@ -277,8 +277,11 @@ class StepFilterProvider(
         matchType(javaType, typeRef.get, declaringType)
       case ExistentialType(typeRef, paramRefs) =>
         matchType(javaType, typeRef.get, declaringType)
+      case PolyType(typeRef, paramRefs) =>
+        val upperBound = extractUpperBound(typeRef.get)
+        matchType(javaType, upperBound, declaringType)
       case other =>
-        val message = s"Unexpected type found: ${other.getClass.getSimpleName}"
+        val message = s"Unexpected type found: $other"
         if (testMode) throw new Exception(message)
         else {
           logger.warn(message)
@@ -384,10 +387,7 @@ class StepFilterProvider(
     val path = sym.path
     sym match {
       case TypeSymbol(info) =>
-        val upperBound = info.info.get match {
-          case TypeBoundsType(lower, upper) => upper.get
-          case other => other
-        }
+        val upperBound = extractUpperBound(info.info.get)
         matchType(javaType, upperBound, declaringType)
       case AliasSymbol(info) =>
         val tpe = info.info.get
@@ -412,6 +412,13 @@ class StepFilterProvider(
             }
           encoded.fold(ifEmpty)(_ == javaType.name)
         }
+    }
+  }
+
+  private def extractUpperBound(tpe: Type): Type = {
+    tpe match {
+      case TypeBoundsType(_, upper) => upper.get
+      case other => other
     }
   }
 
