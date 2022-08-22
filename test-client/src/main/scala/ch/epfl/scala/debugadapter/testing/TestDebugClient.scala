@@ -66,7 +66,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
 
   def continue(
       threadId: Long,
-      timeout: Duration = 4.seconds
+      timeout: Duration = 8.seconds
   ): Messages.Response = {
     val args = new ContinueArguments()
     args.threadId = threadId
@@ -141,6 +141,13 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     val response = sendRequest(request, timeout)
   }
 
+  def stepOut(threadId: Long, timeout: Duration = 1.second): Unit = {
+    val args = new StepOutArguments()
+    args.threadId = threadId
+    val request = createRequest(Command.STEPOUT, args)
+    val response = sendRequest(request, timeout)
+  }
+
   def evaluate(
       expression: String,
       frameId: Int,
@@ -177,7 +184,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     getBody[TerminatedEvent](event)
   }
 
-  def exited(timeout: Duration = 16.seconds): ExitedEvent = {
+  def exited(timeout: Duration = 4.seconds): ExitedEvent = {
     val event = receiveEvent(timeout)(e => e.event == "exited")
     getBody[ExitedEvent](event)
   }
@@ -228,7 +235,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
 object TestDebugClient {
   def connect(
       uri: URI,
-      timeout: Duration = 2.seconds,
+      timeout: Duration = 4.seconds,
       debug: String => Unit = _ => ()
   )(implicit ec: ExecutionContext): TestDebugClient = {
     val socket = new Socket()

@@ -165,7 +165,8 @@ object MainDebuggeeRunner {
   def mainClassRunner(
       sources: Seq[(String, String)],
       mainClass: String,
-      scalaVersion: ScalaVersion
+      scalaVersion: ScalaVersion,
+      libraries: Seq[ClassPathEntry]
   ): MainDebuggeeRunner = {
     val tempDir = Files.createTempDirectory("scala-debug-adapter")
 
@@ -181,7 +182,10 @@ object MainDebuggeeRunner {
     }
 
     val scalaInstance = ScalaInstanceCache.get(scalaVersion)
-    scalaInstance.compile(classDir, scalaInstance.libraryJars, sourceFiles)
+    val dependencies =
+      if (libraries.isEmpty) scalaInstance.libraryJars else libraries
+
+    scalaInstance.compile(classDir, dependencies, sourceFiles)
     val sourceEntries = sourceFiles.map { srcFile =>
       StandaloneSourceFile(srcFile, srcDir.relativize(srcFile).toString)
     }
@@ -191,9 +195,25 @@ object MainDebuggeeRunner {
       scalaVersion.version,
       sourceFiles,
       mainClassPathEntry,
-      scalaInstance.libraryJars,
+      dependencies,
       mainClass,
       Some(scalaInstance.expressionCompilerClassLoader)
+    )
+  }
+
+  def mainClassRunner(
+      source: String,
+      mainClass: String,
+      scalaVersion: ScalaVersion,
+      libraries: Seq[ClassPathEntry]
+  ): MainDebuggeeRunner = {
+    val className = mainClass.split('.').last
+    val sourceName = s"$className.scala"
+    mainClassRunner(
+      Seq(sourceName -> source),
+      mainClass,
+      scalaVersion,
+      libraries
     )
   }
 
@@ -204,7 +224,12 @@ object MainDebuggeeRunner {
   ): MainDebuggeeRunner = {
     val className = mainClass.split('.').last
     val sourceName = s"$className.scala"
-    mainClassRunner(Seq(sourceName -> source), mainClass, scalaVersion)
+    mainClassRunner(
+      Seq(sourceName -> source),
+      mainClass,
+      scalaVersion,
+      Seq.empty
+    )
   }
 
   private def getResource(name: String): Path =

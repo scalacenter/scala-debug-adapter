@@ -2,9 +2,9 @@ package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter.ClassEntry
 import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
-
 import java.net.URI
 import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSig
 
 private[debugadapter] final class SourceLookUpProvider(
     private[internal] val classPathEntries: Seq[ClassEntryLookUp],
@@ -14,11 +14,7 @@ private[debugadapter] final class SourceLookUpProvider(
   override def supportsRealtimeBreakpointVerification(): Boolean = true
 
   override def getSourceFileURI(fqcn: String, path: String): String = {
-    fqcnToClassPathEntry
-      .get(fqcn)
-      .flatMap(_.getSourceFile(fqcn))
-      .map(_.toString)
-      .orNull
+    getSourceFile(fqcn).map(_.toString).orNull
   }
 
   override def getSourceContents(uri: String): String = {
@@ -50,10 +46,26 @@ private[debugadapter] final class SourceLookUpProvider(
     }
   }
 
+  def containsClass(fqcn: String): Boolean =
+    fqcnToClassPathEntry.contains(fqcn)
+
   private[internal] def allClassNames: Iterable[String] =
     classPathEntries.flatMap(_.fullyQualifiedNames)
   private[internal] def allOrphanClasses: Iterable[ClassFile] =
     classPathEntries.flatMap(_.orphanClassFiles)
+
+  private[internal] def getScalaSig(fqcn: String): Option[ScalaSig] = {
+    for {
+      classPathEntry <- fqcnToClassPathEntry.get(fqcn)
+      scalaSig <- classPathEntry.getScalaSig(fqcn)
+    } yield scalaSig
+  }
+
+  private def getSourceFile(className: String): Option[URI] = {
+    fqcnToClassPathEntry
+      .get(className)
+      .flatMap(_.getSourceFile(className))
+  }
 }
 
 private[debugadapter] object SourceLookUpProvider {

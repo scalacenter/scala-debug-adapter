@@ -283,10 +283,11 @@ private[debugadapter] object DebugSession {
       runner: DebuggeeRunner,
       logger: Logger,
       autoClose: Boolean,
-      gracePeriod: Duration
+      gracePeriod: Duration,
+      testMode: Boolean
   )(implicit executionContext: ExecutionContext): DebugSession = {
     try {
-      val context = DebugAdapter.context(runner, logger)
+      val context = DebugAdapter.context(runner, logger, testMode)
       val loggingHandler = new LoggingAdapter(logger)
       new DebugSession(
         socket,

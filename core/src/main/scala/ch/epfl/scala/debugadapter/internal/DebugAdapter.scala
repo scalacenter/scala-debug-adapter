@@ -5,12 +5,12 @@ import com.microsoft.java.debug.core.DebugSettings
 import com.microsoft.java.debug.core.adapter._
 import com.microsoft.java.debug.core.protocol.Types
 import com.sun.jdi._
-import io.reactivex.Observable
 
 import java.util
 import java.util.Collections
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
+import io.reactivex.Observable
 
 private[debugadapter] object DebugAdapter {
 
@@ -20,13 +20,18 @@ private[debugadapter] object DebugAdapter {
    */
   DebugSettings.getCurrent.showStaticVariables = true
 
-  def context(runner: DebuggeeRunner, logger: Logger): IProviderContext =
+  def context(
+      runner: DebuggeeRunner,
+      logger: Logger,
+      testMode: Boolean
+  ): IProviderContext = {
     TimeUtils.logTime(logger, "Configured debugger") {
       val context = new ProviderContext
       val sourceLookUpProvider = SourceLookUpProvider(
         runner.classPathEntries ++ runner.javaRuntime,
         logger
       )
+
       context.registerProvider(
         classOf[IHotCodeReplaceProvider],
         HotCodeReplaceProvider
@@ -47,8 +52,18 @@ private[debugadapter] object DebugAdapter {
         classOf[ICompletionsProvider],
         CompletionsProvider
       )
+      context.registerProvider(
+        classOf[IStepFilterProvider],
+        new StepFilterProvider(
+          sourceLookUpProvider,
+          runner.scalaVersion,
+          logger,
+          testMode
+        )
+      )
       context
     }
+  }
 
   object CompletionsProvider extends ICompletionsProvider {
     override def codeComplete(

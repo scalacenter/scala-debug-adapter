@@ -10,6 +10,8 @@ import scala.collection.mutable
 import ClassEntryLookUp.readSourceContent
 
 import scala.util.matching.Regex
+import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSig
+import ch.epfl.scala.debugadapter.internal.scalasig.Decompiler
 
 private case class SourceLine(uri: URI, lineNumber: Int)
 
@@ -23,14 +25,18 @@ private case class ClassFile(
   def fullPackage: String = fullyQualifiedName.stripSuffix(s".$className")
   def fullPackageAsPath: String = fullPackage.replace(".", "/")
   def folderPath: String = relativePath.stripSuffix(s"/$className.class")
+
+  def readBytes(): Array[Byte] = classSystem.readBytes(relativePath)
 }
 
 private class ClassEntryLookUp(
+    fqcnToClassFile: Map[String, ClassFile],
     sourceUriToSourceFile: Map[URI, SourceFile],
     sourceUriToClassFiles: Map[URI, Seq[ClassFile]],
     classNameToSourceFile: Map[String, SourceFile],
     missingSourceFileClassFiles: Seq[ClassFile],
-    private[internal] val orphanClassFiles: Seq[ClassFile]
+    private[internal] val orphanClassFiles: Seq[ClassFile],
+    logger: Logger
 ) {
   private val cachedSourceLines = mutable.Map[SourceLine, Seq[ClassFile]]()
 
@@ -117,11 +123,51 @@ private class ClassEntryLookUp(
   def getSourceFile(fqcn: String): Option[URI] = {
     classNameToSourceFile.get(fqcn).map(_.uri)
   }
+
+  def getClassFiles(sourceUri: URI): Seq[ClassFile] = {
+    sourceUriToClassFiles.get(sourceUri).getOrElse(Seq.empty)
+  }
+
+  def getClassFile(fqcn: String): Option[ClassFile] = {
+    fqcnToClassFile.get(fqcn)
+  }
+
+  private[internal] def getScalaSig(fqcn: String): Option[ScalaSig] = {
+    def fromClass = for {
+      classFile <- getClassFile(fqcn)
+      if classFile.sourceName.exists(_.endsWith(".scala"))
+      scalaSig <- Decompiler.decompile(classFile, logger)
+    } yield scalaSig
+
+    def fromSource = {
+      val scalaSigs =
+        for {
+          sourceFile <- getSourceFile(fqcn).toSeq
+          if sourceFile.toString.endsWith(".scala")
+          classFile <- getClassFiles(sourceFile)
+          if fqcn.startsWith(classFile.fullyQualifiedName + "$")
+          scalaSig <- Decompiler.decompile(classFile, logger)
+        } yield scalaSig
+      if (scalaSigs.size > 1)
+        throw new Exception(s"More than one ScalaSig found for $fqcn")
+      else scalaSigs.headOption
+    }
+
+    fromClass.orElse(fromSource)
+  }
 }
 
 private object ClassEntryLookUp {
-  private def empty: ClassEntryLookUp =
-    new ClassEntryLookUp(Map.empty, Map.empty, Map.empty, Seq.empty, Seq.empty)
+  private def empty(logger: Logger): ClassEntryLookUp =
+    new ClassEntryLookUp(
+      Map.empty,
+      Map.empty,
+      Map.empty,
+      Map.empty,
+      Seq.empty,
+      Seq.empty,
+      logger
+    )
 
   private[internal] def apply(
       entry: ClassEntry,
@@ -137,13 +183,17 @@ private object ClassEntryLookUp {
       sourceFiles: Seq[SourceFile],
       logger: Logger
   ): ClassEntryLookUp = {
-    if (sourceFiles.isEmpty) ClassEntryLookUp.empty
+    if (sourceFiles.isEmpty) ClassEntryLookUp.empty(logger)
     else {
       val classFiles = entry.classSystems.flatMap { classSystem =>
         classSystem
           .within(readAllClassFiles(classSystem))
           .getOrElse(Vector.empty)
       }
+
+      val classNameToClassFile =
+        classFiles.map(c => (c.fullyQualifiedName, c)).toMap
+
       val sourceUriToSourceFile = sourceFiles.map(f => (f.uri, f)).toMap
       val sourceNameToSourceFile = sourceFiles.groupBy(f => f.fileName)
 
@@ -219,11 +269,13 @@ private object ClassEntryLookUp {
         )
 
       new ClassEntryLookUp(
+        classNameToClassFile,
         sourceUriToSourceFile,
         sourceUriToClassFiles.toMap,
         classNameToSourceFile.toMap,
         missingSourceFileClassFiles,
-        orphanClassFiles
+        orphanClassFiles,
+        logger
       )
     }
   }

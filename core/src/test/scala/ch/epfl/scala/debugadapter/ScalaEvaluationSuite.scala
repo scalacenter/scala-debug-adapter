@@ -125,7 +125,12 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
       breakpoints: Breakpoint*
   ): Unit = {
     val runner =
-      MainDebuggeeRunner.mainClassRunner(sources, mainClass, scalaVersion)
+      MainDebuggeeRunner.mainClassRunner(
+        sources,
+        mainClass,
+        scalaVersion,
+        Seq.empty
+      )
     assertEvaluations(runner, breakpoints)
   }
 
@@ -149,7 +154,12 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
       runner: MainDebuggeeRunner,
       allBreakpoints: Seq[Breakpoint]
   ): Unit = {
-    val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
+    val server = DebugServer(
+      runner,
+      new DebugServer.Address(),
+      NoopLogger,
+      testMode = true
+    )
     val client = TestDebugClient.connect(server.uri, 20.seconds)
     try {
       server.connect()
@@ -180,8 +190,11 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
         client.continue(threadId)
       }
 
-      client.exited()
-      client.terminated()
+      // This is flaky, terminated can happen before exited
+      if (!GithubUtils.isCI()) {
+        client.exited()
+        client.terminated()
+      }
     } finally {
       server.close()
       client.close()

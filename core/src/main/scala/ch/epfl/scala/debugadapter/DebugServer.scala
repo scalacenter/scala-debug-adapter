@@ -13,7 +13,8 @@ final class DebugServer private (
     address: DebugServer.Address,
     logger: Logger,
     autoCloseSession: Boolean,
-    gracePeriod: Duration
+    gracePeriod: Duration,
+    testMode: Boolean
 )(implicit ec: ExecutionContext) {
   private var closedServer = false
   private val ongoingSessions = new ConcurrentLinkedQueue[DebugSession]()
@@ -45,7 +46,14 @@ final class DebugServer private (
   private[debugadapter] def connect(): DebugSession = {
     val socket = serverSocket.accept()
     val session =
-      DebugSession(socket, runner, logger, autoCloseSession, gracePeriod)
+      DebugSession(
+        socket,
+        runner,
+        logger,
+        autoCloseSession,
+        gracePeriod,
+        testMode
+      )
     lock.synchronized {
       if (closedServer) {
         session.close()
@@ -68,7 +76,7 @@ final class DebugServer private (
         } catch {
           case NonFatal(e) =>
             logger.warn(
-              s"Could not close debug server listening on [$uri due to: ${e.getMessage}]"
+              s"Could not close debug server listening on $uri due to: ${e.getMessage}]"
             )
         }
       }
@@ -111,9 +119,17 @@ object DebugServer {
       address: DebugServer.Address,
       logger: Logger,
       autoCloseSession: Boolean = false,
-      gracePeriod: Duration = Duration(5, TimeUnit.SECONDS)
+      gracePeriod: Duration = Duration(5, TimeUnit.SECONDS),
+      testMode: Boolean = false
   )(implicit ec: ExecutionContext): DebugServer = {
-    new DebugServer(runner, address, logger, autoCloseSession, gracePeriod)
+    new DebugServer(
+      runner,
+      address,
+      logger,
+      autoCloseSession,
+      gracePeriod,
+      testMode
+    )
   }
 
   /**
@@ -137,7 +153,14 @@ object DebugServer {
   )(implicit ec: ExecutionContext): Handler = {
     val address = new DebugServer.Address()
     val server =
-      new DebugServer(runner, address, logger, autoCloseSession, gracePeriod)
+      new DebugServer(
+        runner,
+        address,
+        logger,
+        autoCloseSession,
+        gracePeriod,
+        false
+      )
     val running = server.start()
     running.onComplete(_ => server.close())
     new Handler(server.uri, running)
