@@ -57,11 +57,17 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
   protected def assertInMainClass(
       source: String,
       mainClass: String,
+      libraries: Seq[ClassPathEntry] = Seq.empty,
       logger: Logger = NoopLogger,
       timeout: Duration = 8.seconds
   )(breakpoints: Breakpoint*): Unit = {
     val runner =
-      MainDebuggeeRunner.mainClassRunner(source, mainClass, scalaVersion)
+      MainDebuggeeRunner.mainClassRunner(
+        source,
+        mainClass,
+        scalaVersion,
+        libraries
+      )
     val server =
       DebugServer(runner, new DebugServer.Address(), logger, testMode = true)
     val client = TestDebugClient.connect(server.uri)

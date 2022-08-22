@@ -125,7 +125,12 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
       breakpoints: Breakpoint*
   ): Unit = {
     val runner =
-      MainDebuggeeRunner.mainClassRunner(sources, mainClass, scalaVersion)
+      MainDebuggeeRunner.mainClassRunner(
+        sources,
+        mainClass,
+        scalaVersion,
+        Seq.empty
+      )
     assertEvaluations(runner, breakpoints)
   }
 
