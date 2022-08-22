@@ -13,6 +13,8 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
   private implicit val ec =
     ExecutionContext.fromExecutorService(executorService)
 
+  def isScala213: Boolean = scalaVersion.version.startsWith("2.13")
+
   case class Breakpoint(line: Int)(val steps: Step*)
 
   sealed trait Step {

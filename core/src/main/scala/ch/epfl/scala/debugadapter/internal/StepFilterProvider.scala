@@ -27,6 +27,7 @@ class StepFilterProvider(
       else if (isLocalMethod(method)) false
       else if (isLocalClass(method.declaringType)) false
       else if (isDefaultValue(method)) false
+      else if (isTraitInitializer(method)) skipTraitInitializer(method)
       else if (isLazyInitializer(method)) skipLazyInitializer(method)
       else skipScalaMethod(method)
     } catch {
@@ -64,8 +65,15 @@ class StepFilterProvider(
   private def isLocalClass(tpe: jdi.ReferenceType): Boolean =
     tpe.name.contains("$anon$")
 
+  private def isTraitInitializer(method: jdi.Method): Boolean =
+    method.name == "$init$"
+
   private def isLazyInitializer(method: jdi.Method): Boolean =
     method.name.endsWith("$lzycompute")
+
+  private def skipTraitInitializer(method: jdi.Method): Boolean = {
+    method.bytecodes.toSeq == Seq(ByteCodes.RETURN)
+  }
 
   private def skipLazyInitializer(method: jdi.Method): Boolean = {
     val fieldName = method.name.dropRight(11)
@@ -87,14 +95,8 @@ class StepFilterProvider(
 
   private def skipScalaMethod(method: jdi.Method): Boolean = {
     val fqcn = method.declaringType.name
-    val matchingMethods = for {
-      scalaSig <- sourceLookUp.getScalaSig(fqcn).toSeq
-      val isObject = fqcn.endsWith("$")
-      scalaMethod <- scalaSig.entries.toSeq
-        .collect { case m: MethodSymbol if m.isMethod => m }
-      if scalaMethod.parent.exists(p => p.isModule == isObject)
-      if matchSymbol(method, scalaMethod)
-    } yield scalaMethod
+    val matchingMethods =
+      extractScalaMethods(fqcn).filter(matchSymbol(method, _))
 
     if (matchingMethods.size > 1) {
       val builder = new java.lang.StringBuilder
@@ -114,6 +116,16 @@ class StepFilterProvider(
     val res = matchingMethods.headOption.forall(skip)
     if (res) logger.debug(s"Skipping $method")
     res
+  }
+
+  private def extractScalaMethods(fqcn: String): Seq[MethodSymbol] = {
+    for {
+      scalaSig <- sourceLookUp.getScalaSig(fqcn).toSeq
+      val isObject = fqcn.endsWith("$")
+      scalaMethod <- scalaSig.entries.toSeq
+        .collect { case m: MethodSymbol if m.isMethod => m }
+      if scalaMethod.parent.exists(p => p.isModule == isObject)
+    } yield scalaMethod
   }
 
   private def containsLazyField(

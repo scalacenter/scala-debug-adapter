@@ -8,8 +8,6 @@ object Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`)
 abstract class StepFilterTests(scalaVersion: ScalaVersion)
     extends StepFilterSuite(scalaVersion) {
 
-  def isScala213: Boolean = scalaVersion.version.startsWith("2.13")
-
   def tests: Tests = Tests {
     "should not step into mixin forwarder" - {
       val source =
@@ -773,6 +771,58 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
       assertInMainClass(source, "example.Main")(
         Breakpoint(13)(StepInto.line(4)),
         Breakpoint(14)(StepInto.line(4))
+      )
+    }
+
+    "should step into trait initializer, if it is not empty" - {
+      val source =
+        """|package example
+           |
+           |trait A {
+           |  val a: String = "a"
+           |}
+           |
+           |trait B {
+           |  lazy val b: String  = "b"
+           |}
+           |
+           |trait C {
+           |  def c: String = "c"
+           |}
+           |
+           |class D extends A with B with C
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    println(classOf[D])
+           |    val d = new D
+           |    d.a
+           |    d.b
+           |    d.b
+           |    d.c
+           |  }
+           |}
+           |
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(20)(
+          StepInto.method("D.<init>()"),
+          StepInto.method("Object.<init>()"),
+          StepInto.method("D.<init>()"),
+          StepInto.method("A.$init$(A)"),
+          StepInto.method("A.$init$(A)"),
+          StepInto.method("D.<init>()"),
+          if (isScala213) StepInto.method("Statics.releaseFence()")
+          else StepInto.line(20)
+        ),
+        Breakpoint(21)(
+          StepInto.line(22),
+          StepInto.line(8)
+        ),
+        Breakpoint(23)(
+          StepInto.line(24),
+          StepInto.line(12)
+        )
       )
     }
   }
