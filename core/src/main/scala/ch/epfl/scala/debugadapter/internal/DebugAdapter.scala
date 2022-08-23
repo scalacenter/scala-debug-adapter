@@ -54,9 +54,9 @@ private[debugadapter] object DebugAdapter {
       )
       context.registerProvider(
         classOf[IStepFilterProvider],
-        new StepFilterProvider(
+        StepFilterProvider(
           sourceLookUpProvider,
-          runner.scalaVersion,
+          runner,
           logger,
           testMode
         )

@@ -25,9 +25,10 @@ jobs:
       with:
         jvm: ${{ matrix.jvm }}
         app: sbt
-    - name: Cross-publish the expression evaluator
+    - name: Cross-publish the expression compiler
       run: sbt +expressionCompiler/publishLocal
-      shell: bash
+    - name: Publish the Scala 3 step filter
+      run: sbt scala3StepFilter/publishLocal
     - name: Test core project
       run: sbt core/test
       shell: bash

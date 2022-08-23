@@ -57,10 +57,11 @@ private[internal] object EvaluationDriver {
   private def loadBridge(
       classLoader: ClassLoader,
       className: String
-  ): Try[EvaluationDriver] =
+  ): Try[EvaluationDriver] = {
     for {
       clazz <- Try(Class.forName(className, true, classLoader))
       instance <- Try(clazz.getDeclaredConstructor().newInstance())
       method <- Try(clazz.getMethods.find(_.getName == "run").get)
     } yield new EvaluationDriver(instance, method)
+  }
 }

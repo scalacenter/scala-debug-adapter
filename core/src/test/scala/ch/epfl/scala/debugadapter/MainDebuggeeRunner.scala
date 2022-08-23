@@ -158,7 +158,7 @@ object MainDebuggeeRunner {
       mainClassPathEntry,
       classPath,
       "TestRunner",
-      Some(scalaInstance.expressionCompilerClassLoader)
+      Some(scalaInstance.debugToolsClassLoader)
     )
   }
 
@@ -197,7 +197,7 @@ object MainDebuggeeRunner {
       mainClassPathEntry,
       dependencies,
       mainClass,
-      Some(scalaInstance.expressionCompilerClassLoader)
+      Some(scalaInstance.debugToolsClassLoader)
     )
   }
 

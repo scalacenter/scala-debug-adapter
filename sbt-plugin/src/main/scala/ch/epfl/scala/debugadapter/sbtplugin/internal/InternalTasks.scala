@@ -46,9 +46,9 @@ private[sbtplugin] object InternalTasks {
     val scalaInstance = Keys.scalaInstance.value
     val scalaVersion = Keys.scalaVersion.value
 
-    val org = BuildInfo.expressionCompilerOrganization
+    val org = BuildInfo.organization
     val artifact = s"${BuildInfo.expressionCompilerName}_$scalaVersion"
-    val version = BuildInfo.expressionCompilerVersion
+    val version = BuildInfo.version
 
     val updateReport = fetchArtifactsOf(
       org % artifact % version,
