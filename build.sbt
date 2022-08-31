@@ -169,6 +169,9 @@ lazy val scala3StepFilter = project
     scalaVersion := Dependencies.scala3,
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
-      // "tasty-query" %% "tasty-query" % "0.1-SNAPSHOT"
-    )
+      "tasty-query" %% "tasty-query" % "0.1-SNAPSHOT",
+      Dependencies.utest % Test,
+      Dependencies.coursier.cross(CrossVersion.for3Use2_13) % Test
+    ),
+    testFrameworks += new TestFramework("utest.runner.Framework")
   )

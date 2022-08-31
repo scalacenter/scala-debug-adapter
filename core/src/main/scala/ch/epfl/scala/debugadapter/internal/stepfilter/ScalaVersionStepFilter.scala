@@ -16,13 +16,10 @@ object ScalaVersionStepFilter {
       logger: Logger,
       testMode: Boolean
   ): ScalaVersionStepFilter = {
-    if (runner.scalaVersion.startsWith("2")) {
+    if (runner.scalaVersion.startsWith("2"))
       new Scala2StepFilter(sourceLookUp, runner.scalaVersion, logger, testMode)
-    } else {
-      runner.evaluationClassLoader
-        .flatMap(Scala3StepFilter.tryLoad(_, logger, testMode).toOption)
-        .getOrElse(fallback)
-    }
+    else
+      Scala3StepFilter.tryLoad(runner, logger, testMode).getOrElse(fallback)
   }
 
   private def fallback: ScalaVersionStepFilter = new ScalaVersionStepFilter {

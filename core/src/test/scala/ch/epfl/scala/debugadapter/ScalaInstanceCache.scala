@@ -11,7 +11,7 @@ case class ScalaInstance(
     libraryJars: Seq[ClassPathEntry],
     compilerJars: Seq[ClassPathEntry],
     expressionCompilerJar: ClassPathEntry,
-    stepFilterJar: Option[ClassPathEntry]
+    stepFilterJars: Seq[ClassPathEntry]
 ) {
   val libraryClassLoader =
     new URLClassLoader(libraryJars.map(_.toURL).toArray, null)
@@ -19,7 +19,7 @@ case class ScalaInstance(
     new URLClassLoader(compilerJars.map(_.toURL).toArray, libraryClassLoader)
   val debugToolsClassLoader = {
     val toolingJars =
-      (Seq(expressionCompilerJar) ++ stepFilterJar).map(_.toURL).toArray
+      (Seq(expressionCompilerJar) ++ stepFilterJars).map(_.toURL).toArray
     if (toolingJars.isEmpty) compilerClassLoader
     else new URLClassLoader(toolingJars, compilerClassLoader)
   }
@@ -100,7 +100,7 @@ object ScalaInstanceCache {
       libraryJars,
       compilerJars,
       expressionCompilerJar,
-      None
+      Seq.empty
     )
   }
 
@@ -134,8 +134,6 @@ object ScalaInstanceCache {
     }
     val expressionCompilerJar =
       jars.find(jar => jar.name.startsWith(expressionCompilerArtifact)).get
-    val stepFilterJar =
-      stepFilterJars.find(jar => jar.name.startsWith(stepFilterArtifact)).get
     val compilerJars = jars.filter { jar =>
       !libraryJars.contains(jar) && jar != expressionCompilerJar
     }
@@ -145,7 +143,7 @@ object ScalaInstanceCache {
       libraryJars,
       compilerJars,
       expressionCompilerJar,
-      Some(stepFilterJar)
+      stepFilterJars
     )
   }
 }

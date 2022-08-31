@@ -4,6 +4,7 @@ import utest._
 
 object Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
 object Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`)
+object Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1`)
 
 abstract class StepFilterTests(scalaVersion: ScalaVersion)
     extends StepFilterSuite(scalaVersion) {
@@ -20,24 +21,24 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |object Main {
            |  def main(args: Array[String]): Unit = {
            |    val b = new B
-           |    println(b.m())
+           |    b.m()
            |    val c = new C
-           |    println(c.m())
+           |    c.m()
            |    val d = new D
-           |    println(d.m())
+           |    d.m()
            |    val e = new E
-           |    println(e.m())
-           |    println(F.m())
+           |    e.m()
+           |    F.m()
            |    val g = new G
-           |    println(g.m())
+           |    g.m()
            |    val h = new H
-           |    println(h.m())
+           |    h.m()
            |    val a1 = new A {}
-           |    println(a1.m())
+           |    a1.m()
            |    val a2 = new A {
            |      override def m(): String = "g.m()"
            |    }
-           |    println(a2.m())
+           |    a2.m()
            |  }
            |
            |  private class G extends A {
@@ -69,8 +70,11 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
         Breakpoint(17)(StepInto.line(4), StepOut.line(17)),
         Breakpoint(19)(StepInto.line(31), StepOut.line(19)),
         Breakpoint(21)(StepInto.line(4), StepOut.line(21)),
-        // cannot skip method in local class
-        Breakpoint(23)(StepInto.line(22), StepOut.line(23)),
+        Breakpoint(23)(
+          if (isScala3) StepInto.line(4)
+          else StepInto.line(22), // cannot skip method in local class
+          StepOut.line(23)
+        ),
         Breakpoint(27)(StepInto.line(25), StepOut.line(27))
       )
     }
