@@ -25,7 +25,7 @@ object Scala3StepFilter {
       testMode: Boolean
   ): Option[Scala3StepFilter] = {
     for {
-      classLoader <- runner.evaluationClassLoader
+      classLoader <- runner.stepFilterClassLoader
       stepFilterTry = Try {
         val className =
           "ch.epfl.scala.debugadapter.internal.stepfilter.StepFilterBridge"

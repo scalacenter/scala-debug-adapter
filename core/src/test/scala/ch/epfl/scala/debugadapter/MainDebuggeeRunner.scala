@@ -15,7 +15,8 @@ case class MainDebuggeeRunner(
     projectEntry: ClassPathEntry,
     dependencies: Seq[ClassPathEntry],
     mainClass: String,
-    override val evaluationClassLoader: Option[ClassLoader]
+    override val evaluationClassLoader: Option[ClassLoader],
+    override val stepFilterClassLoader: Option[ClassLoader]
 ) extends DebuggeeRunner {
   override def name: String = mainClass
   override def classPathEntries: Seq[ClassPathEntry] =
@@ -158,7 +159,8 @@ object MainDebuggeeRunner {
       mainClassPathEntry,
       classPath,
       "TestRunner",
-      Some(scalaInstance.debugToolsClassLoader)
+      Some(scalaInstance.evaluationClassLoader),
+      Some(scalaInstance.stepFilterClassLoader)
     )
   }
 
@@ -197,7 +199,8 @@ object MainDebuggeeRunner {
       mainClassPathEntry,
       dependencies,
       mainClass,
-      Some(scalaInstance.debugToolsClassLoader)
+      Some(scalaInstance.evaluationClassLoader),
+      Some(scalaInstance.stepFilterClassLoader)
     )
   }
 
@@ -280,6 +283,7 @@ object MainDebuggeeRunner {
       mainClassPathEntry,
       Seq.empty,
       mainClass,
+      None,
       None
     )
   }

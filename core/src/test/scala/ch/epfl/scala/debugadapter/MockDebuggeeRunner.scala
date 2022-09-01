@@ -24,6 +24,9 @@ class MockDebuggeeRunner() extends DebuggeeRunner {
   override def evaluationClassLoader: Option[ClassLoader] = Some(
     getClass.getClassLoader
   )
+  override def stepFilterClassLoader: Option[ClassLoader] = Some(
+    getClass.getClassLoader
+  )
 }
 
 class MockCancelableFuture() extends CancelableFuture[Unit] {

@@ -207,6 +207,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val state = Keys.state.value
       val evaluationClassLoader =
         InternalTasks.tryResolveEvaluationClassLoader.value
+      val stepFilterClassLoader =
+        InternalTasks.tryResolveStepFilterClassLoader.value
       val javaOptions = (Keys.run / Keys.javaOptions).value
 
       val runner = for {
@@ -241,7 +243,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           javaRuntime,
           params.`class`,
           params.arguments,
-          evaluationClassLoader
+          evaluationClassLoader,
+          stepFilterClassLoader
         )
       }
 
@@ -317,6 +320,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val scope = Keys.resolvedScoped.value
       val evaluationClassLoader =
         InternalTasks.tryResolveEvaluationClassLoader.value
+      val stepFilterClassLoader =
+        InternalTasks.tryResolveStepFilterClassLoader.value
 
       val runner = for {
         json <- jsonParser.parsed
@@ -386,7 +391,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           parallel,
           testRunners,
           testDefinitions,
-          evaluationClassLoader
+          evaluationClassLoader,
+          stepFilterClassLoader
         )
       }
 
@@ -439,6 +445,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val javaRuntime = InternalTasks.javaRuntime.value
       val evaluationClassLoader =
         InternalTasks.tryResolveEvaluationClassLoader.value
+      val stepFilterClassLoader =
+        InternalTasks.tryResolveStepFilterClassLoader.value
       val state = Keys.state.value
       val jobService = Keys.bgJobService.value
       val scope = Keys.resolvedScoped.value
@@ -448,7 +456,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         scalaVersion,
         classPathEntries,
         javaRuntime,
-        evaluationClassLoader
+        evaluationClassLoader,
+        stepFilterClassLoader
       )
       startServer(jobService, scope, state, target, runner)
     }

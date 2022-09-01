@@ -92,4 +92,5 @@ class StepFilterBridge(
     scalaNameReg.matches(javaName)
 
   private def skip(symbol: RegularSymbol): Boolean =
-    !symbol.is(Flags.Method) || symbol.is(Flags.Accessor)
+    (!symbol.is(Flags.Method) || symbol.is(Flags.Accessor)) &&
+      !symbol.is(Flags.Lazy)

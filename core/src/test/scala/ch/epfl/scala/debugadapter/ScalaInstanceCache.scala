@@ -17,12 +17,10 @@ case class ScalaInstance(
     new URLClassLoader(libraryJars.map(_.toURL).toArray, null)
   val compilerClassLoader =
     new URLClassLoader(compilerJars.map(_.toURL).toArray, libraryClassLoader)
-  val debugToolsClassLoader = {
-    val toolingJars =
-      (Seq(expressionCompilerJar) ++ stepFilterJars).map(_.toURL).toArray
-    if (toolingJars.isEmpty) compilerClassLoader
-    else new URLClassLoader(toolingJars, compilerClassLoader)
-  }
+  val evaluationClassLoader =
+    new URLClassLoader(Array(expressionCompilerJar.toURL), compilerClassLoader)
+  val stepFilterClassLoader =
+    new URLClassLoader(stepFilterJars.map(_.toURL).toArray, null)
 
   def compile(
       classDir: Path,
