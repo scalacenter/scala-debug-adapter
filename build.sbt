@@ -32,7 +32,7 @@ inThisBuild(
 
 lazy val root = project
   .in(file("."))
-  .aggregate(core, sbtPlugin, expressionCompiler)
+  .aggregate(core, sbtPlugin, expressionCompiler, scala3StepFilter)
   .settings(
     PgpKeys.publishSigned := {},
     publishLocal := {}

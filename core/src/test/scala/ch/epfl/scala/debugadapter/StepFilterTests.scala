@@ -263,24 +263,22 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |object Main {
            |  def main(args: Array[String]): Unit = {
            |    val a = new A
-           |    println(m()(a))
+           |    m()(a)
            |  }
            |
            |  def m()(a: A): String = {
-           |    a.toString()
+           |    a.toString
            |  }
            |}
            |
            |class A {
-           |  override def toString(): String = {
-           |    "B"
-           |  }
+           |  override def toString(): String = "B"
            |}
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
         Breakpoint(6)(
           StepInto.line(10),
-          StepInto.line(16),
+          StepInto.line(15),
           StepOut.line(10),
           StepOut.line(6)
         )
