@@ -179,7 +179,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |}
            |
            |class C(var c1: String, private var c2: String) extends B with A {
-           |  override var a1: String = "a1"
+           |  /* override */ var a1: String = "a1"
            |  private var c3: String = "c3"
            |  
            |  def m(): Unit = {

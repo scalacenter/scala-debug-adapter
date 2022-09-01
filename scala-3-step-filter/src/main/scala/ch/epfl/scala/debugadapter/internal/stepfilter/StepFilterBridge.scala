@@ -9,6 +9,7 @@ import tastyquery.ast.Symbols.*
 import java.util.function.Consumer
 import java.nio.file.Path
 import ch.epfl.scala.debugadapter.internal.jdi
+import tastyquery.ast.Flags
 
 class StepFilterBridge(
     classpaths: Array[Path],
@@ -79,4 +80,4 @@ class StepFilterBridge(
     method.name == symbol.name.toString
 
   private def skip(symbol: RegularSymbol): Boolean =
-    false
+    !symbol.is(Flags.Method) || symbol.is(Flags.Accessor)
