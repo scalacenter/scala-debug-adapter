@@ -25,9 +25,10 @@ class StepFilterBridge(
 
   def skipMethod(obj: Any): Boolean =
     val method = jdi.Method(obj)
+    val isExtensionMethod = method.name.endsWith("$extension")
     val fqcn = method.declaringType.name
     val matchingSymbols =
-      extractScalaTerms(fqcn).filter(matchSymbol(method, _))
+      extractScalaTerms(fqcn, isExtensionMethod).filter(matchSymbol(method, _))
 
     val builder = new java.lang.StringBuilder
     builder.append(
@@ -42,21 +43,26 @@ class StepFilterBridge(
 
     matchingSymbols.headOption.forall(skip)
 
-  private[stepfilter] def extractScalaTerms(fqcn: String): Seq[RegularSymbol] =
+  private[stepfilter] def extractScalaTerms(
+      fqcn: String,
+      isExtensionMethod: Boolean
+  ): Seq[RegularSymbol] =
     for
-      declaringType <- findDeclaringType(fqcn).toSeq
+      declaringType <- findDeclaringType(fqcn, isExtensionMethod).toSeq
       terms <- declaringType.declarations
         .collect { case sym: RegularSymbol if sym.isTerm => sym }
     yield terms
 
-  private def findDeclaringType(fqcn: String): Option[DeclaringSymbol] =
+  private def findDeclaringType(
+      fqcn: String,
+      isExtensionMethod: Boolean
+  ): Option[DeclaringSymbol] =
     val javaParts = fqcn.split('.')
     val isObject = fqcn.endsWith("$")
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
       ctx.findSymbolFromRoot(packageNames).asInstanceOf[PackageClassSymbol]
     val className = javaParts.last
-
     def findRec(
         owner: DeclaringSymbol,
         encodedName: String
@@ -72,12 +78,18 @@ class StepFilterBridge(
             case _ => None
         }
 
-    findRec(packageSym, className).find { sym =>
-      sym.name.asInstanceOf[TypeName].wrapsObjectName == isObject
-    }
+    val clsSymbols = findRec(packageSym, className)
+    val obj = clsSymbols.filter(_.name.toTypeName.wrapsObjectName)
+    val cls = clsSymbols.filter(!_.name.toTypeName.wrapsObjectName)
+    assert(obj.size <= 1 && cls.size <= 1)
+    if isObject && !isExtensionMethod then obj.headOption else cls.headOption
 
   private def matchSymbol(method: jdi.Method, symbol: Symbol): Boolean =
-    method.name == symbol.name.toString
+    matchName(method.name, symbol.name.toString)
+
+  private def matchName(javaName: String, scalaName: String): Boolean =
+    val scalaNameReg = s"$scalaName(\\$$extension)?".r
+    scalaNameReg.matches(javaName)
 
   private def skip(symbol: RegularSymbol): Boolean =
     !symbol.is(Flags.Method) || symbol.is(Flags.Accessor)
