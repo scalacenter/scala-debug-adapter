@@ -105,7 +105,7 @@ lazy val expressionCompiler = project
   .in(file("expression-compiler"))
   .settings(
     name := "scala-expression-compiler",
-    scalaVersion := "3.1.3",
+    scalaVersion := "3.2.0",
     crossScalaVersions := Seq(
       "3.2.0",
       "3.1.3",
@@ -138,8 +138,10 @@ lazy val expressionCompiler = project
     Compile / unmanagedSourceDirectories ++= {
       val sourceDir = (Compile / sourceDirectory).value
       CrossVersion.partialVersion(scalaVersion.value).collect {
+        case (3, 0) =>
+          sourceDir / s"scala-3.0"
         case (3, minor) =>
-          sourceDir / s"scala-3.$minor"
+          sourceDir / s"scala-3.1+"
       }
     },
     Compile / doc / sources := Seq.empty,

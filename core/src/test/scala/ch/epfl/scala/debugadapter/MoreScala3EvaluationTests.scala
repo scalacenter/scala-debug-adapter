@@ -4,8 +4,8 @@ import utest._
 
 object MoreScala30EvaluationTests
     extends MoreScala3EvaluationTests(ScalaVersion.`3.0`)
-object MoreScala31EvaluationTests
-    extends MoreScala3EvaluationTests(ScalaVersion.`3.1`)
+object MoreScala32EvaluationTests
+    extends MoreScala3EvaluationTests(ScalaVersion.`3.2`)
 
 abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
     extends ScalaEvaluationSuite(scalaVersion) {

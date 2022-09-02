@@ -14,7 +14,7 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
   implicit val ec =
     ExecutionContext.fromExecutorService(executorService)
 
-  val isScala31 = scalaVersion == ScalaVersion.`3.1`
+  val isScala32 = scalaVersion == ScalaVersion.`3.2`
   val isScala3 = scalaVersion.binaryVersion.startsWith("3")
   val isScala2 = scalaVersion.binaryVersion.startsWith("2")
 

@@ -5,7 +5,7 @@ import utest._
 object Scala212EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.12`)
 object Scala213EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.13`)
 object Scala30EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.0`)
-object Scala31EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.1`)
+object Scala32EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.2`)
 
 abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
     extends ScalaEvaluationSuite(scalaVersion) {
@@ -1531,7 +1531,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
            |  }
            |}""".stripMargin
 
-      if (isScala31) {
+      if (isScala32) {
         assertInTestSuite(source, "MySuite")(
           Breakpoint(5)(Evaluation.success("1 + 1", 2))
         )
