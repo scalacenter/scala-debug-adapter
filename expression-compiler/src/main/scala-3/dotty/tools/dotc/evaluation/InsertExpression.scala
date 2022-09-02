@@ -153,12 +153,11 @@ class InsertExpression(using
     // don't use stripMargin on wrappedExpression because expression can contain a line starting with `  |`
     val wrappedExpression = prefix + evalCtx.expression + "\n  }\n"
     val expressionFile = SourceFile.virtual("<expression>", evalCtx.expression)
-    val wrappedExpressionFile = new VirtualFile(
-      "<wrapped-expression>",
-      wrappedExpression.getBytes(StandardCharsets.UTF_8)
-    )
+    val contentBytes = wrappedExpression.getBytes(StandardCharsets.UTF_8)
+    val wrappedExpressionFile =
+      new VirtualFile("<wrapped-expression>", contentBytes)
     val sourceFile =
-      new SourceFile(wrappedExpressionFile, scala.io.Codec.UTF8):
+      new SourceFile(wrappedExpressionFile, wrappedExpression.toArray):
         override def start: Int =
           // prefix.size depends on the OS
           -prefix.size
