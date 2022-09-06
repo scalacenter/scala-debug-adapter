@@ -10,6 +10,7 @@ import java.util.function.Consumer
 import java.nio.file.Path
 import ch.epfl.scala.debugadapter.internal.jdi
 import tastyquery.ast.Flags
+import scala.util.matching.Regex
 
 class StepFilterBridge(
     classpaths: Array[Path],
@@ -70,7 +71,7 @@ class StepFilterBridge(
       owner.declarations
         .collect { case sym: DeclaringSymbol => sym }
         .flatMap { sym =>
-          val Symbol = s"${sym.name.toString}\\$$?(.*)".r
+          val Symbol = s"${Regex.quote(sym.name.toString)}\\$$?(.*)".r
           encodedName match
             case Symbol(remaining) =>
               if remaining.isEmpty then Some(sym)
@@ -88,7 +89,7 @@ class StepFilterBridge(
     matchName(method.name, symbol.name.toString)
 
   private def matchName(javaName: String, scalaName: String): Boolean =
-    val scalaNameReg = s"$scalaName(\\$$extension)?".r
+    val scalaNameReg = s"${Regex.quote(scalaName)}(\\$$extension)?".r
     scalaNameReg.matches(javaName)
 
   private def skip(symbol: RegularSymbol): Boolean =
