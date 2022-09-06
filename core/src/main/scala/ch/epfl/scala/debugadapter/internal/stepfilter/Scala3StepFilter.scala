@@ -7,15 +7,21 @@ import scala.util.Try
 import ch.epfl.scala.debugadapter.DebuggeeRunner
 import java.util.function.Consumer
 import java.nio.file.Path
+import java.lang.reflect.InvocationTargetException
 
 class Scala3StepFilter(
     bridge: Any,
     skipMethod: Method,
     logger: Logger,
     testMode: Boolean
-) extends ScalaVersionStepFilter {
-  override def skipMethod(method: jdi.Method): Boolean =
-    skipMethod.invoke(bridge, method).asInstanceOf[Boolean]
+) extends ScalaStepFilter {
+  override protected def skipScalaMethod(method: jdi.Method): Boolean =
+    try {
+      skipMethod.invoke(bridge, method).asInstanceOf[Boolean]
+    } catch {
+      case e: InvocationTargetException => throw e.getCause
+    }
+
 }
 
 object Scala3StepFilter {

@@ -12,8 +12,8 @@ class Scala2StepFilter(
     scalaVersion: String,
     logger: Logger,
     testMode: Boolean
-) extends ScalaVersionStepFilter {
-  override def skipMethod(method: jdi.Method): Boolean = {
+) extends ScalaStepFilter {
+  override protected def skipScalaMethod(method: jdi.Method): Boolean = {
     if (isLazyInitializer(method)) {
       skipLazyInitializer(method)
     } else {

@@ -4,7 +4,7 @@ import utest._
 
 object Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
 object Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`)
-object Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1`)
+object Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.2`)
 
 abstract class StepFilterTests(scalaVersion: ScalaVersion)
     extends StepFilterSuite(scalaVersion) {
@@ -295,14 +295,10 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |  }
            |
            |  def main(args: Array[String]): Unit = {
-           |    foo(a)
-           |    foo(a)
-           |    foo(b)
-           |    foo(b)
-           |  }
-           |
-           |  def foo(x: String): Unit = {
-           |    println(x)
+           |    println(a)
+           |    println(a)
+           |    println(b)
+           |    println(b)
            |  }
            |}
            |
@@ -312,17 +308,57 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.A")(
-        Breakpoint(9)(
-          StepInto.line(4),
-          StepInto.line(5),
-          StepOut.line(9),
-          StepInto.line(16)
-        ),
-        Breakpoint(10)(StepInto.line(16)),
-        Breakpoint(11)(StepInto.line(22), StepOut.line(11), StepInto.line(16)),
-        Breakpoint(12)(StepInto.line(16))
-      )
+
+      val breakpoints = if (isScala3) {
+        Seq(
+          // TODO: clean debug line table in Scala 3 compiler
+          // TODO: introduce $lazyinit$ to isolate user code
+          Breakpoint(9)(
+            StepInto.line(4),
+            StepInto.line(6),
+            StepInto.line(4),
+            StepInto.line(6),
+            StepInto.line(5),
+            StepOut.line(9)
+            // TODO uncomment when https://github.com/scalacenter/tasty-query/issues/78 is fixed
+            // StepInto.method("Predef$.println(Object)")
+          ),
+          Breakpoint(10)(
+            StepInto.line(4),
+            StepInto.line(6),
+            StepInto.line(4),
+            StepInto.line(6)
+            // TODO uncomment when https://github.com/scalacenter/tasty-query/issues/78 is fixed
+            // StepInto.method("Predef$.println(Object)")
+          ),
+          Breakpoint(11)(
+            StepInto.line(18),
+            StepOut.line(11)
+            // TODO uncomment when https://github.com/scalacenter/tasty-query/issues/78 is fixed
+            // StepInto.method("Predef$.println(Object)")
+          )
+          // TODO uncomment when https://github.com/scalacenter/tasty-query/issues/78 is fixed
+          // Breakpoint(12)(StepInto.method("Predef$.println(Object)"))
+        )
+      } else {
+        Seq(
+          Breakpoint(9)(
+            StepInto.line(4),
+            StepInto.line(5),
+            StepOut.line(9),
+            StepInto.method("Predef$.println(Object)")
+          ),
+          Breakpoint(10)(StepInto.method("Predef$.println(Object)")),
+          Breakpoint(11)(
+            StepInto.line(18),
+            StepOut.line(11),
+            StepInto.method("Predef$.println(Object)")
+          ),
+          Breakpoint(12)(StepInto.method("Predef$.println(Object)"))
+        )
+      }
+
+      assertInMainClass(source, "example.A")(breakpoints: _*)
     }
 
     "should not step into synthetic method of case class" - {
