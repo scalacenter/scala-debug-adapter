@@ -63,6 +63,7 @@ private[sbtplugin] object InternalTasks {
 
     val updateReport = fetchArtifactsOf(
       org % artifact % version,
+      Seq.empty,
       Keys.dependencyResolution.value,
       Keys.scalaModuleInfo.value,
       Keys.updateConfiguration.value,
@@ -77,17 +78,22 @@ private[sbtplugin] object InternalTasks {
       )
       .map(_.toURI.toURL)
       .toArray
-
     new URLClassLoader(evaluatorJars, scalaInstance.loader)
   }
 
   private lazy val resolveStepFilterClassLoader = Def.task {
+    val scalaModule = Keys.scalaModuleInfo.value
+
     val org = BuildInfo.organization
     val artifact = s"${BuildInfo.scala3StepFilterName}_3"
     val version = BuildInfo.version
+    val tastyDep = scalaModule.map { info =>
+      info.scalaOrganization %% "tasty-core" % info.scalaFullVersion
+    }
 
     val updateReport = fetchArtifactsOf(
       org % artifact % version,
+      tastyDep.toSeq,
       Keys.dependencyResolution.value,
       Keys.scalaModuleInfo.value,
       Keys.updateConfiguration.value,
@@ -102,7 +108,6 @@ private[sbtplugin] object InternalTasks {
       )
       .map(_.toURI.toURL)
       .toArray
-
     new URLClassLoader(stepFilterJars, null)
   }
 
@@ -168,13 +173,23 @@ private[sbtplugin] object InternalTasks {
 
   private def fetchArtifactsOf(
       moduleID: ModuleID,
+      dependencies: Seq[ModuleID],
       dependencyRes: DependencyResolution,
       scalaInfo: Option[ScalaModuleInfo],
       updateConfig: UpdateConfiguration,
       warningConfig: UnresolvedWarningConfiguration,
       log: sbt.Logger
-  ) = {
-    val descriptor = dependencyRes.wrapDependencyInModule(moduleID, scalaInfo)
+  ): UpdateReport = {
+    val sha1 = Hash.toHex(Hash(moduleID.name))
+    val dummyID =
+      ModuleID("ch.epfl.scala.temp", "temp-module" + sha1, moduleID.revision)
+        .withConfigurations(moduleID.configurations)
+    val descriptor =
+      dependencyRes.moduleDescriptor(
+        dummyID,
+        moduleID +: dependencies.toVector,
+        scalaInfo
+      )
 
     dependencyRes.update(descriptor, updateConfig, warningConfig, log) match {
       case Right(report) =>

@@ -113,18 +113,24 @@ object ScalaInstanceCache {
       BuildInfo.version
     )
 
-    val stepFilterArtifact =
-      s"${BuildInfo.scala3StepFilterName}_${scalaVersion.binaryVersion}"
     val stepFilterDep = Dependency(
       Module(
         Organization(BuildInfo.organization),
-        ModuleName(stepFilterArtifact)
+        ModuleName(s"${BuildInfo.scala3StepFilterName}_3")
       ),
       BuildInfo.version
     )
 
+    val tastyDep = Dependency(
+      Module(
+        Organization("org.scala-lang"),
+        ModuleName(s"tasty-core_3")
+      ),
+      scalaVersion.version
+    )
+
     val jars = Coursier.fetch(expressionCompilerDep)
-    val stepFilterJars = Coursier.fetch(stepFilterDep)
+    val stepFilterJars = Coursier.fetch(stepFilterDep, tastyDep)
 
     val libraryJars = jars.filter { jar =>
       jar.name.startsWith("scala-library") ||
