@@ -11,8 +11,9 @@ import java.nio.file.Path
 import ch.epfl.scala.debugadapter.internal.jdi
 import tastyquery.ast.Flags
 import scala.util.matching.Regex
+import scala.util.Try
 
-class StepFilterBridge(
+class ScalaStepFilterBridge(
     classpaths: Array[Path],
     warnLogger: Consumer[String],
     testMode: Boolean
@@ -31,16 +32,14 @@ class StepFilterBridge(
     val matchingSymbols =
       extractScalaTerms(fqcn, isExtensionMethod).filter(matchSymbol(method, _))
 
-    val builder = new java.lang.StringBuilder
-    builder.append(
-      s"Found ${matchingSymbols.size} matching symbols for $method:\n"
-    )
-    matchingSymbols.foreach(sym => builder.append(s"$sym\n"))
-
     if matchingSymbols.size > 1 then
+      val builder = new java.lang.StringBuilder
+      builder.append(
+        s"Found ${matchingSymbols.size} matching symbols for $method:\n"
+      )
+      matchingSymbols.foreach(sym => builder.append(s"$sym\n"))
       if testMode then throw new Exception(builder.toString)
       else warn(builder.toString)
-    // else println(builder.toString)
 
     matchingSymbols.headOption.forall(skip)
 
@@ -80,18 +79,23 @@ class StepFilterBridge(
         }
 
     val clsSymbols = findRec(packageSym, className)
-    val obj = clsSymbols.filter(_.name.toTypeName.wrapsObjectName)
-    val cls = clsSymbols.filter(!_.name.toTypeName.wrapsObjectName)
+    def symIsObject(sym: Symbol): Boolean =
+      sym.name.toTypeName.wrapsObjectName || Try(sym.is(Flags.Module)).toOption
+        .contains(true)
+    val obj = clsSymbols.filter(symIsObject)
+    val cls = clsSymbols.filter(!symIsObject(_))
     assert(obj.size <= 1 && cls.size <= 1)
     if isObject && !isExtensionMethod then obj.headOption else cls.headOption
 
   private def matchSymbol(method: jdi.Method, symbol: Symbol): Boolean =
     matchName(method.name, symbol.name.toString)
 
-  private def matchName(javaName: String, scalaName: String): Boolean =
+  def matchName(javaName: String, scalaName: String): Boolean =
     val scalaNameReg = s"${Regex.quote(scalaName)}(\\$$extension)?".r
     scalaNameReg.matches(javaName)
 
-  private def skip(symbol: RegularSymbol): Boolean =
-    (!symbol.is(Flags.Method) || symbol.is(Flags.Accessor)) &&
-      !symbol.is(Flags.Lazy)
+  def skip(symbol: RegularSymbol): Boolean =
+    val isNonLazyGetterOrSetter =
+      (!symbol.flags.is(Flags.Method) || symbol.is(Flags.Accessor)) &&
+        !symbol.is(Flags.Lazy)
+    isNonLazyGetterOrSetter || symbol.is(Flags.Synthetic)

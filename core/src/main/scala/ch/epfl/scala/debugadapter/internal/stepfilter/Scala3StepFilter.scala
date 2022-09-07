@@ -8,6 +8,8 @@ import ch.epfl.scala.debugadapter.DebuggeeRunner
 import java.util.function.Consumer
 import java.nio.file.Path
 import java.lang.reflect.InvocationTargetException
+import ch.epfl.scala.debugadapter.Java8
+import ch.epfl.scala.debugadapter.Java9OrAbove
 
 class Scala3StepFilter(
     bridge: Any,
@@ -34,14 +36,19 @@ object Scala3StepFilter {
       classLoader <- runner.stepFilterClassLoader
       stepFilterTry = Try {
         val className =
-          "ch.epfl.scala.debugadapter.internal.stepfilter.StepFilterBridge"
+          "ch.epfl.scala.debugadapter.internal.stepfilter.ScalaStepFilterBridge"
         val cls = classLoader.loadClass(className)
         val ctr = cls.getConstructor(
           classOf[Array[Path]],
           classOf[Consumer[String]],
           classOf[Boolean]
         )
-        val debuggeeClasspath = runner.classPath.toArray
+        // TASTy Query needs the javaRuntimeJars
+        val javaRuntimeJars = runner.javaRuntime.toSeq.flatMap {
+          case Java8(javaHome, classJars, sourceZip) => classJars
+          case Java9OrAbove(javaHome, fsJar, sourceZip) => Seq.empty
+        }
+        val debuggeeClasspath = runner.classPath.toArray ++ javaRuntimeJars
         val warnLogger: Consumer[String] = msg => logger.warn(msg)
         val bridge = ctr.newInstance(
           debuggeeClasspath,

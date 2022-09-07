@@ -389,15 +389,25 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |  }
            |}""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(11)(StepInto.file("ScalaRunTime.scala"), StepOut.line(11)),
+        Breakpoint(11)(
+          StepInto.method("ScalaRunTime$._toString(Product)"),
+          StepOut.line(11)
+        ),
         Breakpoint(12)(StepInto.method("A.<init>(String)"), StepOut.line(12)),
-        Breakpoint(13)(StepInto.file("ScalaRunTime.scala"), StepOut.line(13)),
-        Breakpoint(14)(StepInto.file("String.java"), StepOut.line(14)),
+        Breakpoint(13)(
+          StepInto.method("ScalaRunTime$._hashCode(Product)"),
+          StepOut.line(13)
+        ),
+        Breakpoint(14)(
+          StepInto.method("String.equals(Object)"),
+          StepOut.line(14)
+        ),
         Breakpoint(15)(
           StepInto.line(16),
           StepInto.line(17),
           StepInto.line(18),
-          StepInto.file("ScalaRunTime.scala")
+          if (isScala3) StepInto.method("Product.productIterator()")
+          else StepInto.method("ScalaRunTime$.typedProductIterator(Product)")
         )
       )
     }
