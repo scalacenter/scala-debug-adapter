@@ -84,11 +84,8 @@ class ScalaStepFilterBridge(
         }
 
     val clsSymbols = findRec(packageSym, className)
-    def symIsObject(sym: Symbol): Boolean =
-      sym.name.toTypeName.wrapsObjectName || Try(sym.is(Flags.Module)).toOption
-        .contains(true)
-    val obj = clsSymbols.filter(symIsObject)
-    val cls = clsSymbols.filter(!symIsObject(_))
+    val obj = clsSymbols.filter(_.is(Flags.Module))
+    val cls = clsSymbols.filter(!_.is(Flags.Module))
     assert(obj.size <= 1 && cls.size <= 1)
     if isObject && !isExtensionMethod then obj.headOption else cls.headOption
 
