@@ -1,6 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.jdi
 
 import scala.jdk.CollectionConverters.*
+import java.lang.reflect.InvocationTargetException
 
 class Method(val obj: Any) extends JavaReflection:
   def name: String = invokeMethod("name")
@@ -12,8 +13,12 @@ class Method(val obj: Any) extends JavaReflection:
     invokeMethod[java.util.List[Object]]("arguments").asScala.toSeq
       .map(LocalVariable.apply(_))
 
-  def returnType: Type =
-    Type(invokeMethod("returnType"))
+  def returnType: Option[Type] =
+    try Some(Type(invokeMethod("returnType")))
+    catch
+      case e: InvocationTargetException
+          if e.getCause.getClass.getName == "com.sun.jdi.ClassNotLoadedException" =>
+        None
 
   def signature: String = invokeMethod("signature")
 

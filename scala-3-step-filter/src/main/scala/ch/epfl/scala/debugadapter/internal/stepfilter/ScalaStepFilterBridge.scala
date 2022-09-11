@@ -116,10 +116,8 @@ class ScalaStepFilterBridge(
           case Some("$this") if isExtensionMethod => method.arguments.tail
           case _ => method.arguments
         val scalaArgs = sig.paramsSig.filter(!_.isInstanceOf[TypeLenSig])
-        matchArguments(scalaArgs, javaArgs) && matchType(
-          sig.resSig,
-          method.returnType
-        )
+        matchArguments(scalaArgs, javaArgs) &&
+        method.returnType.forall(matchType(sig.resSig, _))
       case _ =>
         true // TODO compare symbol.declaredType
 
