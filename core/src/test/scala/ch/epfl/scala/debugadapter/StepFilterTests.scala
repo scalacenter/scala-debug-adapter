@@ -840,26 +840,38 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |}
            |
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(20)(
-          StepInto.method("D.<init>()"),
-          StepInto.method("Object.<init>()"),
-          StepInto.method("D.<init>()"),
-          StepInto.method("A.$init$(A)"),
-          StepInto.method("A.$init$(A)"),
-          StepInto.method("D.<init>()"),
-          if (isScala213) StepInto.method("Statics.releaseFence()")
-          else StepInto.line(20)
-        ),
-        Breakpoint(21)(
-          StepInto.line(22),
-          StepInto.line(8)
-        ),
-        Breakpoint(23)(
-          StepInto.line(24),
-          StepInto.line(12)
+      val breakpoints = if (isScala3) {
+        Seq(
+          Breakpoint(20)(
+            StepInto.method("Class.getDeclaredField(String)"),
+            StepOut.line(20),
+            StepInto.method("D.<init>()"),
+            StepInto.method("Object.<init>()"),
+            StepInto.method("D.<init>()"),
+            StepInto.method("A.$init$(A)"),
+            StepInto.method("D.<init>()"),
+            StepInto.method("Statics.releaseFence()")
+          ),
+          Breakpoint(22)(StepInto.line(8)),
+          Breakpoint(23)(StepInto.line(24), StepInto.line(12))
         )
-      )
+      } else {
+        Seq(
+          Breakpoint(20)(
+            StepInto.method("D.<init>()"),
+            StepInto.method("Object.<init>()"),
+            StepInto.method("D.<init>()"),
+            StepInto.method("A.$init$(A)"),
+            StepInto.method("A.$init$(A)"),
+            StepInto.method("D.<init>()"),
+            if (isScala213) StepInto.method("Statics.releaseFence()")
+            else StepInto.line(20)
+          ),
+          Breakpoint(21)(StepInto.line(22), StepInto.line(8)),
+          Breakpoint(23)(StepInto.line(24), StepInto.line(12))
+        )
+      }
+      assertInMainClass(source, "example.Main")(breakpoints: _*)
     }
   }
 }
