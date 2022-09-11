@@ -147,12 +147,9 @@ class Scala2StepFilter(
     )
     def matchAllArguments: Boolean = {
       val javaArgs = javaMethod.arguments.asScala.toSeq
-      javaArgs.size == scalaArgs.size &&
-      javaArgs
-        .zip(scalaArgs)
-        .forall { case (javaArg, scalaArg) =>
-          matchArgument(javaArg, scalaArg, javaMethod.declaringType)
-        }
+      javaArgs.corresponds(scalaArgs) { (javaArg, scalaArg) =>
+        matchArgument(javaArg, scalaArg, javaMethod.declaringType)
+      }
     }
     def matchReturnType: Boolean = {
       try {

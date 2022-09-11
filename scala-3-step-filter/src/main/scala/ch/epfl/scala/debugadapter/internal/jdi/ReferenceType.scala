@@ -1,4 +1,3 @@
 package ch.epfl.scala.debugadapter.internal.jdi
 
-class ReferenceType(val obj: Any) extends JavaReflection:
-  def name: String = invokeMethod("name")
+class ReferenceType(obj: Any) extends Type(obj)
