@@ -15,16 +15,20 @@ import scala.util.Try
 import tastyquery.ast.TermSig
 import tastyquery.ast.TypeLenSig
 import tastyquery.ast.ParamSig
+import tastyquery.ast.Types.*
 
 class ScalaStepFilterBridge(
     classpaths: Array[Path],
     warnLogger: Consumer[String],
     testMode: Boolean
 ):
-  val kinds = Set(FileKind.Tasty, FileKind.Class)
-  val classpath =
-    ClasspathLoaders.read(classpaths.toList, kinds)
-  given ctx: Context = Contexts.init(classpath)
+  private val classpath =
+    ClasspathLoaders.read(
+      classpaths.toList,
+      Set(FileKind.Tasty, FileKind.Class)
+    )
+  private given ctx: Context = Contexts.init(classpath)
+  private val scalaArray = ArrayTypeUnapplied.resolveToSymbol
 
   private def warn(msg: String): Unit = warnLogger.accept(msg)
 
@@ -46,7 +50,7 @@ class ScalaStepFilterBridge(
       if testMode then throw new Exception(builder.toString)
       else warn(builder.toString)
 
-    matchingSymbols.headOption.forall(skip)
+    matchingSymbols.forall(skip)
 
   private[stepfilter] def extractScalaTerms(
       fqcn: String,
@@ -110,18 +114,40 @@ class ScalaStepFilterBridge(
       symbol: Symbol,
       isExtensionMethod: Boolean
   ): Boolean =
-    symbol.signedName match
-      case SignedName(_, sig, _) =>
-        val javaArgs = method.arguments.headOption.map(_.name) match
-          case Some("$this") if isExtensionMethod => method.arguments.tail
-          case _ => method.arguments
-        val scalaArgs = sig.paramsSig.filter(!_.isInstanceOf[TypeLenSig])
-        matchArguments(scalaArgs, javaArgs) &&
-        method.returnType.forall(matchType(sig.resSig, _))
-      case _ =>
-        true // TODO compare symbol.declaredType
+    val notSupported = unsupported(symbol.declaredType)
+    if unsupported(symbol.declaredType) then true
+    else
+      symbol.signedName match
+        case SignedName(_, sig, _) =>
+          val javaArgs = method.arguments.headOption.map(_.name) match
+            case Some("$this") if isExtensionMethod => method.arguments.tail
+            case _ => method.arguments
+          val scalaArgs = sig.paramsSig.filter(!_.isInstanceOf[TypeLenSig])
+          matchArguments(scalaArgs, javaArgs) &&
+          method.returnType.forall(matchType(sig.resSig, _))
+        case _ =>
+          true // TODO compare symbol.declaredType
 
-  def matchArguments(
+  private def unsupported(tpe: Type): Boolean = tpe match
+    case m: MethodType =>
+      m.paramTypes.exists(unsupported) || unsupported(m.resultType)
+    case m: PolyType => unsupported(m.resType)
+    case _: ExprType => false
+    case AppliedType(tycon, targs) =>
+      if tycon.isRef(scalaArray) then true
+      else unsupported(tycon) || targs.exists(unsupported)
+    case tpe: Symbolic =>
+      tpe.resolveToSymbol match
+        case cls: ClassSymbol => false
+        case sym => unsupported(sym.declaredType)
+    case tpe: TypeParamRef => unsupported(tpe.bounds.high)
+    case AndType(_, _) | OrType(_, _) => true
+    case WildcardTypeBounds(bounds) => unsupported(bounds.high)
+    case BoundedType(bounds, NoType) => unsupported(bounds.high)
+    case BoundedType(_, alias) => unsupported(alias)
+    case tpe => false
+
+  private def matchArguments(
       scalaArgs: Seq[ParamSig],
       javaArgs: Seq[jdi.LocalVariable]
   ): Boolean =
@@ -132,7 +158,7 @@ class ScalaStepFilterBridge(
           if (testMode) throw new Exception(s"Unexpected $TypeLenSig") else true
     }
 
-  def matchType(scalaType: TypeName, javaType: jdi.Type): Boolean =
+  private def matchType(scalaType: TypeName, javaType: jdi.Type): Boolean =
     val expectedType = scalaType.toString match
       case "java.lang.Boolean" | "scala.Boolean" => "boolean".r
       case "java.lang.Byte" | "scala.Byte" => "byte".r
@@ -150,10 +176,13 @@ class ScalaStepFilterBridge(
           .map(Regex.quote)
           .mkString("", "[\\.\\$]", "\\$?")
           .r
-    expectedType.matches(javaType.name)
-    // println(s"match type: ${scalaType.toString} ${javaType.name}   (${expectedType.regex})")
+    val res = expectedType.matches(javaType.name)
+    println(
+      s"match type: ${scalaType.toString} ${javaType.name}   (${expectedType.regex})"
+    )
+    res
 
-  def skip(symbol: RegularSymbol): Boolean =
+  private def skip(symbol: RegularSymbol): Boolean =
     val isNonLazyGetterOrSetter =
       (!symbol.flags.is(Flags.Method) || symbol.is(Flags.Accessor)) &&
         !symbol.is(Flags.Lazy)
