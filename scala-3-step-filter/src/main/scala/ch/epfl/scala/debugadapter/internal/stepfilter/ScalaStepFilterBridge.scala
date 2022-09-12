@@ -28,7 +28,6 @@ class ScalaStepFilterBridge(
       Set(FileKind.Tasty, FileKind.Class)
     )
   private given ctx: Context = Contexts.init(classpath)
-  private val scalaArray = ArrayTypeUnapplied.resolveToSymbol
 
   private def warn(msg: String): Unit = warnLogger.accept(msg)
 
@@ -134,8 +133,7 @@ class ScalaStepFilterBridge(
     case m: PolyType => unsupported(m.resType)
     case _: ExprType => false
     case AppliedType(tycon, targs) =>
-      if tycon.isRef(scalaArray) then true
-      else unsupported(tycon) || targs.exists(unsupported)
+      unsupported(tycon) || targs.exists(unsupported)
     case tpe: Symbolic =>
       tpe.resolveToSymbol match
         case cls: ClassSymbol => false
@@ -158,29 +156,39 @@ class ScalaStepFilterBridge(
           if (testMode) throw new Exception(s"Unexpected $TypeLenSig") else true
     }
 
+  private val javaToScala: Map[String, String] = Map(
+    "scala.Boolean" -> "boolean",
+    "scala.Byte" -> "byte",
+    "scala.Char" -> "char",
+    "scala.Double" -> "double",
+    "scala.Float" -> "float",
+    "scala.Int" -> "int",
+    "scala.Long" -> "long",
+    "scala.Short" -> "short",
+    "scala.Unit" -> "void",
+    "scala.Any" -> "java.lang.Object",
+    "scala.Null" -> "scala.runtime.Null$",
+    "scala.Nothing" -> "scala.runtime.Nothing$"
+  )
+
   private def matchType(scalaType: TypeName, javaType: jdi.Type): Boolean =
-    val expectedType = scalaType.toString match
-      case "java.lang.Boolean" | "scala.Boolean" => "boolean".r
-      case "java.lang.Byte" | "scala.Byte" => "byte".r
-      case "java.lang.Character" | "scala.Char" => "char".r
-      case "java.lang.Double" | "scala.Double" => "double".r
-      case "java.lang.Float" | "scala.Float" => "float".r
-      case "java.lang.Integer" | "scala.Int" => "int".r
-      case "java.lang.Long" | "scala.Long" => "long".r
-      case "java.lang.Short" | "scala.Short" => "short".r
-      case "scala.Unit" => "void".r
-      case "scala.Any" => Regex.quote("java.lang.Object").r
-      case scalaTypeName =>
-        scalaTypeName
-          .split('.')
-          .map(Regex.quote)
-          .mkString("", "[\\.\\$]", "\\$?")
-          .r
-    val res = expectedType.matches(javaType.name)
-    println(
-      s"match type: ${scalaType.toString} ${javaType.name}   (${expectedType.regex})"
-    )
-    res
+    def rec(scalaType: String, javaType: String): Boolean =
+      scalaType.toString match
+        case "scala.Any[]" =>
+          javaType == "java.lang.Object[]" || javaType == "java.lang.Object"
+        case s"$scalaType[]" => rec(scalaType, javaType.stripSuffix("[]"))
+        case _ =>
+          val regex = scalaType
+            .split('.')
+            .map(Regex.quote)
+            .mkString("", "[\\.\\$]", "\\$?")
+            .r
+          javaToScala
+            .get(scalaType)
+            .map(_ == javaType)
+            .getOrElse(regex.matches(javaType))
+    rec(scalaType.toString, javaType.name)
+    // println(s"match type: ${scalaType.toString} ${javaType.name} $res")
 
   private def skip(symbol: RegularSymbol): Boolean =
     val isNonLazyGetterOrSetter =
