@@ -303,7 +303,8 @@ class Scala2StepFilter(
       "scala.package.PartiallyOrdered" -> "scala.math.PartiallyOrdered",
       "scala.package.Either" -> "scala.util.Either",
       "scala.package.Left" -> "scala.util.Left",
-      "scala.package.Right" -> "scala.util.Right"
+      "scala.package.Right" -> "scala.util.Right",
+      "scala.<repeated>" -> "scala.collection.immutable.Seq"
     ) ++ (
       if (scalaVersion.startsWith("2.12"))
         Map(
@@ -351,9 +352,8 @@ class Scala2StepFilter(
           javaType.name == scalaToJavaTypes(path)
         } else {
           lazy val ifEmpty =
-            if (testMode) {
-              throw new Exception(s"Empty encoded value for $path")
-            } else {
+            if (testMode) throw new Exception(s"Empty encoded value for $path")
+            else {
               // if the symbol cannot be encoded, we return true
               // because we don't want to skip a method that should not be skipped
               true

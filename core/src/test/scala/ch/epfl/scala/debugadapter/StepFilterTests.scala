@@ -873,5 +873,27 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
       }
       assertInMainClass(source, "example.Main")(breakpoints: _*)
     }
+
+    "should match on vararg type" - {
+      val source =
+        """|package example
+           |
+           |case class A(as: String*)
+           |
+           |object Main {
+           |  def main(xs: Array[String]): Unit = {
+           |    val a = A("x", "y")
+           |    println(a.as)
+           |    val sc = StringContext("x", "y")
+           |    println(sc.parts)
+           |  }
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(8)(StepInto.method("Predef$.println(Object)")),
+        Breakpoint(10)(StepInto.method("Predef$.println(Object)"))
+      )
+    }
   }
 }
