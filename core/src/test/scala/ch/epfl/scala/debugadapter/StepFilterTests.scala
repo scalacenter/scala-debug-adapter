@@ -895,5 +895,32 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
         Breakpoint(10)(StepInto.method("Predef$.println(Object)"))
       )
     }
+
+    "encode operator symbols" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    println(classOf[<>])
+           |    val x = new <>
+           |    x.m
+           |    &(x)
+           |  }
+           |  
+           |  def &(x: <>): String = x.toString
+           |}
+           |
+           |class <> {
+           |  def m: <> = this
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(6)(StepInto.method("$less$greater.<init>()")),
+        Breakpoint(7)(StepInto.method("$less$greater.m()")),
+        Breakpoint(8)(StepInto.method("Main$.$amp($less$greater)"))
+      )
+    }
   }
 }

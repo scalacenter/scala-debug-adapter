@@ -78,7 +78,8 @@ class ScalaStepFilterBridge(
       owner.declarations
         .collect { case sym: DeclaringSymbol => sym }
         .flatMap { sym =>
-          val Symbol = s"${Regex.quote(sym.name.toString)}\\$$?(.*)".r
+          val encodedSymName = NameTransformer.encode(sym.name.toString)
+          val Symbol = s"${Regex.quote(encodedSymName)}\\$$?(.*)".r
           encodedName match
             case Symbol(remaining) =>
               if remaining.isEmpty then Some(sym)
@@ -104,8 +105,12 @@ class ScalaStepFilterBridge(
       scalaName: String,
       isExtensionMethod: Boolean
   ): Boolean =
-    if isExtensionMethod then scalaName == javaName.stripSuffix("$extension")
-    else scalaName == javaName
+    val encodedScalaName =
+      if scalaName == "<init>" then "<init>"
+      else NameTransformer.encode(scalaName)
+    if isExtensionMethod then
+      encodedScalaName == javaName.stripSuffix("$extension")
+    else encodedScalaName == javaName
 
   def matchSignature(
       method: jdi.Method,
@@ -170,13 +175,14 @@ class ScalaStepFilterBridge(
 
   private def matchType(scalaType: TypeName, javaType: jdi.Type): Boolean =
     def rec(scalaType: String, javaType: String): Boolean =
-      scalaType.toString match
+      scalaType match
         case "scala.Any[]" =>
           javaType == "java.lang.Object[]" || javaType == "java.lang.Object"
         case s"$scalaType[]" => rec(scalaType, javaType.stripSuffix("[]"))
         case _ =>
           val regex = scalaType
             .split('.')
+            .map(NameTransformer.encode)
             .map(Regex.quote)
             .mkString("", "[\\.\\$]", "\\$?")
             .r
@@ -185,7 +191,7 @@ class ScalaStepFilterBridge(
             .map(_ == javaType)
             .getOrElse(regex.matches(javaType))
     rec(scalaType.toString, javaType.name)
-    // println(s"match type: ${scalaType.toString} ${javaType.name} $res")
+    // println(s"match type: $scalaType ${javaType.name} $res")
 
   private def skip(symbol: RegularSymbol): Boolean =
     val isNonLazyGetterOrSetter =
