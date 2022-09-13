@@ -28,15 +28,11 @@ class Scala2StepFilter(
         )
         val printer = new ScalaSigPrinter(builder)
         matchingMethods.foreach(printer.printSymbol)
-
-        if (testMode) {
-          throw new Exception(builder.toString)
-        } else {
-          logger.warn(builder.toString)
-        }
+        if (testMode) throw new Exception(builder.toString)
+        else logger.warn(builder.toString)
       }
 
-      matchingMethods.headOption.forall(skip)
+      matchingMethods.forall(skip)
     }
   }
 

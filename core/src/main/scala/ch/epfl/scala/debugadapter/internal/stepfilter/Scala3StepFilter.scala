@@ -9,10 +9,8 @@ import java.nio.file.Path
 import java.lang.reflect.InvocationTargetException
 import ch.epfl.scala.debugadapter.Java8
 import ch.epfl.scala.debugadapter.Java9OrAbove
-import scala.util.control.NonFatal
 import scala.util.Try
 import scala.util.Success
-import ch.epfl.scala.debugadapter.testing.SingleTestResult
 import scala.util.Failure
 
 class Scala3StepFilter(

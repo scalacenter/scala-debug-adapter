@@ -85,7 +85,6 @@ class ScalaStepFilterBridge(
               else findRec(sym, remaining)
             case _ => None
         }
-
     val clsSymbols = findRec(packageSym, className)
     val obj = clsSymbols.filter(_.is(Flags.Module))
     val cls = clsSymbols.filter(!_.is(Flags.Module))
@@ -121,8 +120,7 @@ class ScalaStepFilterBridge(
           val javaArgs = method.arguments.headOption.map(_.name) match
             case Some("$this") if isExtensionMethod => method.arguments.tail
             case _ => method.arguments
-          val scalaArgs = sig.paramsSig.filter(!_.isInstanceOf[TypeLenSig])
-          matchArguments(scalaArgs, javaArgs) &&
+          matchArguments(sig.paramsSig, javaArgs) &&
           method.returnType.forall(matchType(sig.resSig, _))
         case _ =>
           true // TODO compare symbol.declaredType
@@ -149,12 +147,11 @@ class ScalaStepFilterBridge(
       scalaArgs: Seq[ParamSig],
       javaArgs: Seq[jdi.LocalVariable]
   ): Boolean =
-    scalaArgs.corresponds(javaArgs) { (scalaArg, javaArg) =>
-      scalaArg match
-        case TermSig(typeName) => matchType(typeName, javaArg.`type`)
-        case TypeLenSig(len) =>
-          if (testMode) throw new Exception(s"Unexpected $TypeLenSig") else true
-    }
+    scalaArgs
+      .collect { case termSig: TermSig => termSig }
+      .corresponds(javaArgs) { (scalaArg, javaArg) =>
+        matchType(scalaArg.typ, javaArg.`type`)
+      }
 
   private val javaToScala: Map[String, String] = Map(
     "scala.Boolean" -> "boolean",
