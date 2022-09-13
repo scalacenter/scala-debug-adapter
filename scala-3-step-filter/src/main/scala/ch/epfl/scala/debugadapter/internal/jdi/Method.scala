@@ -3,7 +3,7 @@ package ch.epfl.scala.debugadapter.internal.jdi
 import scala.jdk.CollectionConverters.*
 import java.lang.reflect.InvocationTargetException
 
-class Method(val obj: Any) extends JavaReflection:
+class Method(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method"):
   def name: String = invokeMethod("name")
 
   def declaringType: ReferenceType =

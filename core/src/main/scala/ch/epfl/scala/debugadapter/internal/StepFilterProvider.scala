@@ -44,7 +44,7 @@ object StepFilterProvider {
   ): StepFilterProvider = {
     val scalaStepFilter =
       ScalaStepFilter(sourceLookUp, runner, logger, testMode)
-    val scalaLibraryStepFilter = ScalaLibraryStepFilter(runner)
+    val scalaLibraryStepFilter = RuntimeClassStepFilter(runner)
     new StepFilterProvider(
       Seq(scalaLibraryStepFilter, scalaStepFilter),
       logger,

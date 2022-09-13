@@ -3,13 +3,17 @@ package ch.epfl.scala.debugadapter.internal.stepfilter
 import java.lang.reflect.Method
 import ch.epfl.scala.debugadapter.Logger
 import com.sun.jdi
-import scala.util.Try
 import ch.epfl.scala.debugadapter.DebuggeeRunner
 import java.util.function.Consumer
 import java.nio.file.Path
 import java.lang.reflect.InvocationTargetException
 import ch.epfl.scala.debugadapter.Java8
 import ch.epfl.scala.debugadapter.Java9OrAbove
+import scala.util.control.NonFatal
+import scala.util.Try
+import scala.util.Success
+import ch.epfl.scala.debugadapter.testing.SingleTestResult
+import scala.util.Failure
 
 class Scala3StepFilter(
     bridge: Any,
@@ -34,7 +38,7 @@ object Scala3StepFilter {
   ): Option[Scala3StepFilter] = {
     for {
       classLoader <- runner.stepFilterClassLoader
-      stepFilterTry = Try {
+      stepFilter <- Try {
         val className =
           "ch.epfl.scala.debugadapter.internal.stepfilter.ScalaStepFilterBridge"
         val cls = classLoader.loadClass(className)
@@ -45,8 +49,10 @@ object Scala3StepFilter {
         )
         // TASTy Query needs the javaRuntimeJars
         val javaRuntimeJars = runner.javaRuntime.toSeq.flatMap {
-          case Java8(javaHome, classJars, sourceZip) => classJars
-          case Java9OrAbove(javaHome, fsJar, sourceZip) => Seq.empty
+          case Java8(_, classJars, _) => classJars
+          case java9OrAbove: Java9OrAbove =>
+            java9OrAbove.classSystems
+              .map(_.fileSystem.getPath("/modules", "java.base"))
         }
         val debuggeeClasspath = runner.classPath.toArray ++ javaRuntimeJars
         val warnLogger: Consumer[String] = msg => logger.warn(msg)
@@ -57,8 +63,13 @@ object Scala3StepFilter {
         )
         val skipMethod = cls.getMethods.find(m => m.getName == "skipMethod").get
         new Scala3StepFilter(bridge, skipMethod, logger, testMode)
+      } match {
+        case Success(value) => Some(value)
+        case Failure(e) =>
+          logger.error("Failed to load step filter from provided class loader")
+          logger.trace(e)
+          None
       }
-      stepFilter <- stepFilterTry.toOption
     } yield stepFilter
   }
 }

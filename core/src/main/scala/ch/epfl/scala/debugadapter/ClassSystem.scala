@@ -6,6 +6,10 @@ import java.nio.file.FileSystem
 import java.nio.file.FileSystems
 import java.nio.file.Path
 import java.nio.file.Files
+import java.net.URI
+import scala.collection.mutable
+import scala.util.control.NonFatal
+import java.util.Collections
 
 sealed trait ClassSystem {
   def within[T](f: (FileSystem, Path) => T): Option[T]
@@ -27,11 +31,26 @@ final case class ClassDirectory(absolutePath: Path) extends ClassSystem {
 
 final case class JavaRuntimeSystem(classLoader: ClassLoader, javaHome: Path)
     extends ClassSystem {
+  def fileSystem: FileSystem =
+    JavaRuntimeSystem.getFileSystem(classLoader, javaHome)
+
   def within[T](f: (FileSystem, Path) => T): Option[T] = {
-    Some(
-      IO.withinJavaRuntimeFileSystem(classLoader, javaHome)(fs =>
-        f(fs, fs.getPath("/modules"))
-      )
+    try {
+      Some(f(fileSystem, fileSystem.getPath("/modules")))
+    } catch {
+      case NonFatal(_) => None
+    }
+  }
+}
+
+object JavaRuntimeSystem {
+  private val fileSystems: mutable.Map[Path, FileSystem] = mutable.Map()
+
+  def getFileSystem(classLoader: ClassLoader, javaHome: Path): FileSystem = {
+    val properties = Collections.singletonMap("java.home", javaHome.toString)
+    fileSystems.getOrElseUpdate(
+      javaHome,
+      FileSystems.newFileSystem(URI.create("jrt:/"), properties, classLoader)
     )
   }
 }

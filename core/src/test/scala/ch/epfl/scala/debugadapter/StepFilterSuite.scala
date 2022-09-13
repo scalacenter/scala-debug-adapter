@@ -105,7 +105,6 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
           client.stopped(timeout)
           val stackTrace = client.stackTrace(threadId)
           val topFrame = stackTrace.stackFrames.head
-          println(s"Stepped into ${topFrame.name}")
           currentLine = topFrame.line
           step.assert(topFrame)
         }
