@@ -117,8 +117,8 @@ class ScalaStepFilterBridge(
       symbol: Symbol,
       isExtensionMethod: Boolean
   ): Boolean =
-    val notSupported = unsupported(symbol.declaredType)
-    if unsupported(symbol.declaredType) then true
+    val supported = doesSupportErasure(symbol.declaredType)
+    if !supported then true
     else
       symbol.signedName match
         case SignedName(_, sig, _) =>
@@ -130,23 +130,25 @@ class ScalaStepFilterBridge(
         case _ =>
           true // TODO compare symbol.declaredType
 
-  private def unsupported(tpe: Type): Boolean = tpe match
+  // erasure in TASTy Query is not yet correct on AndType and OrType
+  private def doesSupportErasure(tpe: Type): Boolean = tpe match
     case m: MethodType =>
-      m.paramTypes.exists(unsupported) || unsupported(m.resultType)
-    case m: PolyType => unsupported(m.resType)
-    case _: ExprType => false
+      m.paramTypes.forall(doesSupportErasure) &&
+      doesSupportErasure(m.resultType)
+    case m: PolyType => doesSupportErasure(m.resType)
+    case _: ExprType => true
     case AppliedType(tycon, targs) =>
-      unsupported(tycon) || targs.exists(unsupported)
+      doesSupportErasure(tycon) && targs.forall(doesSupportErasure)
     case tpe: Symbolic =>
       tpe.resolveToSymbol match
-        case cls: ClassSymbol => false
-        case sym => unsupported(sym.declaredType)
-    case tpe: TypeParamRef => unsupported(tpe.bounds.high)
-    case AndType(_, _) | OrType(_, _) => true
-    case WildcardTypeBounds(bounds) => unsupported(bounds.high)
-    case BoundedType(bounds, NoType) => unsupported(bounds.high)
-    case BoundedType(_, alias) => unsupported(alias)
-    case tpe => false
+        case cls: ClassSymbol => true
+        case sym => doesSupportErasure(sym.declaredType)
+    case tpe: TypeParamRef => doesSupportErasure(tpe.bounds.high)
+    case AndType(_, _) | OrType(_, _) => false
+    case WildcardTypeBounds(bounds) => doesSupportErasure(bounds.high)
+    case BoundedType(bounds, NoType) => doesSupportErasure(bounds.high)
+    case BoundedType(_, alias) => doesSupportErasure(alias)
+    case tpe => true
 
   private def matchArguments(
       scalaArgs: Seq[ParamSig],
