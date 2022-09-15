@@ -26,8 +26,8 @@ trait ScalaStepFilter extends StepFilter {
 
   private def isDynamicClass(tpe: ReferenceType): Boolean =
     try {
-      tpe.sourceName()
-      false
+      // source of java.lang.invoke.LambdaForm$DMH.1175962212.invokeStatic_L_L(java.lang.Object, java.lang.Object) is LambdaForm$DMH
+      !tpe.sourceName.contains('.')
     } catch {
       case _: AbsentInformationException =>
         // We assume that a ReferenceType with no source name is necessarily a dynamic class
