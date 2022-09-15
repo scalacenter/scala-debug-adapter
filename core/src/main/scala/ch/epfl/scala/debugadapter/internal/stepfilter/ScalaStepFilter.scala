@@ -15,6 +15,7 @@ trait ScalaStepFilter extends StepFilter {
     if (method.isBridge) true
     else if (isDynamicClass(method.declaringType)) true
     else if (isJava(method)) false
+    else if (isConstructor(method)) false
     else if (isLocalMethod(method)) false
     else if (isAnonFunction(method)) false
     else if (isLocalClass(method.declaringType)) false
@@ -35,6 +36,9 @@ trait ScalaStepFilter extends StepFilter {
 
   private def isJava(method: Method): Boolean =
     method.declaringType.sourceName.endsWith(".java")
+
+  private def isConstructor(method: Method): Boolean =
+    method.name == "<init>"
 
   private def isLocalMethod(method: Method): Boolean =
     method.name.matches(".+\\$\\d+")

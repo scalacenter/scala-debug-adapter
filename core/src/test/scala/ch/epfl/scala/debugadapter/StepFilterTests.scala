@@ -882,17 +882,21 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |
            |object Main {
            |  def main(xs: Array[String]): Unit = {
-           |    val a = A("x", "y")
+           |    A(""); StringContext("") // loading classes
+           |    val parts = Seq("x", "y")
+           |    val a = A(parts:_*)
            |    println(a.as)
-           |    val sc = StringContext("x", "y")
+           |    val sc = StringContext(parts:_*)
            |    println(sc.parts)
            |  }
            |}
            |""".stripMargin
 
       assertInMainClass(source, "example.Main")(
-        Breakpoint(8)(StepInto.method("Predef$.println(Object)")),
-        Breakpoint(10)(StepInto.method("Predef$.println(Object)"))
+        Breakpoint(9)(StepInto.method("A.<init>(Seq)")),
+        Breakpoint(10)(StepInto.method("Predef$.println(Object)")),
+        Breakpoint(11)(StepInto.method("StringContext.<init>(Seq)")),
+        Breakpoint(12)(StepInto.method("Predef$.println(Object)"))
       )
     }
 

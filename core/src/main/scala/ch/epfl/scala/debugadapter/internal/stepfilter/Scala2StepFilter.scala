@@ -149,7 +149,6 @@ class Scala2StepFilter(
     }
     def matchReturnType: Boolean = {
       try {
-        javaMethod.isConstructor ||
         matchType(
           javaMethod.returnType,
           scalaReturnType,

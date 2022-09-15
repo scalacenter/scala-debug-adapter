@@ -43,9 +43,9 @@ class ScalaStepFilterBridge(
     if matchingSymbols.size > 1 then
       val builder = new java.lang.StringBuilder
       builder.append(
-        s"Found ${matchingSymbols.size} matching symbols for $method:\n"
+        s"Found ${matchingSymbols.size} matching symbols for $method:"
       )
-      matchingSymbols.foreach(sym => builder.append(s"$sym\n"))
+      matchingSymbols.foreach(sym => builder.append(s"\n$sym"))
       if testMode then throw new Exception(builder.toString)
       else warn(builder.toString)
 
@@ -105,9 +105,7 @@ class ScalaStepFilterBridge(
       scalaName: String,
       isExtensionMethod: Boolean
   ): Boolean =
-    val encodedScalaName =
-      if scalaName == "<init>" then "<init>"
-      else NameTransformer.encode(scalaName)
+    val encodedScalaName = NameTransformer.encode(scalaName)
     if isExtensionMethod then
       encodedScalaName == javaName.stripSuffix("$extension")
     else encodedScalaName == javaName
@@ -175,7 +173,10 @@ class ScalaStepFilterBridge(
     "scala.Nothing" -> "scala.runtime.Nothing$"
   )
 
-  private def matchType(scalaType: TypeName, javaType: jdi.Type): Boolean =
+  private def matchType(
+      scalaType: FullyQualifiedName,
+      javaType: jdi.Type
+  ): Boolean =
     def rec(scalaType: String, javaType: String): Boolean =
       scalaType match
         case "scala.Any[]" =>
