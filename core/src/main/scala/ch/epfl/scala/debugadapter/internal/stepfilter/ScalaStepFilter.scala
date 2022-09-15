@@ -7,6 +7,7 @@ import ch.epfl.scala.debugadapter.internal.ByteCodes
 import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
 import ch.epfl.scala.debugadapter.DebuggeeRunner
 import ch.epfl.scala.debugadapter.Logger
+import scala.collection.JavaConverters.*
 
 trait ScalaStepFilter extends StepFilter {
   protected def skipScalaMethod(method: Method): Boolean
@@ -16,7 +17,8 @@ trait ScalaStepFilter extends StepFilter {
     else if (isDynamicClass(method.declaringType)) true
     else if (isJava(method)) false
     else if (isConstructor(method)) false
-    else if (isLocalMethod(method)) false
+    else if (isLocalMethod(method))
+      !isLazyInitializer(method) && isLazyGetter(method)
     else if (isAnonFunction(method)) false
     else if (isLocalClass(method.declaringType)) false
     else if (isDefaultValue(method)) false
@@ -42,6 +44,27 @@ trait ScalaStepFilter extends StepFilter {
 
   private def isLocalMethod(method: Method): Boolean =
     method.name.matches(".+\\$\\d+")
+
+  private def isLazyInitializer(method: Method): Boolean =
+    method.name.contains("$lzyINIT") || method.name.contains("$lzycompute$")
+
+  private val lazyTypes: Set[String] = Set(
+    "scala.runtime.LazyRef",
+    "scala.runtime.LazyBoolean",
+    "scala.runtime.LazyByte",
+    "scala.runtime.LazyChar",
+    "scala.runtime.LazyShort",
+    "scala.runtime.LazyInt",
+    "scala.runtime.LazyLong",
+    "scala.runtime.LazyFloat",
+    "scala.runtime.LazyDouble",
+    "scala.runtime.LazyUnit"
+  )
+  private def isLazyGetter(method: Method): Boolean =
+    method.argumentTypes.asScala.toSeq match {
+      case Seq(argType) => lazyTypes.contains(argType.name)
+      case _ => false
+    }
 
   private def isAnonFunction(method: Method): Boolean =
     method.name.contains("$anonfun$")

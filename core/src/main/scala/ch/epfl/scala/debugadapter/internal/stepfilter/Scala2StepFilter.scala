@@ -70,11 +70,8 @@ class Scala2StepFilter(
       case t =>
         val message =
           s"Expected declaring type of $method to be a class, found ${t.getClass.getSimpleName}"
-        if (testMode) throw new Exception(message)
-        else {
-          logger.warn(message)
-          false
-        }
+        throwOrWarn(message)
+        false
     }
   }
 

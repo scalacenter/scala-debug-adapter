@@ -957,5 +957,38 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
         )
       )
     }
+
+    "should step into local lazy initializer" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    lazy val foo = {
+           |      println("foo")
+           |      "foo"
+           |    }
+           |    println(foo)
+           |    println(foo)
+           |  }
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(9)(
+          StepInto.method("LazyRef.initialized()"),
+          StepInto.method(
+            if (isScala3) "Main$.foo$lzyINIT1$1(LazyRef)"
+            else "Main$.foo$lzycompute$1(LazyRef)"
+          ),
+          StepOut.line(9)
+        ),
+        Breakpoint(10)(
+          StepInto.method("LazyRef.initialized()"),
+          StepInto.method("LazyRef.value()"),
+          StepInto.line(10)
+        )
+      )
+    }
   }
 }

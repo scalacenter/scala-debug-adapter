@@ -202,7 +202,6 @@ class ScalaStepFilterBridge(
             .map(_ == javaType)
             .getOrElse(regex.matches(javaType))
     rec(scalaType.toString, javaType.name)
-    // println(s"match type: $scalaType ${javaType.name} $res")
 
   private def skip(symbol: RegularSymbol): Boolean =
     val isNonLazyGetterOrSetter =
