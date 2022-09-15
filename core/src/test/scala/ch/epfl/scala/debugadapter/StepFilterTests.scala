@@ -420,7 +420,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |}
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(6)(StepInto.line(5), StepOut.line(6))
+        Breakpoint(5)(StepInto.line(6), StepInto.line(5), StepOut.line(6))
       )
     }
 
