@@ -31,25 +31,33 @@ class ScalaStepFilterBridge(
 
   private def warn(msg: String): Unit = warnLogger.accept(msg)
 
+  private def throwOrWarn(msg: String): Unit =
+    if (testMode) warn(msg)
+    else throw new Exception(msg)
+
   def skipMethod(obj: Any): Boolean =
     val method = jdi.Method(obj)
     val isExtensionMethod = method.name.endsWith("$extension")
     val fqcn = method.declaringType.name
-    val matchingSymbols =
-      extractScalaTerms(fqcn, isExtensionMethod).filter(
-        matchSymbol(method, _, isExtensionMethod)
-      )
+    findDeclaringType(fqcn, isExtensionMethod) match
+      case None =>
+        throwOrWarn(s"Cannot find Scala symbol of $fqcn")
+        false
+      case Some(declaringType) =>
+        val matchingSymbols =
+          declaringType.declarations
+            .collect { case sym: RegularSymbol if sym.isTerm => sym }
+            .filter(matchSymbol(method, _, isExtensionMethod))
 
-    if matchingSymbols.size > 1 then
-      val builder = new java.lang.StringBuilder
-      builder.append(
-        s"Found ${matchingSymbols.size} matching symbols for $method:"
-      )
-      matchingSymbols.foreach(sym => builder.append(s"\n$sym"))
-      if testMode then throw new Exception(builder.toString)
-      else warn(builder.toString)
+        if matchingSymbols.size > 1 then
+          val builder = new java.lang.StringBuilder
+          builder.append(
+            s"Found ${matchingSymbols.size} matching symbols for $method:"
+          )
+          matchingSymbols.foreach(sym => builder.append(s"\n$sym"))
+          throwOrWarn(builder.toString)
 
-    matchingSymbols.forall(skip)
+        matchingSymbols.forall(skip)
 
   private[stepfilter] def extractScalaTerms(
       fqcn: String,
