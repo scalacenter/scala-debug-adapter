@@ -16,6 +16,7 @@ trait ScalaStepFilter extends StepFilter {
     else if (isDynamicClass(method.declaringType)) true
     else if (isJava(method)) false
     else if (isLocalMethod(method)) false
+    else if (isAnonFunction(method)) false
     else if (isLocalClass(method.declaringType)) false
     else if (isDefaultValue(method)) false
     else if (isTraitInitializer(method)) skipTraitInitializer(method)
@@ -36,6 +37,9 @@ trait ScalaStepFilter extends StepFilter {
     method.declaringType.sourceName.endsWith(".java")
 
   private def isLocalMethod(method: Method): Boolean =
+    method.name.matches(".+\\$\\d+")
+
+  private def isAnonFunction(method: Method): Boolean =
     method.name.contains("$anonfun$")
 
   private def isDefaultValue(method: Method): Boolean =

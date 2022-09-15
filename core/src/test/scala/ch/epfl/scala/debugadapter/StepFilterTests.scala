@@ -922,5 +922,36 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
         Breakpoint(8)(StepInto.method("Main$.$amp($less$greater)"))
       )
     }
+
+    "should step into local recursive method" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(xs: Array[String]): Unit = {
+           |    fac(2)
+           |  }
+           |  
+           |  def fac(x: Int): Int = {
+           |    def rec(x: Int, acc: Int): Int = {
+           |      if (x <= 0) acc
+           |      else rec(x - 1, acc * x)
+           |    }
+           |    rec(x, 1)
+           |  }
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(5)(
+          StepInto.line(13),
+          StepInto.line(10),
+          StepInto.line(11),
+          StepInto.line(10),
+          StepOut.line(13),
+          StepOut.line(5)
+        )
+      )
+    }
   }
 }
