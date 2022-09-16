@@ -168,8 +168,7 @@ private[internal] class ExpressionEvaluator(
       classLoader: JdiClassLoader
   ): Safe[(List[StringReference], List[Value])] = {
     val thisObjectOpt = Option(frame.thisObject) // this object can be null
-    def extractVariablesFromFrame()
-        : Safe[(List[StringReference], List[Value])] = {
+    def extractVariablesFromFrame(): Safe[(List[StringReference], List[Value])] = {
       val variables: List[LocalVariable] =
         frame.visibleVariables().asScala.toList
       val variableNames =

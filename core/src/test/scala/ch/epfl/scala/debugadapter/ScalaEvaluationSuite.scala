@@ -7,8 +7,7 @@ import scala.concurrent.duration._
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 
-abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
-    extends TestSuite {
+abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
   val executorService = Executors.newFixedThreadPool(1)
   implicit val ec =
@@ -82,8 +81,7 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion)
           case () =>
             if (isScala3) assert(resp.exists(_.endsWith("\"()\"")))
             else assert(resp == Right("<void value>"))
-          case expected @ (_: Boolean | _: Byte | _: Char | _: Int | _: Long |
-              _: Short) =>
+          case expected @ (_: Boolean | _: Byte | _: Char | _: Int | _: Long | _: Short) =>
             assert(resp == Right(expected.toString))
           case floating @ (_: Double | _: Float) =>
             val expected = String.format(

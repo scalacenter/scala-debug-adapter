@@ -129,9 +129,7 @@ class ScalaSigPrinter(builder: StringBuilder) {
 
   def isCaseClassObject(o: ObjectSymbol): Boolean = {
     val TypeRefType(_, Ref(classSymbol: ClassSymbol), _) = o.infoType
-    o.isFinal && (classSymbol.children.find(x =>
-      x.isCase && x.isInstanceOf[MethodSymbol]
-    ) match {
+    o.isFinal && (classSymbol.children.find(x => x.isCase && x.isInstanceOf[MethodSymbol]) match {
       case Some(_) => true
       case None => false
     })
@@ -328,8 +326,7 @@ class ScalaSigPrinter(builder: StringBuilder) {
     val printer = new ScalaSigPrinter(new StringBuilder())
     val methodName = msymb.name
     val paramAccessors = c.children.filter {
-      case ms: MethodSymbol
-          if ms.isParamAccessor && ms.name.startsWith(methodName) =>
+      case ms: MethodSymbol if ms.isParamAccessor && ms.name.startsWith(methodName) =>
         true
       case _ => false
     }
@@ -372,8 +369,7 @@ class ScalaSigPrinter(builder: StringBuilder) {
           "(" + (mt match {
             case _: ImplicitMethodType => "implicit "
             // for Scala 2.9
-            case mt: MethodType
-                if mt.paramSymbols.nonEmpty && mt.paramSymbols.head.isImplicit =>
+            case mt: MethodType if mt.paramSymbols.nonEmpty && mt.paramSymbols.head.isImplicit =>
               "implicit "
             case _ => ""
           }),
@@ -556,8 +552,7 @@ class ScalaSigPrinter(builder: StringBuilder) {
 
     // print type itself
     t match {
-      case ThisType(Ref(classSymbol: ClassSymbol))
-          if refinementClass(classSymbol) =>
+      case ThisType(Ref(classSymbol: ClassSymbol)) if refinementClass(classSymbol) =>
         sep + "this.type"
       case ThisType(Ref(symbol)) =>
         sep + processName(symbol.name) + ".this.type"
@@ -573,8 +568,7 @@ class ScalaSigPrinter(builder: StringBuilder) {
             case name => processName(name) + ".this"
           }
         sep + thisSymbolName + "." + processName(symbol.name) + ".type"
-      case SingleType(Ref(ThisType(Ref(exSymbol: ExternalSymbol))), symbol)
-          if exSymbol.name == "<root>" =>
+      case SingleType(Ref(ThisType(Ref(exSymbol: ExternalSymbol))), symbol) if exSymbol.name == "<root>" =>
         sep + processName(symbol.name) + ".type"
       case SingleType(
             Ref(ThisType(Ref(exSymbol: ExternalSymbol))),
@@ -621,17 +615,11 @@ class ScalaSigPrinter(builder: StringBuilder) {
                     case TypeRefType(_, Ref(sym), _) => sym == parent
                     case _: TypeBoundsType => false
                     case RefinedType(Ref(sym), refs) =>
-                      sym == parent || refs.exists(tp =>
-                        checkContainsSelf(Some(tp), parent)
-                      )
+                      sym == parent || refs.exists(tp => checkContainsSelf(Some(tp), parent))
                     case ClassInfoType(Ref(sym), refs) =>
-                      sym == parent || refs.exists(tp =>
-                        checkContainsSelf(Some(tp), parent)
-                      )
+                      sym == parent || refs.exists(tp => checkContainsSelf(Some(tp), parent))
                     case ClassInfoTypeWithCons(Ref(sym), refs, _) =>
-                      sym == parent || refs.exists(tp =>
-                        checkContainsSelf(Some(tp), parent)
-                      )
+                      sym == parent || refs.exists(tp => checkContainsSelf(Some(tp), parent))
                     case ImplicitMethodType(_, _) => false
                     case MethodType(_, _) => false
                     case NullaryMethodType(_) => false
@@ -656,8 +644,7 @@ class ScalaSigPrinter(builder: StringBuilder) {
             val prefixStr =
               (prefix.get, symbol.get, toString(prefix.get, level)) match {
                 case (NoPrefixType, _, _) => ""
-                case (ThisType(Ref(objectSymbol)), _, _)
-                    if objectSymbol.isModule && !objectSymbol.isStableObject =>
+                case (ThisType(Ref(objectSymbol)), _, _) if objectSymbol.isModule && !objectSymbol.isStableObject =>
                   val name: String = objectSymbol.name
                   objectSymbol match {
                     case classSymbol: ClassSymbol if name == "package" =>
@@ -666,8 +653,7 @@ class ScalaSigPrinter(builder: StringBuilder) {
                   }
                 case (ThisType(packSymbol), _, _) if !packSymbol.isType =>
                   processName(packSymbol.path.fixRoot) + "."
-                case (ThisType(Ref(classSymbol: ClassSymbol)), _, _)
-                    if refinementClass(classSymbol) =>
+                case (ThisType(Ref(classSymbol: ClassSymbol)), _, _) if refinementClass(classSymbol) =>
                   ""
                 case (
                       ThisType(Ref(typeSymbol: ClassSymbol)),
@@ -846,8 +832,8 @@ class ScalaSigPrinter(builder: StringBuilder) {
     }
 
     // symbol literals are not valid constant expression
-    private val symbolLiteralText: PartialFunction[Any, String] = {
-      case Ref(ScalaSymbol(value)) => "\'" + value
+    private val symbolLiteralText: PartialFunction[Any, String] = { case Ref(ScalaSymbol(value)) =>
+      "\'" + value
     }
 
     private val constantDefinitionExpr: PartialFunction[Any, String] = {
@@ -1019,8 +1005,7 @@ object ScalaSigPrinter {
 
     /** Can character form part of a Scala operator name? */
     def isOperatorPart(c: Char): Boolean = (c: @switch) match {
-      case '~' | '!' | '@' | '#' | '%' | '^' | '*' | '+' | '-' | '<' | '>' |
-          '?' | ':' | '=' | '&' | '|' | '/' | '\\' =>
+      case '~' | '!' | '@' | '#' | '%' | '^' | '*' | '+' | '-' | '<' | '>' | '?' | ':' | '=' | '&' | '|' | '/' | '\\' =>
         true
       case _ => isSpecial(c)
     }

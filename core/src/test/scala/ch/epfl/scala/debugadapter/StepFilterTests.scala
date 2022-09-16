@@ -6,8 +6,7 @@ object Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
 object Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`)
 object Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.2`)
 
-abstract class StepFilterTests(scalaVersion: ScalaVersion)
-    extends StepFilterSuite(scalaVersion) {
+abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSuite(scalaVersion) {
 
   def tests: Tests = Tests {
     "should not step into mixin forwarder" - {

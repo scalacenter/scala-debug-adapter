@@ -39,8 +39,7 @@ object JdiArray {
   }
 }
 
-class JdiArray(reference: ArrayReference, thread: ThreadReference)
-    extends JdiObject(reference, thread) {
+class JdiArray(reference: ArrayReference, thread: ThreadReference) extends JdiObject(reference, thread) {
   def setValue(index: Int, value: Value): Unit =
     reference.setValue(index, value)
 

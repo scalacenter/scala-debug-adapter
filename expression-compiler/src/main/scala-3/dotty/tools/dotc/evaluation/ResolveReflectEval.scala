@@ -140,8 +140,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               gen.boxIfValueClass(field, fieldValue)
             case EvaluationStrategy.FieldAssign(field) =>
               val arg = gen.unboxIfValueClass(field, args.head)
-              if field.owner.is(Trait) then
-                gen.callMethod(qualifier, field.setter.asTerm, List(arg))
+              if field.owner.is(Trait) then gen.callMethod(qualifier, field.setter.asTerm, List(arg))
               else gen.setField(qualifier, field, arg)
             case EvaluationStrategy.MethodCall(method) =>
               gen.callMethod(qualifier, method, args)

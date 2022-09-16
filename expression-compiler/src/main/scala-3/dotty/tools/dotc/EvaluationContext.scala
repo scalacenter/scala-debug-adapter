@@ -30,9 +30,7 @@ class EvaluationContext(
       cls
     }.toSeq
     capturingMethod = exprSym.ownersIterator
-      .find(sym =>
-        (sym.isClass || sym.is(Method)) && sym.enclosure.is(Method)
-      ) // the first local class or method
+      .find(sym => (sym.isClass || sym.is(Method)) && sym.enclosure.is(Method)) // the first local class or method
       .collect { case sym if sym.is(Method) => sym.asTerm } // if it is a method
 
   def expressionClass(using Context): ClassSymbol =

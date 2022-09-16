@@ -7,15 +7,13 @@ import java.nio.file.Paths
 
 sealed trait JavaRuntime extends ClassEntry
 
-final case class Java8(javaHome: Path, classJars: Seq[Path], sourceZip: Path)
-    extends JavaRuntime {
+final case class Java8(javaHome: Path, classJars: Seq[Path], sourceZip: Path) extends JavaRuntime {
   override def sourceEntries: Seq[SourceEntry] = Seq(SourceJar(sourceZip))
   override def classSystems: Seq[ClassSystem] = classJars.map(ClassJar.apply)
   override def name: String = javaHome.toString
 }
 
-final case class Java9OrAbove(javaHome: Path, fsJar: Path, sourceZip: Path)
-    extends JavaRuntime {
+final case class Java9OrAbove(javaHome: Path, fsJar: Path, sourceZip: Path) extends JavaRuntime {
   override def sourceEntries: Seq[SourceEntry] = Seq(SourceJar(sourceZip))
   override def classSystems: Seq[JavaRuntimeSystem] = {
     val classLoader = new URLClassLoader(Array(fsJar.toUri.toURL))

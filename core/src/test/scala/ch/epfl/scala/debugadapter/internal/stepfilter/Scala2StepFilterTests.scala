@@ -9,13 +9,10 @@ import ch.epfl.scala.debugadapter.internal.scalasig._
 import ch.epfl.scala.debugadapter.PrintLogger
 import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
 
-object Scala213StepFilterTests
-    extends Scala2StepFilterTests(ScalaVersion.`2.13`)
-object Scala212StepFilterTests
-    extends Scala2StepFilterTests(ScalaVersion.`2.12`)
+object Scala213StepFilterTests extends Scala2StepFilterTests(ScalaVersion.`2.13`)
+object Scala212StepFilterTests extends Scala2StepFilterTests(ScalaVersion.`2.12`)
 
-abstract class Scala2StepFilterTests(scalaVersion: ScalaVersion)
-    extends TestSuite {
+abstract class Scala2StepFilterTests(scalaVersion: ScalaVersion) extends TestSuite {
   def isScala213: Boolean = scalaVersion.binaryVersion == "2.13"
 
   override def tests: Tests = Tests {

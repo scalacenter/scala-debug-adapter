@@ -34,8 +34,8 @@ object ClassEntryLookUpSpec extends TestSuite {
         Coursier.fetchOnly("org.typelevel", "cats-core_3", "2.6.1")
       val lookUp = ClassEntryLookUp(classPathEntry, NoopLogger)
 
-      val sourceJar = classPathEntry.sourceEntries.collectFirst {
-        case SourceJar(jar) => jar
+      val sourceJar = classPathEntry.sourceEntries.collectFirst { case SourceJar(jar) =>
+        jar
       }.get
       val expectedSourceFile =
         URI.create(s"jar:${sourceJar.toUri}!/cats/instances/list.scala")
@@ -67,8 +67,8 @@ object ClassEntryLookUpSpec extends TestSuite {
         Coursier.fetchOnly("org.typelevel", "cats-core_2.12", "2.3.0")
       val lookUp = ClassEntryLookUp(classPathEntry, NoopLogger)
 
-      val sourceJar = classPathEntry.sourceEntries.collectFirst {
-        case SourceJar(jar) => jar
+      val sourceJar = classPathEntry.sourceEntries.collectFirst { case SourceJar(jar) =>
+        jar
       }.get
       val sourceFile =
         URI.create(s"jar:${sourceJar.toUri}!/cats/instances/list.scala")
@@ -82,8 +82,8 @@ object ClassEntryLookUpSpec extends TestSuite {
       val classPathEntry =
         Coursier.fetchOnly("org.webjars", "swagger-ui", "4.2.1")
       val lookUp = ClassEntryLookUp(classPathEntry, NoopLogger)
-      val sourceJar = classPathEntry.sourceEntries.collectFirst {
-        case SourceJar(jar) => jar
+      val sourceJar = classPathEntry.sourceEntries.collectFirst { case SourceJar(jar) =>
+        jar
       }
       assert(sourceJar.isDefined)
       assert(lookUp.sources.isEmpty)

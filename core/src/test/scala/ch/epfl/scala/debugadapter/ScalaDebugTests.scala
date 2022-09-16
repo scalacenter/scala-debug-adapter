@@ -126,9 +126,8 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
         assertMatch(localVars.map(_.name)) { case Array("args", "h", "this") =>
           ()
         }
-        assertMatch(localVars.map(_.value).map(_.split(" ").last)) {
-          case Array(_, "\"hello\"", _) =>
-            ()
+        assertMatch(localVars.map(_.value).map(_.split(" ").last)) { case Array(_, "\"hello\"", _) =>
+          ()
         }
 
         client.continue(stopped.threadId)
@@ -170,9 +169,8 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
         client.evaluate("1 + 2", topFrame.id)
         val localVarsAfterEvaluation =
           client.variables(localScope.variablesReference)
-        assertMatch(localVarsAfterEvaluation.map(_.name)) {
-          case Array("args", "h", "this") =>
-            ()
+        assertMatch(localVarsAfterEvaluation.map(_.name)) { case Array("args", "h", "this") =>
+          ()
         }
 
         client.continue(stopped.threadId)

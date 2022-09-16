@@ -8,8 +8,7 @@ import ch.epfl.scala.debugadapter.testing.TestSuiteEvent
  * Extracts information about tests execution and send it to the DebuggeeListener.
  * Then DebugeeListener forwards it to the DAP client.
  */
-class SbtTestSuiteEventHandler(listener: DebuggeeListener)
-    extends TestSuiteEventHandler {
+class SbtTestSuiteEventHandler(listener: DebuggeeListener) extends TestSuiteEventHandler {
 
   def handle(event: TestSuiteEvent): Unit =
     event match {

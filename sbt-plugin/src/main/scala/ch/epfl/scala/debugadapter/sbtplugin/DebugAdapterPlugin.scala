@@ -213,11 +213,10 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
 
       val runner = for {
         json <- jsonParser.parsed
-        params <- Converter.fromJson[ScalaMainClass](json).toEither.left.map {
-          cause =>
-            Error.invalidParams(
-              s"expected data of kind ${DataKind.ScalaMainClass}: ${cause.getMessage}"
-            )
+        params <- Converter.fromJson[ScalaMainClass](json).toEither.left.map { cause =>
+          Error.invalidParams(
+            s"expected data of kind ${DataKind.ScalaMainClass}: ${cause.getMessage}"
+          )
         }
       } yield {
         val forkOptions = ForkOptions(
@@ -365,8 +364,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         val cleanups = testExec.options.collect { case cleanup @ Cleanup(_) =>
           cleanup
         }
-        val arguments = testExec.options.collect {
-          case argument @ Argument(_, _) => argument
+        val arguments = testExec.options.collect { case argument @ Argument(_, _) =>
+          argument
         }
         val parallel = testExec.parallel && parallelExec
 

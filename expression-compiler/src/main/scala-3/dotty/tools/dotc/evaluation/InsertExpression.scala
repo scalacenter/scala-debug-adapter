@@ -108,11 +108,9 @@ class InsertExpression(using
 
   override def run(using Context): Unit =
     val inserter = Inserter(parseExpression, parseEvaluationClass)
-    ctx.compilationUnit.untpdTree =
-      inserter.transform(ctx.compilationUnit.untpdTree)
+    ctx.compilationUnit.untpdTree = inserter.transform(ctx.compilationUnit.untpdTree)
 
-  class Inserter(expression: Tree, expressionClass: Seq[Tree])
-      extends UntypedTreeMap:
+  class Inserter(expression: Tree, expressionClass: Seq[Tree]) extends UntypedTreeMap:
     override def transform(tree: Tree)(using Context): Tree =
       tree match
         case tree: PackageDef =>
@@ -127,16 +125,14 @@ class InsertExpression(using
               )
             )
           else transformed
-        case tree @ DefDef(name, paramss, tpt, rhs)
-            if rhs != EmptyTree && isOnBreakpoint(tree) =>
+        case tree @ DefDef(name, paramss, tpt, rhs) if rhs != EmptyTree && isOnBreakpoint(tree) =>
           cpy.DefDef(tree)(
             name,
             paramss,
             tpt,
             mkExprBlock(expression, tree.rhs)
           )
-        case tree @ Match(selector, caseDefs)
-            if isOnBreakpoint(tree) || caseDefs.exists(isOnBreakpoint) =>
+        case tree @ Match(selector, caseDefs) if isOnBreakpoint(tree) || caseDefs.exists(isOnBreakpoint) =>
           // the expression is on the match or a case of the match
           // if it is on the case of the match the program could pause on the pattern, the guard or the body
           // we assume it pauses on the pattern because that is the first instruction
@@ -144,8 +140,7 @@ class InsertExpression(using
           cpy.Match(tree)(mkExprBlock(expression, selector), caseDefs)
         case tree @ ValDef(name, tpt, rhs) if isOnBreakpoint(tree) =>
           cpy.ValDef(tree)(name, tpt, mkExprBlock(expression, tree.rhs))
-        case tree: (Ident | Select | GenericApply | Literal | This | New |
-              InterpolatedString | OpTree | Tuple | Assign)
+        case tree: (Ident | Select | GenericApply | Literal | This | New | InterpolatedString | OpTree | Tuple | Assign)
             if isOnBreakpoint(tree) =>
           mkExprBlock(expression, tree)
 
@@ -199,8 +194,7 @@ class InsertExpression(using
   private def mkExprBlock(expr: Tree, tree: Tree)(using
       Context
   ): Block =
-    if expressionInserted then
-      report.error("expression already inserted", tree.srcPos)
+    if expressionInserted then report.error("expression already inserted", tree.srcPos)
     expressionInserted = true
     val valDef = ValDef(evalCtx.expressionTermName, TypeTree(), expr)
     Block(List(valDef), tree)

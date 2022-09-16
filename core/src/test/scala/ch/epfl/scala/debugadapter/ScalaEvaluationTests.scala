@@ -7,8 +7,7 @@ object Scala213EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.13`)
 object Scala30EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.0`)
 object Scala32EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.2`)
 
-abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
-    extends ScalaEvaluationSuite(scalaVersion) {
+abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEvaluationSuite(scalaVersion) {
 
   def tests: Tests = Tests {
     "report source and position in error, and no colors" - {

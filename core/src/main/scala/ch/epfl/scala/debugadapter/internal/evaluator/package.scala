@@ -32,9 +32,7 @@ package object evaluator {
         ObjectReference.INVOKE_SINGLE_THREADED
       )
     ).recoverWith { case t: InvocationException =>
-      extractMessage(t)(thread).map(message =>
-        throw new MethodInvocationFailed(message, t.exception())
-      )
+      extractMessage(t)(thread).map(message => throw new MethodInvocationFailed(message, t.exception()))
     }
   }
 

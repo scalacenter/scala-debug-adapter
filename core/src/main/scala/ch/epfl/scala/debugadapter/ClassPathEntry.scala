@@ -3,8 +3,7 @@ package ch.epfl.scala.debugadapter
 import java.nio.file.Path
 import java.net.URL
 
-case class ClassPathEntry(absolutePath: Path, sourceEntries: Seq[SourceEntry])
-    extends ClassEntry {
+case class ClassPathEntry(absolutePath: Path, sourceEntries: Seq[SourceEntry]) extends ClassEntry {
   def classSystem: ClassSystem =
     if (isJar) ClassJar(absolutePath)
     else ClassDirectory(absolutePath)

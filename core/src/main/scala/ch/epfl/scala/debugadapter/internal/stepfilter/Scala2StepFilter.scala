@@ -64,9 +64,7 @@ class Scala2StepFilter(
     val fieldName = method.name.dropRight(11)
     method.declaringType match {
       case cls: jdi.ClassType =>
-        cls.allInterfaces.asScala.exists(interface =>
-          containsLazyField(interface, fieldName)
-        )
+        cls.allInterfaces.asScala.exists(interface => containsLazyField(interface, fieldName))
       case t =>
         val message =
           s"Expected declaring type of $method to be a class, found ${t.getClass.getSimpleName}"

@@ -10,9 +10,7 @@ import scala.tools.nsc.transform.{Transform, TypingTransformers}
  * - inserts extracted expression at the end of the `evaluate` method,
  * - modifies the return type of `evaluate` method.
  */
-class GenerateExpression(override val global: EvaluationGlobal)
-    extends Transform
-    with TypingTransformers {
+class GenerateExpression(override val global: EvaluationGlobal) extends Transform with TypingTransformers {
   import global._
   val valOrDefDefs: mutable.Map[Name, ValOrDefDef] = mutable.Map()
   val lambdas: mutable.ListBuffer[DefDef] = mutable.ListBuffer()
@@ -134,8 +132,7 @@ class GenerateExpression(override val global: EvaluationGlobal)
    * - replaces symbols in the expression with their local equivalents
    * - modifies return type of the `evaluate` method.
    */
-  class GenExprTransformer(unit: CompilationUnit)
-      extends TypingTransformer(unit) {
+  class GenExprTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
     private var valuesByNameIdent: Ident = _
 
     override def transform(tree: Tree): Tree = tree match {
@@ -226,8 +223,7 @@ class GenerateExpression(override val global: EvaluationGlobal)
         if (qualifier.isInstanceOf[This] && symbolsByName.contains(name))
           ident(name)
         else super.transform(tree)
-      case tree: Apply
-          if tree.fun.isInstanceOf[Select] && tree.fun.symbol.isPrivate =>
+      case tree: Apply if tree.fun.isInstanceOf[Select] && tree.fun.symbol.isPrivate =>
         val privateCall = mkCallPrivate(tree)(typer)
         super.transform(privateCall)
       case _ =>
@@ -264,8 +260,7 @@ class GenerateExpression(override val global: EvaluationGlobal)
   )(unit: CompilationUnit)
       extends TypingTransformer(unit) {
     override def transform(tree: Tree): Tree = tree match {
-      case tree: Apply
-          if tree.fun.isInstanceOf[Select] && tree.fun.symbol.isPrivate =>
+      case tree: Apply if tree.fun.isInstanceOf[Select] && tree.fun.symbol.isPrivate =>
         super.transform(mkCallPrivate(tree)(typer))
       case _ =>
         super.transform(tree)

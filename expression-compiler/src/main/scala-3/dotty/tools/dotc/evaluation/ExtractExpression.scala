@@ -17,9 +17,7 @@ import dotty.tools.dotc.core.Phases.*
 import dotty.tools.dotc.report
 import dotty.tools.dotc.util.SrcPos
 
-class ExtractExpression(using evalCtx: EvaluationContext)
-    extends MacroTransform
-    with DenotTransformer:
+class ExtractExpression(using evalCtx: EvaluationContext) extends MacroTransform with DenotTransformer:
   override def phaseName: String = ExtractExpression.name
 
   /**
@@ -75,8 +73,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           getStaticObject(tree)(tree.symbol.moduleClass)
 
         // non-static object
-        case tree: (Ident | Select)
-            if isInaccessibleNonStaticObject(tree.symbol) =>
+        case tree: (Ident | Select) if isInaccessibleNonStaticObject(tree.symbol) =>
           val qualifier = getTransformedQualifier(tree)
           callMethod(tree)(qualifier, tree.symbol.asTerm, List.empty)
 
@@ -91,8 +88,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           else
             getCapturer(tree.symbol.asTerm) match
               case Some(capturer) =>
-                if capturer.isClass then
-                  getClassCapture(tree)(tree.symbol, capturer.asClass)
+                if capturer.isClass then getClassCapture(tree)(tree.symbol, capturer.asClass)
                 else getMethodCapture(tree)(tree.symbol, capturer.asTerm)
               case None => getLocalValue(tree)(tree.symbol)
 
@@ -102,8 +98,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           val rhs = transform(tree.rhs)
           getCapturer(variable) match
             case Some(capturer) =>
-              if capturer.isClass then
-                setClassCapture(tree)(variable, capturer.asClass, rhs)
+              if capturer.isClass then setClassCapture(tree)(variable, capturer.asClass, rhs)
               else setMethodCapture(tree)(variable, capturer.asTerm, rhs)
             case None => setLocalValue(tree)(variable, rhs)
 
@@ -122,21 +117,18 @@ class ExtractExpression(using evalCtx: EvaluationContext)
           thisOrOuterValue(tree)(tree.symbol.enclosingClass.asClass)
 
         // inaccessible constructors
-        case tree: (Select | Apply | TypeApply)
-            if isInaccessibleConstructor(tree.symbol) =>
+        case tree: (Select | Apply | TypeApply) if isInaccessibleConstructor(tree.symbol) =>
           val args = getTransformedArgs(tree)
           val qualifier = getTransformedQualifierOfNew(tree)
           callConstructor(tree)(qualifier, tree.symbol.asTerm, args)
 
         // inaccessible methods
-        case tree: (Ident | Select | Apply | TypeApply)
-            if isInaccessibleMethod(tree.symbol) =>
+        case tree: (Ident | Select | Apply | TypeApply) if isInaccessibleMethod(tree.symbol) =>
           val args = getTransformedArgs(tree)
           val qualifier = getTransformedQualifier(tree)
           callMethod(tree)(qualifier, tree.symbol.asTerm, args)
 
-        case Typed(tree, tpt)
-            if tpt.symbol.isType && !isTypeAccessible(tpt.symbol.asType) =>
+        case Typed(tree, tpt) if tpt.symbol.isType && !isTypeAccessible(tpt.symbol.asType) =>
           transform(tree)
         case tree =>
           super.transform(tree)
@@ -240,8 +232,8 @@ class ExtractExpression(using evalCtx: EvaluationContext)
     val strategy = EvaluationStrategy.LocalValueAssign(variable.asTerm)
     reflectEval(tree)(nullLiteral, strategy, List(rhs), tree.tpe)
 
-  private def getClassCapture(tree: Tree)(variable: Symbol, cls: ClassSymbol)(
-      using Context
+  private def getClassCapture(tree: Tree)(variable: Symbol, cls: ClassSymbol)(using
+      Context
   ): Tree =
     reportErrorIfLocalInsideValueClass(cls, tree.srcPos)
     val strategy = EvaluationStrategy.ClassCapture(variable.asTerm, cls)
@@ -423,9 +415,7 @@ class ExtractExpression(using evalCtx: EvaluationContext)
   private def isTypeAccessible(symbol: TypeSymbol)(using Context): Boolean =
     isOwnedByExpression(symbol) || (
       !symbol.isLocal &&
-        symbol.ownersIterator.forall(s =>
-          s.isPublic || s.privateWithin.is(PackageClass)
-        )
+        symbol.ownersIterator.forall(s => s.isPublic || s.privateWithin.is(PackageClass))
     )
 
   private def isOwnedByExpression(symbol: Symbol)(using Context): Boolean =

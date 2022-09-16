@@ -1,8 +1,6 @@
 package ch.epfl.scala.debugadapter.internal
 
-import com.microsoft.java.debug.core.adapter.{
-  StepFilterProvider => JavaStepFilterProvider
-}
+import com.microsoft.java.debug.core.adapter.{StepFilterProvider => JavaStepFilterProvider}
 import com.microsoft.java.debug.core.protocol.Requests.StepFilters
 import com.sun.jdi.Method
 

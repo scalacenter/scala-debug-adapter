@@ -5,8 +5,7 @@ import dotty.tools.dotc.core.Phases.Phase
 import dotty.tools.dotc.evaluation.*
 import dotty.tools.dotc.util.SourceFile
 
-class EvaluationCompiler(using EvaluationContext)(using Context)
-    extends Compiler:
+class EvaluationCompiler(using EvaluationContext)(using Context) extends Compiler:
 
   override protected def frontendPhases: List[List[Phase]] =
     List(EvaluationFrontEnd()) :: super.frontendPhases.tail

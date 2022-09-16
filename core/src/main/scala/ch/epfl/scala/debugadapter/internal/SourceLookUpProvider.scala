@@ -39,9 +39,7 @@ private[debugadapter] final class SourceLookUpProvider(
         sourceUriToClassPathEntry.get(uri) match {
           case None => lines.map(_ => null)
           case Some(entry) =>
-            lines.map(line =>
-              entry.getFullyQualifiedClassName(uri, line).orNull
-            )
+            lines.map(line => entry.getFullyQualifiedClassName(uri, line).orNull)
         }
     }
   }

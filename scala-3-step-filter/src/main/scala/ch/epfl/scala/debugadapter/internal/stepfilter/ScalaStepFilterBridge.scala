@@ -114,8 +114,7 @@ class ScalaStepFilterBridge(
       isExtensionMethod: Boolean
   ): Boolean =
     val encodedScalaName = NameTransformer.encode(scalaName)
-    if isExtensionMethod then
-      encodedScalaName == javaName.stripSuffix("$extension")
+    if isExtensionMethod then encodedScalaName == javaName.stripSuffix("$extension")
     else encodedScalaName == javaName
 
   def matchSignature(
