@@ -15,7 +15,9 @@ private class RuntimeStepFilter(
 private[internal] object RuntimeStepFilter {
   private val javaClassesToSkip = Set("sun.misc.Unsafe")
   private val javaMethodsToSkip = Set(
-    "java.lang.invoke.DirectMethodHandle.internalMemberName(java.lang.Object)"
+    "java.lang.invoke.DirectMethodHandle.internalMemberName(java.lang.Object)",
+    "java.lang.invoke.DirectMethodHandle.allocateInstance(java.lang.Object)",
+    "java.lang.invoke.DirectMethodHandle.constructorMethod(java.lang.Object)"
   )
   private val scala3ClassesToSkip = Set("scala.runtime.LazyVals$")
   private val scala2ClassesToSkip = Set.empty[String]
