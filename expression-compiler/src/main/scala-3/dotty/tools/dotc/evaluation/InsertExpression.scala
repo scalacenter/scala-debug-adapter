@@ -140,8 +140,8 @@ class InsertExpression(using
           cpy.Match(tree)(mkExprBlock(expression, selector), caseDefs)
         case tree @ ValDef(name, tpt, rhs) if isOnBreakpoint(tree) =>
           cpy.ValDef(tree)(name, tpt, mkExprBlock(expression, tree.rhs))
-        case tree: (Ident | Select | GenericApply | Literal | This | New | InterpolatedString | OpTree | Tuple | Assign)
-            if isOnBreakpoint(tree) =>
+        case tree: (Ident | Select | GenericApply | Literal | This | New | InterpolatedString | OpTree | Tuple |
+              Assign | Block) if isOnBreakpoint(tree) =>
           mkExprBlock(expression, tree)
 
         case tree => super.transform(tree)

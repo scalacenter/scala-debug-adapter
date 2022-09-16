@@ -1882,10 +1882,27 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
         Breakpoint(5)(
-          Evaluation.successOrIgnore("foo(1)", isScala2)(
-            _.contains("AssertionError@")
-          )
+          Evaluation.successOrIgnore("foo(1)", isScala2)(_.contains("AssertionError@"))
         )
+      )
+    }
+
+    "evaluate on block" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    { import Foo.msg ; println(msg) }
+           |  }
+           |}
+           |
+           |object Foo {
+           |  val msg = "x"
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(5)(Evaluation.success("Foo.msg", "x"))
       )
     }
   }

@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import scala.util.Failure
 import scala.util.Success
 import ch.epfl.scala.debugadapter.Logger
+import scala.util.Try
 
 private[internal] object EvaluationProvider {
   def apply(
@@ -76,12 +77,8 @@ private[internal] class EvaluationProvider(
           )
         else
           evaluationBlock {
-            evaluator.evaluate(expression, thread, depth) match {
-              case Failure(exception) =>
-                future.completeExceptionally(exception)
-              case Success(value) =>
-                future.complete(value)
-            }
+            val evaluation = evaluator.evaluate(expression, thread, depth)
+            completeFuture(future, evaluation)
           }
     }
     debugContext.getStackFrameManager.reloadStackFrames(thread)
@@ -120,15 +117,19 @@ private[internal] class EvaluationProvider(
           // if invocation throws an exception, we return that exception as the result
           case MethodInvocationFailed(msg, exception) => exception
         }
-      invocation.getResult match {
-        case Success(value) =>
-          future.complete(value)
-        case Failure(exception) =>
-          future.completeExceptionally(exception)
-      }
+      completeFuture(future, invocation.getResult)
       debugContext.getStackFrameManager.reloadStackFrames(thread)
     }
     future
+  }
+
+  private def completeFuture[T](future: CompletableFuture[T], result: Try[T]): Unit = {
+    result match {
+      case Success(value) =>
+        future.complete(value)
+      case Failure(exception) =>
+        future.completeExceptionally(exception)
+    }
   }
 
   private def evaluationBlock(f: => Unit): Unit = {
