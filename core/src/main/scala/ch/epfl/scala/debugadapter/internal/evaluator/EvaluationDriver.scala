@@ -32,12 +32,12 @@ private[internal] class EvaluationDriver(
           expressionClassName,
           classPath,
           sourceFile,
-          Integer.valueOf(line),
+          line: java.lang.Integer,
           expression,
           defNames.asJava,
           pckg,
           { error => reportError(error) }: Consumer[String],
-          java.lang.Long.valueOf(timeout.toMillis)
+          timeout.toMillis: java.lang.Long
         )
         .asInstanceOf[Boolean]
     } catch {
@@ -57,10 +57,11 @@ private[internal] object EvaluationDriver {
   private def loadBridge(
       classLoader: ClassLoader,
       className: String
-  ): Try[EvaluationDriver] =
+  ): Try[EvaluationDriver] = {
     for {
       clazz <- Try(Class.forName(className, true, classLoader))
       instance <- Try(clazz.getDeclaredConstructor().newInstance())
       method <- Try(clazz.getMethods.find(_.getName == "run").get)
     } yield new EvaluationDriver(instance, method)
+  }
 }

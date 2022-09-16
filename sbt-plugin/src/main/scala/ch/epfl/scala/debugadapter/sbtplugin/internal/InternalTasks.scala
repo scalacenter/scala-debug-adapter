@@ -11,21 +11,22 @@ import java.net.URLClassLoader
 import scala.util.Properties
 
 private[sbtplugin] object InternalTasks {
-  def classPathEntries: Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.task {
-    val fullClasspath =
-      Keys.fullClasspath.value // compile to fill the class directories
-    val managedEntries =
-      externalClassPathEntries.value ++ internalClassPathEntries.value
-    val managedClasspath = managedEntries.map(_.absolutePath).toSet
-    val unmanagedEntries =
-      fullClasspath
-        .map(_.data.getAbsoluteFile.toPath)
-        .filter(path => !managedClasspath.contains(path))
-        .map(path => ClassPathEntry(path, Seq.empty))
-    managedEntries ++ unmanagedEntries
-  }
+  lazy val classPathEntries: Def.Initialize[Task[Seq[ClassPathEntry]]] =
+    Def.task {
+      val fullClasspath =
+        Keys.fullClasspath.value // compile to fill the class directories
+      val managedEntries =
+        externalClassPathEntries.value ++ internalClassPathEntries.value
+      val managedClasspath = managedEntries.map(_.absolutePath).toSet
+      val unmanagedEntries =
+        fullClasspath
+          .map(_.data.getAbsoluteFile.toPath)
+          .filter(path => !managedClasspath.contains(path))
+          .map(path => ClassPathEntry(path, Seq.empty))
+      managedEntries ++ unmanagedEntries
+    }
 
-  def javaRuntime: Def.Initialize[Task[Option[JavaRuntime]]] = Def.task {
+  lazy val javaRuntime: Def.Initialize[Task[Option[JavaRuntime]]] = Def.task {
     for {
       jdkHome <- Keys.javaHome.value
         .map(_.toString)
@@ -34,24 +35,35 @@ private[sbtplugin] object InternalTasks {
     } yield javaRuntime
   }
 
-  def tryResolveEvaluationClassLoader
+  lazy val tryResolveEvaluationClassLoader
+      : Def.Initialize[Task[Option[URLClassLoader]]] = Def.taskIf {
+    if (Keys.scalaVersion.value.startsWith("3"))
+      resolveEvaluationClassLoader.result.map {
+        case Inc(cause) => None
+        case Value(value) => Some(value)
+      }.value
+    else None
+  }
+
+  lazy val tryResolveStepFilterClassLoader
       : Def.Initialize[Task[Option[URLClassLoader]]] = {
-    resolveEvaluationClassLoader.result.map {
+    resolveStepFilterClassLoader.result.map {
       case Inc(cause) => None
       case Value(value) => Some(value)
     }
   }
 
-  private def resolveEvaluationClassLoader = Def.task {
+  private lazy val resolveEvaluationClassLoader = Def.task {
     val scalaInstance = Keys.scalaInstance.value
     val scalaVersion = Keys.scalaVersion.value
 
-    val org = BuildInfo.expressionCompilerOrganization
+    val org = BuildInfo.organization
     val artifact = s"${BuildInfo.expressionCompilerName}_$scalaVersion"
-    val version = BuildInfo.expressionCompilerVersion
+    val version = BuildInfo.version
 
     val updateReport = fetchArtifactsOf(
       org % artifact % version,
+      Seq.empty,
       Keys.dependencyResolution.value,
       Keys.scalaModuleInfo.value,
       Keys.updateConfiguration.value,
@@ -66,11 +78,40 @@ private[sbtplugin] object InternalTasks {
       )
       .map(_.toURI.toURL)
       .toArray
-
     new URLClassLoader(evaluatorJars, scalaInstance.loader)
   }
 
-  private def externalClassPathEntries
+  private lazy val resolveStepFilterClassLoader = Def.task {
+    val scalaModule = Keys.scalaModuleInfo.value
+
+    val org = BuildInfo.organization
+    val artifact = s"${BuildInfo.scala3StepFilterName}_3"
+    val version = BuildInfo.version
+    val tastyDep = scalaModule.map { info =>
+      info.scalaOrganization %% "tasty-core" % info.scalaFullVersion
+    }
+
+    val updateReport = fetchArtifactsOf(
+      org % artifact % version,
+      tastyDep.toSeq,
+      Keys.dependencyResolution.value,
+      Keys.scalaModuleInfo.value,
+      Keys.updateConfiguration.value,
+      (Keys.update / Keys.unresolvedWarningConfiguration).value,
+      Keys.streams.value.log
+    )
+    val stepFilterJars = updateReport
+      .select(
+        configurationFilter(Runtime.name),
+        moduleFilter(),
+        artifactFilter(extension = "jar", classifier = "")
+      )
+      .map(_.toURI.toURL)
+      .toArray
+    new URLClassLoader(stepFilterJars, null)
+  }
+
+  private lazy val externalClassPathEntries
       : Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.task {
     val classifierReport = Keys.updateClassifiers.value
     val report = Keys.update.value
@@ -101,7 +142,7 @@ private[sbtplugin] object InternalTasks {
       }
   }
 
-  private def internalClassPathEntries
+  private lazy val internalClassPathEntries
       : Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.taskDyn {
     val internalDependencies = Keys.bspInternalDependencyConfigurations
     val classPathEntries = for {
@@ -132,13 +173,23 @@ private[sbtplugin] object InternalTasks {
 
   private def fetchArtifactsOf(
       moduleID: ModuleID,
+      dependencies: Seq[ModuleID],
       dependencyRes: DependencyResolution,
       scalaInfo: Option[ScalaModuleInfo],
       updateConfig: UpdateConfiguration,
       warningConfig: UnresolvedWarningConfiguration,
       log: sbt.Logger
-  ) = {
-    val descriptor = dependencyRes.wrapDependencyInModule(moduleID, scalaInfo)
+  ): UpdateReport = {
+    val sha1 = Hash.toHex(Hash(moduleID.name))
+    val dummyID =
+      ModuleID("ch.epfl.scala.temp", "temp-module" + sha1, moduleID.revision)
+        .withConfigurations(moduleID.configurations)
+    val descriptor =
+      dependencyRes.moduleDescriptor(
+        dummyID,
+        moduleID +: dependencies.toVector,
+        scalaInfo
+      )
 
     dependencyRes.update(descriptor, updateConfig, warningConfig, log) match {
       case Right(report) =>

@@ -1,27 +1,20 @@
-package ch.epfl.scala.debugadapter.internal
+package ch.epfl.scala.debugadapter.internal.stepfilter
 
 import utest._
 import ch.epfl.scala.debugadapter.MainDebuggeeRunner
 import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSig
 import ch.epfl.scala.debugadapter.NoopLogger
-import ch.epfl.scala.debugadapter.internal.scalasig.MethodSymbol
-import ch.epfl.scala.debugadapter.internal.scalasig.Decompiler
-import ch.epfl.scala.debugadapter.internal.scalasig.ThisType
-import ch.epfl.scala.debugadapter.internal.scalasig.TypeRefType
-import ch.epfl.scala.debugadapter.internal.scalasig.ConstantType
-import ch.epfl.scala.debugadapter.internal.scalasig.RefinedType
-import ch.epfl.scala.debugadapter.internal.scalasig.AnnotatedType
-import ch.epfl.scala.debugadapter.internal.scalasig.ExistentialType
-import ch.epfl.scala.debugadapter.internal.scalasig.SingleType
+import ch.epfl.scala.debugadapter.internal.scalasig._
 import ch.epfl.scala.debugadapter.PrintLogger
+import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
 
-object Scala213StepFilterProviderTests
-    extends StepFilterProviderTests(ScalaVersion.`2.13`)
-object Scala212StepFilterProviderTests
-    extends StepFilterProviderTests(ScalaVersion.`2.12`)
+object Scala213StepFilterTests
+    extends Scala2StepFilterTests(ScalaVersion.`2.13`)
+object Scala212StepFilterTests
+    extends Scala2StepFilterTests(ScalaVersion.`2.12`)
 
-abstract class StepFilterProviderTests(scalaVersion: ScalaVersion)
+abstract class Scala2StepFilterTests(scalaVersion: ScalaVersion)
     extends TestSuite {
   def isScala213: Boolean = scalaVersion.binaryVersion == "2.13"
 
@@ -54,7 +47,7 @@ abstract class StepFilterProviderTests(scalaVersion: ScalaVersion)
            |""".stripMargin
       val runner = MainDebuggeeRunner.mainClassRunner(source, "", scalaVersion)
       val stepFilter =
-        new StepFilterProvider(
+        new Scala2StepFilter(
           null,
           scalaVersion.version,
           NoopLogger,
@@ -104,7 +97,7 @@ abstract class StepFilterProviderTests(scalaVersion: ScalaVersion)
         val runner =
           MainDebuggeeRunner.mainClassRunner(source, "", scalaVersion)
         val stepFilter =
-          new StepFilterProvider(
+          new Scala2StepFilter(
             null,
             scalaVersion.version,
             NoopLogger,
@@ -130,7 +123,7 @@ abstract class StepFilterProviderTests(scalaVersion: ScalaVersion)
         PrintLogger
       )
       val stepFilter =
-        new StepFilterProvider(
+        new Scala2StepFilter(
           sourceLookUp,
           scalaVersion.version,
           NoopLogger,

@@ -21,13 +21,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
+    - uses: actions/checkout@v3
+      with:
+        repository: scalacenter/tasty-query
+        path: tasty-query
     - uses: coursier/setup-action@v1.2.0
       with:
         jvm: ${{ matrix.jvm }}
         app: sbt
-    - name: Cross-publish the expression evaluator
+    - name: Publish tasty query
+      run: sbt tastyQueryJVM/publishLocal
+      working-directory: tasty-query
+    - name: Cross-publish the expression compiler
       run: sbt +expressionCompiler/publishLocal
-      shell: bash
+    - name: Publish the Scala 3 step filter
+      run: sbt scala3StepFilter/publishLocal
     - name: Test core project
       run: sbt core/test
       shell: bash

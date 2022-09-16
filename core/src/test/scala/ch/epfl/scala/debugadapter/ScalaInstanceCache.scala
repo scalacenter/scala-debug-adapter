@@ -10,17 +10,17 @@ case class ScalaInstance(
     scalaVersion: ScalaVersion,
     libraryJars: Seq[ClassPathEntry],
     compilerJars: Seq[ClassPathEntry],
-    expressionCompilerJar: Option[ClassPathEntry]
+    expressionCompilerJar: ClassPathEntry,
+    stepFilterJars: Seq[ClassPathEntry]
 ) {
   val libraryClassLoader =
     new URLClassLoader(libraryJars.map(_.toURL).toArray, null)
   val compilerClassLoader =
     new URLClassLoader(compilerJars.map(_.toURL).toArray, libraryClassLoader)
-  val expressionCompilerClassLoader = {
-    expressionCompilerJar
-      .map(jar => new URLClassLoader(Array(jar.toURL), compilerClassLoader))
-      .getOrElse(compilerClassLoader)
-  }
+  val evaluationClassLoader =
+    new URLClassLoader(Array(expressionCompilerJar.toURL), compilerClassLoader)
+  val stepFilterClassLoader =
+    new URLClassLoader(stepFilterJars.map(_.toURL).toArray, null)
 
   def compile(
       classDir: Path,
@@ -74,20 +74,21 @@ object ScalaInstanceCache {
   }
 
   private def fetch(scalaVersion: Scala2): ScalaInstance = {
-    val artifactName =
+    val expressionCompilerArtifact =
       s"${BuildInfo.expressionCompilerName}_${scalaVersion.version}"
-    val dependency = Dependency(
+    val expressionCompilerDep = Dependency(
       Module(
-        Organization(BuildInfo.expressionCompilerOrganization),
-        ModuleName(artifactName)
+        Organization(BuildInfo.organization),
+        ModuleName(expressionCompilerArtifact)
       ),
-      BuildInfo.expressionCompilerVersion
+      BuildInfo.version
     )
-    val jars = Coursier.fetch(dependency)
+
+    val jars = Coursier.fetch(expressionCompilerDep)
 
     val libraryJars = jars.filter(jar => jar.name.startsWith("scala-library"))
     val expressionCompilerJar =
-      jars.find(jar => jar.name.startsWith(artifactName)).get
+      jars.find(jar => jar.name.startsWith(expressionCompilerArtifact)).get
     val compilerJars = jars.filter(jar =>
       !libraryJars.contains(jar) && jar != expressionCompilerJar
     )
@@ -96,45 +97,57 @@ object ScalaInstanceCache {
       scalaVersion,
       libraryJars,
       compilerJars,
-      Some(expressionCompilerJar)
+      expressionCompilerJar,
+      Seq.empty
     )
   }
 
   private def fetch(scalaVersion: Scala3): ScalaInstance = {
-    val compilerArtifactName = "scala3-compiler_3"
-    val compilerDependency = Dependency(
+    val expressionCompilerArtifact =
+      s"${BuildInfo.expressionCompilerName}_${scalaVersion.version}"
+    val expressionCompilerDep = Dependency(
+      Module(
+        Organization(BuildInfo.organization),
+        ModuleName(expressionCompilerArtifact)
+      ),
+      BuildInfo.version
+    )
+
+    val stepFilterDep = Dependency(
+      Module(
+        Organization(BuildInfo.organization),
+        ModuleName(s"${BuildInfo.scala3StepFilterName}_3")
+      ),
+      BuildInfo.version
+    )
+
+    val tastyDep = Dependency(
       Module(
         Organization("org.scala-lang"),
-        ModuleName(compilerArtifactName)
+        ModuleName(s"tasty-core_3")
       ),
       scalaVersion.version
     )
 
-    val expressionCompilerArtifactName =
-      s"${BuildInfo.expressionCompilerName}_${scalaVersion.version}"
-    val expressionCompilerDependency = Dependency(
-      Module(
-        Organization(BuildInfo.expressionCompilerOrganization),
-        ModuleName(expressionCompilerArtifactName)
-      ),
-      BuildInfo.expressionCompilerVersion
-    )
-
-    val jars = Coursier.fetch(compilerDependency, expressionCompilerDependency)
+    val jars = Coursier.fetch(expressionCompilerDep)
+    val stepFilterJars = Coursier.fetch(stepFilterDep, tastyDep)
 
     val libraryJars = jars.filter { jar =>
       jar.name.startsWith("scala-library") ||
       jar.name.startsWith("scala3-library_3")
     }
     val expressionCompilerJar =
-      jars.find(jar => jar.name.startsWith(expressionCompilerArtifactName)).get
-    val compilerJars = jars.filter(jar => !libraryJars.contains(jar))
+      jars.find(jar => jar.name.startsWith(expressionCompilerArtifact)).get
+    val compilerJars = jars.filter { jar =>
+      !libraryJars.contains(jar) && jar != expressionCompilerJar
+    }
 
     ScalaInstance(
       scalaVersion,
       libraryJars,
       compilerJars,
-      Some(expressionCompilerJar)
+      expressionCompilerJar,
+      stepFilterJars
     )
   }
 }

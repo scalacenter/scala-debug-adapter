@@ -17,17 +17,4 @@ private[debugadapter] object IO {
       case NonFatal(e) => None
     } finally fileSystem.close()
   }
-
-  def withinJavaRuntimeFileSystem[T](classLoader: ClassLoader, javaHome: Path)(
-      f: FileSystem => T
-  ): T = {
-    val properties =
-      util.Collections.singletonMap("java.home", javaHome.toString)
-    // In case of memory leak, see: https://stackoverflow.com/questions/68083239/how-to-free-all-resources-after-reading-a-jrt
-    val fileSystem =
-      FileSystems.newFileSystem(URI.create("jrt:/"), properties, classLoader)
-    try f(fileSystem)
-    finally fileSystem.close()
-  }
-
 }

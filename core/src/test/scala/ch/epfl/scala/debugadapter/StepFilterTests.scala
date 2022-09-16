@@ -4,6 +4,7 @@ import utest._
 
 object Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
 object Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`)
+object Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.2`)
 
 abstract class StepFilterTests(scalaVersion: ScalaVersion)
     extends StepFilterSuite(scalaVersion) {
@@ -20,24 +21,24 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |object Main {
            |  def main(args: Array[String]): Unit = {
            |    val b = new B
-           |    println(b.m())
+           |    b.m()
            |    val c = new C
-           |    println(c.m())
+           |    c.m()
            |    val d = new D
-           |    println(d.m())
+           |    d.m()
            |    val e = new E
-           |    println(e.m())
-           |    println(F.m())
+           |    e.m()
+           |    F.m()
            |    val g = new G
-           |    println(g.m())
+           |    g.m()
            |    val h = new H
-           |    println(h.m())
+           |    h.m()
            |    val a1 = new A {}
-           |    println(a1.m())
+           |    a1.m()
            |    val a2 = new A {
            |      override def m(): String = "g.m()"
            |    }
-           |    println(a2.m())
+           |    a2.m()
            |  }
            |
            |  private class G extends A {
@@ -69,8 +70,11 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
         Breakpoint(17)(StepInto.line(4), StepOut.line(17)),
         Breakpoint(19)(StepInto.line(31), StepOut.line(19)),
         Breakpoint(21)(StepInto.line(4), StepOut.line(21)),
-        // cannot skip method in local class
-        Breakpoint(23)(StepInto.line(22), StepOut.line(23)),
+        Breakpoint(23)(
+          if (isScala3) StepInto.line(4)
+          else StepInto.line(22), // cannot skip method in local class
+          StepOut.line(23)
+        ),
         Breakpoint(27)(StepInto.line(25), StepOut.line(27))
       )
     }
@@ -175,7 +179,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |}
            |
            |class C(var c1: String, private var c2: String) extends B with A {
-           |  override var a1: String = "a1"
+           |  /* override */ var a1: String = "a1"
            |  private var c3: String = "c3"
            |  
            |  def m(): Unit = {
@@ -259,24 +263,22 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |object Main {
            |  def main(args: Array[String]): Unit = {
            |    val a = new A
-           |    println(m()(a))
+           |    m()(a)
            |  }
            |
            |  def m()(a: A): String = {
-           |    a.toString()
+           |    a.toString
            |  }
            |}
            |
            |class A {
-           |  override def toString(): String = {
-           |    "B"
-           |  }
+           |  override def toString(): String = "B"
            |}
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
         Breakpoint(6)(
           StepInto.line(10),
-          StepInto.line(16),
+          StepInto.line(15),
           StepOut.line(10),
           StepOut.line(6)
         )
@@ -293,14 +295,10 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |  }
            |
            |  def main(args: Array[String]): Unit = {
-           |    foo(a)
-           |    foo(a)
-           |    foo(b)
-           |    foo(b)
-           |  }
-           |
-           |  def foo(x: String): Unit = {
-           |    println(x)
+           |    println(a)
+           |    println(a)
+           |    println(b)
+           |    println(b)
            |  }
            |}
            |
@@ -310,17 +308,53 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.A")(
-        Breakpoint(9)(
-          StepInto.line(4),
-          StepInto.line(5),
-          StepOut.line(9),
-          StepInto.line(16)
-        ),
-        Breakpoint(10)(StepInto.line(16)),
-        Breakpoint(11)(StepInto.line(22), StepOut.line(11), StepInto.line(16)),
-        Breakpoint(12)(StepInto.line(16))
-      )
+
+      val breakpoints = if (isScala3) {
+        Seq(
+          // TODO: clean debug line table in Scala 3 compiler
+          // TODO: introduce $lazyinit$ to isolate user code
+          Breakpoint(9)(
+            StepInto.line(4),
+            StepInto.line(6),
+            StepInto.line(4),
+            StepInto.line(6),
+            StepInto.line(5),
+            StepOut.line(9),
+            StepInto.method("Predef$.println(Object)")
+          ),
+          Breakpoint(10)(
+            StepInto.line(4),
+            StepInto.line(6),
+            StepInto.line(4),
+            StepInto.line(6),
+            StepOut.line(10),
+            StepInto.method("Predef$.println(Object)")
+          ),
+          Breakpoint(11)(
+            StepInto.line(18),
+            StepOut.line(11),
+            StepInto.method("Predef$.println(Object)")
+          ),
+          Breakpoint(12)(StepInto.method("Predef$.println(Object)"))
+        )
+      } else {
+        Seq(
+          Breakpoint(9)(
+            StepInto.line(4),
+            StepInto.line(5),
+            StepOut.line(9),
+            StepInto.method("Predef$.println(Object)")
+          ),
+          Breakpoint(10)(StepInto.method("Predef$.println(Object)")),
+          Breakpoint(11)(
+            StepInto.line(18),
+            StepOut.line(11),
+            StepInto.method("Predef$.println(Object)")
+          ),
+          Breakpoint(12)(StepInto.method("Predef$.println(Object)"))
+        )
+      }
+      assertInMainClass(source, "example.A")(breakpoints: _*)
     }
 
     "should not step into synthetic method of case class" - {
@@ -351,15 +385,25 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |  }
            |}""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(11)(StepInto.file("ScalaRunTime.scala"), StepOut.line(11)),
+        Breakpoint(11)(
+          StepInto.method("ScalaRunTime$._toString(Product)"),
+          StepOut.line(11)
+        ),
         Breakpoint(12)(StepInto.method("A.<init>(String)"), StepOut.line(12)),
-        Breakpoint(13)(StepInto.file("ScalaRunTime.scala"), StepOut.line(13)),
-        Breakpoint(14)(StepInto.file("String.java"), StepOut.line(14)),
+        Breakpoint(13)(
+          StepInto.method("ScalaRunTime$._hashCode(Product)"),
+          StepOut.line(13)
+        ),
+        Breakpoint(14)(
+          StepInto.method("String.equals(Object)"),
+          StepOut.line(14)
+        ),
         Breakpoint(15)(
           StepInto.line(16),
           StepInto.line(17),
           StepInto.line(18),
-          StepInto.file("ScalaRunTime.scala")
+          if (isScala3) StepInto.method("Product.productIterator()")
+          else StepInto.method("ScalaRunTime$.typedProductIterator(Product)")
         )
       )
     }
@@ -376,7 +420,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |}
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(6)(StepInto.line(5), StepOut.line(6))
+        Breakpoint(5)(StepInto.line(6), StepInto.line(5), StepOut.line(6))
       )
     }
 
@@ -494,52 +538,44 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |}
            |
            |object Main extends A {
-           |  class B
            |  def m(a : example.A): example.A = a
            |  def mbis(b: A#B): A#B = b
            |  def mbis(a: A)(b: a.B): a.B = b
            |  def m(a: this.type): this.type = a
-           |  def mter(b: Main.super[A].B): Main.super[A].B = b
            |  def mbis(a: A { def b: B }): A { def b: B } = a
            |  def m(x: String @annot): String @annot = x
-           |  def m(x: Either[Int, X] forSome { type X }): Either[Y, Int] forSome { type Y } = x.swap
            |  def m[T](x: T): T = x
            |  def mbis(a: Main.type): Main.type = a
            |
            |  def main(args: Array[String]): Unit = {
            |    m(Main: A): A
-           |    val b0: super[A].B = new super[A].B
+           |    val b0: B = new B
            |    mbis(b0)
            |    val a1: A = Main
            |    val b1: a1.B = new a1.B
            |    mbis(a1)(b1)
            |    m(Main)
-           |    mter(b0)
-           |    val a2 = new A { def b: B = new B } 
+           |    val a2: A { def b: B } = new A { def b: B = new B }
            |    mbis(a2)
            |    m("foo")
-           |    val x = Right(2)
-           |    m(x)
            |    m(5)
            |    mbis(Main)
            |  }
            |}
            |""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(25)(StepInto.line(13)),
+        Breakpoint(22)(StepInto.line(12)),
+        Breakpoint(24)(StepInto.line(13)),
         Breakpoint(27)(StepInto.line(14)),
-        Breakpoint(30)(StepInto.line(15)),
-        Breakpoint(31)(StepInto.line(16)),
-        Breakpoint(32)(StepInto.line(17)),
-        Breakpoint(34)(StepInto.line(18)),
-        Breakpoint(35)(StepInto.line(19)),
-        Breakpoint(37)(StepInto.line(20)),
-        Breakpoint(38)(
-          StepInto.file("BoxesRunTime.java"),
-          StepOut.line(38),
-          StepInto.line(21)
+        Breakpoint(28)(StepInto.line(15)),
+        Breakpoint(30)(StepInto.line(16)),
+        Breakpoint(31)(StepInto.line(17)),
+        Breakpoint(32)(
+          StepInto.method("BoxesRunTime.boxToInteger(int)"),
+          StepOut.line(32),
+          StepInto.line(18)
         ),
-        Breakpoint(39)(StepInto.line(22))
+        Breakpoint(33)(StepInto.line(19))
       )
     }
 
@@ -595,7 +631,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |
            |object Main {
            |  def m1(): A with B { def foo: String }  = {
-           |    new A  with B { def foo: String = toString }
+           |    new A with B { def foo: String = toString }
            |  }
            |  
            |  def m2(): { def foo: String } = {
@@ -804,24 +840,153 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion)
            |}
            |
            |""".stripMargin
+      val breakpoints = if (isScala3) {
+        Seq(
+          Breakpoint(20)(
+            StepInto.method("Class.getDeclaredField(String)"),
+            StepOut.line(20),
+            StepInto.method("D.<init>()"),
+            StepInto.method("Object.<init>()"),
+            StepInto.method("D.<init>()"),
+            StepInto.method("A.$init$(A)"),
+            StepInto.method("D.<init>()"),
+            StepInto.method("Statics.releaseFence()")
+          ),
+          Breakpoint(22)(StepInto.line(8)),
+          Breakpoint(23)(StepInto.line(24), StepInto.line(12))
+        )
+      } else {
+        Seq(
+          Breakpoint(20)(
+            StepInto.method("D.<init>()"),
+            StepInto.method("Object.<init>()"),
+            StepInto.method("D.<init>()"),
+            StepInto.method("A.$init$(A)"),
+            StepInto.method("A.$init$(A)"),
+            StepInto.method("D.<init>()"),
+            if (isScala213) StepInto.method("Statics.releaseFence()")
+            else StepInto.line(20)
+          ),
+          Breakpoint(21)(StepInto.line(22), StepInto.line(8)),
+          Breakpoint(23)(StepInto.line(24), StepInto.line(12))
+        )
+      }
+      assertInMainClass(source, "example.Main")(breakpoints: _*)
+    }
+
+    "should match on vararg type" - {
+      val source =
+        """|package example
+           |
+           |case class A(as: String*)
+           |
+           |object Main {
+           |  def main(xs: Array[String]): Unit = {
+           |    A(""); StringContext("") // loading classes
+           |    val parts = Seq("x", "y")
+           |    val a = A(parts:_*)
+           |    println(a.as)
+           |    val sc = StringContext(parts:_*)
+           |    println(sc.parts)
+           |  }
+           |}
+           |""".stripMargin
+
       assertInMainClass(source, "example.Main")(
-        Breakpoint(20)(
-          StepInto.method("D.<init>()"),
-          StepInto.method("Object.<init>()"),
-          StepInto.method("D.<init>()"),
-          StepInto.method("A.$init$(A)"),
-          StepInto.method("A.$init$(A)"),
-          StepInto.method("D.<init>()"),
-          if (isScala213) StepInto.method("Statics.releaseFence()")
-          else StepInto.line(20)
+        Breakpoint(9)(StepInto.method("A.<init>(Seq)")),
+        Breakpoint(10)(StepInto.method("Predef$.println(Object)")),
+        Breakpoint(11)(StepInto.method("StringContext.<init>(Seq)")),
+        Breakpoint(12)(StepInto.method("Predef$.println(Object)"))
+      )
+    }
+
+    "encode operator symbols" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    println(classOf[<>])
+           |    val x = new <>
+           |    x.m
+           |    &(x)
+           |  }
+           |  
+           |  def &(x: <>): String = x.toString
+           |}
+           |
+           |class <> {
+           |  def m: <> = this
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(6)(StepInto.method("$less$greater.<init>()")),
+        Breakpoint(7)(StepInto.method("$less$greater.m()")),
+        Breakpoint(8)(StepInto.method("Main$.$amp($less$greater)"))
+      )
+    }
+
+    "should step into local recursive method" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(xs: Array[String]): Unit = {
+           |    fac(2)
+           |  }
+           |  
+           |  def fac(x: Int): Int = {
+           |    def rec(x: Int, acc: Int): Int = {
+           |      if (x <= 0) acc
+           |      else rec(x - 1, acc * x)
+           |    }
+           |    rec(x, 1)
+           |  }
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(5)(
+          StepInto.line(13),
+          StepInto.line(10),
+          StepInto.line(11),
+          StepInto.line(10),
+          StepOut.line(13),
+          StepOut.line(5)
+        )
+      )
+    }
+
+    "should step into local lazy initializer" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    lazy val foo = {
+           |      println("foo")
+           |      "foo"
+           |    }
+           |    println(foo)
+           |    println(foo)
+           |  }
+           |}
+           |""".stripMargin
+
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(9)(
+          StepInto.method("LazyRef.initialized()"),
+          StepInto.method(
+            if (isScala3) "Main$.foo$lzyINIT1$1(LazyRef)"
+            else "Main$.foo$lzycompute$1(LazyRef)"
+          ),
+          StepOut.line(9)
         ),
-        Breakpoint(21)(
-          StepInto.line(22),
-          StepInto.line(8)
-        ),
-        Breakpoint(23)(
-          StepInto.line(24),
-          StepInto.line(12)
+        Breakpoint(10)(
+          StepInto.method("LazyRef.initialized()"),
+          StepInto.method("LazyRef.value()"),
+          StepInto.line(10)
         )
       )
     }

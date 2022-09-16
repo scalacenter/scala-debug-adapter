@@ -32,7 +32,8 @@ private[debugadapter] final class MainClassRunner(
     val javaRuntime: Option[JavaRuntime],
     mainClass: String,
     args: Seq[String],
-    val evaluationClassLoader: Option[ClassLoader]
+    val evaluationClassLoader: Option[ClassLoader],
+    val stepFilterClassLoader: Option[ClassLoader]
 )(implicit ec: ExecutionContext)
     extends DebuggeeRunner {
   override def name: String =
@@ -54,7 +55,8 @@ private[debugadapter] final class TestSuitesRunner(
     parallel: Boolean,
     runners: Map[TestFramework, Runner],
     tests: Seq[TestDefinition],
-    val evaluationClassLoader: Option[ClassLoader]
+    val evaluationClassLoader: Option[ClassLoader],
+    val stepFilterClassLoader: Option[ClassLoader]
 )(implicit executionContext: ExecutionContext)
     extends DebuggeeRunner {
 
@@ -182,7 +184,8 @@ private[debugadapter] final class AttachRemoteRunner(
     val scalaVersion: String,
     val classPathEntries: Seq[ClassPathEntry],
     val javaRuntime: Option[JavaRuntime],
-    val evaluationClassLoader: Option[ClassLoader]
+    val evaluationClassLoader: Option[ClassLoader],
+    val stepFilterClassLoader: Option[ClassLoader]
 ) extends DebuggeeRunner {
   override def name: String = s"${getClass.getSimpleName}(${target.uri})"
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] =

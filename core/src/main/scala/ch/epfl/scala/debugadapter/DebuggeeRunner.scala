@@ -10,4 +10,5 @@ trait DebuggeeRunner {
   def classPath: Seq[Path] = classPathEntries.map(_.absolutePath)
   def javaRuntime: Option[JavaRuntime]
   def evaluationClassLoader: Option[ClassLoader]
+  def stepFilterClassLoader: Option[ClassLoader]
 }

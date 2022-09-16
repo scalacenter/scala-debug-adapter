@@ -14,6 +14,7 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
     ExecutionContext.fromExecutorService(executorService)
 
   def isScala213: Boolean = scalaVersion.version.startsWith("2.13")
+  def isScala3: Boolean = scalaVersion.isInstanceOf[Scala3]
 
   case class Breakpoint(line: Int)(val steps: Step*)
 
@@ -104,7 +105,6 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
           client.stopped(timeout)
           val stackTrace = client.stackTrace(threadId)
           val topFrame = stackTrace.stackFrames.head
-          // println(s"Stepped into ${topFrame.name}")
           currentLine = topFrame.line
           step.assert(topFrame)
         }

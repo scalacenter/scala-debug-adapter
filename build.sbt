@@ -32,7 +32,7 @@ inThisBuild(
 
 lazy val root = project
   .in(file("."))
-  .aggregate(core, sbtPlugin, expressionCompiler)
+  .aggregate(core, sbtPlugin, expressionCompiler, scala3StepFilter)
   .settings(
     PgpKeys.publishSigned := {},
     publishLocal := {}
@@ -55,14 +55,13 @@ lazy val core = project
       Dependencies.coursierJvm % Test
     ),
     buildInfoKeys := Seq[BuildInfoKey](
-      BuildInfoKey.action("expressionCompilerOrganization")(
-        (expressionCompiler / organization).value
-      ),
+      BuildInfoKey.action("organization")(organization.value),
+      BuildInfoKey.action("version")(version.value),
       BuildInfoKey.action("expressionCompilerName")(
         (expressionCompiler / name).value
       ),
-      BuildInfoKey.action("expressionCompilerVersion")(
-        (expressionCompiler / version).value
+      BuildInfoKey.action("scala3StepFilterName")(
+        (scala3StepFilter / name).value
       )
     ),
     buildInfoPackage := "ch.epfl.scala.debugadapter",
@@ -95,7 +94,7 @@ lazy val sbtPlugin = project
     scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
     scriptedBufferLog := false,
     scriptedDependencies := {
-      (publishLocal).value
+      publishLocal.value
       (core / publishLocal).value
       (testClient / publishLocal).value
     }
@@ -106,7 +105,7 @@ lazy val expressionCompiler = project
   .in(file("expression-compiler"))
   .settings(
     name := "scala-expression-compiler",
-    scalaVersion := "3.2.0",
+    scalaVersion := Dependencies.scala3,
     crossScalaVersions := Seq(
       "3.2.0",
       "3.1.3",
@@ -160,4 +159,19 @@ lazy val expressionCompiler = project
         case _ => Seq.empty
       }
     }
+  )
+
+lazy val scala3StepFilter = project
+  .in(file("scala-3-step-filter"))
+  .disablePlugins(SbtJdiTools)
+  .settings(
+    name := "scala-debug-step-filter",
+    scalaVersion := Dependencies.scala3,
+    Compile / doc / sources := Seq.empty,
+    libraryDependencies ++= Seq(
+      "tasty-query" %% "tasty-query" % "0.1-SNAPSHOT",
+      Dependencies.utest % Test,
+      Dependencies.coursier.cross(CrossVersion.for3Use2_13) % Test
+    ),
+    testFrameworks += new TestFramework("utest.runner.Framework")
   )
