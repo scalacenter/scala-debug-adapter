@@ -29,7 +29,7 @@ class InsertExpression(using
 
   private val evaluationClassSource =
     s"""|class ${evalCtx.expressionClassName}(names: Array[String], values: Array[Any]):
-        |  import scala.util.Try
+        |  import java.lang.reflect.InvocationTargetException
         |
         |  def evaluate(): Any =
         |    ()
@@ -54,7 +54,7 @@ class InsertExpression(using
         |      }
         |      .getOrElse(throw new NoSuchMethodException(methodName))
         |    method.setAccessible(true)
-        |    method.invoke(obj, args*)
+        |    unwrapException(method.invoke(obj, args*))
         |
         |  def callConstructor(className: String, paramTypesNames: Array[String], args: Array[Object]): Any =
         |    val classLoader = getClass.getClassLoader
@@ -63,7 +63,7 @@ class InsertExpression(using
         |      .find { c => c.getParameterTypes.map(_.getName).toSeq == paramTypesNames.toSeq }
         |      .getOrElse(throw new NoSuchMethodException(s"new $$className"))
         |    constructor.setAccessible(true)
-        |    constructor.newInstance(args*)
+        |    unwrapException(constructor.newInstance(args*))
         |
         |  def getField(obj: Any, className: String, fieldName: String): Any =
         |    val clazz = getClass.getClassLoader.loadClass(className)
@@ -98,6 +98,12 @@ class InsertExpression(using
         |  // a fake method that is used between the extract-expression and the resolve-reflect-eval phases, 
         |  // which transforms them to calls of one of the methods defined above.
         |  def reflectEval(qualifier: Object, term: String, args: Array[Object]): Any = ???
+        |
+        |  private def unwrapException(f: => Any): Any =
+        |    try f
+        |    catch
+        |      case e: InvocationTargetException => throw e.getCause
+        |    
         |""".stripMargin
 
   override def run(using Context): Unit =

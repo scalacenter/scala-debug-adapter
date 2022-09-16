@@ -1865,5 +1865,29 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion)
         )
       )
     }
+
+    "should unwrap exception from InvocationTargetException" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    foo(-1)
+           |  }
+           |
+           |  private def foo(x: Int): Unit = {
+           |    assert(x < 0, "not negative")
+           |  }
+           |}
+           |
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(5)(
+          Evaluation.successOrIgnore("foo(1)", isScala2)(
+            _.contains("AssertionError@")
+          )
+        )
+      )
+    }
   }
 }
