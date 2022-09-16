@@ -18,7 +18,8 @@ final class EvaluationBridge {
       localVariables: ju.Set[String],
       pckg: String,
       errorConsumer: Consumer[String],
-      timeoutMillis: Long
+      timeoutMillis: Long,
+      testMode: Boolean
   ): Boolean = {
     val settings = new Settings
     // Debugging: Print the tree after each phases of the debugger

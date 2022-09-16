@@ -24,16 +24,11 @@ package object evaluator {
       args: List[Value],
       thread: ThreadReference
   ): Safe[Value] = {
-    Safe(
-      objRef.invokeMethod(
-        thread,
-        method,
-        args.asJava,
-        ObjectReference.INVOKE_SINGLE_THREADED
-      )
-    ).recoverWith { case t: InvocationException =>
-      extractMessage(t)(thread).map(message => throw new MethodInvocationFailed(message, t.exception()))
-    }
+    Safe(objRef.invokeMethod(thread, method, args.asJava, ObjectReference.INVOKE_SINGLE_THREADED))
+      .recoverWith { case t: InvocationException =>
+        extractMessage(t)(thread)
+          .map(message => throw new MethodInvocationFailed(message, t.exception()))
+      }
   }
 
   private def extractMessage(

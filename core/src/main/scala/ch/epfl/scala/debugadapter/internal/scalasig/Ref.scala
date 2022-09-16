@@ -18,16 +18,13 @@ class Ref[T <: Entry: ClassTag](val index: Int)(implicit
     val entry = scalaSig.get(index)
 
     if (!scalaSig.isInitialized)
-      throw new ScalaDecompilerException(
-        "usage of scalaSig entry before initialization"
-      )
+      throw new ScalaDecompilerException("usage of scalaSig entry before initialization")
 
     val expectedClass = implicitly[ClassTag[T]].runtimeClass
     if (!expectedClass.isInstance(entry)) {
       val expName = expectedClass.getCanonicalName
       val actName = entry.getClass.getCanonicalName
-      val message =
-        s"wrong type of reference at index $index, expected: $expName, actual: $actName"
+      val message = s"wrong type of reference at index $index, expected: $expName, actual: $actName"
       throw new ScalaDecompilerException(message)
     }
 

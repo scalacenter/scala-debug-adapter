@@ -78,10 +78,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               val capture = gen
                 .getClassCapture(qualifier, variable.name, cls)
                 .getOrElse {
-                  report.error(
-                    s"No capture found for $variable in $cls",
-                    tree.srcPos
-                  )
+                  report.error(s"No capture found for $variable in $cls", tree.srcPos)
                   ref(defn.Predef_undefined)
                 }
               val capturedValue = gen.derefCapturedVar(capture, variable)
@@ -90,10 +87,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               val capture = gen
                 .getClassCapture(qualifier, variable.name, cls)
                 .getOrElse {
-                  report.error(
-                    s"No capture found for $variable in $cls",
-                    tree.srcPos
-                  )
+                  report.error(s"No capture found for $variable in $cls", tree.srcPos)
                   ref(defn.Predef_undefined)
                 }
               val value = gen.unboxIfValueClass(variable, args.head)
@@ -104,10 +98,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               val capture = gen
                 .getMethodCapture(method, variable.name)
                 .getOrElse {
-                  report.error(
-                    s"No capture found for $variable in $method",
-                    tree.srcPos
-                  )
+                  report.error(s"No capture found for $variable in $method", tree.srcPos)
                   ref(defn.Predef_undefined)
                 }
               val capturedValue = gen.derefCapturedVar(capture, variable)
@@ -116,10 +107,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               val capture = gen
                 .getMethodCapture(method, variable.name)
                 .getOrElse {
-                  report.error(
-                    s"No capture found for $variable in $method",
-                    tree.srcPos
-                  )
+                  report.error(s"No capture found for $variable in $method", tree.srcPos)
                   ref(defn.Predef_undefined)
                 }
               val value = gen.unboxIfValueClass(variable, args.head)
@@ -282,10 +270,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
           case name @ DerivedName(underlying, _) =>
             capturedValue(method, underlying)
               .getOrElse {
-                report.error(
-                  s"Unknown captured variable $name in $method",
-                  reflectEval.srcPos
-                )
+                report.error(s"Unknown captured variable $name in $method", reflectEval.srcPos)
                 ref(defn.Predef_undefined)
               }
           case name =>
@@ -343,10 +328,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
             // if derived then probably a capture
             capturedValue(ctr.owner, underlying)
               .getOrElse {
-                report.error(
-                  s"Unknown captured variable $name in $ctr of ${ctr.owner}",
-                  reflectEval.srcPos
-                )
+                report.error(s"Unknown captured variable $name in $ctr of ${ctr.owner}", reflectEval.srcPos)
                 ref(defn.Predef_undefined)
               }
           case name =>

@@ -46,7 +46,7 @@ private[debugadapter] object DebugAdapter {
       )
       context.registerProvider(
         classOf[IEvaluationProvider],
-        EvaluationProvider(runner, sourceLookUpProvider, logger)
+        EvaluationProvider(runner, sourceLookUpProvider, logger, testMode)
       )
       context.registerProvider(
         classOf[ICompletionsProvider],
@@ -54,12 +54,7 @@ private[debugadapter] object DebugAdapter {
       )
       context.registerProvider(
         classOf[IStepFilterProvider],
-        StepFilterProvider(
-          sourceLookUpProvider,
-          runner,
-          logger,
-          testMode
-        )
+        StepFilterProvider(sourceLookUpProvider, runner, logger, testMode)
       )
       context
     }

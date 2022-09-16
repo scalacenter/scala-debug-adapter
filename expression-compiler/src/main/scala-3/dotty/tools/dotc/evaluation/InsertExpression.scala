@@ -13,6 +13,7 @@ import dotty.tools.dotc.util.SourcePosition
 import dotty.tools.dotc.util.Spans.Span
 import dotty.tools.dotc.util.NoSourcePosition
 import dotty.tools.dotc.report
+import dotty.tools.dotc.util.SrcPos
 
 /**
  * This phase:
@@ -193,11 +194,19 @@ class InsertExpression(using
 
   private def mkExprBlock(expr: Tree, tree: Tree)(using
       Context
-  ): Block =
-    if expressionInserted then report.error("expression already inserted", tree.srcPos)
-    expressionInserted = true
-    val valDef = ValDef(evalCtx.expressionTermName, TypeTree(), expr)
-    Block(List(valDef), tree)
+  ): Tree =
+    if expressionInserted then
+      warnOrError("expression already inserted", tree.srcPos)
+      tree
+    else
+      expressionInserted = true
+      val valDef = ValDef(evalCtx.expressionTermName, TypeTree(), expr)
+      Block(List(valDef), tree)
+
+  // only fails in test mode
+  private def warnOrError(msg: String, srcPos: SrcPos)(using Context): Unit =
+    if evalCtx.testMode then report.error(msg, srcPos)
+    else report.warning(msg, srcPos)
 
 object InsertExpression:
   val name: String = "insert-expression"

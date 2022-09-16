@@ -17,7 +17,8 @@ private[internal] class ExpressionEvaluator(
     classPath: Seq[Path],
     sourceLookUpProvider: ISourceLookUpProvider,
     driver: EvaluationDriver,
-    logger: Logger
+    logger: Logger,
+    testMode: Boolean
 ) {
   private val classPathString =
     classPath.mkString(File.pathSeparator)
@@ -68,7 +69,8 @@ private[internal] class ExpressionEvaluator(
           names.map(_.value()).toSet,
           pckg,
           error => errors :+= error,
-          5.seconds
+          5.seconds,
+          testMode
         )
       _ = {
         if (!compiled) {
@@ -85,12 +87,7 @@ private[internal] class ExpressionEvaluator(
       _ = valuesArray.setValues(values)
       args = List(namesArray.reference, valuesArray.reference)
       expressionInstance <-
-        createExpressionInstance(
-          classLoader,
-          expressionDir,
-          expressionFqcn,
-          args
-        )
+        createExpressionInstance(classLoader, expressionDir, expressionFqcn, args)
       evaluatedValue <- evaluateExpression(expressionInstance)
       _ <- updateVariables(valuesArray, thread, depth)
       unboxedValue <- unboxIfPrimitive(evaluatedValue, thread)
@@ -106,13 +103,9 @@ private[internal] class ExpressionEvaluator(
         classLoader <- Option(scalaLibClass.classLoader)
       } yield classLoader
 
-    val classLoader = Option(
-      thread.frame(0).location.method.declaringType.classLoader
-    )
+    val classLoader = Option(thread.frame(0).location.method.declaringType.classLoader)
       .orElse(scalaLibClassLoader)
-      .getOrElse(
-        throw new Exception("Cannot find the classloader of the Scala library")
-      )
+      .getOrElse(throw new Exception("Cannot find the classloader of the Scala library"))
     JdiClassLoader(classLoader, thread)
   }
 

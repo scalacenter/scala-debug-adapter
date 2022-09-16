@@ -283,9 +283,7 @@ object Parser {
     private def readEnd() = readNat() + readIndex
 
     protected def errorBadSignature(msg: String) =
-      throw new RuntimeException(
-        s"malformed Scala signature " + " at " + readIndex + "; " + msg
-      )
+      throw new RuntimeException(s"malformed Scala signature " + " at " + readIndex + "; " + msg)
 
   }
 }

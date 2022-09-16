@@ -23,18 +23,13 @@ private[internal] object EvaluationProvider {
   def apply(
       runner: DebuggeeRunner,
       sourceLookUpProvider: SourceLookUpProvider,
-      logger: Logger
+      logger: Logger,
+      testMode: Boolean
   ): IEvaluationProvider = {
     val evaluator = runner.evaluationClassLoader
       .flatMap(EvaluationDriver(_))
       .map(
-        new ExpressionEvaluator(
-          runner.scalaVersion,
-          runner.classPath,
-          sourceLookUpProvider,
-          _,
-          logger
-        )
+        new ExpressionEvaluator(runner.scalaVersion, runner.classPath, sourceLookUpProvider, _, logger, testMode)
       )
     new EvaluationProvider(evaluator)
   }
