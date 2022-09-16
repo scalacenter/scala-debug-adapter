@@ -35,8 +35,7 @@ private[sbtplugin] object InternalTasks {
     } yield javaRuntime
   }
 
-  lazy val tryResolveEvaluationClassLoader
-      : Def.Initialize[Task[Option[URLClassLoader]]] = Def.taskIf {
+  lazy val tryResolveEvaluationClassLoader: Def.Initialize[Task[Option[URLClassLoader]]] = Def.taskIf {
     if (Keys.scalaVersion.value.startsWith("3"))
       resolveEvaluationClassLoader.result.map {
         case Inc(cause) => None
@@ -45,8 +44,7 @@ private[sbtplugin] object InternalTasks {
     else None
   }
 
-  lazy val tryResolveStepFilterClassLoader
-      : Def.Initialize[Task[Option[URLClassLoader]]] = {
+  lazy val tryResolveStepFilterClassLoader: Def.Initialize[Task[Option[URLClassLoader]]] = {
     resolveStepFilterClassLoader.result.map {
       case Inc(cause) => None
       case Value(value) => Some(value)
@@ -111,8 +109,7 @@ private[sbtplugin] object InternalTasks {
     new URLClassLoader(stepFilterJars, null)
   }
 
-  private lazy val externalClassPathEntries
-      : Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.task {
+  private lazy val externalClassPathEntries: Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.task {
     val classifierReport = Keys.updateClassifiers.value
     val report = Keys.update.value
     val configRef = Keys.configuration.value.toConfigRef
@@ -142,8 +139,7 @@ private[sbtplugin] object InternalTasks {
       }
   }
 
-  private lazy val internalClassPathEntries
-      : Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.taskDyn {
+  private lazy val internalClassPathEntries: Def.Initialize[Task[Seq[ClassPathEntry]]] = Def.taskDyn {
     val internalDependencies = Keys.bspInternalDependencyConfigurations
     val classPathEntries = for {
       (proj, configs) <- Keys.bspInternalDependencyConfigurations.value
@@ -165,9 +161,7 @@ private[sbtplugin] object InternalTasks {
     }
     val sourceEntries =
       sourceDirectories.map(SourceDirectory.apply) ++
-        standaloneSourceFiles.map(f =>
-          StandaloneSourceFile(f, f.getFileName.toString)
-        )
+        standaloneSourceFiles.map(f => StandaloneSourceFile(f, f.getFileName.toString))
     ClassPathEntry(classDirectory, sourceEntries)
   }
 

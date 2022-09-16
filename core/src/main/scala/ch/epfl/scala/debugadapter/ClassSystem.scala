@@ -29,8 +29,7 @@ final case class ClassDirectory(absolutePath: Path) extends ClassSystem {
     Some(f(FileSystems.getDefault, absolutePath))
 }
 
-final case class JavaRuntimeSystem(classLoader: ClassLoader, javaHome: Path)
-    extends ClassSystem {
+final case class JavaRuntimeSystem(classLoader: ClassLoader, javaHome: Path) extends ClassSystem {
   def fileSystem: FileSystem =
     JavaRuntimeSystem.getFileSystem(classLoader, javaHome)
 

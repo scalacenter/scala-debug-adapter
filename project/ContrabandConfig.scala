@@ -25,8 +25,7 @@ object ContrabandConfig {
       twoArgs(tpe).flatMap(getFormats)
     }
     case "Int" | "Long" => { _ => Nil }
-    case "scalajson.ast.unsafe.JValue" |
-        "sjsonnew.shaded.scalajson.ast.unsafe.JValue" => { _ =>
+    case "scalajson.ast.unsafe.JValue" | "sjsonnew.shaded.scalajson.ast.unsafe.JValue" => { _ =>
       List("sbt.internal.util.codec.JValueFormats")
     }
 

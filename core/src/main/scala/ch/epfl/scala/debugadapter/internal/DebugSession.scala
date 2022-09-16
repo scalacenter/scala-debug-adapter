@@ -2,10 +2,7 @@ package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter._
 import ch.epfl.scala.debugadapter.testing.TestSuiteSummary
-import com.microsoft.java.debug.core.adapter.{
-  IProviderContext,
-  ProtocolServer => DapServer
-}
+import com.microsoft.java.debug.core.adapter.{IProviderContext, ProtocolServer => DapServer}
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent
 import com.microsoft.java.debug.core.protocol.Messages.{Request, Response}
 import com.microsoft.java.debug.core.protocol.Requests._

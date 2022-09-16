@@ -89,9 +89,7 @@ object ScalaInstanceCache {
     val libraryJars = jars.filter(jar => jar.name.startsWith("scala-library"))
     val expressionCompilerJar =
       jars.find(jar => jar.name.startsWith(expressionCompilerArtifact)).get
-    val compilerJars = jars.filter(jar =>
-      !libraryJars.contains(jar) && jar != expressionCompilerJar
-    )
+    val compilerJars = jars.filter(jar => !libraryJars.contains(jar) && jar != expressionCompilerJar)
 
     ScalaInstance(
       scalaVersion,

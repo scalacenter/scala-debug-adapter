@@ -16,8 +16,7 @@ class Method(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method"):
   def returnType: Option[Type] =
     try Some(Type(invokeMethod("returnType")))
     catch
-      case e: InvocationTargetException
-          if e.getCause.getClass.getName == "com.sun.jdi.ClassNotLoadedException" =>
+      case e: InvocationTargetException if e.getCause.getClass.getName == "com.sun.jdi.ClassNotLoadedException" =>
         None
 
   def signature: String = invokeMethod("signature")

@@ -1,22 +1,12 @@
 package ch.epfl.scala.debugadapter.sbtplugin.internal
 
 import ch.epfl.scala.debugadapter.*
-import ch.epfl.scala.debugadapter.sbtplugin.{
-  AnnotatedFingerscan,
-  SubclassFingerscan
-}
+import ch.epfl.scala.debugadapter.sbtplugin.{AnnotatedFingerscan, SubclassFingerscan}
 import sbt.Tests.{Cleanup, Setup}
 import sbt.internal.bsp.BuildTargetIdentifier
 import sbt.io.IO
 import sbt.testing.*
-import sbt.{
-  ForkConfiguration,
-  ForkMain,
-  ForkOptions,
-  ForkTags,
-  TestDefinition,
-  TestFramework
-}
+import sbt.{ForkConfiguration, ForkMain, ForkOptions, ForkTags, TestDefinition, TestFramework}
 
 import java.io.{ObjectInputStream, ObjectOutputStream}
 import java.net.{ServerSocket, Socket}

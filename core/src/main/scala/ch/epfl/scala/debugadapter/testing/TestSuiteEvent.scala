@@ -64,8 +64,7 @@ object TestSuiteEvent {
   case class Trace(throwable: Throwable) extends TestSuiteEvent
 
   /** @param testSuite Class name of test suite */
-  case class Results(testSuite: String, events: List[Event])
-      extends TestSuiteEvent {
+  case class Results(testSuite: String, events: List[Event]) extends TestSuiteEvent {
 
     // if no duration is available value is set to -1
     val duration = events.collect {

@@ -2,13 +2,10 @@ package ch.epfl.scala.debugadapter
 
 import utest._
 
-object MoreScala30EvaluationTests
-    extends MoreScala3EvaluationTests(ScalaVersion.`3.0`)
-object MoreScala32EvaluationTests
-    extends MoreScala3EvaluationTests(ScalaVersion.`3.2`)
+object MoreScala30EvaluationTests extends MoreScala3EvaluationTests(ScalaVersion.`3.0`)
+object MoreScala32EvaluationTests extends MoreScala3EvaluationTests(ScalaVersion.`3.2`)
 
-abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion)
-    extends ScalaEvaluationSuite(scalaVersion) {
+abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEvaluationSuite(scalaVersion) {
 
   override def tests: Tests = Tests {
     "evaluate shadowed variable properly" - {

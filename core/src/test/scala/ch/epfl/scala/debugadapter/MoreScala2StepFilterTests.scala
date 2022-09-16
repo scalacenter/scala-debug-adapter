@@ -2,8 +2,7 @@ package ch.epfl.scala.debugadapter
 
 import utest._
 
-object MoreScala213StepFilterTests
-    extends StepFilterSuite(ScalaVersion.`2.13`) {
+object MoreScala213StepFilterTests extends StepFilterSuite(ScalaVersion.`2.13`) {
   def tests: Tests = Tests(
     "should match all kinds of Scala 2 types (not valid in Scala 3)" - {
       val source =

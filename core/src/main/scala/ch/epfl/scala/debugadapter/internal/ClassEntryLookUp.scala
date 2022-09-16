@@ -58,9 +58,7 @@ private class ClassEntryLookUp(
       sourceUriToClassFiles(sourceUri)
         .groupBy(_.classSystem)
         .foreach { case (classSystem, classFiles) =>
-          classSystem.within((_, root) =>
-            loadLineNumbers(root, classFiles, sourceUri)
-          )
+          classSystem.within((_, root) => loadLineNumbers(root, classFiles, sourceUri))
         }
     }
 
@@ -229,9 +227,7 @@ private object ClassEntryLookUp {
           case manySourceFiles =>
             // there are several files with the same name
             // we find the one whose relative path matches the class package
-            manySourceFiles.find(f =>
-              f.folderPath == classFile.folderPath
-            ) match {
+            manySourceFiles.find(f => f.folderPath == classFile.folderPath) match {
               case Some(sourceFile) => recordSourceFile(sourceFile)
               case None =>
                 // in some modules of the java 9+ runtimes, the pattern of the path
@@ -250,9 +246,7 @@ private object ClassEntryLookUp {
                     // so we try to find the right package declaration in each file
                     // it would be very unfortunate that 2 sources file with the same name
                     // declare the same package.
-                    manySourceFiles.filter(s =>
-                      findPackage(s, classFile.fullPackage)
-                    ) match {
+                    manySourceFiles.filter(s => findPackage(s, classFile.fullPackage)) match {
                       case sourceFile :: Nil =>
                         recordSourceFile(sourceFile)
                       case _ =>
@@ -328,9 +322,8 @@ private object ClassEntryLookUp {
   ): Boolean = {
     // for "a.b.c" it returns Seq("a.b.c", "b.c", "c")
     // so that we can match on "package a.b.c" or "package b.c" or "package c"
-    val nestedPackages = fullPackage.split('.').foldLeft(Seq.empty[String]) {
-      (nestedParts, newPart) =>
-        nestedParts.map(outer => s"$outer.$newPart") :+ newPart
+    val nestedPackages = fullPackage.split('.').foldLeft(Seq.empty[String]) { (nestedParts, newPart) =>
+      nestedParts.map(outer => s"$outer.$newPart") :+ newPart
     }
     val sourceContent = readSourceContent(sourceFile)
     nestedPackages.exists { `package` =>

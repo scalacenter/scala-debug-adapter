@@ -3,9 +3,7 @@ package scala.tools.nsc
 import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
 
-class InsertExpression(override val global: EvaluationGlobal)
-    extends Transform
-    with TypingTransformers {
+class InsertExpression(override val global: EvaluationGlobal) extends Transform with TypingTransformers {
   import global._
 
   override val phaseName: String = "insert-expression"

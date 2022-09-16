@@ -31,9 +31,7 @@ object SourceLookUpProviderSpec extends TestSuite {
           val linuxJar = group.find(_.getName.endsWith("-linux.jar")).get
           val macJar = group.find(_.getName.endsWith("-mac.jar")).get
           val mainJar = group
-            .find(file =>
-              !Set(sourcesJar, winJar, linuxJar, macJar).contains(file)
-            )
+            .find(file => !Set(sourcesJar, winJar, linuxJar, macJar).contains(file))
             .get
           val sourceEntries = Seq(SourceJar(sourcesJar.toPath))
           Seq(winJar, linuxJar, macJar, mainJar)

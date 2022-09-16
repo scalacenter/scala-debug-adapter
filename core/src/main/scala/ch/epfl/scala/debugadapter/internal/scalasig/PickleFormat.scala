@@ -58,8 +58,7 @@ abstract class ScalaSigSymbol(protected val scalaSig: ScalaSig) extends Symbol {
   override def attributes: Iterable[SymAnnot] = scalaSig.attributes(this)
 }
 
-abstract class SymbolInfoSymbol(val symbolInfo: SymbolInfo)
-    extends ScalaSigSymbol(symbolInfo.name.scalaSig) {
+abstract class SymbolInfoSymbol(val symbolInfo: SymbolInfo) extends ScalaSigSymbol(symbolInfo.name.scalaSig) {
   override lazy val name: String = symbolInfo.name.get.value.trim
   override def parentRef: Option[Ref[Symbol]] = Some(symbolInfo.owner)
   override def hasFlag(flag: Long): Boolean = (symbolInfo.flags & flag) != 0L
@@ -83,15 +82,13 @@ case class TypeSymbol(info: SymbolInfo) extends SymbolInfoSymbol(info)
 
 case class AliasSymbol(info: SymbolInfo) extends SymbolInfoSymbol(info)
 
-case class ClassSymbol(info: SymbolInfo, thisTypeRef: Option[Ref[Type]])
-    extends SymbolInfoSymbol(info)
+case class ClassSymbol(info: SymbolInfo, thisTypeRef: Option[Ref[Type]]) extends SymbolInfoSymbol(info)
 
 case class ObjectSymbol(info: SymbolInfo) extends SymbolInfoSymbol(info) {
   def companionClass: Option[ClassSymbol] = scalaSig.findCompanionClass(this)
 }
 
-case class MethodSymbol(info: SymbolInfo, aliasRef: Option[Ref[Symbol]])
-    extends SymbolInfoSymbol(info)
+case class MethodSymbol(info: SymbolInfo, aliasRef: Option[Ref[Symbol]]) extends SymbolInfoSymbol(info)
 
 case class ExternalSymbol(
     nameRef: Ref[Name],
@@ -189,11 +186,9 @@ case class TypeRefType(
 
 case class TypeBoundsType(lower: Ref[Type], upper: Ref[Type]) extends Type
 
-case class RefinedType(classSym: Ref[Symbol], typeRefs: Seq[Ref[Type]])
-    extends Type
+case class RefinedType(classSym: Ref[Symbol], typeRefs: Seq[Ref[Type]]) extends Type
 
-case class ClassInfoType(symbol: Ref[Symbol], typeRefs: Seq[Ref[Type]])
-    extends Type
+case class ClassInfoType(symbol: Ref[Symbol], typeRefs: Seq[Ref[Type]]) extends Type
 
 case class ClassInfoTypeWithCons(
     symbol: Ref[Symbol],
