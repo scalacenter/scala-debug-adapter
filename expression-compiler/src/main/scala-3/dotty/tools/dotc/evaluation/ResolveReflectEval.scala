@@ -41,8 +41,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
           cpy.DefDef(tree)(rhs = rhs)
 
         case reflectEval: Apply if isReflectEval(reflectEval.fun.symbol) =>
-          val qualifier :: _ :: argsTree :: Nil =
-            reflectEval.args.map(transform)
+          val qualifier :: _ :: argsTree :: Nil = reflectEval.args.map(transform): @unchecked
           val args = argsTree.asInstanceOf[JavaSeqLiteral].elems
           val gen = new Gen(reflectEval)
           tree.attachment(EvaluationStrategy) match
@@ -54,13 +53,12 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               else gen.getLocalValue("$this")
             case EvaluationStrategy.Outer(outerCls) =>
               gen.getOuter(qualifier, outerCls)
-            case EvaluationStrategy.LocalValue(variable) =>
+            case EvaluationStrategy.LocalValue(variable, isByName) =>
               val variableName = JavaEncoding.encode(variable.name)
-              val localValue = gen.derefCapturedVar(
-                gen.getLocalValue(variableName),
-                variable
-              )
-              gen.boxIfValueClass(variable, localValue)
+              val rawLocalValue = gen.getLocalValue(variableName)
+              val localValue = if isByName then gen.evaluateByName(rawLocalValue) else rawLocalValue
+              val derefLocalValue = gen.derefCapturedVar(localValue, variable)
+              gen.boxIfValueClass(variable, derefLocalValue)
             case EvaluationStrategy.LocalValueAssign(variable) =>
               val value = gen.unboxIfValueClass(variable, args.head)
               val typeSymbol = variable.info.typeSymbol.asType
@@ -74,13 +72,14 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
                     value
                   )
                 case _ => gen.setLocalValue(variableName, value)
-            case EvaluationStrategy.ClassCapture(variable, cls) =>
-              val capture = gen
+            case EvaluationStrategy.ClassCapture(variable, cls, isByName) =>
+              val rawCapture = gen
                 .getClassCapture(qualifier, variable.name, cls)
                 .getOrElse {
                   report.error(s"No capture found for $variable in $cls", tree.srcPos)
                   ref(defn.Predef_undefined)
                 }
+              val capture = if isByName then gen.evaluateByName(rawCapture) else rawCapture
               val capturedValue = gen.derefCapturedVar(capture, variable)
               gen.boxIfValueClass(variable, capturedValue)
             case EvaluationStrategy.ClassCaptureAssign(variable, cls) =>
@@ -94,13 +93,14 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               val typeSymbol = variable.info.typeSymbol
               val elemField = typeSymbol.info.decl(termName("elem")).symbol
               gen.setField(capture, elemField.asTerm, value)
-            case EvaluationStrategy.MethodCapture(variable, method) =>
-              val capture = gen
+            case EvaluationStrategy.MethodCapture(variable, method, isByName) =>
+              val rawCapture = gen
                 .getMethodCapture(method, variable.name)
                 .getOrElse {
                   report.error(s"No capture found for $variable in $method", tree.srcPos)
                   ref(defn.Predef_undefined)
                 }
+              val capture = if isByName then gen.evaluateByName(rawCapture) else rawCapture
               val capturedValue = gen.derefCapturedVar(capture, variable)
               gen.boxIfValueClass(variable, capturedValue)
             case EvaluationStrategy.MethodCaptureAssign(variable, method) =>
@@ -116,7 +116,7 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
               gen.setField(capture, elemField.asTerm, value)
             case EvaluationStrategy.StaticObject(obj) =>
               gen.getStaticObject(obj)
-            case EvaluationStrategy.Field(field) =>
+            case EvaluationStrategy.Field(field, isByName) =>
               // if the field is lazy, if it is private in a value class or a trait
               // then we must call the getter method
               val fieldValue =
@@ -124,7 +124,9 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
                   field.owner.isValueClass ||
                   field.owner.is(Trait)
                 then gen.callMethod(qualifier, field.getter.asTerm, Nil)
-                else gen.getField(qualifier, field)
+                else
+                  val rawValue = gen.getField(qualifier, field)
+                  if isByName then gen.evaluateByName(rawValue) else rawValue
               gen.boxIfValueClass(field, fieldValue)
             case EvaluationStrategy.FieldAssign(field) =>
               val arg = gen.unboxIfValueClass(field, args.head)
@@ -253,6 +255,10 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
           value
         )
       )
+
+    def evaluateByName(function: Tree): Tree =
+      val castFunction = function.cast(defn.Function0.typeRef.appliedTo(defn.AnyType))
+      Apply(Select(castFunction, termName("apply")), List())
 
     def callMethod(
         qualifier: Tree,

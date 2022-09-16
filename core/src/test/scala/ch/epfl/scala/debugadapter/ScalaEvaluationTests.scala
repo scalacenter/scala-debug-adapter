@@ -1905,5 +1905,44 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
         Breakpoint(5)(Evaluation.success("Foo.msg", "x"))
       )
     }
+
+    "evaluate by-name param" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    m(true)
+           |    val a = new A("foo")
+           |    a.m
+           |  }
+           |
+           |  def m(x: => Boolean): Boolean = {
+           |    x
+           |    def m: Boolean =
+           |      x
+           |    m
+           |    class A {
+           |      def m: Boolean =
+           |        x
+           |    }
+           |    val a = new A
+           |    a.m
+           |  }
+           |}
+           |
+           |class A(x: => String) {
+           |  def m: String = {
+           |    x
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(
+        Breakpoint(11)(Evaluation.successOrIgnore("x", true, isScala2)),
+        Breakpoint(13)(Evaluation.successOrIgnore("x", true, isScala2)),
+        Breakpoint(17)(Evaluation.successOrIgnore("x", true, isScala2)),
+        Breakpoint(26)(Evaluation.successOrIgnore("x", "foo", isScala2))
+      )
+    }
   }
 }

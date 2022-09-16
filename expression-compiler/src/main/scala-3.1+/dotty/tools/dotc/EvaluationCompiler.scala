@@ -7,7 +7,7 @@ import dotty.tools.dotc.evaluation.*
 class EvaluationCompiler(using EvaluationContext)(using Context) extends Compiler:
 
   override protected def frontendPhases: List[List[Phase]] =
-    val parser :: others = super.frontendPhases
+    val parser :: others = super.frontendPhases: @unchecked
     parser :: List(InsertExpression()) :: others
 
   override protected def picklerPhases: List[List[Phase]] =

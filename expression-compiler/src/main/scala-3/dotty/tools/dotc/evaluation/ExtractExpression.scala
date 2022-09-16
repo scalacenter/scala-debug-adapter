@@ -219,8 +219,15 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MacroTransform
     reflectEval(tree)(qualifier, strategy, List.empty, outerCls.typeRef)
 
   private def getLocalValue(tree: Tree)(variable: Symbol)(using Context): Tree =
-    val strategy = EvaluationStrategy.LocalValue(variable.asTerm)
+    val isByName = isByNameParam(variable.info)
+    val strategy = EvaluationStrategy.LocalValue(variable.asTerm, isByName)
     reflectEval(tree)(nullLiteral, strategy, List.empty, tree.tpe)
+
+  private def isByNameParam(tpe: Type)(using Context): Boolean =
+    tpe match
+      case _: ExprType => true
+      case ref: TermRef => isByNameParam(ref.symbol.info)
+      case _ => false
 
   private def setLocalValue(tree: Tree)(
       variable: Symbol,
@@ -233,7 +240,8 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MacroTransform
       Context
   ): Tree =
     reportErrorIfLocalInsideValueClass(cls, tree.srcPos)
-    val strategy = EvaluationStrategy.ClassCapture(variable.asTerm, cls)
+    val byName = isByNameParam(variable.info)
+    val strategy = EvaluationStrategy.ClassCapture(variable.asTerm, cls, byName)
     val qualifier = thisOrOuterValue(tree)(cls)
     reflectEval(tree)(qualifier, strategy, List.empty, tree.tpe)
 
@@ -251,8 +259,9 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MacroTransform
       Context
   ): Tree =
     reportErrorIfLocalInsideValueClass(method, tree.srcPos)
+    val isByName = isByNameParam(variable.info)
     val strategy =
-      EvaluationStrategy.MethodCapture(variable.asTerm, method.asTerm)
+      EvaluationStrategy.MethodCapture(variable.asTerm, method.asTerm, isByName)
     reflectEval(tree)(nullLiteral, strategy, List.empty, tree.tpe)
 
   private def setMethodCapture(
@@ -275,7 +284,8 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MacroTransform
       Context
   ): Tree =
     reportErrorIfLocalInsideValueClass(field, tree.srcPos)
-    val strategy = EvaluationStrategy.Field(field)
+    val byName = isByNameParam(field.info)
+    val strategy = EvaluationStrategy.Field(field, byName)
     reflectEval(tree)(qualifier, strategy, List.empty, tree.tpe)
 
   private def setField(tree: Tree)(
