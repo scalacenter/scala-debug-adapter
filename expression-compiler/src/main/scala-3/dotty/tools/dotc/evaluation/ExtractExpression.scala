@@ -80,10 +80,7 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MacroTransform
         // local variable
         case tree: Ident if isLocalVariable(tree.symbol) =>
           if tree.symbol.is(Lazy) then
-            report.error(
-              s"Evaluation of local lazy val not supported",
-              tree.srcPos
-            )
+            report.error(s"Evaluation of local lazy val not supported", tree.srcPos)
             tree
           else
             getCapturer(tree.symbol.asTerm) match

@@ -13,7 +13,8 @@ class EvaluationContext(
     val breakpointLine: Int,
     val expression: String,
     val localVariables: Set[String],
-    val pckg: String
+    val pckg: String,
+    val testMode: Boolean
 ):
   val expressionTermName: TermName = termName(uniqueName.toLowerCase.toString)
   val expressionClassName: TypeName = typeName(uniqueName)

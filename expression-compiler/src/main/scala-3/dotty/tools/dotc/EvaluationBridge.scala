@@ -19,7 +19,8 @@ class EvaluationBridge:
       localVariables: ju.Set[String],
       pckg: String,
       errorConsumer: Consumer[String],
-      timeoutMillis: Long
+      timeoutMillis: Long,
+      testMode: Boolean
   ): Boolean =
     val args = Array(
       "-d",
@@ -36,7 +37,8 @@ class EvaluationBridge:
       line,
       expression,
       localVariables.asScala.toSet,
-      pckg
+      pckg,
+      testMode
     )
 
     val driver = new Driver:

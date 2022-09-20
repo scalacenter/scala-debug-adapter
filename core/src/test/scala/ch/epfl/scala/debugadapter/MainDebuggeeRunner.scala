@@ -273,7 +273,7 @@ object MainDebuggeeRunner {
 
     val exitValue = process.waitFor()
     if (exitValue != 0)
-      throw new IllegalArgumentException(s"cannot compile $srcFile")
+      throw new IllegalArgumentException(s"Cannot compile $srcFile")
 
     val sourceEntry = SourceDirectory(srcDir)
     val mainClassPathEntry = ClassPathEntry(classDir, Seq(sourceEntry))

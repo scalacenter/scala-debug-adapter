@@ -22,7 +22,8 @@ private[internal] class EvaluationDriver(
       defNames: Set[String],
       pckg: String,
       reportError: String => Unit,
-      timeout: Duration
+      timeout: Duration,
+      testMode: Boolean
   ): Boolean = {
     try {
       compileMethod
@@ -37,7 +38,8 @@ private[internal] class EvaluationDriver(
           defNames.asJava,
           pckg,
           { error => reportError(error) }: Consumer[String],
-          timeout.toMillis: java.lang.Long
+          timeout.toMillis: java.lang.Long,
+          testMode: java.lang.Boolean
         )
         .asInstanceOf[Boolean]
     } catch {
