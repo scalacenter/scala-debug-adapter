@@ -3,9 +3,9 @@ package ch.epfl.scala.debugadapter.internal
 import utest._
 import coursier._
 import java.io.File
-import ch.epfl.scala.debugadapter.ClassPathEntry
 import ch.epfl.scala.debugadapter.SourceJar
 import ch.epfl.scala.debugadapter.NoopLogger
+import ch.epfl.scala.debugadapter.Library
 
 object SourceLookUpProviderSpec extends TestSuite {
   def tests: Tests = Tests {
@@ -13,12 +13,7 @@ object SourceLookUpProviderSpec extends TestSuite {
       val artifacts = coursier
         .Fetch()
         .addDependencies(dep"org.openjfx:javafx-controls:17.0.1")
-        .addClassifiers(
-          Classifier.sources,
-          Classifier("win"),
-          Classifier("linux"),
-          Classifier("mac")
-        )
+        .addClassifiers(Classifier.sources, Classifier("win"), Classifier("linux"), Classifier("mac"))
         .withMainArtifacts()
         .run()
 
@@ -36,7 +31,7 @@ object SourceLookUpProviderSpec extends TestSuite {
           val sourceEntries = Seq(SourceJar(sourcesJar.toPath))
           Seq(winJar, linuxJar, macJar, mainJar)
             .map(_.toPath)
-            .map(ClassPathEntry(_, sourceEntries))
+            .map(path => Library("javafx-controls", "17.0.1", path, sourceEntries))
         }
         .toSeq
 

@@ -7,14 +7,16 @@ import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit}
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
+import com.microsoft.java.debug.core.adapter.IProviderContext
+import ch.epfl.scala.debugadapter.internal.DebugAdapter
 
 final class DebugServer private (
-    runner: DebuggeeRunner,
+    debuggee: Debuggee,
+    context: IProviderContext,
     address: DebugServer.Address,
     logger: Logger,
     autoCloseSession: Boolean,
-    gracePeriod: Duration,
-    testMode: Boolean
+    gracePeriod: Duration
 )(implicit ec: ExecutionContext) {
   private var closedServer = false
   private val ongoingSessions = new ConcurrentLinkedQueue[DebugSession]()
@@ -45,15 +47,7 @@ final class DebugServer private (
    */
   private[debugadapter] def connect(): DebugSession = {
     val socket = serverSocket.accept()
-    val session =
-      DebugSession(
-        socket,
-        runner,
-        logger,
-        autoCloseSession,
-        gracePeriod,
-        testMode
-      )
+    val session = DebugSession(socket, debuggee, context, logger, autoCloseSession, gracePeriod)
     lock.synchronized {
       if (closedServer) {
         session.close()
@@ -75,9 +69,7 @@ final class DebugServer private (
           serverSocket.close()
         } catch {
           case NonFatal(e) =>
-            logger.warn(
-              s"Could not close debug server listening on $uri due to: ${e.getMessage}]"
-            )
+            logger.warn(s"Could not close debug server listening on $uri due to: ${e.getMessage}]")
         }
       }
     }
@@ -93,11 +85,9 @@ object DebugServer {
      * which can happen when a restart is request and the client immediately
      * connects without waiting for the other session to finish.
      */
-    val serverSocket =
-      new ServerSocket(address.getPort, 1, address.getAddress)
+    val serverSocket = new ServerSocket(address.getPort, 1, address.getAddress)
 
-    def uri: URI =
-      URI.create(s"tcp://${address.getHostString}:${serverSocket.getLocalPort}")
+    def uri: URI = URI.create(s"tcp://${address.getHostString}:${serverSocket.getLocalPort}")
   }
 
   final class Handler(val uri: URI, val running: Future[Unit])
@@ -115,21 +105,16 @@ object DebugServer {
    * @return a new instance of DebugServer
    */
   def apply(
-      runner: DebuggeeRunner,
-      address: DebugServer.Address,
+      debuggee: Debuggee,
+      tools: DebugTools,
       logger: Logger,
+      address: Address = new Address,
       autoCloseSession: Boolean = false,
-      gracePeriod: Duration = Duration(5, TimeUnit.SECONDS),
+      gracePeriod: Duration = Duration(2, TimeUnit.SECONDS),
       testMode: Boolean = false
   )(implicit ec: ExecutionContext): DebugServer = {
-    new DebugServer(
-      runner,
-      address,
-      logger,
-      autoCloseSession,
-      gracePeriod,
-      testMode
-    )
+    val context = DebugAdapter.context(debuggee, tools, logger, testMode)
+    new DebugServer(debuggee, context, address, logger, autoCloseSession, gracePeriod)
   }
 
   /**
@@ -146,21 +131,15 @@ object DebugServer {
    * @return The uri and running future of the server
    */
   def start(
-      runner: DebuggeeRunner,
+      debuggee: Debuggee,
+      tools: DebugTools,
       logger: Logger,
+      address: Address = new Address(),
       autoCloseSession: Boolean = false,
-      gracePeriod: Duration = Duration(2, TimeUnit.SECONDS)
+      gracePeriod: Duration = Duration(2, TimeUnit.SECONDS),
+      testMode: Boolean = false
   )(implicit ec: ExecutionContext): Handler = {
-    val address = new DebugServer.Address()
-    val server =
-      new DebugServer(
-        runner,
-        address,
-        logger,
-        autoCloseSession,
-        gracePeriod,
-        false
-      )
+    val server = DebugServer(debuggee, tools, logger, address, autoCloseSession, gracePeriod, testMode)
     val running = server.start()
     running.onComplete(_ => server.close())
     new Handler(server.uri, running)

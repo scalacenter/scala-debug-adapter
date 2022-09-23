@@ -44,6 +44,12 @@ private[debugadapter] final class SourceLookUpProvider(
     }
   }
 
+  def getClassEntry(fqcn: String): Option[ClassEntry] =
+    fqcnToClassPathEntry.get(fqcn).map(_.entry)
+
+  def getSourceContentFromClassName(fqcn: String): Option[String] =
+    fqcnToClassPathEntry.get(fqcn).flatMap(_.getSourceContentFromClassName(fqcn))
+
   def containsClass(fqcn: String): Boolean =
     fqcnToClassPathEntry.contains(fqcn)
 

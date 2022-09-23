@@ -2,7 +2,7 @@ package scala.tools.nsc
 
 import scala.tools.nsc.reporters.Reporter
 
-private[nsc] class EvaluationGlobal(
+private[nsc] class ExpressionGlobal(
     settings: Settings,
     reporter: Reporter,
     val line: Int,

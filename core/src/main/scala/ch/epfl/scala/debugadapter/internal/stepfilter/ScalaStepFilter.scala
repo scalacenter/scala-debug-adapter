@@ -5,9 +5,11 @@ import com.sun.jdi.ReferenceType
 import com.sun.jdi.AbsentInformationException
 import ch.epfl.scala.debugadapter.internal.ByteCodes
 import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
-import ch.epfl.scala.debugadapter.DebuggeeRunner
+import ch.epfl.scala.debugadapter.Debuggee
+import ch.epfl.scala.debugadapter.DebugTools
 import ch.epfl.scala.debugadapter.Logger
 import scala.collection.JavaConverters.*
+import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
 
 trait ScalaStepFilter extends StepFilter {
   protected def skipScalaMethod(method: Method): Boolean
@@ -84,22 +86,22 @@ trait ScalaStepFilter extends StepFilter {
 
 object ScalaStepFilter {
   def apply(
+      debuggee: Debuggee,
+      tools: DebugTools,
       sourceLookUp: SourceLookUpProvider,
-      runner: DebuggeeRunner,
       logger: Logger,
       testMode: Boolean
   ): StepFilter = {
-    if (runner.scalaVersion.startsWith("2"))
-      new Scala2StepFilter(sourceLookUp, runner.scalaVersion, logger, testMode)
+    if (debuggee.scalaVersion.isScala2)
+      new Scala2StepFilter(sourceLookUp, debuggee.scalaVersion, logger, testMode)
     else
-      Scala3StepFilter
-        .tryLoad(runner, logger, testMode)
-        .getOrElse {
-          logger.warn(
-            s"Cannot load step filter for Scala ${runner.scalaVersion}"
-          )
-          fallback
+      tools.stepFilter
+        .flatMap { classLoader =>
+          Scala3StepFilter
+            .tryLoad(debuggee, classLoader, logger, testMode)
+            .warnFailure(logger, s"Cannot load step filter for Scala ${debuggee.scalaVersion}")
         }
+        .getOrElse(fallback)
   }
 
   private def fallback: StepFilter = new ScalaStepFilter {

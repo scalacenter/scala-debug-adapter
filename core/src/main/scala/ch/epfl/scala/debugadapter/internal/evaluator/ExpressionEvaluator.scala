@@ -1,93 +1,53 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 import com.sun.jdi._
 
-import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import scala.collection.JavaConverters._
-import scala.concurrent.duration._
 import scala.util.Try
 import java.nio.charset.StandardCharsets
 import ch.epfl.scala.debugadapter.Logger
 
 private[internal] class ExpressionEvaluator(
-    scalaVersion: String,
-    classPath: Seq[Path],
-    sourceLookUpProvider: ISourceLookUpProvider,
-    driver: EvaluationDriver,
+    compiler: ExpressionCompiler,
     logger: Logger,
     testMode: Boolean
 ) {
-  private val classPathString =
-    classPath.mkString(File.pathSeparator)
-
-  def evaluate(
-      expression: String,
-      thread: ThreadReference,
-      depth: Int
-  ): Try[Value] = {
+  def evaluate(sourceContent: String, expression: String, thread: ThreadReference, depth: Int): Try[Value] = {
     logger.debug(s"Evaluating '$expression'")
     val location = thread.frame(depth).location
-    val sourcePath = location.sourcePath
-    val breakpointLine = location.lineNumber
+    val line = location.lineNumber
     val fqcn = location.declaringType.name
     val className = fqcn.split('.').last
-    val pckg =
-      if (className == fqcn) ""
-      else fqcn.stripSuffix(s".$className")
-
-    val uri = sourceLookUpProvider.getSourceFileURI(fqcn, sourcePath)
-    val sourceContent = sourceLookUpProvider.getSourceContents(uri)
+    val packageName = if (className == fqcn) "" else fqcn.stripSuffix(s".$className")
 
     val randomId = java.util.UUID.randomUUID.toString.replace("-", "")
-    val expressionDir =
-      Files.createTempDirectory(s"scala-debug-adapter-$randomId")
+    val outDir = Files.createTempDirectory(s"scala-debug-adapter-$randomId")
     val expressionClassName = s"Expression$randomId"
 
-    val fileName = sourcePath.split('/').flatMap(_.split('\\')).last
-    val sourceFile = Files.createFile(expressionDir.resolve(fileName))
+    val fileName = location.sourcePath.split('/').flatMap(_.split('\\')).last
+    val sourceFile = Files.createFile(outDir.resolve(fileName))
     Files.write(sourceFile, sourceContent.getBytes(StandardCharsets.UTF_8))
 
-    val expressionFqcn =
-      (fqcn.split("\\.").dropRight(1) :+ expressionClassName).mkString(".")
+    val expressionFqcn = if (packageName.isEmpty) expressionClassName else s"$packageName.$expressionClassName"
     var errors = Seq.empty[String]
     val classLoader = findClassLoader(thread)
     val evaluatedValue = for {
       // must be called before any invocation otherwise
       // it throws an InvalidStackFrameException
       (names, values) <- extractValuesAndNames(thread.frame(depth), classLoader)
-      compiled = driver
-        .run(
-          expressionDir,
-          expressionClassName,
-          classPathString,
-          sourceFile,
-          breakpointLine,
-          expression,
-          names.map(_.value()).toSet,
-          pckg,
-          error => errors :+= error,
-          5.seconds,
-          testMode
-        )
-      _ = {
-        if (!compiled) {
-          logger.debug(s"Failed compilation:\n${errors.mkString("\n")}")
-          throw new ExpressionCompilationFailed(errors)
-        }
-      }
+      localNames = names.map(_.value()).toSet
+      compilation =
+        compiler.compile(outDir, expressionClassName, sourceFile, line, expression, localNames, packageName, testMode)
+      _ <- Safe.lift(compilation)
       // if everything went smooth we can load our expression class
-      namesArray <-
-        JdiArray("java.lang.String", names.size, classLoader)
-      valuesArray <-
-        JdiArray("java.lang.Object", values.size, classLoader)
+      namesArray <- JdiArray("java.lang.String", names.size, classLoader)
+      valuesArray <- JdiArray("java.lang.Object", values.size, classLoader)
       _ = namesArray.setValues(names)
       _ = valuesArray.setValues(values)
       args = List(namesArray.reference, valuesArray.reference)
-      expressionInstance <-
-        createExpressionInstance(classLoader, expressionDir, expressionFqcn, args)
+      expressionInstance <- createExpressionInstance(classLoader, outDir, expressionFqcn, args)
       evaluatedValue <- evaluateExpression(expressionInstance)
       _ <- updateVariables(valuesArray, thread, depth)
       unboxedValue <- unboxIfPrimitive(evaluatedValue, thread)
@@ -187,7 +147,6 @@ private[internal] class ExpressionEvaluator(
       Safe.join(fieldNames, fieldValues)
     }
 
-    val isScala2 = scalaVersion.startsWith("2")
     for {
       (variableNames, variableValues) <- extractVariablesFromFrame()
       // Currently we only need to load the fields for the Scala 2
@@ -195,7 +154,7 @@ private[internal] class ExpressionEvaluator(
       // It is dangerous because local values can shadow fields
       // TODO: adapt Scala 2 expression compiler
       (fieldNames, fieldValues) <- thisObjectOpt
-        .filter(_ => isScala2)
+        .filter(_ => compiler.scalaVersion.isScala2)
         .map(extractFields)
         .getOrElse(Safe.lift((Nil, Nil)))
       // If `this` is a value class then the breakpoint must be in

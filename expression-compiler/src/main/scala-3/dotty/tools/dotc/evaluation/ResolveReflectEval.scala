@@ -1,6 +1,6 @@
 package dotty.tools.dotc.evaluation
 
-import dotty.tools.dotc.EvaluationContext
+import dotty.tools.dotc.ExpressionContext
 import dotty.tools.dotc.ast.tpd.*
 import dotty.tools.dotc.core.Constants.Constant
 import dotty.tools.dotc.core.Contexts.*
@@ -17,7 +17,7 @@ import dotty.tools.dotc.core.Phases
 import dotty.tools.dotc.core.TypeErasure.ErasedValueType
 import dotty.tools.dotc.transform.ValueClasses
 
-class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
+class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
   override def phaseName: String = ResolveReflectEval.name
 
   override def transformTypeDef(tree: TypeDef)(using Context): Tree =
@@ -26,18 +26,15 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
   object ExpressionTransformer extends TreeMap:
     override def transform(tree: Tree)(using Context): Tree =
       tree match
-        case tree: DefDef if tree.symbol == evalCtx.evaluateMethod =>
+        case tree: DefDef if tree.symbol == exprCtx.evaluateMethod =>
           // unbox the result of the `evaluate` method if it is a value class
           val gen = new Gen(
             Apply(
-              Select(This(evalCtx.expressionClass), termName("reflectEval")),
+              Select(This(exprCtx.expressionClass), termName("reflectEval")),
               List(nullLiteral, nullLiteral, nullLiteral)
             )
           )
-          val rhs = gen.unboxIfValueClass(
-            evalCtx.expressionSymbol,
-            transform(tree.rhs)
-          )
+          val rhs = gen.unboxIfValueClass(exprCtx.expressionSymbol, transform(tree.rhs))
           cpy.DefDef(tree)(rhs = rhs)
 
         case reflectEval: Apply if isReflectEval(reflectEval.fun.symbol) =>
@@ -140,11 +137,9 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
 
   private def isReflectEval(symbol: Symbol)(using Context): Boolean =
     symbol.name == termName("reflectEval") &&
-      symbol.owner == evalCtx.expressionClass
+      symbol.owner == exprCtx.expressionClass
 
-  class Gen(reflectEval: Apply)(using evalCtx: EvaluationContext)(using
-      Context
-  ):
+  class Gen(reflectEval: Apply)(using Context):
     private val expressionThis = reflectEval.fun.asInstanceOf[Select].qualifier
 
     def derefCapturedVar(tree: Tree, term: TermSymbol): Tree =
@@ -371,21 +366,21 @@ class ResolveReflectEval(using evalCtx: EvaluationContext) extends MiniPhase:
         originalName: TermName
     ): Option[Tree] =
       val encodedName = JavaEncoding.encode(originalName)
-      if evalCtx.classOwners.contains(sym)
+      if exprCtx.classOwners.contains(sym)
       then capturedByClass(sym.asClass, originalName)
       else
       // if the captured value is not a local variables
       // then it must have been captured by the outer method
-      if evalCtx.localVariables.contains(encodedName)
+      if exprCtx.localVariables.contains(encodedName)
       then Some(getLocalValue(encodedName))
-      else evalCtx.capturingMethod.flatMap(getMethodCapture(_, originalName))
+      else exprCtx.capturingMethod.flatMap(getMethodCapture(_, originalName))
 
     private def capturedByClass(
         cls: ClassSymbol,
         originalName: TermName
     ): Option[Tree] =
-      val target = evalCtx.classOwners.indexOf(cls)
-      val qualifier = evalCtx.classOwners
+      val target = exprCtx.classOwners.indexOf(cls)
+      val qualifier = exprCtx.classOwners
         .drop(1)
         .take(target)
         .foldLeft(getLocalValue("$this"))((q, cls) => getOuter(q, cls))

@@ -1,7 +1,5 @@
 package ch.epfl.scala.debugadapter
 
-import coursier._
-
 case class ScalaVersion(value: String) {
   def isScala2: Boolean = value.startsWith("2")
   def isScala3: Boolean = value.startsWith("3")
@@ -14,5 +12,8 @@ case class ScalaVersion(value: String) {
 }
 
 object ScalaVersion {
-  val `3.2` = ScalaVersion("3.2.0")
+  val `2.12` = ScalaVersion("2.12.17")
+  val `2.13` = ScalaVersion(BuildInfo.defaultScala2Version)
+  val `3.0` = ScalaVersion("3.0.2")
+  val `3.2` = ScalaVersion(BuildInfo.defaultScala3Version)
 }

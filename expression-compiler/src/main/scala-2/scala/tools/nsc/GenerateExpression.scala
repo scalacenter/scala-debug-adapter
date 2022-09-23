@@ -10,7 +10,7 @@ import scala.tools.nsc.transform.{Transform, TypingTransformers}
  * - inserts extracted expression at the end of the `evaluate` method,
  * - modifies the return type of `evaluate` method.
  */
-class GenerateExpression(override val global: EvaluationGlobal) extends Transform with TypingTransformers {
+class GenerateExpression(override val global: ExpressionGlobal) extends Transform with TypingTransformers {
   import global._
   val valOrDefDefs: mutable.Map[Name, ValOrDefDef] = mutable.Map()
   val lambdas: mutable.ListBuffer[DefDef] = mutable.ListBuffer()

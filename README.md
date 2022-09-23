@@ -28,11 +28,11 @@ While it is always the case with Java 9, you probably want to use the `sbt-jdi-t
 addSbtPlugin("org.scala-debugger" % "sbt-jdi-tools" % "1.1.1")
 ```
 
-You can start a debug server by providing your own intance of `DebuggeeRunner` and `Logger`.
-Examples of `DebuggeeRunner` can be found [here](https://github.com/scalacenter/scala-debug-adapter/blob/main/sbt/plugin/src/main/scala/ch/epfl/scala/debugadapter/sbtplugin/internal/SbtDebuggeeRunner.scala).
+You can start a debug server by providing your own intance of `Debuggee` and `Logger`.
+Examples of `DebuggeeRunner` can be found [here](https://github.com/scalacenter/scala-debug-adapter/blob/main/sbt/plugin/src/main/scala/ch/epfl/scala/debugadapter/sbtplugin/internal/SbtDebuggee.scala).
 
 ```scala
-val runner = new MyDebuggeeRunner()
+val debuggee = new MyDebuggee()
 val logger = new MyLogger()
 val server = DebugServer(runner, logger)
 server.start()

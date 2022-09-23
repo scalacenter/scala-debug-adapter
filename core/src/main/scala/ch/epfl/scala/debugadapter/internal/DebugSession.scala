@@ -28,7 +28,7 @@ import scala.util.{Failure, Success, Try}
  */
 private[debugadapter] final class DebugSession private (
     socket: Socket,
-    runner: DebuggeeRunner,
+    debuggee: Debuggee,
     context: IProviderContext,
     logger: Logger,
     loggingAdapter: LoggingAdapter,
@@ -71,9 +71,9 @@ private[debugadapter] final class DebugSession private (
     debugState.transform {
       case DebugSession.Ready =>
         DebugSession.fork(run)
-        val debuggee = runner.run(Listener)
+        val process = debuggee.run(Listener)
 
-        debuggee.future
+        process.future
           .onComplete { result =>
             result.failed.foreach(cancelPromises)
             // wait for the terminated event then close the session
@@ -85,7 +85,7 @@ private[debugadapter] final class DebugSession private (
             }
           }
 
-        DebugSession.Started(debuggee)
+        DebugSession.Started(process)
 
       case otherState =>
         otherState // don't start if already started or cancelled
@@ -214,7 +214,7 @@ private[debugadapter] final class DebugSession private (
     }
   }
 
-  private def name = runner.name
+  private def name = debuggee.name
 
   private def cancelPromises(cause: Throwable): Unit = {
     debuggeeAddress.tryFailure(cause)
@@ -271,30 +271,21 @@ private[debugadapter] object DebugSession {
 
   final case object Ready extends State
 
-  final case class Started(debuggee: CancelableFuture[Unit]) extends State
+  final case class Started(process: CancelableFuture[Unit]) extends State
 
   final case object Stopped extends State
 
   def apply(
       socket: Socket,
-      runner: DebuggeeRunner,
+      debuggee: Debuggee,
+      context: IProviderContext,
       logger: Logger,
       autoClose: Boolean,
-      gracePeriod: Duration,
-      testMode: Boolean
+      gracePeriod: Duration
   )(implicit executionContext: ExecutionContext): DebugSession = {
     try {
-      val context = DebugAdapter.context(runner, logger, testMode)
       val loggingHandler = new LoggingAdapter(logger)
-      new DebugSession(
-        socket,
-        runner,
-        context,
-        logger,
-        loggingHandler,
-        autoClose,
-        gracePeriod
-      )
+      new DebugSession(socket, debuggee, context, logger, loggingHandler, autoClose, gracePeriod)
     } catch {
       case NonFatal(cause) =>
         logger.error(cause.toString())

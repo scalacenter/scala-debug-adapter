@@ -40,7 +40,7 @@ object ScalaStepFilterBridgeTests extends TestSuite:
            |
            |class B extends A
            |""".stripMargin
-      val classpath = ScalaInstanceCache.compile(source, ScalaVersion.`3.1`)
+      val classpath = ScalaInstanceCache.compile(source, ScalaVersion.`3.2`)
       val stepFilter =
         new ScalaStepFilterBridge(classpath.toArray, println, true)
 
@@ -63,7 +63,7 @@ object ScalaStepFilterBridgeTests extends TestSuite:
            |}
            |""".stripMargin
 
-      val classpath = ScalaInstanceCache.compile(source, ScalaVersion.`3.1`)
+      val classpath = ScalaInstanceCache.compile(source, ScalaVersion.`3.2`)
       val stepFilter =
         new ScalaStepFilterBridge(classpath.toArray, println, true)
 
@@ -88,7 +88,7 @@ object ScalaStepFilterBridgeTests extends TestSuite:
            |}
            |""".stripMargin
 
-      val classpath = ScalaInstanceCache.compile(source, ScalaVersion.`3.1`)
+      val classpath = ScalaInstanceCache.compile(source, ScalaVersion.`3.2`)
       val stepFilter =
         new ScalaStepFilterBridge(classpath.toArray, println, true)
 
@@ -101,7 +101,7 @@ object ScalaStepFilterBridgeTests extends TestSuite:
     }
 
     "should not step into synthetized methods of case classes" - {
-      val classpath = ScalaInstanceCache.compile("", ScalaVersion.`3.1`)
+      val classpath = ScalaInstanceCache.compile("", ScalaVersion.`3.2`)
       val stepFilter = new ScalaStepFilterBridge(
         classpath.toArray ++ runtimeJar,
         println,

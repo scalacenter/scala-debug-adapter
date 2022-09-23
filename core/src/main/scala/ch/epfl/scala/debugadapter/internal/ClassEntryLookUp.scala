@@ -30,12 +30,13 @@ private case class ClassFile(
 }
 
 private class ClassEntryLookUp(
+    val entry: ClassEntry,
     fqcnToClassFile: Map[String, ClassFile],
     sourceUriToSourceFile: Map[URI, SourceFile],
     sourceUriToClassFiles: Map[URI, Seq[ClassFile]],
     classNameToSourceFile: Map[String, SourceFile],
     missingSourceFileClassFiles: Seq[ClassFile],
-    private[internal] val orphanClassFiles: Seq[ClassFile],
+    val orphanClassFiles: Seq[ClassFile],
     logger: Logger
 ) {
   private val cachedSourceLines = mutable.Map[SourceLine, Seq[ClassFile]]()
@@ -114,21 +115,20 @@ private class ClassEntryLookUp(
     }
   }
 
-  def getSourceContent(sourceUri: URI): Option[String] = {
+  def getSourceContent(sourceUri: URI): Option[String] =
     sourceUriToSourceFile.get(sourceUri).flatMap(readSourceContent)
-  }
 
-  def getSourceFile(fqcn: String): Option[URI] = {
+  def getSourceFile(fqcn: String): Option[URI] =
     classNameToSourceFile.get(fqcn).map(_.uri)
-  }
 
-  def getClassFiles(sourceUri: URI): Seq[ClassFile] = {
+  def getSourceContentFromClassName(fqcn: String): Option[String] =
+    getSourceFile(fqcn).flatMap(getSourceContent)
+
+  def getClassFiles(sourceUri: URI): Seq[ClassFile] =
     sourceUriToClassFiles.get(sourceUri).getOrElse(Seq.empty)
-  }
 
-  def getClassFile(fqcn: String): Option[ClassFile] = {
+  def getClassFile(fqcn: String): Option[ClassFile] =
     fqcnToClassFile.get(fqcn)
-  }
 
   private[internal] def getScalaSig(fqcn: String): Option[ScalaSig] = {
     def fromClass = for {
@@ -156,23 +156,11 @@ private class ClassEntryLookUp(
 }
 
 private object ClassEntryLookUp {
-  private def empty(logger: Logger): ClassEntryLookUp =
-    new ClassEntryLookUp(
-      Map.empty,
-      Map.empty,
-      Map.empty,
-      Map.empty,
-      Seq.empty,
-      Seq.empty,
-      logger
-    )
+  private def empty(entry: ClassEntry, logger: Logger): ClassEntryLookUp =
+    new ClassEntryLookUp(entry, Map.empty, Map.empty, Map.empty, Map.empty, Seq.empty, Seq.empty, logger)
 
-  private[internal] def apply(
-      entry: ClassEntry,
-      logger: Logger
-  ): ClassEntryLookUp = {
-    val sourceFiles =
-      entry.sourceEntries.flatMap(SourceEntryLookUp.getAllSourceFiles)
+  private[internal] def apply(entry: ClassEntry, logger: Logger): ClassEntryLookUp = {
+    val sourceFiles = entry.sourceEntries.flatMap(SourceEntryLookUp.getAllSourceFiles)
     ClassEntryLookUp(entry, sourceFiles, logger)
   }
 
@@ -181,7 +169,7 @@ private object ClassEntryLookUp {
       sourceFiles: Seq[SourceFile],
       logger: Logger
   ): ClassEntryLookUp = {
-    if (sourceFiles.isEmpty) ClassEntryLookUp.empty(logger)
+    if (sourceFiles.isEmpty) ClassEntryLookUp.empty(entry, logger)
     else {
       val classFiles = entry.classSystems.flatMap { classSystem =>
         classSystem
@@ -263,6 +251,7 @@ private object ClassEntryLookUp {
         )
 
       new ClassEntryLookUp(
+        entry,
         classNameToClassFile,
         sourceUriToSourceFile,
         sourceUriToClassFiles.toMap,

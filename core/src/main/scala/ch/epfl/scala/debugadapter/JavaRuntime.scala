@@ -5,12 +5,14 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 
-sealed trait JavaRuntime extends ClassEntry
+sealed trait JavaRuntime extends ClassEntry {
+  def javaHome: Path
+  def name: String = javaHome.getFileName.toString
+}
 
 final case class Java8(javaHome: Path, classJars: Seq[Path], sourceZip: Path) extends JavaRuntime {
   override def sourceEntries: Seq[SourceEntry] = Seq(SourceJar(sourceZip))
   override def classSystems: Seq[ClassSystem] = classJars.map(ClassJar.apply)
-  override def name: String = javaHome.toString
 }
 
 final case class Java9OrAbove(javaHome: Path, fsJar: Path, sourceZip: Path) extends JavaRuntime {
@@ -19,7 +21,6 @@ final case class Java9OrAbove(javaHome: Path, fsJar: Path, sourceZip: Path) exte
     val classLoader = new URLClassLoader(Array(fsJar.toUri.toURL))
     Seq(JavaRuntimeSystem(classLoader, javaHome))
   }
-  override def name: String = javaHome.toString
 }
 
 object JavaRuntime {

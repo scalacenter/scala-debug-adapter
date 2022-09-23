@@ -1,7 +1,7 @@
 package dotty.tools.dotc.evaluation
 
 import dotty.tools.dotc.CompilationUnit
-import dotty.tools.dotc.EvaluationContext
+import dotty.tools.dotc.ExpressionContext
 import dotty.tools.dotc.ast
 import dotty.tools.dotc.core.Contexts.Context
 import dotty.tools.dotc.core.Contexts.ctx
@@ -13,7 +13,7 @@ import dotty.tools.dotc.util.NoSourcePosition
 import dotty.tools.dotc.util.SourcePosition
 import dotty.tools.dotc.util.Stats.record
 
-class EvaluationFrontEnd(using EvaluationContext)(using Context) extends FrontEnd:
+class EvaluationFrontEnd(using ExpressionContext)(using Context) extends FrontEnd:
   private val insertExpression = InsertExpression()
 
   private var remaining: List[Context] = Nil

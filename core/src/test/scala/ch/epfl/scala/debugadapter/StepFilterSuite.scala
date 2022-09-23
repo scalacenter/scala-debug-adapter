@@ -13,8 +13,8 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
   private implicit val ec =
     ExecutionContext.fromExecutorService(executorService)
 
-  def isScala213: Boolean = scalaVersion.version.startsWith("2.13")
-  def isScala3: Boolean = scalaVersion.isInstanceOf[Scala3]
+  def isScala213: Boolean = scalaVersion.isScala213
+  def isScala3: Boolean = scalaVersion.isScala3
 
   case class Breakpoint(line: Int)(val steps: Step*)
 
@@ -60,19 +60,13 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
   protected def assertInMainClass(
       source: String,
       mainClass: String,
-      libraries: Seq[ClassPathEntry] = Seq.empty,
+      libraries: Seq[Library] = Seq.empty,
       logger: Logger = NoopLogger,
       timeout: Duration = 8.seconds
   )(breakpoints: Breakpoint*): Unit = {
-    val runner =
-      MainDebuggeeRunner.mainClassRunner(
-        source,
-        mainClass,
-        scalaVersion,
-        libraries
-      )
-    val server =
-      DebugServer(runner, new DebugServer.Address(), logger, testMode = true)
+    val debuggee = MainDebuggee.mainClassRunner(source, mainClass, scalaVersion, libraries)
+    val tools = DebugTools(debuggee, ScalaInstanceResolver, logger)
+    val server = DebugServer(debuggee, tools, logger, testMode = true)
     val client = TestDebugClient.connect(server.uri)
     try {
       server.connect()
@@ -80,7 +74,7 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
       client.launch()
 
       val lines = breakpoints.map(_.line).distinct.toArray
-      val resp = client.setBreakpoints(runner.sourceFiles.head, lines)
+      val resp = client.setBreakpoints(debuggee.sourceFiles.head, lines)
       assert(resp.length == lines.length)
       assert(resp.forall(_.verified))
       client.configurationDone()

@@ -8,9 +8,9 @@ import scala.util.control.NonFatal
 import dotty.tools.dotc.reporting.StoreReporter
 import dotty.tools.dotc.core.Contexts.Context
 
-class EvaluationBridge:
+class ExpressionCompilerBridge:
   def run(
-      expressionDir: Path,
+      outDir: Path,
       expressionClassName: String,
       classPath: String,
       sourceFile: Path,
@@ -19,12 +19,11 @@ class EvaluationBridge:
       localVariables: ju.Set[String],
       pckg: String,
       errorConsumer: Consumer[String],
-      timeoutMillis: Long,
       testMode: Boolean
   ): Boolean =
     val args = Array(
       "-d",
-      expressionDir.toString,
+      outDir.toString,
       "-classpath",
       classPath,
       "-Yskip:pureStats",
@@ -32,19 +31,12 @@ class EvaluationBridge:
       // "-Vprint:typer,extract-expression,resolve-reflect-eval",
       sourceFile.toString
     )
-    val evalCtx = EvaluationContext(
-      expressionClassName,
-      line,
-      expression,
-      localVariables.asScala.toSet,
-      pckg,
-      testMode
-    )
+    val exprCtx =
+      ExpressionContext(expressionClassName, line, expression, localVariables.asScala.toSet, pckg, testMode)
 
     val driver = new Driver:
-      protected override def newCompiler(using Context): EvaluationCompiler =
-        EvaluationCompiler(using evalCtx)
-    val reporter = EvaluationReporter(error => errorConsumer.accept(error))
+      protected override def newCompiler(using Context): ExpressionCompiler = ExpressionCompiler(using exprCtx)
+    val reporter = ExpressionReporter(error => errorConsumer.accept(error))
     try
       driver.process(args, reporter)
       !reporter.hasErrors

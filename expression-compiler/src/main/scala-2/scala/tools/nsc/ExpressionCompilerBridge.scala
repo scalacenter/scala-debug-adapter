@@ -7,9 +7,9 @@ import scala.collection.JavaConverters._
 import scala.tools.nsc.reporters.StoreReporter
 import scala.util.control.NonFatal
 
-final class EvaluationBridge {
+final class ExpressionCompilerBridge {
   def run(
-      expressionDir: Path,
+      outDir: Path,
       expressionClassName: String,
       classPath: String,
       sourceFile: Path,
@@ -18,16 +18,15 @@ final class EvaluationBridge {
       localVariables: ju.Set[String],
       pckg: String,
       errorConsumer: Consumer[String],
-      timeoutMillis: Long,
       testMode: Boolean
   ): Boolean = {
     val settings = new Settings
     // Debugging: Print the tree after each phases of the debugger
     // settings.Xprint.value = List("insert-expression", "typer", "generate-expression")
     settings.classpath.value = classPath
-    settings.outputDirs.setSingleOutput(expressionDir.toString)
+    settings.outputDirs.setSingleOutput(outDir.toString)
     val reporter = new StoreReporter
-    val global = new EvaluationGlobal(
+    val global = new ExpressionGlobal(
       settings,
       reporter,
       line,

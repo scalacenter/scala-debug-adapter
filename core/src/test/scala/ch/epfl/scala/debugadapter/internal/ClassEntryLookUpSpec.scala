@@ -1,23 +1,21 @@
 package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter.Coursier
-import ch.epfl.scala.debugadapter.MainDebuggeeRunner
+import ch.epfl.scala.debugadapter.MainDebuggee
 import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.SourceJar
 import utest._
 
 import java.net.URI
-import java.nio.file.Files
 import ch.epfl.scala.debugadapter.NoopLogger
 
 object ClassEntryLookUpSpec extends TestSuite {
   def tests = Tests {
     "should map source files to class names and backward, in project" - {
-      val runner =
-        MainDebuggeeRunner.scalaBreakpointTest(ScalaVersion.`2.12`)
-      val lookUp = ClassEntryLookUp(runner.projectEntry, NoopLogger)
+      val debuggee = MainDebuggee.scalaBreakpointTest(ScalaVersion.`2.12`)
+      val lookUp = ClassEntryLookUp(debuggee.mainModule, NoopLogger)
 
-      val expectedSourceFile = runner.sourceFiles.head.toUri
+      val expectedSourceFile = debuggee.sourceFiles.head.toUri
       val expectedClassName =
         "scaladebug.test.BreakpointTest$Hello$InnerHello$1"
 
@@ -30,11 +28,10 @@ object ClassEntryLookUpSpec extends TestSuite {
     }
 
     "should map source files to class names and backward, in dependency jars" - {
-      val classPathEntry =
-        Coursier.fetchOnly("org.typelevel", "cats-core_3", "2.6.1")
-      val lookUp = ClassEntryLookUp(classPathEntry, NoopLogger)
+      val catsCore = Coursier.fetchOnly("org.typelevel", "cats-core_3", "2.6.1")
+      val lookUp = ClassEntryLookUp(catsCore, NoopLogger)
 
-      val sourceJar = classPathEntry.sourceEntries.collectFirst { case SourceJar(jar) =>
+      val sourceJar = catsCore.sourceEntries.collectFirst { case SourceJar(jar) =>
         jar
       }.get
       val expectedSourceFile =
@@ -50,24 +47,28 @@ object ClassEntryLookUpSpec extends TestSuite {
     }
 
     "should get source file content, in project" - {
-      val runner =
-        MainDebuggeeRunner.scalaBreakpointTest(ScalaVersion.`2.12`)
-      val lookUp = ClassEntryLookUp(runner.projectEntry, NoopLogger)
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    println("Hello, World!")
+           |  }
+           |}
+           |""".stripMargin
+      val mainClass = "example.Main"
+      val debuggee = MainDebuggee.mainClassRunner(source, mainClass, ScalaVersion.`2.12`)
+      val lookUp = ClassEntryLookUp(debuggee.mainModule, NoopLogger)
 
-      val sourceFile = runner.sourceFiles.head.toUri
-      val expectedSourceContent =
-        new String(Files.readAllBytes(runner.sourceFiles.head))
-
-      val sourceContent = lookUp.getSourceContent(sourceFile)
-      assert(sourceContent.contains(expectedSourceContent))
+      val sourceContent = lookUp.getSourceContentFromClassName(mainClass)
+      assert(sourceContent.contains(source))
     }
 
     "should get source file content, in dependency jar" - {
-      val classPathEntry =
-        Coursier.fetchOnly("org.typelevel", "cats-core_2.12", "2.3.0")
-      val lookUp = ClassEntryLookUp(classPathEntry, NoopLogger)
+      val catsCore = Coursier.fetchOnly("org.typelevel", "cats-core_2.12", "2.3.0")
+      val lookUp = ClassEntryLookUp(catsCore, NoopLogger)
 
-      val sourceJar = classPathEntry.sourceEntries.collectFirst { case SourceJar(jar) =>
+      val sourceJar = catsCore.sourceEntries.collectFirst { case SourceJar(jar) =>
         jar
       }.get
       val sourceFile =
@@ -79,10 +80,9 @@ object ClassEntryLookUpSpec extends TestSuite {
     }
 
     "should work in case of broken dependency jar" - {
-      val classPathEntry =
-        Coursier.fetchOnly("org.webjars", "swagger-ui", "4.2.1")
-      val lookUp = ClassEntryLookUp(classPathEntry, NoopLogger)
-      val sourceJar = classPathEntry.sourceEntries.collectFirst { case SourceJar(jar) =>
+      val swaggerUi = Coursier.fetchOnly("org.webjars", "swagger-ui", "4.2.1")
+      val lookUp = ClassEntryLookUp(swaggerUi, NoopLogger)
+      val sourceJar = swaggerUi.sourceEntries.collectFirst { case SourceJar(jar) =>
         jar
       }
       assert(sourceJar.isDefined)

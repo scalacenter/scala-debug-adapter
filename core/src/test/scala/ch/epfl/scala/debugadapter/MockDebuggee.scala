@@ -4,8 +4,8 @@ import scala.concurrent.duration._
 import scala.concurrent.{Await, Future, Promise}
 import scala.language.postfixOps
 
-class MockDebuggeeRunner() extends DebuggeeRunner {
-  val scalaVersion: String = "2.12.15"
+class MockDebuggee extends Debuggee {
+  val scalaVersion: ScalaVersion = ScalaVersion.`2.12`
   var currentProcess: MockCancelableFuture = _
 
   override def name: String = "mock"
@@ -19,14 +19,11 @@ class MockDebuggeeRunner() extends DebuggeeRunner {
     currentProcess
   }
 
-  override def classPathEntries: Seq[ClassPathEntry] = Seq.empty
+  override def modules: Seq[Module] = Seq.empty
+  override def libraries: Seq[Library] = Seq.empty
+  override def unmanagedEntries: Seq[UnmanagedEntry] = Seq.empty
+
   override def javaRuntime: Option[JavaRuntime] = None
-  override def evaluationClassLoader: Option[ClassLoader] = Some(
-    getClass.getClassLoader
-  )
-  override def stepFilterClassLoader: Option[ClassLoader] = Some(
-    getClass.getClassLoader
-  )
 }
 
 class MockCancelableFuture() extends CancelableFuture[Unit] {

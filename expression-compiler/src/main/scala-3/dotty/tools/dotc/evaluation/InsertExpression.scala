@@ -1,6 +1,6 @@
 package dotty.tools.dotc.evaluation
 
-import dotty.tools.dotc.EvaluationContext
+import dotty.tools.dotc.ExpressionContext
 import dotty.tools.dotc.ast.untpd.*
 import dotty.tools.dotc.core.Contexts.*
 import dotty.tools.dotc.core.Phases.Phase
@@ -20,16 +20,14 @@ import dotty.tools.dotc.util.SrcPos
  * - inserts the expression that is being evaluated in the line of the breakpoint
  * - inserts `Expression` class in a proper package
  */
-class InsertExpression(using
-    evalCtx: EvaluationContext
-) extends Phase:
+class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
   private var expressionInserted = false
 
   override def phaseName: String = InsertExpression.name
   override def isCheckable: Boolean = false
 
   private val evaluationClassSource =
-    s"""|class ${evalCtx.expressionClassName}(names: Array[String], values: Array[Any]):
+    s"""|class ${exprCtx.expressionClassName}(names: Array[String], values: Array[Any]):
         |  import java.lang.reflect.InvocationTargetException
         |
         |  def evaluate(): Any =
@@ -153,8 +151,8 @@ class InsertExpression(using
           |  {
           |    """.stripMargin
     // don't use stripMargin on wrappedExpression because expression can contain a line starting with `  |`
-    val wrappedExpression = prefix + evalCtx.expression + "\n  }\n"
-    val expressionFile = SourceFile.virtual("<expression>", evalCtx.expression)
+    val wrappedExpression = prefix + exprCtx.expression + "\n  }\n"
+    val expressionFile = SourceFile.virtual("<expression>", exprCtx.expression)
     val contentBytes = wrappedExpression.getBytes(StandardCharsets.UTF_8)
     val wrappedExpressionFile =
       new VirtualFile("<wrapped-expression>", contentBytes)
@@ -190,7 +188,7 @@ class InsertExpression(using
   private def isOnBreakpoint(tree: Tree)(using Context): Boolean =
     val startLine =
       if tree.span.exists then tree.sourcePos.startLine + 1 else -1
-    startLine == evalCtx.breakpointLine
+    startLine == exprCtx.breakpointLine
 
   private def mkExprBlock(expr: Tree, tree: Tree)(using
       Context
@@ -200,12 +198,12 @@ class InsertExpression(using
       tree
     else
       expressionInserted = true
-      val valDef = ValDef(evalCtx.expressionTermName, TypeTree(), expr)
+      val valDef = ValDef(exprCtx.expressionTermName, TypeTree(), expr)
       Block(List(valDef), tree)
 
   // only fails in test mode
   private def warnOrError(msg: String, srcPos: SrcPos)(using Context): Unit =
-    if evalCtx.testMode then report.error(msg, srcPos)
+    if exprCtx.testMode then report.error(msg, srcPos)
     else report.warning(msg, srcPos)
 
 object InsertExpression:

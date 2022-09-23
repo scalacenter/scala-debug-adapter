@@ -17,19 +17,15 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
 
   def tests: Tests = Tests {
     "should support breakpoints in scala sources" - {
-      val runner = MainDebuggeeRunner.scalaBreakpointTest(scalaVersion)
-      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
+      val debuggee = MainDebuggee.scalaBreakpointTest(scalaVersion)
+      val server = getDebugServer(debuggee)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
         client.initialize()
         client.launch()
 
-        val breakpoints =
-          client.setBreakpoints(
-            runner.sourceFiles.head,
-            Array(5, 13, 22, 14, 9)
-          )
+        val breakpoints = client.setBreakpoints(debuggee.sourceFiles.head, Array(5, 13, 22, 14, 9))
         assert(breakpoints.size == 5)
         assert(breakpoints.forall(_.verified))
 
@@ -68,16 +64,15 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
     }
 
     "should support breakpoints in fully qualified classes" - {
-      val runner = MainDebuggeeRunner.scalaBreakpointTest(scalaVersion)
-      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
+      val debuggee = MainDebuggee.scalaBreakpointTest(scalaVersion)
+      val server = getDebugServer(debuggee)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
         client.initialize()
         client.launch()
 
-        val breakpoints =
-          client.setBreakpointsInClass(runner.mainClass, Array(5, 9))
+        val breakpoints = client.setBreakpointsInClass(debuggee.mainClass, Array(5, 9))
         assert(breakpoints.size == 2)
         assert(breakpoints.forall(_.verified))
 
@@ -101,14 +96,14 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
     }
 
     "should return stacktrace, scopes and variables when stopped by a breakpoint" - {
-      val runner = MainDebuggeeRunner.scalaBreakpointTest(scalaVersion)
-      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
+      val debuggee = MainDebuggee.scalaBreakpointTest(scalaVersion)
+      val server = getDebugServer(debuggee)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
         client.initialize()
         client.launch()
-        client.setBreakpoints(runner.sourceFiles.head, Array(7))
+        client.setBreakpoints(debuggee.sourceFiles.head, Array(7))
         client.configurationDone()
 
         val stopped = client.stopped()
@@ -140,14 +135,14 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
     }
 
     "should return variables after expression evaluation" - {
-      val runner = MainDebuggeeRunner.scalaBreakpointTest(scalaVersion)
-      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
+      val debuggee = MainDebuggee.scalaBreakpointTest(scalaVersion)
+      val server = getDebugServer(debuggee)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
         client.initialize()
         client.launch()
-        client.setBreakpoints(runner.sourceFiles.head, Array(7))
+        client.setBreakpoints(debuggee.sourceFiles.head, Array(7))
         client.configurationDone()
 
         val stopped = client.stopped()
@@ -162,16 +157,11 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
         assert(localScope.name == "Local")
 
         val localVars = client.variables(localScope.variablesReference)
-        assertMatch(localVars.map(_.name)) { case Array("args", "h", "this") =>
-          ()
-        }
+        assertMatch(localVars.map(_.name)) { case Array("args", "h", "this") => () }
 
         client.evaluate("1 + 2", topFrame.id)
-        val localVarsAfterEvaluation =
-          client.variables(localScope.variablesReference)
-        assertMatch(localVarsAfterEvaluation.map(_.name)) { case Array("args", "h", "this") =>
-          ()
-        }
+        val localVarsAfterEvaluation = client.variables(localScope.variablesReference)
+        assertMatch(localVarsAfterEvaluation.map(_.name)) { case Array("args", "h", "this") => () }
 
         client.continue(stopped.threadId)
         client.exited()
@@ -199,18 +189,14 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
            |  }
            |}
            |""".stripMargin
-      val runner = MainDebuggeeRunner.mainClassRunner(
-        source,
-        "example.Main",
-        scalaVersion
-      )
-      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
+      val debuggee = MainDebuggee.mainClassRunner(source, "example.Main", scalaVersion)
+      val server = getDebugServer(debuggee)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
         client.initialize()
         client.launch()
-        client.setBreakpoints(runner.sourceFiles.head, Array(6, 12))
+        client.setBreakpoints(debuggee.sourceFiles.head, Array(6, 12))
         client.configurationDone()
 
         val stopped = client.stopped()
@@ -233,5 +219,10 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
         client.close()
       }
     }
+  }
+
+  def getDebugServer(debuggee: Debuggee, logger: Logger = NoopLogger): DebugServer = {
+    val tools = DebugTools(debuggee, ScalaInstanceResolver, NoopLogger)
+    DebugServer(debuggee, tools, NoopLogger, testMode = true)
   }
 }

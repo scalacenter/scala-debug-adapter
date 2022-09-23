@@ -1,7 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.stepfilter
 
 import com.sun.jdi.Method
-import ch.epfl.scala.debugadapter.DebuggeeRunner
+import ch.epfl.scala.debugadapter.ScalaVersion
 
 private class RuntimeStepFilter(
     classesToSkip: Set[String],
@@ -22,8 +22,8 @@ private[internal] object RuntimeStepFilter {
   private val scala3ClassesToSkip = Set("scala.runtime.LazyVals$")
   private val scala2ClassesToSkip = Set.empty[String]
 
-  def apply(runner: DebuggeeRunner): StepFilter = {
-    if (runner.scalaVersion.startsWith("2"))
+  def apply(scalaVersion: ScalaVersion): StepFilter = {
+    if (scalaVersion.isScala2)
       new RuntimeStepFilter(
         scala2ClassesToSkip ++ javaClassesToSkip,
         javaMethodsToSkip
