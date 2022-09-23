@@ -147,7 +147,7 @@ object MainDebuggee {
       "0.7.29"
     )
     val classPath = (scalaInstance.libraryJars ++ dependencies).distinct
-    scalaInstance.compile(classDir, classPath, Seq(sourceFile, testRunner))
+    scalaInstance.compile(classDir, classPath, Seq.empty, Seq(sourceFile, testRunner))
 
     val sourceEntry = SourceDirectory(srcDir)
     val mainModule = Module(testSuite, Some(scalaVersion), Seq.empty, classDir, Seq(sourceEntry))
@@ -158,6 +158,7 @@ object MainDebuggee {
       sources: Seq[(String, String)],
       mainClass: String,
       scalaVersion: ScalaVersion,
+      scalacOptions: Seq[String],
       dependencies: Seq[Library]
   ): MainDebuggee = {
     val tempDir = Files.createTempDirectory("scala-debug-adapter")
@@ -177,12 +178,12 @@ object MainDebuggee {
     val libraries =
       if (dependencies.isEmpty) scalaInstance.libraryJars else dependencies
 
-    scalaInstance.compile(classDir, libraries, sourceFiles)
+    scalaInstance.compile(classDir, libraries, scalacOptions, sourceFiles)
     val sourceEntries = sourceFiles.map { srcFile =>
       StandaloneSourceFile(srcFile, srcDir.relativize(srcFile).toString)
     }
 
-    val mainModule = Module(mainClass, Some(scalaVersion), Seq.empty, classDir, sourceEntries)
+    val mainModule = Module(mainClass, Some(scalaVersion), scalacOptions, classDir, sourceEntries)
     MainDebuggee(scalaVersion, sourceFiles, mainModule, libraries, mainClass)
   }
 
@@ -190,17 +191,29 @@ object MainDebuggee {
       source: String,
       mainClass: String,
       scalaVersion: ScalaVersion,
+      scalacOptions: Seq[String],
       dependencies: Seq[Library]
   ): MainDebuggee = {
     val className = mainClass.split('.').last
     val sourceName = s"$className.scala"
-    mainClassRunner(Seq(sourceName -> source), mainClass, scalaVersion, dependencies)
+    mainClassRunner(Seq(sourceName -> source), mainClass, scalaVersion, Seq.empty, dependencies)
   }
 
   def mainClassRunner(source: String, mainClass: String, scalaVersion: ScalaVersion): MainDebuggee = {
     val className = mainClass.split('.').last
     val sourceName = s"$className.scala"
-    mainClassRunner(Seq(sourceName -> source), mainClass, scalaVersion, Seq.empty)
+    mainClassRunner(Seq(sourceName -> source), mainClass, scalaVersion, Seq.empty, Seq.empty)
+  }
+
+  def mainClassRunner(
+      source: String,
+      mainClass: String,
+      scalaVersion: ScalaVersion,
+      scalacOptions: Seq[String]
+  ): MainDebuggee = {
+    val className = mainClass.split('.').last
+    val sourceName = s"$className.scala"
+    mainClassRunner(Seq(sourceName -> source), mainClass, scalaVersion, scalacOptions, Seq.empty)
   }
 
   private def getResource(name: String): Path =

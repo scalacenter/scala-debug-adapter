@@ -64,7 +64,7 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
       logger: Logger = NoopLogger,
       timeout: Duration = 8.seconds
   )(breakpoints: Breakpoint*): Unit = {
-    val debuggee = MainDebuggee.mainClassRunner(source, mainClass, scalaVersion, libraries)
+    val debuggee = MainDebuggee.mainClassRunner(source, mainClass, scalaVersion, Seq.empty, libraries)
     val tools = DebugTools(debuggee, ScalaInstanceResolver, logger)
     val server = DebugServer(debuggee, tools, logger, testMode = true)
     val client = TestDebugClient.connect(server.uri)

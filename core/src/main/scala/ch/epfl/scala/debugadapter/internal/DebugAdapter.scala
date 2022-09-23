@@ -4,7 +4,7 @@ import ch.epfl.scala.debugadapter.Debuggee
 import ch.epfl.scala.debugadapter.DebugTools
 import ch.epfl.scala.debugadapter.Logger
 import com.microsoft.java.debug.core.DebugSettings
-import com.microsoft.java.debug.core.adapter._
+import com.microsoft.java.debug.core.adapter.{StepFilterProvider => _, _}
 import com.microsoft.java.debug.core.protocol.Types
 import com.sun.jdi._
 

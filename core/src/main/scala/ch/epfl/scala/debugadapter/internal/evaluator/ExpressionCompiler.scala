@@ -36,6 +36,7 @@ private[debugadapter] class ExpressionCompiler(
           outDir,
           expressionClassName,
           classPath,
+          scalacOptions.toArray,
           sourceFile,
           line: java.lang.Integer,
           expression,

@@ -18,14 +18,20 @@ sealed abstract class ScalaInstance(
   val expressionCompilerClassLoader = new URLClassLoader(Array(expressionCompilerJar.toURL), compilerClassLoader)
   val stepFilterClassLoader = new URLClassLoader(stepFilterJars.map(_.toURL).toArray, null)
 
-  def compile(classDir: Path, classPath: Seq[ClassPathEntry], sourceFiles: Seq[Path]): Unit = {
+  def compile(
+      classDir: Path,
+      classPath: Seq[ClassPathEntry],
+      scalacOptions: Seq[String],
+      sourceFiles: Seq[Path]
+  ): Unit = {
     val args = Array(
       "-d",
       classDir.toString,
       "-classpath",
-      classPath.map(_.absolutePath).mkString(File.pathSeparator),
-      "-deprecation"
-    ) ++ sourceFiles.map(_.toString)
+      classPath.map(_.absolutePath).mkString(File.pathSeparator)
+    ) ++
+      scalacOptions ++
+      sourceFiles.map(_.toString)
     compileInternal(args)
   }
 

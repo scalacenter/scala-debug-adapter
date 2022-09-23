@@ -13,6 +13,7 @@ class ExpressionCompilerBridge:
       outDir: Path,
       expressionClassName: String,
       classPath: String,
+      options: Array[String],
       sourceFile: Path,
       line: Int,
       expression: String,
@@ -26,11 +27,10 @@ class ExpressionCompilerBridge:
       outDir.toString,
       "-classpath",
       classPath,
-      "-Yskip:pureStats",
+      "-Yskip:pureStats"
       // Debugging: Print the tree after phases of the debugger
       // "-Vprint:typer,extract-expression,resolve-reflect-eval",
-      sourceFile.toString
-    )
+    ) ++ options :+ sourceFile.toString
     val exprCtx =
       ExpressionContext(expressionClassName, line, expression, localVariables.asScala.toSet, pckg, testMode)
 

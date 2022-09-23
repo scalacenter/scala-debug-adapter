@@ -117,21 +117,21 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuit
   }
 
   def assertInMainClass(sources: Seq[(String, String)], mainClass: String)(breakpoints: Breakpoint*): Unit = {
-    val debuggee =
-      MainDebuggee.mainClassRunner(
-        sources,
-        mainClass,
-        scalaVersion,
-        Seq.empty
-      )
+    val debuggee = MainDebuggee.mainClassRunner(sources, mainClass, scalaVersion, Seq.empty, Seq.empty)
     assertEvaluations(debuggee, breakpoints)
   }
 
-  def assertInMainClass(source: String, mainClass: String)(
+  def assertInMainClass(source: String, mainClass: String)(breakpoints: Breakpoint*): Unit = {
+    val debuggee =
+      MainDebuggee.mainClassRunner(source, mainClass, scalaVersion)
+    assertEvaluations(debuggee, breakpoints)
+  }
+
+  def assertInMainClass(source: String, mainClass: String, scalacOptions: Seq[String])(
       breakpoints: Breakpoint*
   ): Unit = {
     val debuggee =
-      MainDebuggee.mainClassRunner(source, mainClass, scalaVersion)
+      MainDebuggee.mainClassRunner(source, mainClass, scalaVersion, scalacOptions)
     assertEvaluations(debuggee, breakpoints)
   }
 

@@ -12,6 +12,7 @@ final class ExpressionCompilerBridge {
       outDir: Path,
       expressionClassName: String,
       classPath: String,
+      options: Array[String],
       sourceFile: Path,
       line: Int,
       expression: String,
@@ -20,14 +21,19 @@ final class ExpressionCompilerBridge {
       errorConsumer: Consumer[String],
       testMode: Boolean
   ): Boolean = {
-    val settings = new Settings
-    // Debugging: Print the tree after each phases of the debugger
-    // settings.Xprint.value = List("insert-expression", "typer", "generate-expression")
-    settings.classpath.value = classPath
-    settings.outputDirs.setSingleOutput(outDir.toString)
+    val args = List(
+      "-d",
+      outDir.toString,
+      "-classpath",
+      classPath
+      // Debugging: Print the tree after phases of the debugger
+      // "-Xprint:typer,generate-expression",
+    ) ++ options :+ sourceFile.toString
+
+    val command = new CompilerCommand(args, errorConsumer.accept(_))
     val reporter = new StoreReporter
     val global = new ExpressionGlobal(
-      settings,
+      command.settings,
       reporter,
       line,
       expression,

@@ -389,5 +389,23 @@ abstract class MoreScala3EvaluationTests(scalaVersion: ScalaVersion) extends Sca
         )
       )
     }
+
+    "should use explicit nulls" - {
+      val source =
+        """|package example
+           |
+           |object Main:
+           |  def main(args: Array[String]): Unit =
+           |    val classLoader = getClass.getClassLoader
+           |    println(classLoader.toString)
+           |""".stripMargin
+      assertInMainClass(source, "example.Main", Seq("-Yexplicit-nulls"))(
+        Breakpoint(6)(
+          Evaluation.failed(
+            "classLoader.loadClass(\"java.lang.String\")"
+          )(_.format.contains("not a member of ClassLoader | Null"))
+        )
+      )
+    }
   }
 }
