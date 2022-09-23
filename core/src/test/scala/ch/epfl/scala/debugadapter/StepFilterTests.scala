@@ -401,7 +401,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
           StepInto.line(16),
           StepInto.line(17),
           StepInto.line(18),
-          if (isScala3) StepInto.method("Product.productIterator()")
+          if (isScala3 || isScala213) StepInto.method("Product.productIterator()")
           else StepInto.method("ScalaRunTime$.typedProductIterator(Product)")
         )
       )

@@ -89,7 +89,7 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
         methodsOfClass.partition(m => m.isSynthetic)
       assert(nonSyntheticMethods.size == 2) // init and getter
 
-      val syntheticMethodCount = if (isScala212) 10 else 11
+      val syntheticMethodCount = 10
       assert(
         syntheticMethods.size == syntheticMethodCount
       ) // copy, toString, equals, hashCode, productArity...
