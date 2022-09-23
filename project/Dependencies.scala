@@ -1,7 +1,7 @@
 import sbt._
 
 object Dependencies {
-  val scala212 = "2.12.16"
+  val scala212 = "2.12.17"
   val scala3 = "3.2.0"
   val asmVersion = "9.3"
   val coursierVersion = "2.1.0-M6"
