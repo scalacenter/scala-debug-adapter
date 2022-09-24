@@ -1944,5 +1944,22 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
         Breakpoint(26)(Evaluation.successOrIgnore("x", "foo", isScala2))
       )
     }
+
+    "ignore fatal warnings" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val x = "Hello"
+           |    println(x)
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main", Seq("-Xfatal-warnings"))(
+        // a pure expression does nothing in statement position
+        Breakpoint(6)(Evaluation.success("x\nx", "Hello"))
+      )
+    }
   }
 }

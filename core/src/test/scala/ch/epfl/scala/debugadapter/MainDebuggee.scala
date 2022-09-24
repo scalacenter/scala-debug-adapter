@@ -13,11 +13,14 @@ case class MainDebuggee(
     scalaVersion: ScalaVersion,
     sourceFiles: Seq[Path],
     mainModule: Module,
-    libraries: Seq[Library],
+    dependencies: Seq[ManagedEntry],
     mainClass: String
 ) extends Debuggee {
+
   override def name: String = mainClass
-  override def modules: Seq[Module] = Seq(mainModule)
+  override def modules: Seq[Module] = Seq(mainModule) ++ dependencies.collect { case m: Module => m }
+
+  override def libraries: Seq[Library] = dependencies.collect { case m: Library => m }
   override def unmanagedEntries: Seq[UnmanagedEntry] = Seq.empty
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] = {
     val cmd = Seq(
@@ -159,7 +162,7 @@ object MainDebuggee {
       mainClass: String,
       scalaVersion: ScalaVersion,
       scalacOptions: Seq[String],
-      dependencies: Seq[Library]
+      dependencies: Seq[ManagedEntry]
   ): MainDebuggee = {
     val tempDir = Files.createTempDirectory("scala-debug-adapter")
 
@@ -175,16 +178,21 @@ object MainDebuggee {
     }
 
     val scalaInstance = ScalaInstanceResolver.get(scalaVersion)
-    val libraries =
-      if (dependencies.isEmpty) scalaInstance.libraryJars else dependencies
+    def isScalaLibrary(dep: ManagedEntry): Boolean = {
+      if (scalaVersion.isScala3) dep.name.startsWith("scala-library") || dep.name.startsWith("scala3-library")
+      else dep.name.startsWith("scala-library")
+    }
+    val allDependencies =
+      if (dependencies.isEmpty) scalaInstance.libraryJars
+      else dependencies.filter(!isScalaLibrary(_)) ++ scalaInstance.libraryJars
 
-    scalaInstance.compile(classDir, libraries, scalacOptions, sourceFiles)
+    scalaInstance.compile(classDir, allDependencies, scalacOptions, sourceFiles)
     val sourceEntries = sourceFiles.map { srcFile =>
       StandaloneSourceFile(srcFile, srcDir.relativize(srcFile).toString)
     }
 
     val mainModule = Module(mainClass, Some(scalaVersion), scalacOptions, classDir, sourceEntries)
-    MainDebuggee(scalaVersion, sourceFiles, mainModule, libraries, mainClass)
+    MainDebuggee(scalaVersion, sourceFiles, mainModule, allDependencies, mainClass)
   }
 
   def mainClassRunner(
@@ -192,7 +200,7 @@ object MainDebuggee {
       mainClass: String,
       scalaVersion: ScalaVersion,
       scalacOptions: Seq[String],
-      dependencies: Seq[Library]
+      dependencies: Seq[ManagedEntry]
   ): MainDebuggee = {
     val className = mainClass.split('.').last
     val sourceName = s"$className.scala"

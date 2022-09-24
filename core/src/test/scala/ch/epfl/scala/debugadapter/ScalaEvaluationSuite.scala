@@ -6,6 +6,7 @@ import ch.epfl.scala.debugadapter.testing.TestDebugClient
 import scala.concurrent.duration._
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
+import java.nio.file.Path
 
 abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
@@ -18,17 +19,18 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuit
   val isScala2 = scalaVersion.binaryVersion.startsWith("2")
 
   class Breakpoint(
+      val sourceFile: Option[Path],
       val line: Int,
       val ignore: Boolean,
       val evaluations: Seq[Evaluation]
   )
 
   object Breakpoint {
-    def apply(line: Int, ignore: Boolean = false)(
-        evaluations: Evaluation*
-    ): Breakpoint = {
-      new Breakpoint(line, ignore, evaluations)
-    }
+    def apply(line: Int, ignore: Boolean = false)(evaluations: Evaluation*): Breakpoint =
+      new Breakpoint(None, line, ignore, evaluations)
+
+    def apply(sourceFile: Path, line: Int)(evaluations: Evaluation*): Breakpoint =
+      new Breakpoint(Some(sourceFile), line, false, evaluations)
   }
 
   class Evaluation(
@@ -127,6 +129,10 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuit
     assertEvaluations(debuggee, breakpoints)
   }
 
+  def assertInDebuggee(debuggee: MainDebuggee)(breakpoints: Breakpoint*): Unit = {
+    assertEvaluations(debuggee, breakpoints)
+  }
+
   def assertInMainClass(source: String, mainClass: String, scalacOptions: Seq[String])(
       breakpoints: Breakpoint*
   ): Unit = {
@@ -153,11 +159,15 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuit
       client.launch()
 
       val breakpoints = allBreakpoints.filter(!_.ignore)
-      val lines = breakpoints.map(_.line).distinct.toArray
-      val configuredBreakpoints =
-        client.setBreakpoints(debuggee.sourceFiles.head, lines)
-      assert(configuredBreakpoints.length == lines.length)
-      assert(configuredBreakpoints.forall(_.verified))
+      breakpoints
+        .groupBy(_.sourceFile)
+        .foreach { case (sourceOpt, breakpoints) =>
+          val sourceFile = sourceOpt.getOrElse(debuggee.sourceFiles.head)
+          val lines = breakpoints.map(_.line).distinct.toArray
+          val configuredBreakpoints = client.setBreakpoints(sourceFile, lines)
+          assert(configuredBreakpoints.length == lines.length)
+          assert(configuredBreakpoints.forall(_.verified))
+        }
       client.configurationDone()
 
       breakpoints.foreach { breakpoint =>

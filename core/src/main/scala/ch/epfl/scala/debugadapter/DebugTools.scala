@@ -56,12 +56,17 @@ object DebugTools {
     val scala3Loader = if (scala3Entries.isEmpty) None else resolveCompilerClassLoader(scala3Version)
     val scala2Loader = if (scala2Entries.isEmpty) None else resolveCompilerClassLoader(scala2Version)
 
+    val defaultScala2Options =
+      if (scala3Entries.nonEmpty) Seq("-Xsource:3", "-Ytasty-reader")
+      else Seq("-Xsource:3")
+
     val classPath = debuggee.classPath.mkString(File.pathSeparator)
 
     def loadExpressionCompiler(entry: ManagedEntry): Option[(ClassEntry, ExpressionCompiler)] = {
+      val optionsToAdd = if (entry.isScala2) defaultScala2Options else Seq.empty
       val scalacOptions = entry match {
-        case module: Module => module.scalacOptions
-        case lib: Library => Seq.empty
+        case module: Module => prepareOptions(module.scalacOptions, optionsToAdd)
+        case lib: Library => optionsToAdd
       }
       for {
         classLoader <- if (entry.isScala2) scala2Loader else if (entry.isScala3) scala3Loader else None
@@ -80,5 +85,13 @@ object DebugTools {
       } else None
 
     new DebugTools(allCompilers, stepFilter)
+  }
+
+  private val optionsToRemove = Set("-Xfatal-warnings", "-Werror")
+
+  private def prepareOptions(options: Seq[String], toAdd: Seq[String]) = {
+    val withoutRemoved = options.filter(o => !optionsToRemove.contains(o))
+    val withAdded = withoutRemoved ++ toAdd.filter(o => !options.contains(o))
+    withAdded
   }
 }
