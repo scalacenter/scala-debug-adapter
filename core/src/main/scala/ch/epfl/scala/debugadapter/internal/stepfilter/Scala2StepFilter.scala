@@ -5,11 +5,12 @@ import ch.epfl.scala.debugadapter.internal.scalasig._
 import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
 import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSigPrinter
 import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.ScalaVersion
 import scala.collection.JavaConverters._
 
 class Scala2StepFilter(
     sourceLookUp: SourceLookUpProvider,
-    scalaVersion: String,
+    scalaVersion: ScalaVersion,
     logger: Logger,
     testMode: Boolean
 ) extends ScalaStepFilter {
@@ -303,7 +304,7 @@ class Scala2StepFilter(
       "scala.package.Right" -> "scala.util.Right",
       "scala.<repeated>" -> "scala.collection.immutable.Seq"
     ) ++ (
-      if (scalaVersion.startsWith("2.12"))
+      if (scalaVersion.isScala212)
         Map(
           "scala.Predef.ClassManifest" -> "scala.reflect.ClassTag",
           "scala.package.TraversableOnce" -> "scala.collection.TraversableOnce",

@@ -14,18 +14,18 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
 import ch.epfl.scala.debugadapter.testing.TestSuiteEvent
 
-private[debugadapter] final class MainClassRunner(
+private[debugadapter] final class MainClassDebuggee(
     target: BuildTargetIdentifier,
-    val scalaVersion: String,
+    val scalaVersion: ScalaVersion,
     forkOptions: ForkOptions,
-    val classPathEntries: Seq[ClassPathEntry],
+    val modules: Seq[Module],
+    val libraries: Seq[Library],
+    val unmanagedEntries: Seq[UnmanagedEntry],
     val javaRuntime: Option[JavaRuntime],
     mainClass: String,
-    args: Seq[String],
-    val evaluationClassLoader: Option[ClassLoader],
-    val stepFilterClassLoader: Option[ClassLoader]
+    args: Seq[String]
 )(implicit ec: ExecutionContext)
-    extends DebuggeeRunner {
+    extends Debuggee {
   override def name: String =
     s"${getClass.getSimpleName}(${target.uri}, $mainClass)"
 
@@ -34,21 +34,21 @@ private[debugadapter] final class MainClassRunner(
   }
 }
 
-private[debugadapter] final class TestSuitesRunner(
+private[debugadapter] final class TestSuitesDebuggee(
     target: BuildTargetIdentifier,
-    val scalaVersion: String,
+    val scalaVersion: ScalaVersion,
     forkOptions: ForkOptions,
-    val classPathEntries: Seq[ClassPathEntry],
+    val modules: Seq[Module],
+    val libraries: Seq[Library],
+    val unmanagedEntries: Seq[UnmanagedEntry],
     val javaRuntime: Option[JavaRuntime],
     setups: Seq[Setup],
     cleanups: Seq[Cleanup],
     parallel: Boolean,
     runners: Map[TestFramework, Runner],
-    tests: Seq[TestDefinition],
-    val evaluationClassLoader: Option[ClassLoader],
-    val stepFilterClassLoader: Option[ClassLoader]
+    tests: Seq[TestDefinition]
 )(implicit executionContext: ExecutionContext)
-    extends DebuggeeRunner {
+    extends Debuggee {
 
   override def name: String =
     s"${getClass.getSimpleName}(${target.uri}, [${tests.mkString(", ")}])"
@@ -169,14 +169,14 @@ private[debugadapter] final class TestSuitesRunner(
   }
 }
 
-private[debugadapter] final class AttachRemoteRunner(
+private[debugadapter] final class AttachRemoteDebuggee(
     target: BuildTargetIdentifier,
-    val scalaVersion: String,
-    val classPathEntries: Seq[ClassPathEntry],
-    val javaRuntime: Option[JavaRuntime],
-    val evaluationClassLoader: Option[ClassLoader],
-    val stepFilterClassLoader: Option[ClassLoader]
-) extends DebuggeeRunner {
+    val scalaVersion: ScalaVersion,
+    val modules: Seq[Module],
+    val libraries: Seq[Library],
+    val unmanagedEntries: Seq[UnmanagedEntry],
+    val javaRuntime: Option[JavaRuntime]
+) extends Debuggee {
   override def name: String = s"${getClass.getSimpleName}(${target.uri})"
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] =
     new CancelableFuture[Unit] {

@@ -1,6 +1,6 @@
 package dotty.tools.dotc.evaluation
 
-import dotty.tools.dotc.EvaluationContext
+import dotty.tools.dotc.ExpressionContext
 import dotty.tools.dotc.ast.untpd.*
 import dotty.tools.dotc.core.Contexts.*
 import dotty.tools.dotc.core.Phases.Phase
@@ -20,17 +20,16 @@ import dotty.tools.dotc.util.SrcPos
  * - inserts the expression that is being evaluated in the line of the breakpoint
  * - inserts `Expression` class in a proper package
  */
-class InsertExpression(using
-    evalCtx: EvaluationContext
-) extends Phase:
+class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
   private var expressionInserted = false
 
   override def phaseName: String = InsertExpression.name
   override def isCheckable: Boolean = false
 
   private val evaluationClassSource =
-    s"""|class ${evalCtx.expressionClassName}(names: Array[String], values: Array[Any]):
+    s"""|class ${exprCtx.expressionClassName}(names: Array[String], values: Array[Any]):
         |  import java.lang.reflect.InvocationTargetException
+        |  val classLoader = getClass.getClassLoader.nn
         |
         |  def evaluate(): Any =
         |    ()
@@ -46,55 +45,57 @@ class InsertExpression(using
         |    else values(idx) = value
         |
         |  def callMethod(obj: Any, className: String, methodName: String, paramTypesNames: Array[String], returnTypeName: String, args: Array[Object]): Any =
-        |    val clazz = getClass.getClassLoader.loadClass(className)
-        |    val method = clazz.getDeclaredMethods
-        |      .find { m => 
+        |    val clazz = classLoader.loadClass(className).nn
+        |    val method = clazz.getDeclaredMethods.nn
+        |      .map(_.nn)
+        |      .find { m =>
         |        m.getName == methodName &&
-        |          m.getReturnType.getName == returnTypeName &&
-        |          m.getParameterTypes.map(_.getName).toSeq == paramTypesNames.toSeq
+        |          m.getReturnType.nn.getName == returnTypeName &&
+        |          m.getParameterTypes.nn.map(_.nn.getName).toSeq == paramTypesNames.toSeq
         |      }
         |      .getOrElse(throw new NoSuchMethodException(methodName))
         |    method.setAccessible(true)
         |    unwrapException(method.invoke(obj, args*))
         |
         |  def callConstructor(className: String, paramTypesNames: Array[String], args: Array[Object]): Any =
-        |    val classLoader = getClass.getClassLoader
-        |    val clazz = classLoader.loadClass(className)
-        |    val constructor = clazz.getConstructors
-        |      .find { c => c.getParameterTypes.map(_.getName).toSeq == paramTypesNames.toSeq }
+        |    val clazz = classLoader.loadClass(className).nn
+        |    val constructor = clazz.getConstructors.nn
+        |      .map(_.nn)
+        |      .find { c => c.getParameterTypes.nn.map(_.nn.getName).toSeq == paramTypesNames.toSeq }
         |      .getOrElse(throw new NoSuchMethodException(s"new $$className"))
         |    constructor.setAccessible(true)
         |    unwrapException(constructor.newInstance(args*))
         |
         |  def getField(obj: Any, className: String, fieldName: String): Any =
-        |    val clazz = getClass.getClassLoader.loadClass(className)
-        |    val field = clazz.getDeclaredField(fieldName)
+        |    val clazz = classLoader.loadClass(className).nn
+        |    val field = clazz.getDeclaredField(fieldName).nn
         |    field.setAccessible(true)
         |    field.get(obj)
         |
         |  def setField(obj: Any, className: String, fieldName: String, value: Any): Unit =
-        |    val clazz = getClass.getClassLoader.loadClass(className)
-        |    val field = clazz.getDeclaredField(fieldName)
+        |    val clazz = classLoader.loadClass(className).nn
+        |    val field = clazz.getDeclaredField(fieldName).nn
         |    field.setAccessible(true)
         |    field.set(obj, value)
         |
         |  def getOuter(obj: Any, outerTypeName: String): Any =
         |    val clazz = obj.getClass
         |    val field = getSuperclassIterator(clazz)
-        |      .flatMap(_.getDeclaredFields)
-        |      .find { field => field.getName == "$$outer" && field.getType.getName == outerTypeName }
+        |      .flatMap(_.getDeclaredFields.nn.toSeq)
+        |      .map(_.nn)
+        |      .find { field => field.getName == "$$outer" && field.getType.nn.getName == outerTypeName }
         |      .getOrElse(throw new NoSuchFieldException("$$outer"))
         |    field.setAccessible(true)
         |    field.get(obj)
         |
         |  def getStaticObject(className: String): Any =
-        |    val clazz = getClass.getClassLoader.loadClass(className)
-        |    val field = clazz.getDeclaredField("MODULE$$")
+        |    val clazz = classLoader.loadClass(className).nn
+        |    val field = clazz.getDeclaredField("MODULE$$").nn
         |    field.setAccessible(true)
         |    field.get(null)
         |
-        |  def getSuperclassIterator(clazz: Class[?]): Iterator[Class[?]] =
-        |    Iterator.iterate(clazz)(_.getSuperclass).takeWhile(_ != null)
+        |  def getSuperclassIterator(clazz: Class[?] | Null): Iterator[Class[?]] =
+        |    Iterator.iterate(clazz)(_.nn.getSuperclass).takeWhile(_ != null).map(_.nn)
         |
         |  // a fake method that is used between the extract-expression and the resolve-reflect-eval phases, 
         |  // which transforms them to calls of one of the methods defined above.
@@ -103,8 +104,12 @@ class InsertExpression(using
         |  private def unwrapException(f: => Any): Any =
         |    try f
         |    catch
-        |      case e: InvocationTargetException => throw e.getCause
-        |    
+        |      case e: InvocationTargetException => throw e.getCause.nn
+        |
+        |  extension [T] (x: T | Null)
+        |    private def nn: T = 
+        |      assert(x != null)
+        |      x.asInstanceOf[T]
         |""".stripMargin
 
   override def run(using Context): Unit =
@@ -153,8 +158,8 @@ class InsertExpression(using
           |  {
           |    """.stripMargin
     // don't use stripMargin on wrappedExpression because expression can contain a line starting with `  |`
-    val wrappedExpression = prefix + evalCtx.expression + "\n  }\n"
-    val expressionFile = SourceFile.virtual("<expression>", evalCtx.expression)
+    val wrappedExpression = prefix + exprCtx.expression + "\n  }\n"
+    val expressionFile = SourceFile.virtual("<expression>", exprCtx.expression)
     val contentBytes = wrappedExpression.getBytes(StandardCharsets.UTF_8)
     val wrappedExpressionFile =
       new VirtualFile("<wrapped-expression>", contentBytes)
@@ -190,7 +195,7 @@ class InsertExpression(using
   private def isOnBreakpoint(tree: Tree)(using Context): Boolean =
     val startLine =
       if tree.span.exists then tree.sourcePos.startLine + 1 else -1
-    startLine == evalCtx.breakpointLine
+    startLine == exprCtx.breakpointLine
 
   private def mkExprBlock(expr: Tree, tree: Tree)(using
       Context
@@ -200,12 +205,12 @@ class InsertExpression(using
       tree
     else
       expressionInserted = true
-      val valDef = ValDef(evalCtx.expressionTermName, TypeTree(), expr)
+      val valDef = ValDef(exprCtx.expressionTermName, TypeTree(), expr)
       Block(List(valDef), tree)
 
   // only fails in test mode
   private def warnOrError(msg: String, srcPos: SrcPos)(using Context): Unit =
-    if evalCtx.testMode then report.error(msg, srcPos)
+    if exprCtx.testMode then report.error(msg, srcPos)
     else report.warning(msg, srcPos)
 
 object InsertExpression:

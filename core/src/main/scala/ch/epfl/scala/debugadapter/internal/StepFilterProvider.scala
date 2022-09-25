@@ -6,7 +6,8 @@ import com.sun.jdi.Method
 
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.internal.stepfilter._
-import ch.epfl.scala.debugadapter.DebuggeeRunner
+import ch.epfl.scala.debugadapter.Debuggee
+import ch.epfl.scala.debugadapter.DebugTools
 
 class StepFilterProvider(
     stepFilters: Seq[StepFilter],
@@ -35,14 +36,14 @@ class StepFilterProvider(
 
 object StepFilterProvider {
   def apply(
+      debuggee: Debuggee,
+      tools: DebugTools,
       sourceLookUp: SourceLookUpProvider,
-      runner: DebuggeeRunner,
       logger: Logger,
       testMode: Boolean
   ): StepFilterProvider = {
-    val scalaStepFilter =
-      ScalaStepFilter(sourceLookUp, runner, logger, testMode)
-    val runtimeStepFilter = RuntimeStepFilter(runner)
+    val scalaStepFilter = ScalaStepFilter(debuggee, tools, sourceLookUp, logger, testMode)
+    val runtimeStepFilter = RuntimeStepFilter(debuggee.scalaVersion)
     new StepFilterProvider(
       Seq(runtimeStepFilter, scalaStepFilter),
       logger,

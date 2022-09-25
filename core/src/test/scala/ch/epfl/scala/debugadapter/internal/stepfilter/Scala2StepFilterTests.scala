@@ -1,7 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.stepfilter
 
 import utest._
-import ch.epfl.scala.debugadapter.MainDebuggeeRunner
+import ch.epfl.scala.debugadapter.MainDebuggee
 import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSig
 import ch.epfl.scala.debugadapter.NoopLogger
@@ -13,7 +13,7 @@ object Scala213StepFilterTests extends Scala2StepFilterTests(ScalaVersion.`2.13`
 object Scala212StepFilterTests extends Scala2StepFilterTests(ScalaVersion.`2.12`)
 
 abstract class Scala2StepFilterTests(scalaVersion: ScalaVersion) extends TestSuite {
-  def isScala213: Boolean = scalaVersion.binaryVersion == "2.13"
+  def isScala213: Boolean = scalaVersion.isScala213
 
   override def tests: Tests = Tests {
     "extract result types of all kind" - {
@@ -42,16 +42,10 @@ abstract class Scala2StepFilterTests(scalaVersion: ScalaVersion) extends TestSui
            |  def mbis(a: Main.type): Main.type = a
            |}
            |""".stripMargin
-      val runner = MainDebuggeeRunner.mainClassRunner(source, "", scalaVersion)
-      val stepFilter =
-        new Scala2StepFilter(
-          null,
-          scalaVersion.version,
-          NoopLogger,
-          testMode = true
-        )
+      val debuggee = MainDebuggee.mainClassRunner(source, "", scalaVersion)
+      val stepFilter = new Scala2StepFilter(null, scalaVersion, NoopLogger, testMode = true)
 
-      val scalaSig = decompile(runner, "example/Main.class")
+      val scalaSig = decompile(debuggee, "example/Main.class")
       val methods = scalaSig.entries
         .collect { case m: MethodSymbol => m }
         .filter(m => m.isMethod)
@@ -91,17 +85,10 @@ abstract class Scala2StepFilterTests(scalaVersion: ScalaVersion) extends TestSui
              |  def m(x: "a"): 1 = 1
              |}
              |""".stripMargin
-        val runner =
-          MainDebuggeeRunner.mainClassRunner(source, "", scalaVersion)
-        val stepFilter =
-          new Scala2StepFilter(
-            null,
-            scalaVersion.version,
-            NoopLogger,
-            testMode = true
-          )
+        val debuggee = MainDebuggee.mainClassRunner(source, "", scalaVersion)
+        val stepFilter = new Scala2StepFilter(null, scalaVersion, NoopLogger, testMode = true)
 
-        val scalaSig = decompile(runner, "example/Main.class")
+        val scalaSig = decompile(debuggee, "example/Main.class")
         val method = scalaSig.entries
           .collect { case m: MethodSymbol => m }
           .filter(m => m.isMethod)
@@ -114,18 +101,9 @@ abstract class Scala2StepFilterTests(scalaVersion: ScalaVersion) extends TestSui
     }
 
     "all Java types are known by the class loader" - {
-      val runner = MainDebuggeeRunner.mainClassRunner("", "", scalaVersion)
-      val sourceLookUp = SourceLookUpProvider(
-        runner.classPathEntries ++ runner.javaRuntime,
-        PrintLogger
-      )
-      val stepFilter =
-        new Scala2StepFilter(
-          sourceLookUp,
-          scalaVersion.version,
-          NoopLogger,
-          testMode = true
-        )
+      val debuggee = MainDebuggee.mainClassRunner("", "", scalaVersion)
+      val sourceLookUp = SourceLookUpProvider(debuggee.classEntries, PrintLogger)
+      val stepFilter = new Scala2StepFilter(sourceLookUp, scalaVersion, NoopLogger, testMode = true)
 
       stepFilter.scalaAliasesToJavaTypes.values.foreach { javaClass =>
         assert(sourceLookUp.containsClass(javaClass))
@@ -133,11 +111,8 @@ abstract class Scala2StepFilterTests(scalaVersion: ScalaVersion) extends TestSui
     }
   }
 
-  private def decompile(
-      runner: MainDebuggeeRunner,
-      classFile: String
-  ): ScalaSig = {
-    val classBytes = runner.projectEntry.readBytes(classFile)
+  private def decompile(debuggee: MainDebuggee, classFile: String): ScalaSig = {
+    val classBytes = debuggee.mainModule.readBytes(classFile)
     val scalaSig = Decompiler.decompile(classBytes, classFile, NoopLogger)
     assert(scalaSig.isDefined)
     scalaSig.get

@@ -1,8 +1,10 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter.{DebuggeeRunner, Logger}
+import ch.epfl.scala.debugadapter.Debuggee
+import ch.epfl.scala.debugadapter.DebugTools
+import ch.epfl.scala.debugadapter.Logger
 import com.microsoft.java.debug.core.DebugSettings
-import com.microsoft.java.debug.core.adapter._
+import com.microsoft.java.debug.core.adapter.{StepFilterProvider => _, _}
 import com.microsoft.java.debug.core.protocol.Types
 import com.sun.jdi._
 
@@ -20,41 +22,22 @@ private[debugadapter] object DebugAdapter {
    */
   DebugSettings.getCurrent.showStaticVariables = true
 
-  def context(
-      runner: DebuggeeRunner,
-      logger: Logger,
-      testMode: Boolean
-  ): IProviderContext = {
+  def context(debuggee: Debuggee, tools: DebugTools, logger: Logger, testMode: Boolean): IProviderContext = {
     TimeUtils.logTime(logger, "Configured debugger") {
       val context = new ProviderContext
-      val sourceLookUpProvider = SourceLookUpProvider(
-        runner.classPathEntries ++ runner.javaRuntime,
-        logger
-      )
+      val sourceLookUpProvider = SourceLookUpProvider(debuggee.classEntries, logger)
 
-      context.registerProvider(
-        classOf[IHotCodeReplaceProvider],
-        HotCodeReplaceProvider
-      )
-      context.registerProvider(
-        classOf[IVirtualMachineManagerProvider],
-        VirtualMachineManagerProvider
-      )
-      context.registerProvider(
-        classOf[ISourceLookUpProvider],
-        sourceLookUpProvider
-      )
+      context.registerProvider(classOf[IHotCodeReplaceProvider], HotCodeReplaceProvider)
+      context.registerProvider(classOf[IVirtualMachineManagerProvider], VirtualMachineManagerProvider)
+      context.registerProvider(classOf[ISourceLookUpProvider], sourceLookUpProvider)
       context.registerProvider(
         classOf[IEvaluationProvider],
-        EvaluationProvider(runner, sourceLookUpProvider, logger, testMode)
+        EvaluationProvider(debuggee, tools, sourceLookUpProvider, logger, testMode)
       )
-      context.registerProvider(
-        classOf[ICompletionsProvider],
-        CompletionsProvider
-      )
+      context.registerProvider(classOf[ICompletionsProvider], CompletionsProvider)
       context.registerProvider(
         classOf[IStepFilterProvider],
-        StepFilterProvider(sourceLookUpProvider, runner, logger, testMode)
+        StepFilterProvider(debuggee, tools, sourceLookUpProvider, logger, testMode)
       )
       context
     }

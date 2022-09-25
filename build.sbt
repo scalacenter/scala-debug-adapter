@@ -57,12 +57,10 @@ lazy val core = project
     buildInfoKeys := Seq[BuildInfoKey](
       BuildInfoKey.action("organization")(organization.value),
       BuildInfoKey.action("version")(version.value),
-      BuildInfoKey.action("expressionCompilerName")(
-        (expressionCompiler / name).value
-      ),
-      BuildInfoKey.action("scala3StepFilterName")(
-        (scala3StepFilter / name).value
-      )
+      BuildInfoKey.action("expressionCompilerName")((expressionCompiler / name).value),
+      BuildInfoKey.action("scala3StepFilterName")((scala3StepFilter / name).value),
+      BuildInfoKey.action("defaultScala2Version")(Dependencies.scala213),
+      BuildInfoKey.action("defaultScala3Version")(Dependencies.scala3)
     ),
     buildInfoPackage := "ch.epfl.scala.debugadapter",
     testFrameworks += new TestFramework("utest.runner.Framework"),
@@ -172,6 +170,7 @@ lazy val scala3StepFilter = project
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
       "tasty-query" %% "tasty-query" % "0.1-SNAPSHOT",
+      "org.scala-lang" %% "tasty-core" % scalaVersion.value,
       Dependencies.utest % Test,
       Dependencies.coursier.cross(CrossVersion.for3Use2_13) % Test
     ),

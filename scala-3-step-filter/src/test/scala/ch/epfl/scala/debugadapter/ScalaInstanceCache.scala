@@ -7,24 +7,14 @@ import java.nio.file.Path
 import java.io.File
 import java.nio.file.Files
 
-case class ScalaInstance(
-    scalaVersion: ScalaVersion,
-    libraryJars: Seq[Path],
+sealed abstract class ScalaInstance(
+    val libraryJars: Seq[Path],
     compilerJars: Seq[Path]
 ) {
-  val libraryClassLoader =
-    new URLClassLoader(libraryJars.map(_.toUri.toURL).toArray, null)
-  val compilerClassLoader =
-    new URLClassLoader(
-      compilerJars.map(_.toUri.toURL).toArray,
-      libraryClassLoader
-    )
+  val libraryClassLoader = new URLClassLoader(libraryJars.map(_.toUri.toURL).toArray, null)
+  val compilerClassLoader = new URLClassLoader(compilerJars.map(_.toUri.toURL).toArray, libraryClassLoader)
 
-  def compile(
-      classDir: Path,
-      classPath: Seq[Path],
-      sourceFiles: Seq[Path]
-  ): Unit = {
+  def compile(classDir: Path, classPath: Seq[Path], sourceFiles: Seq[Path]): Unit = {
     val args = Array(
       "-d",
       classDir.toString,
@@ -32,20 +22,25 @@ case class ScalaInstance(
       classPath.mkString(File.pathSeparator),
       "-deprecation"
     ) ++ sourceFiles.map(_.toString)
-    scalaVersion match {
-      case Scala2(_) => compileScala2(args)
-      case Scala3(_) => compileScala3(args)
-    }
+    compileInternal(args)
   }
 
-  private def compileScala2(args: Array[String]): Unit = {
+  protected def compileInternal(args: Array[String]): Unit
+}
+
+final class Scala2Instance(libraryJars: Seq[Path], compilerJars: Seq[Path])
+    extends ScalaInstance(libraryJars, compilerJars) {
+  override protected def compileInternal(args: Array[String]): Unit = {
     val main = compilerClassLoader.loadClass("scala.tools.nsc.Main")
     val process = main.getMethod("process", classOf[Array[String]])
     val success = process.invoke(null, args).asInstanceOf[Boolean]
     if (!success) throw new Exception("compilation failed")
   }
+}
 
-  private def compileScala3(args: Array[String]): Unit = {
+final class Scala3Instance(libraryJars: Seq[Path], compilerJars: Seq[Path])
+    extends ScalaInstance(libraryJars, compilerJars) {
+  override protected def compileInternal(args: Array[String]): Unit = {
     val main = compilerClassLoader.loadClass("dotty.tools.dotc.Main")
     val process = main.getMethod("process", classOf[Array[String]])
     val classOfReporter =
@@ -62,10 +57,9 @@ object ScalaInstanceCache {
 
   def get(scalaVersion: ScalaVersion): ScalaInstance = {
     if (!cache.contains(scalaVersion)) {
-      val scalaInstance = scalaVersion match {
-        case scala2: Scala2 => fetch(scala2)
-        case scala3: Scala3 => fetch(scala3)
-      }
+      val scalaInstance =
+        if (scalaVersion.isScala3) fetchScala3(scalaVersion)
+        else fetchScala2(scalaVersion)
       cache.update(scalaVersion, scalaInstance)
     }
     cache(scalaVersion)
@@ -98,14 +92,14 @@ object ScalaInstanceCache {
     scalaInstance.compile(classDir, dependencies, sourceFiles)
     dependencies :+ classDir
 
-  private def fetch(scalaVersion: Scala2): ScalaInstance = {
+  private def fetchScala2(scalaVersion: ScalaVersion): ScalaInstance = {
     val compilerArtifactName = "scala-compiler"
     val compilerDep = Dependency(
       Module(
         Organization("org.scala-lang"),
         ModuleName(compilerArtifactName)
       ),
-      scalaVersion.version
+      scalaVersion.value
     )
 
     val jars = Coursier.fetch(compilerDep)
@@ -114,31 +108,24 @@ object ScalaInstanceCache {
       jars.filter(jar => jar.getFileName.toString.startsWith("scala-library"))
     val compilerJars = jars.filter(jar => !libraryJars.contains(jar))
 
-    ScalaInstance(scalaVersion, libraryJars, compilerJars)
+    Scala2Instance(libraryJars, compilerJars)
   }
 
-  private def fetch(scalaVersion: Scala3): ScalaInstance = {
+  private def fetchScala3(scalaVersion: ScalaVersion): ScalaInstance = {
     val compilerArtifactName = "scala3-compiler_3"
     val compilerDep = Dependency(
       Module(
         Organization("org.scala-lang"),
         ModuleName(compilerArtifactName)
       ),
-      scalaVersion.version
+      scalaVersion.value
     )
-
     val jars = Coursier.fetch(compilerDep)
-
     val libraryJars = jars.filter { jar =>
       jar.getFileName.toString.startsWith("scala-library") ||
       jar.getFileName.toString.startsWith("scala3-library_3")
     }
     val compilerJars = jars.filter(jar => !libraryJars.contains(jar))
-
-    ScalaInstance(
-      scalaVersion,
-      libraryJars,
-      compilerJars
-    )
+    Scala3Instance(libraryJars, compilerJars)
   }
 }

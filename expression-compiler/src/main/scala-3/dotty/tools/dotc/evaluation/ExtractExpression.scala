@@ -1,6 +1,6 @@
 package dotty.tools.dotc.evaluation
 
-import dotty.tools.dotc.EvaluationContext
+import dotty.tools.dotc.ExpressionContext
 import dotty.tools.dotc.ast.tpd.*
 import dotty.tools.dotc.core.Constants.Constant
 import dotty.tools.dotc.core.Contexts.*
@@ -17,7 +17,7 @@ import dotty.tools.dotc.core.Phases.*
 import dotty.tools.dotc.report
 import dotty.tools.dotc.util.SrcPos
 
-class ExtractExpression(using evalCtx: EvaluationContext) extends MacroTransform with DenotTransformer:
+class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform with DenotTransformer:
   override def phaseName: String = ExtractExpression.name
 
   /**
@@ -31,7 +31,7 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MacroTransform
       case ref: SymDenotation if isExpressionVal(ref.symbol.maybeOwner) =>
         // update owner of the symDenotation, e.g. local vals
         // that are extracted out of the expression val to the evaluate method
-        ref.copySymDenotation(owner = evalCtx.evaluateMethod)
+        ref.copySymDenotation(owner = exprCtx.evaluateMethod)
       case _ =>
         ref
 
@@ -44,15 +44,15 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MacroTransform
         tree match
           case PackageDef(pid, stats) =>
             val evaluationClassDef =
-              stats.find(_.symbol == evalCtx.expressionClass)
-            val others = stats.filter(_.symbol != evalCtx.expressionClass)
+              stats.find(_.symbol == exprCtx.expressionClass)
+            val others = stats.filter(_.symbol != exprCtx.expressionClass)
             val transformedStats = (others ++ evaluationClassDef).map(transform)
             PackageDef(pid, transformedStats)
           case tree: ValDef if isExpressionVal(tree.symbol) =>
             expressionTree = tree.rhs
-            evalCtx.store(tree.symbol)
+            exprCtx.store(tree.symbol)
             unitLiteral
-          case tree: DefDef if tree.symbol == evalCtx.evaluateMethod =>
+          case tree: DefDef if tree.symbol == exprCtx.evaluateMethod =>
             val transformedExpr =
               ExpressionTransformer.transform(expressionTree)
             cpy.DefDef(tree)(rhs = transformedExpr)
@@ -134,7 +134,7 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MacroTransform
         Context
     ): Option[Symbol] =
       // a local variable can be captured by a class or method
-      val candidates = evalCtx.expressionSymbol.ownersIterator
+      val candidates = exprCtx.expressionSymbol.ownersIterator
         .takeWhile(_ != variable.owner)
         .filter(s => s.isClass || s.is(Method))
         .toSeq
@@ -181,20 +181,20 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MacroTransform
   end ExpressionTransformer
 
   private def isExpressionVal(sym: Symbol)(using Context): Boolean =
-    sym.name == evalCtx.expressionTermName
+    sym.name == exprCtx.expressionTermName
 
   // symbol can be a class or a method
   private def thisOrOuterValue(tree: Tree)(cls: ClassSymbol)(using
       Context
   ): Tree =
     reportErrorIfLocalInsideValueClass(
-      evalCtx.expressionSymbol.owner,
+      exprCtx.expressionSymbol.owner,
       tree.srcPos
     )
-    val ths = getThis(tree)(evalCtx.classOwners.head)
-    val target = evalCtx.classOwners.indexOf(cls)
+    val ths = getThis(tree)(exprCtx.classOwners.head)
+    val target = exprCtx.classOwners.indexOf(cls)
     if target >= 0 then
-      evalCtx.classOwners
+      exprCtx.classOwners
         .drop(1)
         .take(target)
         .foldLeft(ths) { (innerObj, outerSym) =>
@@ -207,7 +207,7 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MacroTransform
       nullLiteral,
       EvaluationStrategy.This(cls),
       List.empty,
-      evalCtx.classOwners.head.typeRef
+      exprCtx.classOwners.head.typeRef
     )
 
   private def getOuter(
@@ -327,7 +327,7 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MacroTransform
   ): Tree =
     val reflectEval =
       cpy.Apply(tree)(
-        Select(This(evalCtx.expressionClass), termName("reflectEval")),
+        Select(This(exprCtx.expressionClass), termName("reflectEval")),
         List(
           qualifier,
           Literal(Constant(strategy.toString)),
@@ -426,7 +426,7 @@ class ExtractExpression(using evalCtx: EvaluationContext) extends MacroTransform
     )
 
   private def isOwnedByExpression(symbol: Symbol)(using Context): Boolean =
-    val evaluateMethod = evalCtx.evaluateMethod
+    val evaluateMethod = exprCtx.evaluateMethod
     symbol.ownersIterator.exists(_ == evaluateMethod)
 
 object ExtractExpression:

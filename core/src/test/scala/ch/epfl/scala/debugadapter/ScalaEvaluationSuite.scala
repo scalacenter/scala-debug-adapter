@@ -6,6 +6,7 @@ import ch.epfl.scala.debugadapter.testing.TestDebugClient
 import scala.concurrent.duration._
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
+import java.nio.file.Path
 
 abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
@@ -18,17 +19,18 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuit
   val isScala2 = scalaVersion.binaryVersion.startsWith("2")
 
   class Breakpoint(
+      val sourceFile: Option[Path],
       val line: Int,
       val ignore: Boolean,
       val evaluations: Seq[Evaluation]
   )
 
   object Breakpoint {
-    def apply(line: Int, ignore: Boolean = false)(
-        evaluations: Evaluation*
-    ): Breakpoint = {
-      new Breakpoint(line, ignore, evaluations)
-    }
+    def apply(line: Int, ignore: Boolean = false)(evaluations: Evaluation*): Breakpoint =
+      new Breakpoint(None, line, ignore, evaluations)
+
+    def apply(sourceFile: Path, line: Int)(evaluations: Evaluation*): Breakpoint =
+      new Breakpoint(Some(sourceFile), line, false, evaluations)
   }
 
   class Evaluation(
@@ -67,7 +69,7 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuit
       new Evaluation(
         expression,
         { resp =>
-          println(s"TODO fix in ${scalaVersion.version}")
+          println(s"TODO fix in $scalaVersion")
           println(s"expected: $expected")
         }
       )
@@ -116,48 +118,40 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuit
     )
   }
 
-  def assertInMainClass(
-      sources: Seq[(String, String)],
-      mainClass: String
-  )(
-      breakpoints: Breakpoint*
-  ): Unit = {
-    val runner =
-      MainDebuggeeRunner.mainClassRunner(
-        sources,
-        mainClass,
-        scalaVersion,
-        Seq.empty
-      )
-    assertEvaluations(runner, breakpoints)
+  def assertInMainClass(sources: Seq[(String, String)], mainClass: String)(breakpoints: Breakpoint*): Unit = {
+    val debuggee = MainDebuggee.mainClassRunner(sources, mainClass, scalaVersion, Seq.empty, Seq.empty)
+    assertEvaluations(debuggee, breakpoints)
   }
 
-  def assertInMainClass(source: String, mainClass: String)(
+  def assertInMainClass(source: String, mainClass: String)(breakpoints: Breakpoint*): Unit = {
+    val debuggee =
+      MainDebuggee.mainClassRunner(source, mainClass, scalaVersion)
+    assertEvaluations(debuggee, breakpoints)
+  }
+
+  def assertInDebuggee(debuggee: MainDebuggee)(breakpoints: Breakpoint*): Unit = {
+    assertEvaluations(debuggee, breakpoints)
+  }
+
+  def assertInMainClass(source: String, mainClass: String, scalacOptions: Seq[String])(
       breakpoints: Breakpoint*
   ): Unit = {
-    val runner =
-      MainDebuggeeRunner.mainClassRunner(source, mainClass, scalaVersion)
-    assertEvaluations(runner, breakpoints)
+    val debuggee =
+      MainDebuggee.mainClassRunner(source, mainClass, scalaVersion, scalacOptions)
+    assertEvaluations(debuggee, breakpoints)
   }
 
   def assertInTestSuite(source: String, testSuite: String)(
       breakpoints: Breakpoint*
   ): Unit = {
-    val runner =
-      MainDebuggeeRunner.munitTestSuite(source, testSuite, scalaVersion)
-    assertEvaluations(runner, breakpoints)
+    val debuggee =
+      MainDebuggee.munitTestSuite(source, testSuite, scalaVersion)
+    assertEvaluations(debuggee, breakpoints)
   }
 
-  private def assertEvaluations(
-      runner: MainDebuggeeRunner,
-      allBreakpoints: Seq[Breakpoint]
-  ): Unit = {
-    val server = DebugServer(
-      runner,
-      new DebugServer.Address(),
-      NoopLogger,
-      testMode = true
-    )
+  private def assertEvaluations(debuggee: MainDebuggee, allBreakpoints: Seq[Breakpoint]): Unit = {
+    val tools = DebugTools(debuggee, ScalaInstanceResolver, NoopLogger)
+    val server = DebugServer(debuggee, tools, NoopLogger, testMode = true)
     val client = TestDebugClient.connect(server.uri, 20.seconds)
     try {
       server.connect()
@@ -165,11 +159,15 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuit
       client.launch()
 
       val breakpoints = allBreakpoints.filter(!_.ignore)
-      val lines = breakpoints.map(_.line).distinct.toArray
-      val configuredBreakpoints =
-        client.setBreakpoints(runner.sourceFiles.head, lines)
-      assert(configuredBreakpoints.length == lines.length)
-      assert(configuredBreakpoints.forall(_.verified))
+      breakpoints
+        .groupBy(_.sourceFile)
+        .foreach { case (sourceOpt, breakpoints) =>
+          val sourceFile = sourceOpt.getOrElse(debuggee.sourceFiles.head)
+          val lines = breakpoints.map(_.line).distinct.toArray
+          val configuredBreakpoints = client.setBreakpoints(sourceFile, lines)
+          assert(configuredBreakpoints.length == lines.length)
+          assert(configuredBreakpoints.forall(_.verified))
+        }
       client.configurationDone()
 
       breakpoints.foreach { breakpoint =>

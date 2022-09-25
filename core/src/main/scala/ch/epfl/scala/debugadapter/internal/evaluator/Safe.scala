@@ -77,8 +77,10 @@ object Safe {
     }
   }
 
-  def lift[A](a: A): Safe[A] = {
-    new Safe(Success(a), () => ())
+  def lift[A](a: A): Safe[A] = lift(Success(a))
+
+  def lift[A](a: Try[A]): Safe[A] = {
+    new Safe(a, () => ())
   }
 
   def join[A, B](safeA: Safe[A], safeB: Safe[B]): Safe[(A, B)] = {

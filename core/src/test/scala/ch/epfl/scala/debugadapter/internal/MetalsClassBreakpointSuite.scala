@@ -1,6 +1,6 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter.MainDebuggeeRunner
+import ch.epfl.scala.debugadapter.MainDebuggee
 import ch.epfl.scala.debugadapter.ScalaVersion
 import utest._
 import ch.epfl.scala.debugadapter.NoopLogger
@@ -173,14 +173,10 @@ object MetalsClassBreakpointSuite extends TestSuite {
       val lineNumber =
         original.linesIterator.toSeq.indexWhere(_.contains(">>")) + 1
 
-      val runner = MainDebuggeeRunner.mainClassRunner(
-        source,
-        "Main", // incorrect but not used
-        scalaVersion
-      )
-      val lookUp = ClassEntryLookUp(runner.projectEntry, NoopLogger)
+      val debuggee = MainDebuggee.mainClassRunner(source, "Main", scalaVersion)
+      val lookUp = ClassEntryLookUp(debuggee.mainModule, NoopLogger)
 
-      val sourceFile = runner.sourceFiles.head.toUri
+      val sourceFile = debuggee.sourceFiles.head.toUri
 
       val className =
         lookUp.getFullyQualifiedClassName(sourceFile, lineNumber)

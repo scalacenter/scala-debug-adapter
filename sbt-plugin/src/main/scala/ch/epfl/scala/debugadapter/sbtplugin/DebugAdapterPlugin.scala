@@ -4,7 +4,7 @@ import ch.epfl.scala.debugadapter._
 import ch.epfl.scala.debugadapter.sbtplugin.internal.JsonProtocol._
 import ch.epfl.scala.debugadapter.sbtplugin.internal._
 import sbt.Tests._
-import sbt._
+import sbt.{ScalaVersion => _, _}
 import sbt.internal.bsp.BuildTargetIdentifier
 import sbt.internal.protocol.JsonRpcRequestMessage
 import sbt.internal.server.ServerHandler
@@ -126,9 +126,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       loader.loadClass("com.sun.jdi.Value")
     } catch {
       case c: ClassNotFoundException =>
-        logger.warn(
-          "The sbt-debug-adapter cannot work because the JDI tools are not loaded."
-        )
+        logger.warn("The sbt-debug-adapter cannot work because the JDI tools are not loaded.")
         logger.warn(
           """|
              |Consider adding the sbt-jdi-tools plugin to your `./project/project/plugins.sbt` file:
@@ -196,22 +194,16 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   private def mainClassSessionTask: Def.Initialize[InputTask[URI]] =
     Def.inputTask {
       val target = Keys.bspTargetIdentifier.value
-      val scalaVersion = Keys.scalaVersion.value
       val javaHome = Keys.javaHome.value
       val workingDirectory = (Keys.run / Keys.baseDirectory).value
-      val classPathEntries = InternalTasks.classPathEntries.value
-      val javaRuntime = InternalTasks.javaRuntime.value
       val envVars = Keys.envVars.value
       val jobService = Keys.bgJobService.value
       val scope = Keys.resolvedScoped.value
       val state = Keys.state.value
-      val evaluationClassLoader =
-        InternalTasks.tryResolveEvaluationClassLoader.value
-      val stepFilterClassLoader =
-        InternalTasks.tryResolveStepFilterClassLoader.value
+      val debugToolsResolver = InternalTasks.debugToolsResolver.value
       val javaOptions = (Keys.run / Keys.javaOptions).value
 
-      val runner = for {
+      val debuggee = for {
         json <- jsonParser.parsed
         params <- Converter.fromJson[ScalaMainClass](json).toEither.left.map { cause =>
           Error.invalidParams(
@@ -234,25 +226,25 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             .toMap
         )
 
-        new MainClassRunner(
+        new MainClassDebuggee(
           target,
-          scalaVersion,
+          ScalaVersion(Keys.scalaVersion.value),
           forkOptions,
-          classPathEntries,
-          javaRuntime,
+          InternalTasks.modules.value,
+          InternalTasks.libraries.value,
+          InternalTasks.unmanagedEntries.value,
+          InternalTasks.javaRuntime.value,
           params.`class`,
-          params.arguments,
-          evaluationClassLoader,
-          stepFilterClassLoader
+          params.arguments
         )
       }
 
-      runner match {
+      debuggee match {
         case Left(error) =>
           Keys.state.value.respondError(error.code, error.message)
           throw new MessageOnlyException(error.message)
-        case Right(runner) =>
-          startServer(jobService, scope, state, target, runner)
+        case Right(debuggee) =>
+          startServer(jobService, scope, state, target, debuggee, debugToolsResolver)
       }
     }
 
@@ -305,11 +297,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   ): Def.Initialize[InputTask[URI]] =
     Def.inputTask {
       val target = Keys.bspTargetIdentifier.value
-      val scalaVersion = Keys.scalaVersion.value
       val testGrouping = (Keys.test / Keys.testGrouping).value
       val defaultForkOpts = Keys.forkOptions.value
-      val classPathEntries = InternalTasks.classPathEntries.value
-      val javaRuntime = InternalTasks.javaRuntime.value
       val frameworks = Keys.loadedTestFrameworks.value
       val testLoader = Keys.testLoader.value
       val testExec = (Keys.test / Keys.testExecution).value
@@ -317,12 +306,9 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val state = Keys.state.value
       val jobService = Keys.bgJobService.value
       val scope = Keys.resolvedScoped.value
-      val evaluationClassLoader =
-        InternalTasks.tryResolveEvaluationClassLoader.value
-      val stepFilterClassLoader =
-        InternalTasks.tryResolveStepFilterClassLoader.value
+      val debugToolsResolver = InternalTasks.debugToolsResolver.value
 
-      val runner = for {
+      val debuggee = for {
         json <- jsonParser.parsed
         testSuites <- parseFn(json)
         selectedTests = testSuites.suites
@@ -361,12 +347,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         )
 
         val setups = testExec.options.collect { case setup @ Setup(_) => setup }
-        val cleanups = testExec.options.collect { case cleanup @ Cleanup(_) =>
-          cleanup
-        }
-        val arguments = testExec.options.collect { case argument @ Argument(_, _) =>
-          argument
-        }
+        val cleanups = testExec.options.collect { case cleanup @ Cleanup(_) => cleanup }
+        val arguments = testExec.options.collect { case argument @ Argument(_, _) => argument }
         val parallel = testExec.parallel && parallelExec
 
         val testRunners = frameworks.map { case (name, framework) =>
@@ -374,33 +356,32 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             case Argument(None, args) => args
             case Argument(Some(tf), args) if tf == name => args
           }.flatten
-          val mainRunner =
-            framework.runner(args.toArray, Array.empty[String], testLoader)
+          val mainRunner = framework.runner(args.toArray, Array.empty[String], testLoader)
           name -> mainRunner
         }
 
-        new TestSuitesRunner(
+        new TestSuitesDebuggee(
           target,
-          scalaVersion,
+          ScalaVersion(Keys.scalaVersion.value),
           forkOptions,
-          classPathEntries,
-          javaRuntime,
+          InternalTasks.modules.value,
+          InternalTasks.libraries.value,
+          InternalTasks.unmanagedEntries.value,
+          InternalTasks.javaRuntime.value,
           setups,
           cleanups,
           parallel,
           testRunners,
-          testDefinitions,
-          evaluationClassLoader,
-          stepFilterClassLoader
+          testDefinitions
         )
       }
 
-      runner match {
+      debuggee match {
         case Left(error) =>
           state.respondError(error.code, error.message)
           throw new MessageOnlyException(error.message)
-        case Right(runner) =>
-          startServer(jobService, scope, state, target, runner)
+        case Right(debuggee) =>
+          startServer(jobService, scope, state, target, debuggee, debugToolsResolver)
       }
     }
 
@@ -439,26 +420,20 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       // consume all input and ignore
       val _ = Parsers.any.*.parsed
       val target = Keys.bspTargetIdentifier.value
-      val scalaVersion = Keys.scalaVersion.value
-      val classPathEntries = InternalTasks.classPathEntries.value
-      val javaRuntime = InternalTasks.javaRuntime.value
-      val evaluationClassLoader =
-        InternalTasks.tryResolveEvaluationClassLoader.value
-      val stepFilterClassLoader =
-        InternalTasks.tryResolveStepFilterClassLoader.value
       val state = Keys.state.value
       val jobService = Keys.bgJobService.value
       val scope = Keys.resolvedScoped.value
+      val debugToolsResolver = InternalTasks.debugToolsResolver.value
 
-      val runner = new AttachRemoteRunner(
+      val debuggee = new AttachRemoteDebuggee(
         target,
-        scalaVersion,
-        classPathEntries,
-        javaRuntime,
-        evaluationClassLoader,
-        stepFilterClassLoader
+        ScalaVersion(Keys.scalaVersion.value),
+        InternalTasks.modules.value,
+        InternalTasks.libraries.value,
+        InternalTasks.unmanagedEntries.value,
+        InternalTasks.javaRuntime.value
       )
-      startServer(jobService, scope, state, target, runner)
+      startServer(jobService, scope, state, target, debuggee, debugToolsResolver)
     }
 
   private def startServer(
@@ -466,19 +441,15 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       scope: ScopedKey[_],
       state: State,
       target: BuildTargetIdentifier,
-      runner: DebuggeeRunner
+      debuggee: Debuggee,
+      resolver: DebugToolsResolver
   ): URI = {
     val address = new DebugServer.Address()
+    val tools = DebugTools(debuggee, resolver, new LoggerAdapter(state.log))
     jobService.runInBackground(scope, state) { (logger, _) =>
       // if there is a server for this target then close it
       debugServers.get(target).foreach(_.close())
-      val server =
-        DebugServer(
-          runner,
-          address,
-          new LoggerAdapter(logger),
-          autoCloseSession = true
-        )
+      val server = DebugServer(debuggee, tools, new LoggerAdapter(logger), address, autoCloseSession = true)
       debugServers.update(target, server)
       Await.result(server.start(), Duration.Inf)
     }

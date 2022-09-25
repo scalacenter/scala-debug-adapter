@@ -13,8 +13,8 @@ object MoreScala3DebugTests extends TestSuite {
 
   def tests: Tests = Tests {
     "should support breakpoints in scala 3 with brace-less syntax" - {
-      val runner = MainDebuggeeRunner.scala3Braceless()
-      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
+      val debuggee = MainDebuggee.scala3Braceless()
+      val server = getDebugServer(debuggee)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -22,7 +22,7 @@ object MoreScala3DebugTests extends TestSuite {
         client.launch()
 
         val breakpoints =
-          client.setBreakpoints(runner.sourceFiles.head, Array(5, 7, 11))
+          client.setBreakpoints(debuggee.sourceFiles.head, Array(5, 7, 11))
         assert(breakpoints.size == 3)
         assert(breakpoints.forall(_.verified))
 
@@ -46,8 +46,8 @@ object MoreScala3DebugTests extends TestSuite {
     }
 
     "should support breakpoints in scala 3 with @main" - {
-      val runner = MainDebuggeeRunner.scala3MainAnnotation()
-      val server = DebugServer(runner, new DebugServer.Address(), NoopLogger)
+      val debuggee = MainDebuggee.scala3MainAnnotation()
+      val server = getDebugServer(debuggee)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -55,7 +55,7 @@ object MoreScala3DebugTests extends TestSuite {
         client.launch()
 
         val breakpoints =
-          client.setBreakpoints(runner.sourceFiles.head, Array(4, 6, 10))
+          client.setBreakpoints(debuggee.sourceFiles.head, Array(4, 6, 10))
         assert(breakpoints.size == 3)
         assert(breakpoints.forall(_.verified))
 
@@ -77,5 +77,10 @@ object MoreScala3DebugTests extends TestSuite {
         client.close()
       }
     }
+  }
+
+  def getDebugServer(debuggee: Debuggee, logger: Logger = NoopLogger): DebugServer = {
+    val tools = DebugTools(debuggee, ScalaInstanceResolver, NoopLogger)
+    DebugServer(debuggee, tools, NoopLogger, testMode = true)
   }
 }
