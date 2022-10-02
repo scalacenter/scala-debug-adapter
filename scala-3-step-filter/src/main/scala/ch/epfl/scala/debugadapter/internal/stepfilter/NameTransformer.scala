@@ -1,7 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.stepfilter
 
-import tastyquery.ast.Names.SimpleName
-import tastyquery.ast.Names.Name
+import tastyquery.Names.SimpleName
+import tastyquery.Names.Name
 
 /**
  * Adapted from https://github.com/lampepfl/dotty/blob/main/compiler/src/dotty/tools/dotc/util/NameTransformer.scala
