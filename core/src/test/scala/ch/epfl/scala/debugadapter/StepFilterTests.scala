@@ -366,7 +366,6 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  def main(args: Array[String]): Unit = {
            |    val a = new A("a")
            |    val b = new A("b")
-           |    a.productIterator // load a bunch of classes 
            |    
            |    a.toString
            |    a.copy("b")
@@ -384,25 +383,16 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}""".stripMargin
       assertInMainClass(source, "example.Main")(
-        Breakpoint(11)(
-          StepInto.method("ScalaRunTime$._toString(Product)"),
-          StepOut.line(11)
-        ),
-        Breakpoint(12)(StepInto.method("A.<init>(String)"), StepOut.line(12)),
-        Breakpoint(13)(
-          StepInto.method("ScalaRunTime$._hashCode(Product)"),
-          StepOut.line(13)
-        ),
+        Breakpoint(10)(StepInto.method("ScalaRunTime$._toString(Product)"), StepOut.line(10)),
+        Breakpoint(11)(StepInto.method("A.<init>(String)"), StepOut.line(11)),
+        Breakpoint(12)(StepInto.method("ScalaRunTime$._hashCode(Product)"), StepOut.line(12)),
+        Breakpoint(13)(StepInto.method("String.equals(Object)"), StepOut.line(13)),
         Breakpoint(14)(
-          StepInto.method("String.equals(Object)"),
-          StepOut.line(14)
-        ),
-        Breakpoint(15)(
+          StepInto.line(15),
           StepInto.line(16),
           StepInto.line(17),
-          StepInto.line(18),
-          if (isScala3 || isScala213) StepInto.method("Product.productIterator()")
-          else StepInto.method("ScalaRunTime$.typedProductIterator(Product)")
+          if (isScala212) StepInto.method("ScalaRunTime$.typedProductIterator(Product)")
+          else StepInto.method("Product.productIterator()")
         )
       )
     }
@@ -522,7 +512,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
     }
 
     "should match all kinds of types" - {
-      // To determine if a method should be stepped into, the StepFilterProvider tries to find the Scala method
+      // To determine if a method should be stepped into, the ScalaStepFilter tries to find the Scala method
       // whose signature could match the one of the runtime method, from the class file.
       // In this test we check that all kind of Scala types can match their Java counterpart.
       val source =
@@ -881,7 +871,6 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |
            |object Main {
            |  def main(xs: Array[String]): Unit = {
-           |    A(""); StringContext("") // loading classes
            |    val parts = Seq("x", "y")
            |    val a = A(parts:_*)
            |    println(a.as)
@@ -892,10 +881,10 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |""".stripMargin
 
       assertInMainClass(source, "example.Main")(
-        Breakpoint(9)(StepInto.method("A.<init>(Seq)")),
-        Breakpoint(10)(StepInto.method("Predef$.println(Object)")),
-        Breakpoint(11)(StepInto.method("StringContext.<init>(Seq)")),
-        Breakpoint(12)(StepInto.method("Predef$.println(Object)"))
+        Breakpoint(8)(StepInto.method("A.<init>(Seq)")),
+        Breakpoint(9)(StepInto.method("Predef$.println(Object)")),
+        Breakpoint(10)(StepInto.method("StringContext.<init>(Seq)")),
+        Breakpoint(11)(StepInto.method("Predef$.println(Object)"))
       )
     }
 
@@ -988,6 +977,21 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
           StepInto.line(10)
         )
       )
+    }
+
+    "step out of class loader and into constructor" - {
+      val source =
+        """|package example
+           |
+           |class A
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    new A
+           |  }
+           |}
+           |""".stripMargin
+      assertInMainClass(source, "example.Main")(Breakpoint(7)(StepInto.method("A.<init>()")))
     }
   }
 }
