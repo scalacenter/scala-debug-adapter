@@ -8,6 +8,9 @@ private class RuntimeStepFilter(
     classesToSkip: Set[String],
     methodsToSkip: Set[String]
 ) extends StepFilter {
+  override def shouldStepInto(method: Method): Boolean =
+    classesToSkip.contains(method.declaringType.name) ||
+      methodsToSkip.contains(method.toString)
   override def shouldStepOut(upperLocation: Location, method: Method): Boolean =
     classesToSkip.contains(method.declaringType.name) ||
       methodsToSkip.contains(method.toString)
