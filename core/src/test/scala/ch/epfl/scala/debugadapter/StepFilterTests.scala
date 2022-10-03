@@ -819,7 +819,6 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |
            |object Main {
            |  def main(args: Array[String]): Unit = {
-           |    println(classOf[D])
            |    val d = new D
            |    d.a
            |    d.b
@@ -831,9 +830,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |""".stripMargin
       val breakpoints = if (isScala3) {
         Seq(
-          Breakpoint(20)(
-            StepInto.method("Class.getDeclaredField(String)"),
-            StepOut.line(20),
+          Breakpoint(19)(
             StepInto.method("D.<init>()"),
             StepInto.method("Object.<init>()"),
             StepInto.method("D.<init>()"),
@@ -841,12 +838,12 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
             StepInto.method("D.<init>()"),
             StepInto.method("Statics.releaseFence()")
           ),
-          Breakpoint(22)(StepInto.line(8)),
-          Breakpoint(23)(StepInto.line(24), StepInto.line(12))
+          Breakpoint(21)(StepInto.line(8)),
+          Breakpoint(22)(StepInto.line(23), StepInto.line(12))
         )
       } else {
         Seq(
-          Breakpoint(20)(
+          Breakpoint(19)(
             StepInto.method("D.<init>()"),
             StepInto.method("Object.<init>()"),
             StepInto.method("D.<init>()"),
@@ -854,10 +851,10 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
             StepInto.method("A.$init$(A)"),
             StepInto.method("D.<init>()"),
             if (isScala213) StepInto.method("Statics.releaseFence()")
-            else StepInto.line(20)
+            else StepInto.line(19)
           ),
-          Breakpoint(21)(StepInto.line(22), StepInto.line(8)),
-          Breakpoint(23)(StepInto.line(24), StepInto.line(12))
+          Breakpoint(20)(StepInto.line(21), StepInto.line(8)),
+          Breakpoint(22)(StepInto.line(23), StepInto.line(12))
         )
       }
       assertInMainClass(source, "example.Main")(breakpoints: _*)
@@ -894,7 +891,6 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |
            |object Main {
            |  def main(args: Array[String]): Unit = {
-           |    println(classOf[<>])
            |    val x = new <>
            |    x.m
            |    &(x)
@@ -909,9 +905,9 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |""".stripMargin
 
       assertInMainClass(source, "example.Main")(
-        Breakpoint(6)(StepInto.method("$less$greater.<init>()")),
-        Breakpoint(7)(StepInto.method("$less$greater.m()")),
-        Breakpoint(8)(StepInto.method("Main$.$amp($less$greater)"))
+        Breakpoint(5)(StepInto.method("$less$greater.<init>()")),
+        Breakpoint(6)(StepInto.method("$less$greater.m()")),
+        Breakpoint(7)(StepInto.method("Main$.$amp($less$greater)"))
       )
     }
 

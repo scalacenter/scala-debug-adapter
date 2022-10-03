@@ -29,11 +29,11 @@ class StepFilterProvider(
     }
   }
 
-  override def shouldStepOut(previousLocation: Location, method: Method): Boolean = {
+  override def shouldStepOut(upperLocation: Location, method: Method): Boolean = {
     try {
       val shouldSkip =
-        super.shouldStepOut(previousLocation, method) ||
-          stepFilters.exists(_.shouldStepOut(previousLocation, method))
+        super.shouldStepOut(upperLocation, method) ||
+          stepFilters.exists(_.shouldStepOut(upperLocation, method))
       if (shouldSkip) logger.debug(s"Skipping $method (step out)")
       shouldSkip
     } catch {

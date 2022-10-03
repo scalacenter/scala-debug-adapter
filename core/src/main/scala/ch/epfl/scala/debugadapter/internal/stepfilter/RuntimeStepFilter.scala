@@ -1,13 +1,14 @@
 package ch.epfl.scala.debugadapter.internal.stepfilter
 
 import com.sun.jdi.Method
+import com.sun.jdi.Location
 import ch.epfl.scala.debugadapter.ScalaVersion
 
 private class RuntimeStepFilter(
     classesToSkip: Set[String],
     methodsToSkip: Set[String]
 ) extends StepFilter {
-  override def shouldStepInto(method: Method): Boolean =
+  override def shouldStepOut(upperLocation: Location, method: Method): Boolean =
     classesToSkip.contains(method.declaringType.name) ||
       methodsToSkip.contains(method.toString)
 }

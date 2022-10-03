@@ -5,5 +5,5 @@ import com.sun.jdi.Location
 
 trait StepFilter {
   def shouldStepInto(method: Method): Boolean = false
-  def shouldStepOut(previousLocation: Location, method: Method): Boolean = false
+  def shouldStepOut(upperLocation: Location, method: Method): Boolean = false
 }
