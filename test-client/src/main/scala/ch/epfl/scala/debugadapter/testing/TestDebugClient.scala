@@ -76,12 +76,21 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
 
   def setBreakpoints(
       source: Path,
-      lines: Array[Int],
+      lines: Seq[Int],
+      timeout: Duration = 1.second
+  ): Array[Breakpoint] = {
+    val breakpoints = lines.map(l => (l, null))
+    setConditionalBreakpoints(source, breakpoints, timeout)
+  }
+
+  def setConditionalBreakpoints(
+      source: Path,
+      breakpoints: Seq[(Int, String)],
       timeout: Duration = 1.second
   ): Array[Breakpoint] = {
     val args = new SetBreakpointArguments()
     args.source = new Types.Source(source.toString, 0)
-    args.breakpoints = lines.map(l => new SourceBreakpoint(l, null, null))
+    args.breakpoints = breakpoints.map { case (line, condition) => new SourceBreakpoint(line, condition, null) }.toArray
     val request = createRequest(Command.SETBREAKPOINTS, args)
     val response = sendRequest(request, timeout)
     getBody[SetBreakpointsResponseBody](response).breakpoints
@@ -151,7 +160,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
   def evaluate(
       expression: String,
       frameId: Int,
-      timeout: Duration = 15.seconds
+      timeout: Duration = 16.seconds
   ): Either[Message, String] = {
     val args = new EvaluateArguments()
     args.expression = expression
@@ -208,7 +217,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
   ): OutputEvent =
     outputed(e => e.output == line + System.lineSeparator)
 
-  def stopped(timeout: Duration = 1.second): StoppedEvent = {
+  def stopped(timeout: Duration = 16.seconds): StoppedEvent = {
     val event = receiveEvent(timeout)(e => e != null && e.event == "stopped")
     getBody[StoppedEvent](event)
   }

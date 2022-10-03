@@ -20,10 +20,12 @@ import scala.util.Try
 import ScalaExtension._
 import ch.epfl.scala.debugadapter.DebugTools
 import ch.epfl.scala.debugadapter.ClassEntry
+import ch.epfl.scala.debugadapter.internal.evaluator.CompiledExpression
 
 private[internal] class EvaluationProvider(
     sourceLookUp: SourceLookUpProvider,
-    evaluators: Map[ClassEntry, ExpressionEvaluator]
+    evaluators: Map[ClassEntry, ExpressionEvaluator],
+    logger: Logger
 ) extends IEvaluationProvider {
 
   private var debugContext: IDebugAdapterContext = _
@@ -35,22 +37,11 @@ private[internal] class EvaluationProvider(
   override def isInEvaluation(thread: ThreadReference) = isEvaluating.get
 
   override def evaluate(expression: String, thread: ThreadReference, depth: Int): CompletableFuture[Value] = {
-    val future = new CompletableFuture[Value]()
-
-    val location = thread.frame(depth).location
-    val fqcn = location.declaringType.name
-
     val evaluation = for {
-      entry <- sourceLookUp.getClassEntry(fqcn).toTry(s"Unknown class $fqcn")
-      evaluator <- evaluators.get(entry).toTry(s"Missing evaluator for entry ${entry.name}")
-      sourceContent <- sourceLookUp.getSourceContentFromClassName(fqcn).toTry(s"Cannot find source file of class $fqcn")
-      frame = thread.frames.get(depth)
-      evaluation <- evaluationBlock { evaluator.evaluate(sourceContent, expression, thread, depth) }
+      compiledExpression <- compileExpression(expression, thread, depth)
+      evaluation <- evaluate(compiledExpression, thread, depth)
     } yield evaluation
-
-    completeFuture(future, evaluation)
-    debugContext.getStackFrameManager.reloadStackFrames(thread)
-    future
+    completeFuture(evaluation, thread)
   }
 
   override def evaluate(
@@ -62,7 +53,27 @@ private[internal] class EvaluationProvider(
   override def evaluateForBreakpoint(
       breakpoint: IEvaluatableBreakpoint,
       thread: ThreadReference
-  ): CompletableFuture[Value] = ???
+  ): CompletableFuture[Value] = {
+    val depth = 0
+    val location = thread.frame(depth).location
+    val locationCode = (location.method.name, location.codeIndex).hashCode
+    val compiledExpression: Try[CompiledExpression] =
+      if (breakpoint.getCompiledExpression(locationCode) != null) {
+        breakpoint.getCompiledExpression(locationCode).asInstanceOf[Try[CompiledExpression]]
+      } else if (breakpoint.containsConditionalExpression) {
+        compileExpression(breakpoint.getCondition, thread, depth)
+      } else if (breakpoint.containsLogpointExpression) {
+        compileExpression(breakpoint.getLogMessage, thread, depth)
+      } else {
+        Failure(new Exception("Missing expression"))
+      }
+    breakpoint.setCompiledExpression(locationCode, compiledExpression)
+    val evaluation = for {
+      compiledExpression <- compiledExpression
+      evaluation <- evaluate(compiledExpression, thread, depth)
+    } yield evaluation
+    completeFuture(evaluation, thread)
+  }
 
   override def invokeMethod(
       thisContext: ObjectReference,
@@ -72,26 +83,49 @@ private[internal] class EvaluationProvider(
       thread: ThreadReference,
       invokeSuper: Boolean
   ): CompletableFuture[Value] = {
-    val future = new CompletableFuture[Value]()
     val obj = new JdiObject(thisContext, thread)
-    evaluationBlock {
-      val invocation = obj
+    val invocation = evaluationBlock {
+      obj
         .invoke(methodName, methodSignature, if (args == null) List() else args.toList)
         .recover {
           // if invocation throws an exception, we return that exception as the result
           case MethodInvocationFailed(msg, exception) => exception
         }
-      completeFuture(future, invocation.getResult)
-      debugContext.getStackFrameManager.reloadStackFrames(thread)
     }
-    future
+    completeFuture(invocation.getResult, thread)
   }
 
-  private def completeFuture[T](future: CompletableFuture[T], result: Try[T]): Unit = {
+  private def compileExpression(expression: String, thread: ThreadReference, depth: Int): Try[CompiledExpression] = {
+    val location = thread.frame(depth).location
+    val fqcn = location.declaringType.name
+
+    for {
+      entry <- sourceLookUp.getClassEntry(fqcn).toTry(s"Unknown class $fqcn")
+      evaluator <- evaluators.get(entry).toTry(s"Missing evaluator for entry ${entry.name}")
+      sourceContent <- sourceLookUp.getSourceContentFromClassName(fqcn).toTry(s"Cannot find source file of class $fqcn")
+      compiledExpression <- evaluationBlock { evaluator.compile(sourceContent, expression, thread, depth) }
+    } yield compiledExpression
+  }
+
+  private def evaluate(compiledExpression: CompiledExpression, thread: ThreadReference, depth: Int): Try[Value] = {
+    val location = thread.frame(depth).location
+    val fqcn = location.declaringType.name
+
+    for {
+      entry <- sourceLookUp.getClassEntry(fqcn).toTry(s"Unknown class $fqcn")
+      evaluator <- evaluators.get(entry).toTry(s"Missing evaluator for entry ${entry.name}")
+      compiledExpression <- evaluationBlock { evaluator.evaluate(compiledExpression, thread, depth) }
+    } yield compiledExpression
+  }
+
+  private def completeFuture[T](result: Try[T], thread: ThreadReference): CompletableFuture[T] = {
+    val future = new CompletableFuture[T]()
+    debugContext.getStackFrameManager.reloadStackFrames(thread)
     result match {
       case Success(value) => future.complete(value)
       case Failure(exception) => future.completeExceptionally(exception)
     }
+    future
   }
 
   private def evaluationBlock[T](f: => T): T = {
@@ -115,6 +149,6 @@ private[internal] object EvaluationProvider {
       debugTools.expressionCompilers.mapValues { compiler =>
         new ExpressionEvaluator(compiler, logger, testMode)
       }
-    new EvaluationProvider(sourceLookUp, allEvaluators)
+    new EvaluationProvider(sourceLookUp, allEvaluators, logger)
   }
 }

@@ -18,19 +18,23 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuit
   val isScala3 = scalaVersion.binaryVersion.startsWith("3")
   val isScala2 = scalaVersion.binaryVersion.startsWith("2")
 
-  class Breakpoint(
-      val sourceFile: Option[Path],
-      val line: Int,
-      val ignore: Boolean,
-      val evaluations: Seq[Evaluation]
+  case class Breakpoint(
+      sourceFile: Option[Path],
+      line: Int,
+      condition: Option[String],
+      ignore: Boolean,
+      evaluations: Seq[Evaluation]
   )
 
   object Breakpoint {
     def apply(line: Int, ignore: Boolean = false)(evaluations: Evaluation*): Breakpoint =
-      new Breakpoint(None, line, ignore, evaluations)
+      Breakpoint(None, line, None, ignore, evaluations)
 
     def apply(sourceFile: Path, line: Int)(evaluations: Evaluation*): Breakpoint =
-      new Breakpoint(Some(sourceFile), line, false, evaluations)
+      Breakpoint(Some(sourceFile), line, None, false, evaluations)
+
+    def apply(line: Int, condition: String)(evaluations: Evaluation*): Breakpoint =
+      Breakpoint(None, line, Some(condition), false, evaluations)
   }
 
   class Evaluation(
@@ -163,9 +167,11 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuit
         .groupBy(_.sourceFile)
         .foreach { case (sourceOpt, breakpoints) =>
           val sourceFile = sourceOpt.getOrElse(debuggee.sourceFiles.head)
-          val lines = breakpoints.map(_.line).distinct.toArray
-          val configuredBreakpoints = client.setBreakpoints(sourceFile, lines)
-          assert(configuredBreakpoints.length == lines.length)
+          val conditionalBreakpoints = breakpoints
+            .map(b => (b.line, b.condition.orNull))
+            .distinct
+          val configuredBreakpoints = client.setConditionalBreakpoints(sourceFile, conditionalBreakpoints)
+          assert(configuredBreakpoints.length == conditionalBreakpoints.length)
           assert(configuredBreakpoints.forall(_.verified))
         }
       client.configurationDone()
