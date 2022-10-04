@@ -3,7 +3,7 @@ package ch.epfl.scala.debugadapter
 import ch.epfl.scala.debugadapter.internal.DebugSession
 
 import java.net.{InetSocketAddress, ServerSocket, URI}
-import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit}
+import java.util.concurrent.ConcurrentLinkedQueue
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
@@ -110,7 +110,7 @@ object DebugServer {
       logger: Logger,
       address: Address = new Address,
       autoCloseSession: Boolean = false,
-      gracePeriod: Duration = Duration(2, TimeUnit.SECONDS),
+      gracePeriod: Duration = 5.seconds,
       testMode: Boolean = false
   )(implicit ec: ExecutionContext): DebugServer = {
     val context = DebugAdapter.context(debuggee, tools, logger, testMode)
@@ -136,7 +136,7 @@ object DebugServer {
       logger: Logger,
       address: Address = new Address(),
       autoCloseSession: Boolean = false,
-      gracePeriod: Duration = Duration(2, TimeUnit.SECONDS),
+      gracePeriod: Duration = 5.seconds,
       testMode: Boolean = false
   )(implicit ec: ExecutionContext): Handler = {
     val server = DebugServer(debuggee, tools, logger, address, autoCloseSession, gracePeriod, testMode)
