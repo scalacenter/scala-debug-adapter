@@ -22,8 +22,16 @@ private[debugadapter] object DebugAdapter {
 
   def context(runner: DebuggeeRunner, logger: Logger): IProviderContext = {
     val context = new ProviderContext
+    val distinctEntries = runner.classPathEntries
+      .groupBy(e => e.name)
+      .map { case (name, group) =>
+        if (group.size > 1)
+          logger.warn(s"Found duplicate entry $name in debuggee ${runner.name}")
+        group.head
+      }
+      .toSeq
     val sourceLookUpProvider = SourceLookUpProvider(
-      runner.classPathEntries ++ runner.javaRuntime
+      distinctEntries ++ runner.javaRuntime
     )
     context.registerProvider(
       classOf[IHotCodeReplaceProvider],

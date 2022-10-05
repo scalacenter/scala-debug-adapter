@@ -10,7 +10,6 @@ case class ClassPathEntry(absolutePath: Path, sourceEntries: Seq[SourceEntry])
     else Seq(ClassDirectory(absolutePath))
   }
   def toURL: URL = absolutePath.toUri.toURL
-  def name: String =
-    absolutePath.getFileName.toString.stripSuffix(".jar")
+  def name: String = absolutePath.toString
   private def isJar: Boolean = absolutePath.toString.endsWith(".jar")
 }

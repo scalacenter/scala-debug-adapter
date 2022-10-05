@@ -84,9 +84,9 @@ object ScalaInstanceCache {
     )
     val jars = Coursier.fetch(dependency)
 
-    val libraryJars = jars.filter(jar => jar.name.startsWith("scala-library"))
+    val libraryJars = jars.filter(jar => jar.name.contains("scala-library"))
     val expressionCompilerJar =
-      jars.find(jar => jar.name.startsWith(artifactName)).get
+      jars.find(jar => jar.name.contains(artifactName)).get
     val compilerJars = jars.filter(jar =>
       !libraryJars.contains(jar) && jar != expressionCompilerJar
     )
@@ -122,11 +122,11 @@ object ScalaInstanceCache {
     val jars = Coursier.fetch(compilerDependency, expressionCompilerDependency)
 
     val libraryJars = jars.filter { jar =>
-      jar.name.startsWith("scala-library") ||
-      jar.name.startsWith("scala3-library_3")
+      jar.name.contains("scala-library") ||
+      jar.name.contains("scala3-library_3")
     }
     val expressionCompilerJar =
-      jars.find(jar => jar.name.startsWith(expressionCompilerArtifactName)).get
+      jars.find(jar => jar.name.contains(expressionCompilerArtifactName)).get
     val compilerJars = jars.filter(jar => !libraryJars.contains(jar))
 
     ScalaInstance(

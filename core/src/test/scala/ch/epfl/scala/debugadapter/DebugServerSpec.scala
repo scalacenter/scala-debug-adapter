@@ -206,6 +206,26 @@ object DebugServerSpec extends TestSuite {
       }
     }
 
+    "should start debuggee with duplicate entries" - {
+      val debuggee = MainDebuggeeRunner.helloWorld()
+      val withDuplicate = debuggee.copy(dependencies =
+        debuggee.dependencies ++ debuggee.dependencies
+      )
+      val server = DebugServer(withDuplicate, NoopLogger)
+      val client = TestDebugClient.connect(server.uri)
+      try {
+        server.connect()
+        client.initialize()
+        client.launch()
+        client.configurationDone()
+        client.exited()
+        client.terminated()
+      } finally {
+        server.close()
+        client.close()
+      }
+    }
+
     "should send exited and terminated events when debuggee exits in error" - {
       val runner = MainDebuggeeRunner.sysExit()
       val server = DebugServer(runner, NoopLogger)
