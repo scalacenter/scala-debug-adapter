@@ -97,7 +97,7 @@ object ScalaStepFilterBridgeTests extends TestSuite:
       assert(valueClsTerms.size == 5) // hashCode, equals, <init>, m, x
     }
 
-    "should not step into synthetized methods of case classes" - {
+    "should not step into synthetic methods of case classes" - {
       val classpath = ScalaInstanceCache.compile("", ScalaVersion.`3.2`)
       val stepFilter = new ScalaStepFilterBridge(
         classpath.toArray ++ runtimeJar,

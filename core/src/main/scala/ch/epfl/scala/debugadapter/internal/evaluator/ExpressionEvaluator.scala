@@ -3,7 +3,6 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import com.sun.jdi._
 
 import java.nio.file.Files
-import java.nio.file.Path
 import scala.collection.JavaConverters._
 import scala.util.Try
 import java.nio.charset.StandardCharsets
@@ -14,8 +13,13 @@ private[internal] class ExpressionEvaluator(
     logger: Logger,
     testMode: Boolean
 ) {
-  def evaluate(sourceContent: String, expression: String, thread: ThreadReference, depth: Int): Try[Value] = {
-    logger.debug(s"Evaluating '$expression'")
+  def compile(
+      sourceContent: String,
+      expression: String,
+      thread: ThreadReference,
+      depth: Int
+  ): Try[CompiledExpression] = {
+    logger.debug(s"Compiling expression '$expression'")
     val location = thread.frame(depth).location
     val line = location.lineNumber
     val fqcn = location.declaringType.name
@@ -31,23 +35,27 @@ private[internal] class ExpressionEvaluator(
     Files.write(sourceFile, sourceContent.getBytes(StandardCharsets.UTF_8))
 
     val expressionFqcn = if (packageName.isEmpty) expressionClassName else s"$packageName.$expressionClassName"
-    var errors = Seq.empty[String]
-    val classLoader = findClassLoader(thread)
-    val evaluatedValue = for {
-      // must be called before any invocation otherwise
-      // it throws an InvalidStackFrameException
+    val classLoader = findClassLoader(thread, depth)
+    val compiledExpression = for {
       (names, values) <- extractValuesAndNames(thread.frame(depth), classLoader)
       localNames = names.map(_.value()).toSet
       compilation =
         compiler.compile(outDir, expressionClassName, sourceFile, line, expression, localNames, packageName, testMode)
       _ <- Safe.lift(compilation)
-      // if everything went smooth we can load our expression class
+    } yield CompiledExpression(outDir, expressionFqcn)
+    compiledExpression.getResult
+  }
+
+  def evaluate(compiledExpression: CompiledExpression, thread: ThreadReference, depth: Int): Try[Value] = {
+    val classLoader = findClassLoader(thread, depth)
+    val evaluatedValue = for {
+      (names, values) <- extractValuesAndNames(thread.frame(depth), classLoader)
       namesArray <- JdiArray("java.lang.String", names.size, classLoader)
       valuesArray <- JdiArray("java.lang.Object", values.size, classLoader)
       _ = namesArray.setValues(names)
       _ = valuesArray.setValues(values)
       args = List(namesArray.reference, valuesArray.reference)
-      expressionInstance <- createExpressionInstance(classLoader, outDir, expressionFqcn, args)
+      expressionInstance <- createExpressionInstance(classLoader, compiledExpression, args)
       evaluatedValue <- evaluateExpression(expressionInstance)
       _ <- updateVariables(valuesArray, thread, depth)
       unboxedValue <- unboxIfPrimitive(evaluatedValue, thread)
@@ -55,7 +63,7 @@ private[internal] class ExpressionEvaluator(
     evaluatedValue.getResult
   }
 
-  private def findClassLoader(thread: ThreadReference): JdiClassLoader = {
+  private def findClassLoader(thread: ThreadReference, depth: Int): JdiClassLoader = {
     val scalaLibClassLoader =
       for {
         scalaLibClass <- thread.virtualMachine.allClasses.asScala
@@ -63,7 +71,7 @@ private[internal] class ExpressionEvaluator(
         classLoader <- Option(scalaLibClass.classLoader)
       } yield classLoader
 
-    val classLoader = Option(thread.frame(0).location.method.declaringType.classLoader)
+    val classLoader = Option(thread.frame(depth).location.method.declaringType.classLoader)
       .orElse(scalaLibClassLoader)
       .getOrElse(throw new Exception("Cannot find the classloader of the Scala library"))
     JdiClassLoader(classLoader, thread)
@@ -87,11 +95,10 @@ private[internal] class ExpressionEvaluator(
    */
   private def createExpressionInstance(
       classLoader: JdiClassLoader,
-      expressionDir: Path,
-      expressionFqcn: String,
+      compiledExpression: CompiledExpression,
       args: List[ObjectReference]
   ): Safe[JdiObject] = {
-    val expressionClassPath = expressionDir.toUri.toString
+    val expressionClassPath = compiledExpression.classDir.toUri.toString
     for {
       classPathValue <- classLoader.mirrorOf(expressionClassPath)
       urlClass <- classLoader
@@ -104,7 +111,7 @@ private[internal] class ExpressionEvaluator(
         .flatMap(_.newInstance(List(urls.reference)))
         .map(_.reference.asInstanceOf[ClassLoaderReference])
         .map(JdiClassLoader(_, classLoader.thread))
-      expressionClass <- urlClassLoader.loadClass(expressionFqcn)
+      expressionClass <- urlClassLoader.loadClass(compiledExpression.className)
       expressionInstance <- expressionClass.newInstance(args)
     } yield expressionInstance
   }
