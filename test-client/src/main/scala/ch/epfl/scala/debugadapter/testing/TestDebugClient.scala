@@ -41,7 +41,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     sendRequest(request, timeout)
   }
 
-  def launch(timeout: Duration = 4.seconds): Messages.Response = {
+  def launch(timeout: Duration = 8.seconds): Messages.Response = {
     val request = createRequest(Command.LAUNCH, new LaunchArguments())
     sendRequest(request, timeout)
   }

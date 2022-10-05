@@ -8,6 +8,7 @@ import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.internal.stepfilter._
 import ch.epfl.scala.debugadapter.Debuggee
 import ch.epfl.scala.debugadapter.DebugTools
+import com.sun.jdi.Location
 
 class StepFilterProvider(
     stepFilters: Seq[StepFilter],
@@ -15,20 +16,30 @@ class StepFilterProvider(
     testMode: Boolean
 ) extends JavaStepFilterProvider() {
 
-  override def skip(method: Method, filters: StepFilters): Boolean = {
+  override def shouldStepInto(method: Method, filters: StepFilters): Boolean = {
     try {
-      val shouldSkip =
-        super.skip(method, filters) || stepFilters.exists(_.skip(method))
-      if (shouldSkip) logger.debug(s"Skipping $method")
+      val shouldSkip = super.shouldStepInto(method, filters) || stepFilters.exists(_.shouldStepInto(method))
+      if (shouldSkip) logger.debug(s"Skipping $method (step into)")
       shouldSkip
     } catch {
-      case e: Exception =>
-        if (testMode) throw e
-        else {
-          val msg =
-            s"Failed to determine if $method should be skipped: ${e.getMessage}"
-          logger.error(msg)
-        }
+      case cause: Throwable =>
+        if (testMode) throw cause
+        else logger.error(s"Failed to determine if $method should be stepped into: ${cause.getMessage}")
+        false
+    }
+  }
+
+  override def shouldStepOut(upperLocation: Location, method: Method): Boolean = {
+    try {
+      val shouldSkip =
+        super.shouldStepOut(upperLocation, method) ||
+          stepFilters.exists(_.shouldStepOut(upperLocation, method))
+      if (shouldSkip) logger.debug(s"Skipping $method (step out)")
+      shouldSkip
+    } catch {
+      case cause: Throwable =>
+        if (testMode) throw cause
+        else logger.error(s"Failed to determine if $method should be stepped out: ${cause.getMessage}")
         false
     }
   }
@@ -45,7 +56,7 @@ object StepFilterProvider {
     val scalaStepFilter = ScalaStepFilter(debuggee, tools, sourceLookUp, logger, testMode)
     val runtimeStepFilter = RuntimeStepFilter(debuggee.scalaVersion)
     new StepFilterProvider(
-      Seq(runtimeStepFilter, scalaStepFilter),
+      Seq(ClassLoadingStepFilter, runtimeStepFilter, scalaStepFilter),
       logger,
       testMode
     )

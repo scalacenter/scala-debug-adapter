@@ -13,6 +13,7 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
   private implicit val ec =
     ExecutionContext.fromExecutorService(executorService)
 
+  def isScala212: Boolean = scalaVersion.isScala212
   def isScala213: Boolean = scalaVersion.isScala213
   def isScala3: Boolean = scalaVersion.isScala3
 
@@ -99,6 +100,7 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
           client.stopped(timeout)
           val stackTrace = client.stackTrace(threadId)
           val topFrame = stackTrace.stackFrames.head
+          println(s"Stepped into ${topFrame.name}")
           currentLine = topFrame.line
           step.assert(topFrame)
         }
