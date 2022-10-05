@@ -26,6 +26,7 @@ import scala.util.Failure
 import scala.util.Success
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
+import scala.util.control.NonFatal
 
 object DebugAdapterPlugin extends sbt.AutoPlugin {
   private final val DebugSessionStart: String = "debugSession/start"
@@ -447,11 +448,17 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val address = new DebugServer.Address()
     val tools = DebugTools(debuggee, resolver, new LoggerAdapter(state.log))
     jobService.runInBackground(scope, state) { (logger, _) =>
-      // if there is a server for this target then close it
-      debugServers.get(target).foreach(_.close())
-      val server = DebugServer(debuggee, tools, new LoggerAdapter(logger), address, autoCloseSession = true)
-      debugServers.update(target, server)
-      Await.result(server.start(), Duration.Inf)
+      try {
+        // if there is a server for this target then close it
+        debugServers.get(target).foreach(_.close())
+        val server = DebugServer(debuggee, tools, new LoggerAdapter(logger), address, autoCloseSession = true)
+        debugServers.update(target, server)
+        Await.result(server.start(), Duration.Inf)
+      } catch {
+        case NonFatal(cause) =>
+          state.log.error("Failed to start server")
+          state.log.trace(cause)
+      }
     }
     state.respondEvent(DebugSessionAddress(address.uri))
     address.uri

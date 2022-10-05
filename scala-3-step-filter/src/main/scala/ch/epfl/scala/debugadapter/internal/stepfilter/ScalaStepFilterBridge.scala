@@ -4,29 +4,23 @@ import tastyquery.Contexts.Context
 import tastyquery.Contexts
 import tastyquery.jdk.ClasspathLoaders
 import tastyquery.jdk.ClasspathLoaders.FileKind
-import tastyquery.ast.Names.*
-import tastyquery.ast.Symbols.*
+import tastyquery.Names.*
+import tastyquery.Symbols.*
 import java.util.function.Consumer
 import java.nio.file.Path
 import ch.epfl.scala.debugadapter.internal.jdi
-import tastyquery.ast.Flags
+import tastyquery.Flags
 import scala.util.matching.Regex
 import scala.util.Try
-import tastyquery.ast.TermSig
-import tastyquery.ast.TypeLenSig
-import tastyquery.ast.ParamSig
-import tastyquery.ast.Types.*
+import tastyquery.Types.*
+import tastyquery.Signatures.*
 
 class ScalaStepFilterBridge(
     classpaths: Array[Path],
     warnLogger: Consumer[String],
     testMode: Boolean
 ):
-  private val classpath =
-    ClasspathLoaders.read(
-      classpaths.toList,
-      Set(FileKind.Tasty, FileKind.Class)
-    )
+  private val classpath = ClasspathLoaders.read(classpaths.toList)
   private given ctx: Context = Contexts.init(classpath)
 
   private def warn(msg: String): Unit = warnLogger.accept(msg)
@@ -46,7 +40,7 @@ class ScalaStepFilterBridge(
       case Some(declaringType) =>
         val matchingSymbols =
           declaringType.declarations
-            .collect { case sym: RegularSymbol if sym.isTerm => sym }
+            .collect { case sym: TermSymbol if sym.isTerm => sym }
             .filter(matchSymbol(method, _, isExtensionMethod))
 
         if matchingSymbols.size > 1 then
@@ -62,11 +56,11 @@ class ScalaStepFilterBridge(
   private[stepfilter] def extractScalaTerms(
       fqcn: String,
       isExtensionMethod: Boolean
-  ): Seq[RegularSymbol] =
+  ): Seq[TermSymbol] =
     for
       declaringType <- findDeclaringType(fqcn, isExtensionMethod).toSeq
       term <- declaringType.declarations
-        .collect { case sym: RegularSymbol if sym.isTerm => sym }
+        .collect { case sym: TermSymbol if sym.isTerm => sym }
     yield term
 
   private def findDeclaringType(
@@ -77,7 +71,7 @@ class ScalaStepFilterBridge(
     val isObject = fqcn.endsWith("$")
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
-      ctx.findSymbolFromRoot(packageNames).asInstanceOf[PackageClassSymbol]
+      ctx.findSymbolFromRoot(packageNames).asInstanceOf[PackageSymbol]
     val className = javaParts.last
     def findRec(
         owner: DeclaringSymbol,
@@ -102,7 +96,7 @@ class ScalaStepFilterBridge(
 
   private def matchSymbol(
       method: jdi.Method,
-      symbol: Symbol,
+      symbol: TermSymbol,
       isExtensionMethod: Boolean
   ): Boolean =
     matchName(method.name, symbol.name.toString, isExtensionMethod) &&
@@ -119,12 +113,10 @@ class ScalaStepFilterBridge(
 
   def matchSignature(
       method: jdi.Method,
-      symbol: Symbol,
+      symbol: TermSymbol,
       isExtensionMethod: Boolean
   ): Boolean =
-    val supported = doesSupportErasure(symbol.declaredType)
-    if !supported then true
-    else
+    try {
       symbol.signedName match
         case SignedName(_, sig, _) =>
           val javaArgs = method.arguments.headOption.map(_.name) match
@@ -134,33 +126,18 @@ class ScalaStepFilterBridge(
           method.returnType.forall(matchType(sig.resSig, _))
         case _ =>
           true // TODO compare symbol.declaredType
-
-  // erasure in TASTy Query is not yet correct on AndType and OrType
-  private def doesSupportErasure(tpe: Type): Boolean = tpe match
-    case m: MethodType =>
-      m.paramTypes.forall(doesSupportErasure) &&
-      doesSupportErasure(m.resultType)
-    case m: PolyType => doesSupportErasure(m.resType)
-    case _: ExprType => true
-    case AppliedType(tycon, targs) =>
-      doesSupportErasure(tycon) && targs.forall(doesSupportErasure)
-    case tpe: Symbolic =>
-      tpe.resolveToSymbol match
-        case cls: ClassSymbol => true
-        case sym => doesSupportErasure(sym.declaredType)
-    case tpe: TypeParamRef => doesSupportErasure(tpe.bounds.high)
-    case AndType(_, _) | OrType(_, _) => false
-    case WildcardTypeBounds(bounds) => doesSupportErasure(bounds.high)
-    case BoundedType(bounds, NoType) => doesSupportErasure(bounds.high)
-    case BoundedType(_, alias) => doesSupportErasure(alias)
-    case tpe => true
+    } catch {
+      case e: UnsupportedOperationException =>
+        warn(e.getMessage)
+        true
+    }
 
   private def matchArguments(
       scalaArgs: Seq[ParamSig],
       javaArgs: Seq[jdi.LocalVariable]
   ): Boolean =
     scalaArgs
-      .collect { case termSig: TermSig => termSig }
+      .collect { case termSig: ParamSig.Term => termSig }
       .corresponds(javaArgs) { (scalaArg, javaArg) =>
         matchType(scalaArg.typ, javaArg.`type`)
       }
@@ -202,7 +179,7 @@ class ScalaStepFilterBridge(
             .getOrElse(regex.matches(javaType))
     rec(scalaType.toString, javaType.name)
 
-  private def skip(symbol: RegularSymbol): Boolean =
+  private def skip(symbol: TermSymbol): Boolean =
     val isNonLazyGetterOrSetter =
       (!symbol.flags.is(Flags.Method) || symbol.is(Flags.Accessor)) &&
         !symbol.is(Flags.Lazy)

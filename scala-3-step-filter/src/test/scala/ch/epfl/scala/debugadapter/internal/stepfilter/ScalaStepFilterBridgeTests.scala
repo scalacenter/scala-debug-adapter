@@ -7,11 +7,8 @@ import tastyquery.jdk.ClasspathLoaders.FileKind
 import tastyquery.Contexts
 import tastyquery.Contexts.Context
 import tastyquery.jdk.ClasspathLoaders
-import tastyquery.ast.Symbols.PackageClassSymbol
-import tastyquery.ast.Names.SimpleName
-import tastyquery.ast.Symbols.DeclaringSymbol
-import tastyquery.ast.Names.TypeName
-import tastyquery.ast.Flags
+import tastyquery.Names.*
+import tastyquery.Flags
 import java.nio.file.Paths
 import scala.util.Properties
 import java.nio.file.Files

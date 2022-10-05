@@ -84,11 +84,12 @@ private[sbtplugin] object InternalTasks {
     val standaloneSourceFiles = sourceFiles.filter { file =>
       sourceDirectories.forall(dir => !file.startsWith(dir))
     }
+    val name = (proj / config / Keys.bspTargetIdentifier).value.uri.toString
     val scalaVersion = (proj / config / Keys.scalaVersion).?.value.map(ScalaVersion.apply)
     val scalacOptions = (proj / config / Keys.scalacOptions).?.value.toSeq.flatten
     val sourceEntries =
       sourceDirectories.map(SourceDirectory.apply) ++
         standaloneSourceFiles.map(f => StandaloneSourceFile(f, f.getFileName.toString))
-    Module(proj.project, scalaVersion, scalacOptions, classDirectory, sourceEntries)
+    Module(name, scalaVersion, scalacOptions, classDirectory, sourceEntries)
   }
 }
