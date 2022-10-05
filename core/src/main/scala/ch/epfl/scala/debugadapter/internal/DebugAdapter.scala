@@ -25,7 +25,15 @@ private[debugadapter] object DebugAdapter {
   def context(debuggee: Debuggee, tools: DebugTools, logger: Logger, testMode: Boolean): IProviderContext = {
     TimeUtils.logTime(logger, "Configured debugger") {
       val context = new ProviderContext
-      val sourceLookUpProvider = SourceLookUpProvider(debuggee.classEntries, logger)
+      val classEntries = debuggee.classEntries
+      val distinctEntries = classEntries
+        .groupBy(e => e.name)
+        .map { case (name, group) =>
+          if (group.size > 1) logger.warn(s"Found duplicate entry $name in debuggee ${debuggee.name}")
+          group.head
+        }
+        .toSeq
+      val sourceLookUpProvider = SourceLookUpProvider(distinctEntries, logger)
 
       context.registerProvider(classOf[IHotCodeReplaceProvider], HotCodeReplaceProvider)
       context.registerProvider(classOf[IVirtualMachineManagerProvider], VirtualMachineManagerProvider)

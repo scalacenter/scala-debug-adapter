@@ -16,7 +16,7 @@ sealed trait ClassPathEntry extends ClassEntry {
 }
 
 final case class UnmanagedEntry(absolutePath: Path) extends ClassPathEntry {
-  override def name: String = absolutePath.getFileName.toString
+  override def name: String = absolutePath.toString
   override def sourceEntries: Seq[SourceEntry] = Seq.empty
 }
 
