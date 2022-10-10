@@ -9,8 +9,6 @@ object Scala212DecompilerTests extends DecompilerSuite(ScalaVersion.`2.12`)
 object Scala213DecompilerTests extends DecompilerSuite(ScalaVersion.`2.13`)
 
 abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
-  val isScala212: Boolean = scalaVersion.isScala212
-
   override val tests: Tests = Tests {
     "cannot decompile local methods and classes" - {
       val source =
@@ -86,7 +84,8 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
       assert(nonSyntheticMethods.size == 2)
 
       // copy, toString, equals, hashCode, productArity...
-      assert(syntheticMethods.size == 10)
+      val expected = if (scalaVersion.isScala213) 11 else 10
+      assert(syntheticMethods.size == expected)
 
       // init, apply, unapply, toString and writeReplace
       assert(methodsOfObject.size == 5)
