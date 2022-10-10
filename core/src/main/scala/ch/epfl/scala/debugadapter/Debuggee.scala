@@ -13,6 +13,6 @@ trait Debuggee {
 
   def managedEntries: Seq[ManagedEntry] = modules ++ libraries
   def classPathEntries: Seq[ClassPathEntry] = managedEntries ++ unmanagedEntries
-  val classPath: Seq[Path] = classPathEntries.map(_.absolutePath)
-  val classEntries: Seq[ClassEntry] = classPathEntries ++ javaRuntime
+  def classPath: Seq[Path] = classPathEntries.map(_.absolutePath)
+  def classEntries: Seq[ClassEntry] = classPathEntries ++ javaRuntime
 }
