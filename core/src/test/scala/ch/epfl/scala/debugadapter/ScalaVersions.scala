@@ -35,7 +35,7 @@ final case class Scala3(version: String) extends ScalaVersion {
 
 object ScalaVersion {
   val `2.12` = Scala2("2.12.17")
-  val `2.13` = Scala2("2.13.9")
+  val `2.13` = Scala2("2.13.10")
   val `3.0` = Scala3("3.0.2")
   val `3.2` = Scala3("3.2.0")
 }
