@@ -29,7 +29,7 @@ object JavaRuntime {
 
   def apply(javaHome: Path): Option[JavaRuntime] = {
     for {
-      srcZip <- Seq("src.zip", "lib/src.zip")
+      srcZip <- Seq("src.zip", "lib/src.zip", "../src.zip")
         .map(javaHome.resolve)
         .find(Files.exists(_))
       javaRuntime <- java8(javaHome, srcZip)
