@@ -150,6 +150,18 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
               Assign | Block) if isOnBreakpoint(tree) =>
           mkExprBlock(expression, tree)
 
+        // for loop: we insert the expression on the first enumeration
+        case tree @ ForYield(enums, rhs) if isOnBreakpoint(tree) =>
+          ForYield(transform(enums.head) :: enums.tail, rhs)
+        case tree @ ForDo(enums, rhs) if isOnBreakpoint(tree) =>
+          ForDo(transform(enums.head) :: enums.tail, rhs)
+
+        // generator of for loop: we insert the expression on the rhs
+        case tree @ GenFrom(pat, rhs, checkMode) if isOnBreakpoint(tree) =>
+          GenFrom(pat, mkExprBlock(expression, rhs), checkMode)
+        case tree @ GenAlias(pat, rhs) if isOnBreakpoint(tree) =>
+          GenAlias(pat, mkExprBlock(expression, rhs))
+
         case tree => super.transform(tree)
 
   private def parseExpression(using Context): Tree =

@@ -17,6 +17,8 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuit
   val isScala32 = scalaVersion == ScalaVersion.`3.2`
   val isScala3 = scalaVersion.binaryVersion.startsWith("3")
   val isScala2 = scalaVersion.binaryVersion.startsWith("2")
+  val isScala213 = scalaVersion.binaryVersion == "2.13"
+  val isScala212 = scalaVersion.binaryVersion == "2.12"
 
   case class Breakpoint(
       sourceFile: Option[Path],
@@ -53,23 +55,23 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuit
     def failedOrIgnore(expression: String, ignore: Boolean)(
         assertion: Message => Boolean
     ) = {
-      if (ignore) this.ignore(expression, Left(new Message(0, "???")))
+      if (ignore) this.ignore(expression, new Message(0, "???"))
       else failed(expression)(assertion)
     }
 
     def successOrIgnore(expression: String, result: Any, ignore: Boolean) = {
-      if (ignore) this.ignore(expression, Right(result.toString))
+      if (ignore) this.ignore(expression, result)
       else success(expression, result)
     }
 
     def successOrIgnore(expression: String, ignore: Boolean)(
         assertion: String => Boolean
     ) = {
-      if (ignore) this.ignore(expression, Right("???"))
+      if (ignore) this.ignore(expression, "???")
       else success(expression)(assertion)
     }
 
-    def ignore(expression: String, expected: Either[Message, String]) = {
+    def ignore(expression: String, expected: Any) = {
       new Evaluation(
         expression,
         { resp =>
@@ -183,6 +185,8 @@ abstract class ScalaEvaluationSuite(scalaVersion: ScalaVersion) extends TestSuit
 
         val stackTrace = client.stackTrace(threadId)
         val topFrame = stackTrace.stackFrames.head
+        assert(topFrame.line == breakpoint.line)
+
         breakpoint.evaluations.foreach { evaluation =>
           val result = client.evaluate(evaluation.expression, topFrame.id)
           println(s"$$ ${evaluation.expression}")

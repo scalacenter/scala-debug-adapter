@@ -1564,11 +1564,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
           |}
           |""".stripMargin
       assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(6)(
-          Evaluation.success("List(1, 2, 3).map(_ * 2).sum", 12),
+        Breakpoint(15)(
           Evaluation.success("List(1, 2, 3).map(_ * a * b * c).sum", 36)
         ),
-        Breakpoint(15)(
+        Breakpoint(6)(
+          Evaluation.success("List(1, 2, 3).map(_ * 2).sum", 12),
           Evaluation.success("List(1, 2, 3).map(_ * a * b * c).sum", 36)
         )
       )
@@ -1960,6 +1960,72 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
         // a pure expression does nothing in statement position
         Breakpoint(6)(Evaluation.success("x\nx", "Hello"))
       )
+    }
+
+    "evaluate on for loops, generators and guards" - {
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val list = List(1)
+           |    for {
+           |      x <- list
+           |      y <- list
+           |      z = x + y
+           |    } yield x
+           |    for {
+           |      x <- list
+           |      if x == 1
+           |    } yield x
+           |    for (x <- list) yield x
+           |    for (x <- list) println(x)
+           |  }
+           |}
+           |""".stripMargin
+      val breakpoints =
+        if (isScala3)
+          Seq(
+            Breakpoint(7)(Evaluation.success("list(0)", 1)),
+            Breakpoint(8)(
+              Evaluation.success("list(0)", 1),
+              Evaluation.success("x", 1)
+            ),
+            Breakpoint(9)(), // calling map
+            Breakpoint(9)(), // adapted lambda
+            Breakpoint(9)(Evaluation.success("x + y", 2)), // finally we are into the lifted lambda x + y
+            Breakpoint(8)(), // still in the same lifted lambda (the line position does not make any sense)
+            Breakpoint(9)(), // again in the lifted lambda
+            Breakpoint(8)(), // going out of the lifted lambda
+            Breakpoint(13)(), // calling withFilter
+            Breakpoint(13)(Evaluation.success("x", 1)),
+            Breakpoint(15)(Evaluation.success("list(0)", 1)),
+            Breakpoint(15)(),
+            Breakpoint(16)(Evaluation.success("list(0)", 1)),
+            Breakpoint(16)()
+          )
+        else
+          Seq(
+            Breakpoint(7)(),
+            Breakpoint(7)(Evaluation.ignore("list(0)", 1)),
+            Breakpoint(8)(
+              Evaluation.success("list(0)", 1),
+              Evaluation.success("x", 1)
+            ),
+            Breakpoint(8)(),
+            Breakpoint(9)(Evaluation.ignore("x + y", 2)),
+            Breakpoint(8)(),
+            Breakpoint(9)(),
+            Breakpoint(8)(),
+            Breakpoint(8)(),
+            Breakpoint(13)(Evaluation.successOrIgnore("x", 1, isScala212)),
+            Breakpoint(13, ignore = isScala213)(),
+            Breakpoint(15)(Evaluation.ignore("x", 1)),
+            Breakpoint(15)(),
+            Breakpoint(16)(Evaluation.success("list(0)", 1)),
+            Breakpoint(16)()
+          )
+      assertInMainClass(source, "example.Main")(breakpoints*)
     }
   }
 }
