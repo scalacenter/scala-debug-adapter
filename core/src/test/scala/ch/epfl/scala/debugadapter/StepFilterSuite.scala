@@ -13,6 +13,7 @@ abstract class StepFilterSuite(scalaVersion: ScalaVersion) extends TestSuite {
   private implicit val ec =
     ExecutionContext.fromExecutorService(executorService)
 
+  def isScala2: Boolean = scalaVersion.isScala2
   def isScala212: Boolean = scalaVersion.isScala212
   def isScala213: Boolean = scalaVersion.isScala213
   def isScala3: Boolean = scalaVersion.isScala3
