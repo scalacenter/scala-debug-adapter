@@ -1,6 +1,6 @@
 import scala.util.Properties
 import scala.concurrent.ExecutionContext
-import ch.epfl.scala.debugadapter.testing.TestDebugClient
+import ch.epfl.scala.debugadapter.testfmk.TestDebugClient
 import java.nio.file.Paths
 
 val checkDebugSession = inputKey[Unit]("Check the main class debug session")

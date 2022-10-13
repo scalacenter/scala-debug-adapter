@@ -1,20 +1,17 @@
 package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.internal.DebugSession
-import ch.epfl.scala.debugadapter.testing.TestDebugClient
+import ch.epfl.scala.debugadapter.testfmk.TestDebugClient
 import utest._
 
 import java.net.{ConnectException, SocketException, SocketTimeoutException}
 import scala.concurrent.duration._
-import scala.concurrent.{Await, ExecutionContext}
-import java.util.concurrent.Executors
+import scala.concurrent.Await
 import java.util.concurrent.TimeoutException
-import java.util.concurrent.TimeUnit
+import ch.epfl.scala.debugadapter.testfmk.*
 
-object DebugServerSpec extends TestSuite {
+object DebugServerTests extends DebugTestSuite {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
-  val executorService = Executors.newFixedThreadPool(1)
-  implicit val ec = ExecutionContext.fromExecutorService(executorService)
 
   private val connectionFailedMessages = Array(
     "(Connection refused)",
@@ -46,9 +43,7 @@ object DebugServerSpec extends TestSuite {
       val client = TestDebugClient.connect(server.uri)
       try {
         val session = server.connect()
-        assertMatch(session.currentState) { case DebugSession.Started(_) =>
-          ()
-        }
+        assertMatch(session.currentState) { case DebugSession.Started(_) => () }
       } finally {
         server.close()
         client.close()
@@ -110,8 +105,7 @@ object DebugServerSpec extends TestSuite {
     }
 
     "should set debug address when debuggee starts the jvm" - {
-      val debuggee = MainDebuggee.sleep()
-      val server = getDebugServer(debuggee)
+      val server = getDebugServer(TestingDebuggee.sleep)
       val client = TestDebugClient.connect(server.uri)
       try {
         val session = server.connect()
@@ -138,8 +132,7 @@ object DebugServerSpec extends TestSuite {
     }
 
     "should launch and send initialized event if the debuggee has started a jvm" - {
-      val debuggee = MainDebuggee.sleep()
-      val server = getDebugServer(debuggee)
+      val server = getDebugServer(TestingDebuggee.sleep)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -154,8 +147,7 @@ object DebugServerSpec extends TestSuite {
     }
 
     "should send terminated events when closed" - {
-      val debuggee = MainDebuggee.sleep()
-      val server = getDebugServer(debuggee)
+      val server = getDebugServer(TestingDebuggee.sleep)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -172,8 +164,7 @@ object DebugServerSpec extends TestSuite {
     }
 
     "should send output event when debuggee prints to stdout" - {
-      val debuggee = MainDebuggee.helloWorld()
-      val server = getDebugServer(debuggee)
+      val server = getDebugServer(TestingDebuggee.helloWorld)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -188,8 +179,7 @@ object DebugServerSpec extends TestSuite {
     }
 
     "should send exited and terminated events when debuggee exits successfully" - {
-      val debuggee = MainDebuggee.helloWorld()
-      val server = getDebugServer(debuggee)
+      val server = getDebugServer(TestingDebuggee.helloWorld)
       val client = TestDebugClient.connect(server.uri)
       try {
         server.connect()
@@ -208,7 +198,7 @@ object DebugServerSpec extends TestSuite {
     }
 
     "should start debuggee with duplicate entries" - {
-      val debuggee = MainDebuggee.helloWorld()
+      val debuggee = TestingDebuggee.helloWorld
       val withDuplicate = debuggee.copy(dependencies = debuggee.dependencies ++ debuggee.dependencies)
       val server = getDebugServer(withDuplicate)
       val client = TestDebugClient.connect(server.uri)
@@ -226,7 +216,17 @@ object DebugServerSpec extends TestSuite {
     }
 
     "should send exited and terminated events when debuggee exits in error" - {
-      val debuggee = MainDebuggee.sysExit()
+      val source =
+        """|package example
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    sys.exit(1)
+           |  }
+           |}
+           |
+           |""".stripMargin
+      val debuggee = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`2.12`)
       val server = getDebugServer(debuggee)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -249,44 +249,29 @@ object DebugServerSpec extends TestSuite {
     }
 
     "should support breakpoints in java classes" - {
-      val debuggee = MainDebuggee.javaBreakpointTest()
-      val server = getDebugServer(debuggee)
-      val client = TestDebugClient.connect(server.uri)
-      try {
-        server.connect()
-        client.initialize()
-        client.launch()
-        val breakpoints = client.setBreakpoints(debuggee.sourceFiles.head, Array(5, 12, 16, 8))
-        assert(breakpoints.size == 4)
-        assert(breakpoints.forall(_.verified))
-
-        client.configurationDone()
-        val stopped1 = client.stopped()
-        val threadId = stopped1.threadId
-        assert(stopped1.reason == "breakpoint")
-
-        client.continue(threadId)
-        val stopped2 = client.stopped()
-        assert(stopped2.reason == "breakpoint")
-        assert(stopped2.threadId == threadId)
-
-        client.continue(threadId)
-        val stopped3 = client.stopped()
-        assert(stopped3.reason == "breakpoint")
-        assert(stopped3.threadId == threadId)
-
-        client.continue(threadId)
-        val stopped4 = client.stopped()
-        assert(stopped4.reason == "breakpoint")
-        assert(stopped4.threadId == threadId)
-
-        client.continue(threadId)
-        client.exited()
-        client.terminated()
-      } finally {
-        server.close()
-        client.close()
-      }
+      val source =
+        """|package example;
+           |
+           |class Main {
+           |  public static void main(String[] args) {
+           |    System.out.println("Breakpoint in main method");
+           |    BreakpointTest test = new BreakpointTest();
+           |    test.greet();
+           |    System.out.println("Finished all breakpoints");
+           |  }
+           |
+           |  public BreakpointTest() {
+           |    System.out.println("Breakpoint in constructor");
+           |  }
+           |
+           |  public void greet() {
+           |    System.out.println("Breakpoint in method");
+           |  }
+           |}
+           |
+           |""".stripMargin
+      implicit val debuggee = TestingDebuggee.fromJavaSource(source, "example.Main", ScalaVersion.`2.12`)
+      check(Breakpoint(5), Breakpoint(12), Breakpoint(16), Breakpoint(8))
     }
 
     "should cancel debuggee after receiving disconnect request" - {
@@ -356,23 +341,5 @@ object DebugServerSpec extends TestSuite {
         client1.close()
       }
     }
-  }
-
-  def startDebugServer(
-      debuggee: Debuggee,
-      gracePeriod: Duration = Duration(2, TimeUnit.SECONDS),
-      logger: Logger = NoopLogger
-  ): DebugServer.Handler = {
-    val tools = DebugTools(debuggee, ScalaInstanceResolver, NoopLogger)
-    DebugServer.start(debuggee, tools, NoopLogger)
-  }
-
-  def getDebugServer(
-      debuggee: Debuggee,
-      gracePeriod: Duration = Duration(2, TimeUnit.SECONDS),
-      logger: Logger = NoopLogger
-  ): DebugServer = {
-    val tools = DebugTools(debuggee, ScalaInstanceResolver, NoopLogger)
-    DebugServer(debuggee, tools, NoopLogger, testMode = true)
   }
 }

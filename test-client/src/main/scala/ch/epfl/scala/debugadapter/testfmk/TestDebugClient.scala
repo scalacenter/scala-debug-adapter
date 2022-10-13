@@ -1,4 +1,4 @@
-package ch.epfl.scala.debugadapter.testing
+package ch.epfl.scala.debugadapter.testfmk
 
 import com.google.gson.JsonObject
 import com.google.gson.internal.LinkedTreeMap
@@ -161,7 +161,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
       expression: String,
       frameId: Int,
       timeout: Duration = 16.seconds
-  ): Either[Message, String] = {
+  ): Either[String, String] = {
     val args = new EvaluateArguments()
     args.expression = expression
     args.frameId = frameId
@@ -170,7 +170,7 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
     val response = sendRequest(request, timeout)
 
     Option(getBody[EvaluateResponseBody](response).result)
-      .toRight(getBody[ErrorResponseBody](response).error)
+      .toRight(getBody[ErrorResponseBody](response).error.format)
   }
 
   def disconnect(

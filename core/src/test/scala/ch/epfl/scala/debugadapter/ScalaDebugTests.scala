@@ -1,23 +1,16 @@
 package ch.epfl.scala.debugadapter
 
-import ch.epfl.scala.debugadapter.testing.TestDebugClient
-import utest._
-
-import java.util.concurrent.Executors
-import scala.concurrent.ExecutionContext
+import utest.*
+import ch.epfl.scala.debugadapter.testfmk.*
 
 object Scala212DebugTest extends ScalaDebugTests(ScalaVersion.`2.12`)
 object Scala213DebugTest extends ScalaDebugTests(ScalaVersion.`2.13`)
 object Scala3DebugTest extends ScalaDebugTests(ScalaVersion.`3.2`)
 
-class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
-  // the server needs only one thread for delayed responses of the launch and configurationDone requests
-  val executorService = Executors.newFixedThreadPool(1)
-  implicit val ec = ExecutionContext.fromExecutorService(executorService)
-
+class ScalaDebugTests(scalaVersion: ScalaVersion) extends DebugTestSuite {
   def tests: Tests = Tests {
     "should support breakpoints in scala sources" - {
-      val debuggee = MainDebuggee.scalaBreakpointTest(scalaVersion)
+      val debuggee = TestingDebuggee.scalaBreakpointTest(scalaVersion)
       val server = getDebugServer(debuggee)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -64,7 +57,7 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
     }
 
     "should support breakpoints in fully qualified classes" - {
-      val debuggee = MainDebuggee.scalaBreakpointTest(scalaVersion)
+      val debuggee = TestingDebuggee.scalaBreakpointTest(scalaVersion)
       val server = getDebugServer(debuggee)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -96,7 +89,7 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
     }
 
     "should return stacktrace, scopes and variables when stopped by a breakpoint" - {
-      val debuggee = MainDebuggee.scalaBreakpointTest(scalaVersion)
+      val debuggee = TestingDebuggee.scalaBreakpointTest(scalaVersion)
       val server = getDebugServer(debuggee)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -135,7 +128,7 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
     }
 
     "should return variables after expression evaluation" - {
-      val debuggee = MainDebuggee.scalaBreakpointTest(scalaVersion)
+      val debuggee = TestingDebuggee.scalaBreakpointTest(scalaVersion)
       val server = getDebugServer(debuggee)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -189,7 +182,7 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
            |  }
            |}
            |""".stripMargin
-      val debuggee = MainDebuggee.mainClassRunner(source, "example.Main", scalaVersion)
+      val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
       val server = getDebugServer(debuggee)
       val client = TestDebugClient.connect(server.uri)
       try {
@@ -219,10 +212,5 @@ class ScalaDebugTests(scalaVersion: ScalaVersion) extends TestSuite {
         client.close()
       }
     }
-  }
-
-  def getDebugServer(debuggee: Debuggee, logger: Logger = NoopLogger): DebugServer = {
-    val tools = DebugTools(debuggee, ScalaInstanceResolver, NoopLogger)
-    DebugServer(debuggee, tools, NoopLogger, testMode = true)
   }
 }

@@ -1,5 +1,5 @@
 import scala.concurrent.ExecutionContext
-import ch.epfl.scala.debugadapter.testing.TestDebugClient
+import ch.epfl.scala.debugadapter.testfmk.TestDebugClient
 
 val checkDebugSession = inputKey[Unit]("Check the main class debug session")
 
@@ -32,7 +32,7 @@ checkDebugSession := {
     val topFrame = stackTrace.stackFrames.head
 
     val error = client.evaluate("1 + 1", topFrame.id).left
-    assert(error.exists(_.format.contains("Missing evaluator for entry")))
+    assert(error.exists(_.contains("Missing evaluator for entry")))
 
     client.continue(stopped.threadId)
     client.exited()

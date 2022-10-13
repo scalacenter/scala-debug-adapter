@@ -1,3 +1,5 @@
+package example
+
 import org.junit.Test
 
 class TestSuite {

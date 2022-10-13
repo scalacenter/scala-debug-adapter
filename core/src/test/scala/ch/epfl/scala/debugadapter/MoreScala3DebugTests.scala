@@ -1,86 +1,44 @@
 package ch.epfl.scala.debugadapter
 
-import ch.epfl.scala.debugadapter.testing.TestDebugClient
-import utest._
+import utest.*
+import ch.epfl.scala.debugadapter.testfmk.*
 
-import java.util.concurrent.Executors
-import scala.concurrent.ExecutionContext
-
-object MoreScala3DebugTests extends TestSuite {
-  // the server needs only one thread for delayed responses of the launch and configurationDone requests
-  val executorService = Executors.newFixedThreadPool(1)
-  implicit val ec = ExecutionContext.fromExecutorService(executorService)
-
+object MoreScala3DebugTests extends DebugTestSuite {
   def tests: Tests = Tests {
     "should support breakpoints in scala 3 with brace-less syntax" - {
-      val debuggee = MainDebuggee.scala3Braceless()
-      val server = getDebugServer(debuggee)
-      val client = TestDebugClient.connect(server.uri)
-      try {
-        server.connect()
-        client.initialize()
-        client.launch()
-
-        val breakpoints =
-          client.setBreakpoints(debuggee.sourceFiles.head, Array(5, 7, 11))
-        assert(breakpoints.size == 3)
-        assert(breakpoints.forall(_.verified))
-
-        client.configurationDone()
-        val stop = client.stopped()
-        val threadId = stop.threadId
-
-        client.continue(threadId)
-        client.stopped()
-
-        client.continue(threadId)
-        client.stopped()
-
-        client.continue(threadId)
-        client.exited()
-        client.terminated()
-      } finally {
-        server.close()
-        client.close()
-      }
+      val source =
+        """|package example
+           |
+           |object Main:
+           |  def main(args: Array[String]): Unit =
+           |    println("Breakpoint in main method")
+           |    new Hello().greet()
+           |    println("Finished all breakpoints")
+           |
+           |  class Hello():
+           |    def greet(): Unit =
+           |      println("Breakpoint in hello class")
+           |""".stripMargin
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`3.2`)
+      check(Breakpoint(5), Breakpoint(11), Breakpoint(7))
     }
 
     "should support breakpoints in scala 3 with @main" - {
-      val debuggee = MainDebuggee.scala3MainAnnotation()
-      val server = getDebugServer(debuggee)
-      val client = TestDebugClient.connect(server.uri)
-      try {
-        server.connect()
-        client.initialize()
-        client.launch()
-
-        val breakpoints =
-          client.setBreakpoints(debuggee.sourceFiles.head, Array(4, 6, 10))
-        assert(breakpoints.size == 3)
-        assert(breakpoints.forall(_.verified))
-
-        client.configurationDone()
-        val stop = client.stopped()
-        val threadId = stop.threadId
-
-        client.continue(threadId)
-        client.stopped()
-
-        client.continue(threadId)
-        client.stopped()
-
-        client.continue(threadId)
-        client.exited()
-        client.terminated()
-      } finally {
-        server.close()
-        client.close()
-      }
+      val source =
+        """|package example
+           |
+           |@main def app: Unit =
+           |  println("Breakpoint in main method")
+           |  new Hello().greet()
+           |  println("Finished all breakpoints")
+           |
+           |class Hello():
+           |  def greet(): Unit =
+           |    println("Breakpoint in hello class")
+           |
+           |""".stripMargin
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.app", ScalaVersion.`3.2`)
+      check(Breakpoint(4), Breakpoint(10), Breakpoint(6))
     }
-  }
-
-  def getDebugServer(debuggee: Debuggee, logger: Logger = NoopLogger): DebugServer = {
-    val tools = DebugTools(debuggee, ScalaInstanceResolver, NoopLogger)
-    DebugServer(debuggee, tools, NoopLogger, testMode = true)
   }
 }

@@ -1,13 +1,14 @@
 package ch.epfl.scala.debugadapter
 
 import utest._
+import ch.epfl.scala.debugadapter.testfmk.*
 
 object Scala212EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.12`)
 object Scala213EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.13`)
 object Scala30EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.0`)
 object Scala32EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.2`)
 
-abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEvaluationSuite(scalaVersion) {
+abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTestSuite {
 
   def tests: Tests = Tests {
     "report source and position in error, and no colors" - {
@@ -20,46 +21,44 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5)(
-          Evaluation.failedOrIgnore("\"foo\" + bar", isScala2) { msg =>
-            msg.format.contains("<expression>:1:8") &&
-            msg.format.contains("\"foo\" + bar")
-          },
-          Evaluation.failedOrIgnore("bar", isScala2) { msg =>
-            !msg.format.contains('\u001b')
-          }
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(5),
+        Evaluation.failedOrIgnore("\"foo\" + bar", isScala2) { error =>
+          assert(error.contains("<expression>:1:8"))
+          assert(error.contains("\"foo\" + bar"))
+        },
+        Evaluation.failedOrIgnore("bar", isScala2)(error => assert(!error.contains('\u001b')))
       )
     }
 
     "evaluate primitive values" - {
       val source =
         """|package example
-           |object App {
+           |object Main {
            |  def main(args: Array[String]): Unit = {
            |    println("Hello, World!")
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.App")(
-        Breakpoint(4)(
-          Evaluation.success("true", true),
-          Evaluation.success("0: Byte", 0: Byte),
-          Evaluation.success("'a'", 'a'),
-          Evaluation.success("1.0D", 1.0d),
-          Evaluation.success("0.42F", 0.42f),
-          Evaluation.success("42", 42),
-          Evaluation.success("42L", 42L),
-          Evaluation.success("42: Short", 42: Short)
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(4),
+        Evaluation.success("true", true),
+        Evaluation.success("0: Byte", 0: Byte),
+        Evaluation.success("'a'", 'a'),
+        Evaluation.success("1.0D", 1.0d),
+        Evaluation.success("0.42F", 0.42f),
+        Evaluation.success("42", 42),
+        Evaluation.success("42L", 42L),
+        Evaluation.success("42: Short", 42: Short)
       )
     }
 
     "evaluate local variables" - {
       val source =
         """|package example
-           |object App {
+           |object Main {
            |  def main(args: Array[String]): Unit = {
            |    val str = "hello"
            |    val x1 = 1
@@ -67,11 +66,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.App")(
-        Breakpoint(6)(
-          Evaluation.success("x1 + 2", 3),
-          Evaluation.success("str.reverse", "olleh")
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(6),
+        Evaluation.success("x1 + 2", 3),
+        Evaluation.success("str.reverse", "olleh")
       )
     }
 
@@ -112,29 +111,29 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  private[example] object H
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.A")(
-        Breakpoint(5)(
-          Evaluation.success("a1", "a1"),
-          Evaluation.success("this.a1", "a1"),
-          Evaluation.success("A.this.a1", "a1"),
-          Evaluation.success("a2", "a2"),
-          Evaluation.successOrIgnore("a3", "a3", ignore = isScala2),
-          Evaluation.success("a4", "a4"),
-          Evaluation.success("B.b1", "b1"),
-          Evaluation.success("this.B.b1", "b1"),
-          Evaluation.success("A.B.b1", "b1"),
-          Evaluation.success("A.this.B.b1", "b1"),
-          Evaluation.failed("B.b2")(_ => true),
-          Evaluation.success("B.b3", "b3"),
-          Evaluation.success("A.B.b3", "b3"),
-          Evaluation.success("B.b4", "b4"),
-          Evaluation.success("C")(_.startsWith("A$C$@")),
-          Evaluation.success("D")(_.startsWith("A$D$@")),
-          Evaluation.success("F.f1", "f1"),
-          Evaluation.success("F.f2", "f2"),
-          Evaluation.success("F.G")(_.startsWith("F$G$@")),
-          Evaluation.success("F.H")(_.startsWith("F$H$@"))
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+      check(
+        Breakpoint(5),
+        Evaluation.success("a1", "a1"),
+        Evaluation.success("this.a1", "a1"),
+        Evaluation.success("A.this.a1", "a1"),
+        Evaluation.success("a2", "a2"),
+        Evaluation.successOrIgnore("a3", "a3", ignore = isScala2),
+        Evaluation.success("a4", "a4"),
+        Evaluation.success("B.b1", "b1"),
+        Evaluation.success("this.B.b1", "b1"),
+        Evaluation.success("A.B.b1", "b1"),
+        Evaluation.success("A.this.B.b1", "b1"),
+        Evaluation.failed("B.b2"),
+        Evaluation.success("B.b3", "b3"),
+        Evaluation.success("A.B.b3", "b3"),
+        Evaluation.success("B.b4", "b4"),
+        Evaluation.success("C")(result => assert(result.startsWith("A$C$@"))),
+        Evaluation.success("D")(result => assert(result.startsWith("A$D$@"))),
+        Evaluation.success("F.f1", "f1"),
+        Evaluation.success("F.f2", "f2"),
+        Evaluation.success("F.G")(result => assert(result.startsWith("F$G$@"))),
+        Evaluation.success("F.H")(result => assert(result.startsWith("F$H$@")))
       )
     }
 
@@ -161,15 +160,15 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  private def c2(str: String) = s"c2: $str"
            |}
         """.stripMargin
-      assertInMainClass(source, "example.A")(
-        Breakpoint(5)(
-          Evaluation.success("a1(\"foo\")", "a1: foo"),
-          Evaluation.success("a2(\"foo\")", "a2: foo"),
-          Evaluation.success("B.b1(\"foo\")", "b1: foo"),
-          Evaluation.success("B.b2(\"foo\")", "b2: foo"),
-          Evaluation.success("C.c1(\"foo\")", "c1: foo"),
-          Evaluation.failed("C.c2(\"foo\")")(_ => true)
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+      check(
+        Breakpoint(5),
+        Evaluation.success("a1(\"foo\")", "a1: foo"),
+        Evaluation.success("a2(\"foo\")", "a2: foo"),
+        Evaluation.success("B.b1(\"foo\")", "b1: foo"),
+        Evaluation.success("B.b2(\"foo\")", "b2: foo"),
+        Evaluation.success("C.c1(\"foo\")", "c1: foo"),
+        Evaluation.failed("C.c2(\"foo\")")
       )
     }
 
@@ -201,17 +200,13 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  private def c2(str: String) = s"c2: $str"
            |}
         """.stripMargin
-      assertInMainClass(source, "example.A")(
-        Breakpoint(13)(
-          Evaluation.success("b1", "b1"),
-          Evaluation.success("b2(\"foo\")", "b2: foo"),
-          Evaluation.successOrIgnore("a1", "a1", ignore = isScala2),
-          Evaluation.successOrIgnore(
-            "a2(\"foo\")",
-            "a2: foo",
-            ignore = isScala2
-          )
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+      check(
+        Breakpoint(13),
+        Evaluation.success("b1", "b1"),
+        Evaluation.success("b2(\"foo\")", "b2: foo"),
+        Evaluation.successOrIgnore("a1", "a1", ignore = isScala2),
+        Evaluation.successOrIgnore("a2(\"foo\")", "a2: foo", ignore = isScala2)
       )
     }
 
@@ -243,25 +238,24 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(6)(
-          Evaluation.success("a.a1", "a.a1"),
-          Evaluation.success("a.B.b1", "a.B.b1"),
-          Evaluation.success("new A(\"aa\", 2).a1", "aa.a1"),
-          Evaluation.success("new A(\"aa\", 2).B.b1", "aa.B.b1")
-        ),
-        Breakpoint(23)(
-          Evaluation.success("name", "a"),
-          Evaluation.success("n", 1),
-          Evaluation.success("this.name", "a"),
-          Evaluation.success("a1", "a.a1"),
-          Evaluation.success("a2", "a.a2"),
-          Evaluation.successOrIgnore("new A(\"aa\", 2).a2", "aa.a2", isScala2),
-          Evaluation.success("B.b1", "a.B.b1"),
-          Evaluation.success("this.B.b1", "a.B.b1"),
-          Evaluation.success("C.c1", "a.C.c1"),
-          Evaluation.success("new A(\"aa\", 2).C.c1", "aa.C.c1")
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(6),
+        Evaluation.success("a.a1", "a.a1"),
+        Evaluation.success("a.B.b1", "a.B.b1"),
+        Evaluation.success("new A(\"aa\", 2).a1", "aa.a1"),
+        Evaluation.success("new A(\"aa\", 2).B.b1", "aa.B.b1"),
+        Breakpoint(23),
+        Evaluation.success("name", "a"),
+        Evaluation.success("n", 1),
+        Evaluation.success("this.name", "a"),
+        Evaluation.success("a1", "a.a1"),
+        Evaluation.success("a2", "a.a2"),
+        Evaluation.successOrIgnore("new A(\"aa\", 2).a2", "aa.a2", isScala2),
+        Evaluation.success("B.b1", "a.B.b1"),
+        Evaluation.success("this.B.b1", "a.B.b1"),
+        Evaluation.success("C.c1", "a.C.c1"),
+        Evaluation.success("new A(\"aa\", 2).C.c1", "aa.C.c1")
       )
     }
 
@@ -286,12 +280,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(7)(
-          Evaluation.success("m(\"foo\")", "foo"),
-          Evaluation.success("this.m(\"bar\")", "bar"),
-          Evaluation.success("a.m(\"fizz\")", "fizz")
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(7),
+        Evaluation.success("m(\"foo\")", "foo"),
+        Evaluation.success("this.m(\"bar\")", "bar"),
+        Evaluation.success("a.m(\"fizz\")", "fizz")
       )
     }
 
@@ -323,32 +317,21 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |
            |
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5)(
-          Evaluation.success("m()", "m"),
-          Evaluation.success("m(5)", "m(5: Int)"),
-          Evaluation.success("m(true)", "m(true: Boolean)"),
-          Evaluation.success("m(\"foo\")", "m(foo: String)"),
-          Evaluation.successOrIgnore("m(new B)", "m(b: B)", isScala2),
-          Evaluation.successOrIgnore("m(new B: A)", "m(a: A)", isScala2),
-          Evaluation
-            .successOrIgnore("m(Array(1, 2))", "m(xs: Array[Int])", isScala2),
-          Evaluation
-            .successOrIgnore("m(Array[A](new B))", "m(xs: Array[A])", isScala2),
-          Evaluation.successOrIgnore(
-            "m(Array(Array(1), Array(2)))",
-            "m(xs: Array[Array[Int]])",
-            isScala2
-          ),
-          Evaluation
-            .successOrIgnore("m1(Seq(1, 2, 3))", "List(1, 2, 3)", isScala2),
-          Evaluation.successOrIgnore(
-            "m1(Vector(1, 2, 3))",
-            "Vector(1, 2, 3)",
-            isScala2
-          ),
-          Evaluation.successOrIgnore("m1(Seq(true, false, true))", 2, isScala2)
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(5),
+        Evaluation.success("m()", "m"),
+        Evaluation.success("m(5)", "m(5: Int)"),
+        Evaluation.success("m(true)", "m(true: Boolean)"),
+        Evaluation.success("m(\"foo\")", "m(foo: String)"),
+        Evaluation.successOrIgnore("m(new B)", "m(b: B)", isScala2),
+        Evaluation.successOrIgnore("m(new B: A)", "m(a: A)", isScala2),
+        Evaluation.successOrIgnore("m(Array(1, 2))", "m(xs: Array[Int])", isScala2),
+        Evaluation.successOrIgnore("m(Array[A](new B))", "m(xs: Array[A])", isScala2),
+        Evaluation.successOrIgnore("m(Array(Array(1), Array(2)))", "m(xs: Array[Array[Int]])", isScala2),
+        Evaluation.successOrIgnore("m1(Seq(1, 2, 3))", "List(1, 2, 3)", isScala2),
+        Evaluation.successOrIgnore("m1(Vector(1, 2, 3))", "Vector(1, 2, 3)", isScala2),
+        Evaluation.successOrIgnore("m1(Seq(true, false, true))", 2, isScala2)
       )
     }
 
@@ -384,19 +367,18 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.A")(
-        Breakpoint(5)(
-          Evaluation.success("a1()")(_.startsWith("A$B@")),
-          Evaluation.success("(new B).b1", "b1"),
-          Evaluation.success("(new A.B).b2()", "b2"),
-          Evaluation.success("a2(new B)", "a2")
-        ),
-        Breakpoint(20)(
-          Evaluation.success("c2()")(_.startsWith("C$D@")),
-          Evaluation.success("(new D).d1", "d1"),
-          Evaluation.success("(new this.D).d2()", "d2"),
-          Evaluation.success("c3(new D)", "c3")
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+      check(
+        Breakpoint(5),
+        Evaluation.success("a1()")(result => assert(result.startsWith("A$B@"))),
+        Evaluation.success("(new B).b1", "b1"),
+        Evaluation.success("(new A.B).b2()", "b2"),
+        Evaluation.success("a2(new B)", "a2"),
+        Breakpoint(20),
+        Evaluation.success("c2()")(result => assert(result.startsWith("C$D@"))),
+        Evaluation.success("(new D).d1", "d1"),
+        Evaluation.success("(new this.D).d2()", "d2"),
+        Evaluation.success("c3(new D)", "c3")
       )
     }
 
@@ -418,13 +400,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.A")(
-        Breakpoint(6)(
-          Evaluation.success("new b.C")(_.startsWith("B$C@"))
-        ),
-        Breakpoint(13)(
-          Evaluation.success("new C")(_.startsWith("B$C@"))
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+      check(
+        Breakpoint(6),
+        Evaluation.success("new b.C")(result => assert(result.startsWith("B$C@"))),
+        Breakpoint(13),
+        Evaluation.success("new C")(result => assert(result.startsWith("B$C@")))
       )
     }
 
@@ -453,15 +434,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(11)(
-          Evaluation.success("x1 + x2 + x3", "ax1bx2x3"),
-          Evaluation.successOrIgnore(
-            "x1 + A.this.x2 + this.x3",
-            "ax1ax2bx3",
-            isScala2
-          )
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(11),
+        Evaluation.success("x1 + x2 + x3", "ax1bx2x3"),
+        Evaluation.successOrIgnore("x1 + A.this.x2 + this.x3", "ax1ax2bx3", isScala2)
       )
     }
 
@@ -490,9 +467,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |}
            |
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(8)(Evaluation.success("a", "a"))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(8), Evaluation.success("a", "a"))
     }
 
     "fail evaluation of the outer class of a private final class" - {
@@ -519,14 +495,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(7)(
-          Evaluation.success(
-            "a1",
-            if (isScala3) new NoSuchFieldException("$outer")
-            else new NoSuchFieldError("$outer")
-          )
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(7),
+        Evaluation.success("a1", if (isScala3) new NoSuchFieldException("$outer") else new NoSuchFieldError("$outer"))
       )
     }
 
@@ -557,16 +529,16 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(11)(
-          // B captures the local value x1
-          Evaluation.successOrIgnore("new B", isScala2)(_.startsWith("A$B$1@")),
-          // x1 is captured by B
-          Evaluation.successOrIgnore("x1", "x1", isScala2),
-          Evaluation.success("x2", "x2"),
-          Evaluation.successOrIgnore("A.this.x1", "ax1", isScala2),
-          Evaluation.successOrIgnore("this.x2", "bx2", isScala2)
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(11),
+        // B captures the local value x1
+        Evaluation.successOrIgnore("new B", isScala2)(result => assert(result.startsWith("A$B$1@"))),
+        // x1 is captured by B
+        Evaluation.successOrIgnore("x1", "x1", isScala2),
+        Evaluation.success("x2", "x2"),
+        Evaluation.successOrIgnore("A.this.x1", "ax1", isScala2),
+        Evaluation.successOrIgnore("this.x2", "bx2", isScala2)
       )
     }
 
@@ -614,64 +586,44 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.A")(
-        Breakpoint(18)(
-          Evaluation.success("m1(\"x\")", "m1(x)"),
-          Evaluation.success("m3()")(_.startsWith("A$B@")),
-          Evaluation.success("m2(new B)", "m2(b)")
-        ),
-        Breakpoint(39)(
-          Evaluation.success("m1(\"x\")", "m1(x)"),
-          Evaluation.success("m3()")(_.startsWith("C$D@")),
-          Evaluation.success("m2(new D)", "m2(d)")
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+      check(
+        Breakpoint(18),
+        Evaluation.success("m1(\"x\")", "m1(x)"),
+        Evaluation.success("m3()")(result => assert(result.startsWith("A$B@"))),
+        Evaluation.success("m2(new B)", "m2(b)"),
+        Breakpoint(39),
+        Evaluation.success("m1(\"x\")", "m1(x)"),
+        Evaluation.success("m3()")(result => assert(result.startsWith("C$D@"))),
+        Evaluation.success("m2(new D)", "m2(d)")
       )
     }
 
     "evaluate expression in package" - {
       val source =
-        """package debug {
-          |object EvaluateTest {
+        """package example {
+          |object Main {
           |    def main(args: Array[String]): Unit = {
           |      println("Hello, World!")
           |    }
           |  }
           |}
           |""".stripMargin
-      assertInMainClass(source, "debug.EvaluateTest")(
-        Breakpoint(4)(Evaluation.success("1 + 2", 3))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(4), Evaluation.success("1 + 2", 3))
     }
 
     "evaluate expression with Java util code" - {
       val source =
-        """object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    println("Hello, World!")
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(
-        source,
-        "EvaluateTest",
-        3,
-        "new java.util.ArrayList[String]().toString"
-      )(_.exists(_ == "\"[]\""))
-    }
-
-    "return error message when expression is invalid" - {
-      val source =
-        """object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    println("Hello, World!")
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 3, "1 ++ 2") { result =>
-        result.left.exists { msg =>
-          msg.format.contains("value ++ is not a member of Int")
-        }
-      }
+        """|package example
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    println("Hello, World!")
+           |  }
+           |}
+           |""".stripMargin
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(4), Evaluation.success("new java.util.ArrayList[String]().toString", "[]"))
     }
 
     "evaluate expression inside of a lambda" - {
@@ -691,16 +643,15 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  def m1(): Int = 9
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(6)(
-          Evaluation.success("n", 1),
-          Evaluation.success("m1()", 9)
-        ),
-        Breakpoint(9, ignore = isScala2)(),
-        Breakpoint(9)(
-          Evaluation.success("n", 1),
-          Evaluation.success("m1()", 9)
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(6),
+        Evaluation.success("n", 1),
+        Evaluation.success("m1()", 9),
+        if (isScala3) Breakpoint(9) else NoStep(),
+        Breakpoint(9),
+        Evaluation.success("n", 1),
+        Evaluation.success("m1()", 9)
       )
     }
 
@@ -720,67 +671,72 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  val b = 2
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5)(Evaluation.success("1 + 2", 3)),
-        Breakpoint(12)(Evaluation.success("a + 2", 3))
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(5),
+        Evaluation.success("1 + 2", 3),
+        Breakpoint(12),
+        Evaluation.success("a + 2", 3)
       )
     }
 
     "evaluate expression with breakpoint on method definition" - {
       val source =
-        """class Foo {
-          |  def bar(): String = "foobar"
-          |}
-          |
-          |object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    new Foo().bar()
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(2)(Evaluation.success("1 + 2", 3))
-      )
+        """|package example
+           |class Foo {
+           |  def bar(): String = "foobar"
+           |}
+           |
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    new Foo().bar()
+           |  }
+           |}
+           |""".stripMargin
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(3), Evaluation.success("1 + 2", 3))
     }
 
     "evaluate expression definition" - {
       val source =
-        """|object EvaluateTest {
+        """|package example
+           |object Main {
            |  def main(args: Array[String]): Unit = {
            |    println("Hello, World!")
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(3)(Evaluation.success("val x = 123", ()))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(4), Evaluation.success("val x = 123", ()))
     }
 
     "evaluate multi-line expression" - {
       val source =
-        """object EvaluateTest {
-          |  def main(args: Array[String]): Unit = {
-          |    val a = 1
-          |    println("Hello, World!")
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(4)(
-          Evaluation.success(
-            """val b = 2
-              |val c = 3
-              |a + b + c
-              |""".stripMargin,
-            6
-          )
+        """|package example
+           |object Main {
+           |  def main(args: Array[String]): Unit = {
+           |    val a = 1
+           |    println("Hello, World!")
+           |  }
+           |}
+           |""".stripMargin
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(5),
+        Evaluation.success(
+          """val b = 2
+            |val c = 3
+            |a + b + c
+            |""".stripMargin,
+          6
         )
       )
     }
 
     "evaluate in default arguments" - {
       val source =
-        """|object EvaluateTest {
+        """|package example
+           |object Main {
            |  def main(args: Array[String]): Unit = {
            |    foo(3)()
            |  }
@@ -791,9 +747,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(6)(Evaluation.success("x + 1", 4))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(7), Evaluation.success("x + 1", 4))
     }
 
     "evaluate inside local method" - {
@@ -812,11 +767,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |    println(m1("foo"))
            |  }
            |}""".stripMargin
-      assertInMainClass(source, "example.A")(
-        Breakpoint(7)(
-          Evaluation.success("m1(\"bar\")", "m1(bar)"),
-          Evaluation.success("m2()", "m2()")
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+      check(
+        Breakpoint(7),
+        Evaluation.success("m1(\"bar\")", "m1(bar)"),
+        Evaluation.success("m2()", "m2()")
       )
     }
 
@@ -862,92 +817,52 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |    a.m()
            |  }
            |}""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(30)( // in A#m
-          Evaluation.success("new B")(_.startsWith("A$B$1@")), // captures x1
-          Evaluation.success("(new B).m()", "x1")
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(30), // in A#m
+        Evaluation.success("new B")(result => assert(result.startsWith("A$B$1@"))), // captures x1
+        Evaluation.success("(new B).m()", "x1"),
+        Breakpoint(25), // in B#m
+        Evaluation.success("x1", "x1"), // captured by B
+        Evaluation.success("m()", "x1x2"), // captures x2
+        Evaluation.success("this.m()", "x1"),
+        Evaluation.success(
+          "A.this.m()",
+          if (isScala3) new NoSuchFieldException("$outer") else new NoSuchFieldError("$outer")
         ),
-        Breakpoint(25)( // in B#m
-          Evaluation.success("x1", "x1"), // captured by B
-          Evaluation.success("m()", "x1x2"), // captures x2
-          Evaluation.success("this.m()", "x1"),
-          Evaluation.success(
-            "A.this.m()",
-            if (isScala3) new NoSuchFieldException("$outer")
-            else new NoSuchFieldError("$outer")
-          ),
-          Evaluation.successOrIgnore("new B", isScala2)(
-            _.startsWith("A$B$1@")
-          ) // captures x1
-        ),
-        Breakpoint(22)( // in B#m#m
-          Evaluation.success("x1", "x1"), // captured by B
-          Evaluation.success("x2", "x2"), // captured by m
-          Evaluation.success("m()", "x1x2"), // captures x2
-          Evaluation.success("this.m()", "x1"), // captures x2
-          Evaluation.successOrIgnore("new B", isScala2)(
-            _.startsWith("A$B$1@")
-          ), // captures x1
-          Evaluation.success("new C")(
-            _.startsWith("A$B$1$C$1@")
-          ), // captures x2 and x3
-          Evaluation.success("(new C).m()", "x1x2x3") // captures x2 and x3
-        ),
-        Breakpoint(17)( // in C#m
-          Evaluation.successOrIgnore(
-            "x1",
-            "x1",
-            isScala2
-          ), // captured by B => $this.$outer.x1$1
-          Evaluation.successOrIgnore(
-            "x2",
-            "x2",
-            isScala2
-          ), // captured by C => $this.x2$1
-          Evaluation.successOrIgnore(
-            "x3",
-            "x3",
-            isScala2
-          ), // captured by C => $this.x3$1
-          Evaluation.success("m()", "x1x2x3x4"), // captures x4
-          Evaluation.success("this.m()", "x1x2x3"),
-          Evaluation.successOrIgnore("B.this.m()", "x1", isScala2),
-          Evaluation.successOrIgnore("new C", isScala2)(
-            _.startsWith("A$B$1$C$1@")
-          ), // captures x2 and x3
-          Evaluation.successOrIgnore("new B", isScala2)(
-            _.startsWith("A$B$1@")
-          ), // captures x1
-          Evaluation.success("new A")(_.startsWith("A@"))
-        ),
-        Breakpoint(15)( // in C#m#m
-          Evaluation.successOrIgnore(
-            "x1",
-            "x1",
-            isScala2
-          ), // captured by B => $this.$outer.x1$1
-          Evaluation.successOrIgnore(
-            "x2",
-            "x2",
-            isScala2
-          ), // captured by C => $this.x2$1
-          Evaluation.successOrIgnore(
-            "x3",
-            "x3",
-            isScala2
-          ), // captured by C => $this.x3$1
-          Evaluation.success("x4", "x4"), // captured by D => local x4$1
-          Evaluation.success("m()", "x1x2x3x4"), // captures x4
-          Evaluation.success("this.m()", "x1x2x3"),
-          Evaluation.successOrIgnore("B.this.m()", "x1", isScala2),
-          Evaluation.successOrIgnore("new C", isScala2)(
-            _.startsWith("A$B$1$C$1@")
-          ), // captures x2 and x3
-          Evaluation.successOrIgnore("new B", isScala2)(
-            _.startsWith("A$B$1@")
-          ), // captures x1
-          Evaluation.success("new A")(_.startsWith("A@"))
-        )
+        Evaluation.successOrIgnore("new B", isScala2)(result => assert(result.startsWith("A$B$1@"))), // captures x1
+        Breakpoint(22), // in B#m#m
+        Evaluation.success("x1", "x1"), // captured by B
+        Evaluation.success("x2", "x2"), // captured by m
+        Evaluation.success("m()", "x1x2"), // captures x2
+        Evaluation.success("this.m()", "x1"), // captures x2
+        Evaluation.successOrIgnore("new B", isScala2)(result => assert(result.startsWith("A$B$1@"))), // captures x1
+        Evaluation.success("new C")(result => assert(result.startsWith("A$B$1$C$1@"))), // captures x2 and x3
+        Evaluation.success("(new C).m()", "x1x2x3"), // captures x2 and x3
+        Breakpoint(17), // in C#m
+        Evaluation.successOrIgnore("x1", "x1", ignore = isScala2), // captured by B => $this.$outer.x1$1
+        Evaluation.successOrIgnore("x2", "x2", ignore = isScala2), // captured by C => $this.x2$1
+        Evaluation.successOrIgnore("x3", "x3", ignore = isScala2), // captured by C => $this.x3$1
+        Evaluation.success("m()", "x1x2x3x4"), // captures x4
+        Evaluation.success("this.m()", "x1x2x3"),
+        Evaluation.successOrIgnore("B.this.m()", "x1", isScala2),
+        // captures x2 and x3
+        Evaluation.successOrIgnore("new C", isScala2)(result => assert(result.startsWith("A$B$1$C$1@"))),
+        Evaluation.successOrIgnore("new B", isScala2)(result => assert(result.startsWith("A$B$1@"))), // captures x1
+        Evaluation.success("new A")(result => assert(result.startsWith("A@"))),
+        Breakpoint(15), // in C#m#m
+        Evaluation.successOrIgnore("x1", "x1", ignore = isScala2), // captured by B => $this.$outer.x1$1
+        Evaluation.successOrIgnore("x2", "x2", ignore = isScala2), // captured by C => $this.x2$1
+        Evaluation.successOrIgnore("x3", "x3", ignore = isScala2), // captured by C => $this.x3$1
+        Evaluation.success("x4", "x4"), // captured by D => local x4$1
+        Evaluation.success("m()", "x1x2x3x4"), // captures x4
+        Evaluation.success("this.m()", "x1x2x3"),
+        Evaluation.successOrIgnore("B.this.m()", "x1", isScala2),
+        Evaluation.successOrIgnore("new C", isScala2)(result =>
+          assert(result.startsWith("A$B$1$C$1@"))
+        ), // captures x2 and x3
+        Evaluation.successOrIgnore("new B", isScala2)(result => assert(result.startsWith("A$B$1@"))), // captures x1
+        Evaluation.success("new A")(result => assert(result.startsWith("A@")))
       )
     }
 
@@ -977,12 +892,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(15)(
-          Evaluation.success("x", "x3"),
-          Evaluation.success("m()", "x3")
-        )
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(15), Evaluation.success("x", "x3"), Evaluation.success("m()", "x3"))
     }
 
     "read and write mutable variables whose type is a value class" - {
@@ -1019,36 +930,33 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |}
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(9)(
-          Evaluation.success("x", 1),
-          Evaluation.success("u", 1),
-          Evaluation.success("y", 1),
-          Evaluation.successOrIgnore("x = 2", (), isScala2),
-          Evaluation.successOrIgnore("x", 2, isScala2),
-          Evaluation.successOrIgnore("x = x - 1", (), isScala2),
-          Evaluation.successOrIgnore("x", 1, isScala2),
-          Evaluation.successOrIgnore("x *= 2", (), isScala2),
-          Evaluation.successOrIgnore("x", 2, isScala2),
-          Evaluation.successOrIgnore("u = 2; u", 2, isScala2),
-          Evaluation.successOrIgnore("u", 2, isScala2),
-          Evaluation.success("y += 1", ()),
-          Evaluation.success("new B")(_.startsWith("A$B$1@")),
-          Evaluation.success("yy()", 3)
-        ),
-        Breakpoint(11)(
-          // captured by method m
-          Evaluation.success("y", 3),
-          Evaluation.success("y += 1; y", 4)
-        ),
-        Breakpoint(12)(
-          Evaluation.success("y", 5)
-        ),
-        Breakpoint(16)(
-          // captured by class B
-          Evaluation.successOrIgnore("z", 1, isScala2),
-          Evaluation.successOrIgnore("z += 1; z", 2, isScala2)
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(9),
+        Evaluation.success("x", 1),
+        Evaluation.success("u", 1),
+        Evaluation.success("y", 1),
+        Evaluation.successOrIgnore("x = 2", (), isScala2),
+        Evaluation.successOrIgnore("x", 2, isScala2),
+        Evaluation.successOrIgnore("x = x - 1", (), isScala2),
+        Evaluation.successOrIgnore("x", 1, isScala2),
+        Evaluation.successOrIgnore("x *= 2", (), isScala2),
+        Evaluation.successOrIgnore("x", 2, isScala2),
+        Evaluation.successOrIgnore("u = 2; u", 2, isScala2),
+        Evaluation.successOrIgnore("u", 2, isScala2),
+        Evaluation.success("y += 1", ()),
+        Evaluation.success("new B")(result => assert(result.startsWith("A$B$1@"))),
+        Evaluation.success("yy()", 3),
+        Breakpoint(11),
+        // captured by method m
+        Evaluation.success("y", 3),
+        Evaluation.success("y += 1; y", 4),
+        Breakpoint(12),
+        Evaluation.success("y", 5),
+        Breakpoint(16),
+        // captured by class B
+        Evaluation.successOrIgnore("z", 1, isScala2),
+        Evaluation.successOrIgnore("z += 1; z", 2, isScala2)
       )
     }
 
@@ -1071,17 +979,17 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |}
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(7)(
-          Evaluation.successOrIgnore("x", 1, isScala2),
-          if (isScala3) Evaluation.failed("y")(_ => true)
-          else Evaluation.success("y", 2),
-          Evaluation.successOrIgnore(
-            """|lazy val z = 2
-               |z""".stripMargin,
-            2,
-            isScala2
-          )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(7),
+        Evaluation.successOrIgnore("x", 1, isScala2),
+        if (isScala3) Evaluation.failed("y")
+        else Evaluation.success("y", 2),
+        Evaluation.successOrIgnore(
+          """|lazy val z = 2
+             |z""".stripMargin,
+          2,
+          isScala2
         )
       )
     }
@@ -1118,19 +1026,18 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(9)(
-          Evaluation.successOrIgnore("x", "x", isScala2),
-          Evaluation.successOrIgnore("this.x", "x", isScala2),
-          Evaluation.successOrIgnore("y", "y", isScala2),
-          Evaluation.successOrIgnore("this.y = \"yy\"", (), isScala2),
-          Evaluation.successOrIgnore("y", "yy", isScala2),
-          Evaluation.successOrIgnore("z", "z", isScala2),
-          Evaluation.successOrIgnore("m2", "yyz", isScala2)
-        ),
-        Breakpoint(16)(
-          Evaluation.success("x", "x")
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(9),
+        Evaluation.successOrIgnore("x", "x", isScala2),
+        Evaluation.successOrIgnore("this.x", "x", isScala2),
+        Evaluation.successOrIgnore("y", "y", isScala2),
+        Evaluation.successOrIgnore("this.y = \"yy\"", (), isScala2),
+        Evaluation.successOrIgnore("y", "yy", isScala2),
+        Evaluation.successOrIgnore("z", "z", isScala2),
+        Evaluation.successOrIgnore("m2", "yyz", isScala2),
+        Breakpoint(16),
+        Evaluation.success("x", "x")
       )
     }
 
@@ -1164,20 +1071,17 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  private class C[X, Y](x: X)(y: Y)
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5)(
-          Evaluation.success("m1[String]", "m1[X]"),
-          Evaluation.success("m1[A[Int]]", "m1[X]"),
-          Evaluation.success("m2[String]", "m2[X]"),
-          Evaluation.success("m3(1)(\"x\")", "m3(1)(x)"),
-          Evaluation
-            .successOrIgnore("m4[Int, String](1)(\"x\")", "m4(1)(x)", isScala2),
-          Evaluation.success("new A[String]")(_.startsWith("Main$A@")),
-          Evaluation.success("new B(2)(\"x\")")(_.startsWith("Main$B@")),
-          Evaluation.success("new C[Int, String](2)(\"x\")")(
-            _.startsWith("Main$C@")
-          )
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(5),
+        Evaluation.success("m1[String]", "m1[X]"),
+        Evaluation.success("m1[A[Int]]", "m1[X]"),
+        Evaluation.success("m2[String]", "m2[X]"),
+        Evaluation.success("m3(1)(\"x\")", "m3(1)(x)"),
+        Evaluation.successOrIgnore("m4[Int, String](1)(\"x\")", "m4(1)(x)", isScala2),
+        Evaluation.success("new A[String]")(result => assert(result.startsWith("Main$A@"))),
+        Evaluation.success("new B(2)(\"x\")")(result => assert(result.startsWith("Main$B@"))),
+        Evaluation.success("new C[Int, String](2)(\"x\")")(result => assert(result.startsWith("Main$C@")))
       )
     }
 
@@ -1217,28 +1121,25 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |class C(val size: Int) extends AnyVal
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(8)(
-          Evaluation.success("b1", "foo"),
-          Evaluation.success("c1.size", 2),
-          Evaluation.success("b2.m(c1)", "ba"),
-          Evaluation.success("m(b2)", "bar"),
-          Evaluation.success("new B(\"fizz\")", "fizz"),
-          Evaluation.success("b1 + new B(\"buzz\")", "foobuzz")
-        ),
-        Breakpoint(24)(
-          Evaluation.successOrIgnore("self", "foo", isScala2),
-          Evaluation.successOrIgnore("m(c)", "fo", isScala2)
-        ),
-        Breakpoint(9)(
-          Evaluation.successOrIgnore("b1 = new B(\"fizz\")", (), isScala2),
-          Evaluation.successOrIgnore("c1 = new C(3)", (), isScala2)
-        ),
-        Breakpoint(24, ignore = isScala3)(),
-        Breakpoint(24)(
-          Evaluation.successOrIgnore("self", "fizzbar", isScala2),
-          Evaluation.successOrIgnore("m(c)", "fizzb", isScala2)
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(8),
+        Evaluation.success("b1", "foo"),
+        Evaluation.success("c1.size", 2),
+        Evaluation.success("b2.m(c1)", "ba"),
+        Evaluation.success("m(b2)", "bar"),
+        Evaluation.success("new B(\"fizz\")", "fizz"),
+        Evaluation.success("b1 + new B(\"buzz\")", "foobuzz"),
+        Breakpoint(24),
+        Evaluation.successOrIgnore("self", "foo", isScala2),
+        Evaluation.successOrIgnore("m(c)", "fo", isScala2),
+        Breakpoint(9),
+        Evaluation.successOrIgnore("b1 = new B(\"fizz\")", (), isScala2),
+        Evaluation.successOrIgnore("c1 = new C(3)", (), isScala2),
+        if (isScala2) Breakpoint(24) else NoStep(),
+        Breakpoint(24),
+        Evaluation.successOrIgnore("self", "fizzbar", isScala2),
+        Evaluation.successOrIgnore("m(c)", "fizzb", isScala2)
       )
     }
 
@@ -1266,17 +1167,17 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |class Size(val value: Int) extends AnyVal
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(10)(
-          Evaluation.success("size", 1),
-          Evaluation.successOrIgnore(
-            """|def size2: Size = new Size(2)
-               |getMsg(size2).value""".stripMargin,
-            "He",
-            isScala2
-          ),
-          Evaluation.success("new Msg(new Size(3)).value", "Hel")
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(10),
+        Evaluation.success("size", 1),
+        Evaluation.successOrIgnore(
+          """|def size2: Size = new Size(2)
+             |getMsg(size2).value""".stripMargin,
+          "He",
+          isScala2
+        ),
+        Evaluation.success("new Msg(new Size(3)).value", "Hel")
       )
     }
 
@@ -1303,23 +1204,19 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |class Size(val value: Int) extends AnyVal
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(14)(
-          Evaluation.success("new A(\"foo\")")(_.startsWith("Main$A$1@")),
-          Evaluation.success("m(\"bar\")", "ba")
-        ),
-        Breakpoint(8)(
-          Evaluation.successOrIgnore("size", 2, isScala2),
-          Evaluation.successOrIgnore("size.value", 2, isScala2),
-          Evaluation.successOrIgnore("new A(\"foo\")", isScala2)(
-            _.startsWith("Main$A$1@")
-          )
-        ),
-        Breakpoint(12)(
-          Evaluation.success("size", 2),
-          Evaluation.success("size.value", 2),
-          Evaluation.success("m(\"bar\")", "ba")
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(14),
+        Evaluation.success("new A(\"foo\")")(result => assert(result.startsWith("Main$A$1@"))),
+        Evaluation.success("m(\"bar\")", "ba"),
+        Breakpoint(8),
+        Evaluation.successOrIgnore("size", 2, isScala2),
+        Evaluation.successOrIgnore("size.value", 2, isScala2),
+        Evaluation.successOrIgnore("new A(\"foo\")", isScala2)(result => assert(result.startsWith("Main$A$1@"))),
+        Breakpoint(12),
+        Evaluation.success("size", 2),
+        Evaluation.success("size.value", 2),
+        Evaluation.success("m(\"bar\")", "ba")
       )
     }
 
@@ -1354,33 +1251,30 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |}
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(8)(
-          Evaluation.success("x", 1),
-          Evaluation.success("y", 1),
-          Evaluation.success("z", 1),
-          Evaluation.success("x = new A(2); x", 2),
-          Evaluation.success("x", 2),
-          Evaluation.success("y = x + new A(1)", ()),
-          Evaluation.success("y", 3),
-          Evaluation.successOrIgnore("z += new A(2); z", 3, isScala2),
-          Evaluation.successOrIgnore("z", 3, isScala2),
-          Evaluation.success("new B")(_.startsWith("Main$B$1@")),
-          Evaluation.success("xx()", 3)
-        ),
-        Breakpoint(10)(
-          // captured by method m
-          Evaluation.success("x", 3),
-          Evaluation.success("x += new A(1); x", 4)
-        ),
-        Breakpoint(11)(
-          Evaluation.success("x", 5)
-        ),
-        Breakpoint(15)(
-          // captured by class B
-          Evaluation.successOrIgnore("y", 3, isScala2),
-          Evaluation.successOrIgnore("y += new A(1); y", 4, isScala2)
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(8),
+        Evaluation.success("x", 1),
+        Evaluation.success("y", 1),
+        Evaluation.success("z", 1),
+        Evaluation.success("x = new A(2); x", 2),
+        Evaluation.success("x", 2),
+        Evaluation.success("y = x + new A(1)", ()),
+        Evaluation.success("y", 3),
+        Evaluation.successOrIgnore("z += new A(2); z", 3, isScala2),
+        Evaluation.successOrIgnore("z", 3, isScala2),
+        Evaluation.success("new B")(result => assert(result.startsWith("Main$B$1@"))),
+        Evaluation.success("xx()", 3),
+        Breakpoint(10),
+        // captured by method m
+        Evaluation.success("x", 3),
+        Evaluation.success("x += new A(1); x", 4),
+        Breakpoint(11),
+        Evaluation.success("x", 5),
+        Breakpoint(15),
+        // captured by class B
+        Evaluation.successOrIgnore("y", 3, isScala2),
+        Evaluation.successOrIgnore("y += new A(1); y", 4, isScala2)
       )
     }
 
@@ -1405,33 +1299,27 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |}
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(8)(
-          Evaluation.successOrIgnore("this.m(2)", "fofo", isScala2),
-          Evaluation.failedOrIgnore("m(3)", isScala2)(
-            _.format.contains("not supported")
-          )
-        ),
-        Breakpoint(6)(
-          if (isScala3)
-            Evaluation.failed("self")(_.format.contains("not supported"))
-          else Evaluation.success("self", "foo"),
-          if (isScala3)
-            Evaluation.failed("size")(_.format.contains("not supported"))
-          else Evaluation.success("size", 2),
-          if (isScala3)
-            Evaluation.failed("m(1)")(_.format.contains("not supported"))
-          else Evaluation.success("m(1)", "fo"),
-          if (isScala3)
-            Evaluation.failed("this.m(1)")(_.format.contains("not supported"))
-          else Evaluation.success("this.m(1)", "ff")
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(8),
+        Evaluation.successOrIgnore("this.m(2)", "fofo", isScala2),
+        Evaluation.failedOrIgnore("m(3)", "not supported", isScala2),
+        Breakpoint(6),
+        if (isScala3) Evaluation.failed("self", "not supported")
+        else Evaluation.success("self", "foo"),
+        if (isScala3) Evaluation.failed("size", "not supported")
+        else Evaluation.success("size", 2),
+        if (isScala3) Evaluation.failed("m(1)", "not supported")
+        else Evaluation.success("m(1)", "fo"),
+        if (isScala3) Evaluation.failed("this.m(1)", "not supported")
+        else Evaluation.success("this.m(1)", "ff")
       )
     }
 
     "evaluate tail-rec function" - {
       val source =
-        """|object EvaluateTest {
+        """|package example
+           |object Main {
            |  @scala.annotation.tailrec
            |  def f(x: Int): Int = {
            |    if (x <= 42) {
@@ -1443,32 +1331,14 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(5)(Evaluation.success("f(x)", 2))
-      )
-    }
-
-    "keep working after success or failure" - {
-      val source =
-        """|object EvaluateTest {
-           |  def main(args: Array[String]): Unit = {
-           |    val result = 2
-           |    println(result)
-           |    println(result)
-           |    println(result)
-           |  }
-           |}
-           |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(4)(Evaluation.success("result + 1", 3)),
-        Breakpoint(5)(Evaluation.failed("resulterror")(_ => true)),
-        Breakpoint(6)(Evaluation.success("result + 2", 4))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(6), Evaluation.success("f(x)", 2))
     }
 
     "evaluate App block method" - {
       val source =
-        """|object EvaluateTest extends App {
+        """|package example
+           |object Main extends App {
            |  val x = 1
            |  val y = {
            |    val msg = "Hello World!"
@@ -1477,14 +1347,14 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "EvaluateTest", 6, "msg.toString()")(
-        _.exists(_ == "\"Hello World!\"")
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(7), Evaluation.success("msg", "Hello World!"))
     }
 
     "evaluate at lambda start" - {
       val source =
-        """|object EvaluateTest{
+        """|package example
+           |object Main {
            |  def main(args: Array[String]): Unit = {
            |    val list = List(1, 2, 3)
            |    list.foreach { x =>
@@ -1493,14 +1363,14 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(4)(Evaluation.success("1 + 1", 2))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(5), Evaluation.success("1 + 1", 2))
     }
 
     "return exception as the result of evaluation" - {
       val source =
-        """|object EvaluateTest{
+        """|package example
+           |object Main{
            |  def main(args: Array[String]): Unit = {
            |    println("Hello, World!")
            |  }
@@ -1510,67 +1380,62 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(
-        source,
-        "EvaluateTest",
-        3,
-        "throwException()"
-      )(
-        _.exists(_.contains("\"java.lang.Exception: error\""))
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(4),
+        Evaluation.success("throwException()", new Exception("error"))
       )
     }
 
     "evaluate in munit test" - {
       val source =
-        """|class MySuite extends munit.FunSuite {
+        """|package example
+           |class MySuite extends munit.FunSuite {
            |  def sum(list: List[Int]): Int = list.sum
            |
            |  test("sum of a few numbers") {
            |    assertEquals(sum(List(1,2,0)), 3)
            |  }
-           |}""".stripMargin
-
-      if (isScala32) {
-        assertInTestSuite(source, "MySuite")(
-          Breakpoint(5)(Evaluation.success("1 + 1", 2))
-        )
-      } else {
-        assertInTestSuite(source, "MySuite")(
-          Breakpoint(5)(), // the program stops twice...
-          Breakpoint(5)(Evaluation.success("1 + 1", 2))
-        )
-      }
+           |}
+           |""".stripMargin
+      implicit val debuggee = TestingDebuggee.munitTestSuite(source, "example.MySuite", scalaVersion)
+      check(
+        Breakpoint(6),
+        // the program stops twice before Scala 3.2
+        if (!isScala32) Breakpoint(6) else NoStep(),
+        Evaluation.success("1 + 1", 2)
+      )
     }
 
     "evaluate lambdas" - {
       val source =
-        """class Foo {
-          |  val a = 1
-          |  private val b = 2
-          |  def bar() = {
-          |    val c = 3
-          |    println(s"a + b + c = ${a + b + c}")
-          |  }
-          |}
-          |
-          |object EvaluateTest {
-          |  val a = 1
-          |  private val b = 2
-          |  def main(args: Array[String]): Unit = {
-          |    val c = 3
-          |    println(a + b + c)
-          |    new Foo().bar()
-          |  }
-          |}
-          |""".stripMargin
-      assertInMainClass(source, "EvaluateTest")(
-        Breakpoint(15)(
-          Evaluation.success("List(1, 2, 3).map(_ * a * b * c).sum", 36)
-        ),
-        Breakpoint(6)(
-          Evaluation.success("List(1, 2, 3).map(_ * 2).sum", 12),
-          Evaluation.success("List(1, 2, 3).map(_ * a * b * c).sum", 36)
-        )
+        """|package example
+           |class Foo {
+           |  val a = 1
+           |  private val b = 2
+           |  def bar() = {
+           |    val c = 3
+           |    println(s"a + b + c = ${a + b + c}")
+           |  }
+           |}
+           |
+           |object Main {
+           |  val a = 1
+           |  private val b = 2
+           |  def main(args: Array[String]): Unit = {
+           |    val c = 3
+           |    println(a + b + c)
+           |    new Foo().bar()
+           |  }
+           |}
+           |""".stripMargin
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(16),
+        Evaluation.success("List(1, 2, 3).map(_ * a * b * c).sum", 36),
+        Breakpoint(7),
+        Evaluation.success("List(1, 2, 3).map(_ * 2).sum", 12),
+        Evaluation.success("List(1, 2, 3).map(_ * a * b * c).sum", 36)
       )
     }
 
@@ -1585,11 +1450,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(6)(
-          Evaluation.success("f(\"foo\")")(_.contains("3"))
-        )
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(6), Evaluation.success("f(\"foo\")", 3))
     }
 
     "evaluate call to method of generic class" - {
@@ -1609,14 +1471,14 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5)(
-          Evaluation.success("write(value)", ()),
-          // Should it work without casting?
-          // In contravariant case, we could find what's the expected type
-          // In the covariant case, it is not possible to know what the precise return type is at runtime
-          Evaluation.success("write(\"Hello\".asInstanceOf[T])", ())
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(5),
+        Evaluation.success("write(value)", ()),
+        // Should it work without casting?
+        // In contravariant case, we could find what's the expected type
+        // In the covariant case, it is not possible to know what the precise return type is at runtime
+        Evaluation.success("write(\"Hello\".asInstanceOf[T])", ())
       )
     }
 
@@ -1636,11 +1498,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5)(
-          Evaluation.success("f(\"foo\")", "oof")
-        )
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(5), Evaluation.success("f(\"foo\")", "oof"))
     }
 
     "evaluate local def in expression" - {
@@ -1653,19 +1512,19 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |}
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5)(
-          Evaluation.successOrIgnore(
-            """|def m(x: Int) = println(x)
-               |m(1)""".stripMargin,
-            (),
-            isScala2
-          ),
-          Evaluation.successOrIgnore(
-            "def m(x: Int) = println(x); m(1)",
-            (),
-            isScala2
-          )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(5),
+        Evaluation.successOrIgnore(
+          """|def m(x: Int) = println(x)
+             |m(1)""".stripMargin,
+          (),
+          isScala2
+        ),
+        Evaluation.successOrIgnore(
+          "def m(x: Int) = println(x); m(1)",
+          (),
+          isScala2
         )
       )
     }
@@ -1680,13 +1539,13 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |}
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5)(
-          Evaluation.success(
-            """|import java.nio.file.Paths
-               |Paths.get(".").toString""".stripMargin,
-            "."
-          )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(5),
+        Evaluation.success(
+          """|import java.nio.file.Paths
+             |Paths.get(".").toString""".stripMargin,
+          "."
         )
       )
     }
@@ -1712,11 +1571,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |}
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(7)(
-          Evaluation.success("a", "A.a"),
-          Evaluation.success("a = \"foo\";a", "foo")
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(7),
+        Evaluation.success("a", "A.a"),
+        Evaluation.success("a = \"foo\";a", "foo")
       )
     }
 
@@ -1737,13 +1596,13 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |}
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(6)(
-          Evaluation.successOrIgnore("!", "!", isScala2),
-          Evaluation.successOrIgnore("|", "|", isScala2),
-          Evaluation.success("(new <>).toString", "<>"),
-          Evaluation.successOrIgnore("&(\":\")", "&(:)", isScala2)
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(6),
+        Evaluation.successOrIgnore("!", "!", isScala2),
+        Evaluation.successOrIgnore("|", "|", isScala2),
+        Evaluation.success("(new <>).toString", "<>"),
+        Evaluation.successOrIgnore("&(\":\")", "&(:)", isScala2)
       )
     }
 
@@ -1768,41 +1627,32 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-
-      val breakpoints = if (isScala3) {
-        Seq(
-          Breakpoint(5)(
-            Evaluation.success("list.size", 3)
-          ),
-          Breakpoint(7)(
-            Evaluation.success("b", "b")
-          ),
-          Breakpoint(5)(
-            Evaluation.success("list.size", 1)
-          ),
-          Breakpoint(8)(
-            Evaluation.success("list.size", 1)
-          ),
-          Breakpoint(5)(
-            Evaluation.success("list.size", 0)
-          ),
-          Breakpoint(9)(
-            Evaluation.success("list.size", 0)
-          )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      if (isScala3) {
+        check(
+          Breakpoint(5),
+          Evaluation.success("list.size", 3),
+          Breakpoint(7),
+          Evaluation.success("b", "b"),
+          Breakpoint(5),
+          Evaluation.success("list.size", 1),
+          Breakpoint(8),
+          Evaluation.success("list.size", 1),
+          Breakpoint(5),
+          Evaluation.success("list.size", 0),
+          Breakpoint(9),
+          Evaluation.success("list.size", 0)
         )
       } else {
         // in scala2 it stops many times on line 5 and 8
         // skipping those tests
-        Seq(
-          Breakpoint(7)(
-            Evaluation.success("b", "b")
-          ),
-          Breakpoint(9)(
-            Evaluation.successOrIgnore("list.size", 0, isScala2)
-          )
+        check(
+          Breakpoint(7),
+          Evaluation.success("b", "b"),
+          Breakpoint(9),
+          Evaluation.successOrIgnore("list.size", 0, isScala2)
         )
       }
-      assertInMainClass(source, "example.Main")(breakpoints: _*)
     }
 
     "evaluate on assignment" - {
@@ -1817,11 +1667,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(6)(
-          Evaluation.success("1+1", 2)
-        )
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(6), Evaluation.success("1+1", 2))
     }
 
     "evaluate class def" - {
@@ -1835,32 +1682,32 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(6)(
-          Evaluation.successOrIgnore(
-            """|class A(a: Int) {
-               |  override def toString(): String = s"A($a)"
-               |}
-               |new A(1).toString""".stripMargin,
-            "A(1)",
-            isScala2
-          ),
-          Evaluation.successOrIgnore(
-            """|case class A() {
-               |  override def toString(): String = "A"
-               |}
-               |A().toString""".stripMargin,
-            "A",
-            isScala2
-          ),
-          Evaluation.successOrIgnore(
-            """|class A() {
-               |  def getMsg: String = msg
-               |}
-               |A().getMsg""".stripMargin,
-            "Hello, World!",
-            isScala2
-          )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(6),
+        Evaluation.successOrIgnore(
+          """|class A(a: Int) {
+             |  override def toString(): String = s"A($a)"
+             |}
+             |new A(1).toString""".stripMargin,
+          "A(1)",
+          isScala2
+        ),
+        Evaluation.successOrIgnore(
+          """|case class A() {
+             |  override def toString(): String = "A"
+             |}
+             |A().toString""".stripMargin,
+          "A",
+          isScala2
+        ),
+        Evaluation.successOrIgnore(
+          """|class A() {
+             |  def getMsg: String = msg
+             |}
+             |A().getMsg""".stripMargin,
+          "Hello, World!",
+          isScala2
         )
       )
     }
@@ -1880,10 +1727,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |}
            |
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5)(
-          Evaluation.successOrIgnore("foo(1)", isScala2)(_.contains("AssertionError@"))
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(5),
+        Evaluation.successOrIgnore("foo(1)", isScala2)(result => assert(result.contains("AssertionError@")))
       )
     }
 
@@ -1901,9 +1748,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  val msg = "x"
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5)(Evaluation.success("Foo.msg", "x"))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(5), Evaluation.success("Foo.msg", "x"))
     }
 
     "evaluate by-name param" - {
@@ -1937,11 +1783,16 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(11)(Evaluation.successOrIgnore("x", true, isScala2)),
-        Breakpoint(13)(Evaluation.successOrIgnore("x", true, isScala2)),
-        Breakpoint(17)(Evaluation.successOrIgnore("x", true, isScala2)),
-        Breakpoint(26)(Evaluation.successOrIgnore("x", "foo", isScala2))
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(11),
+        Evaluation.successOrIgnore("x", true, isScala2),
+        Breakpoint(13),
+        Evaluation.successOrIgnore("x", true, isScala2),
+        Breakpoint(17),
+        Evaluation.successOrIgnore("x", true, isScala2),
+        Breakpoint(26),
+        Evaluation.successOrIgnore("x", "foo", isScala2)
       )
     }
 
@@ -1956,10 +1807,9 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main", Seq("-Xfatal-warnings"))(
-        // a pure expression does nothing in statement position
-        Breakpoint(6)(Evaluation.success("x\nx", "Hello"))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion, Seq("-Xfatal-warnings"))
+      // a pure expression does nothing in statement position
+      check(Breakpoint(6), Evaluation.success("x\nx", "Hello"))
     }
 
     "evaluate on for loops, generators and guards" - {
@@ -1983,49 +1833,56 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEva
            |  }
            |}
            |""".stripMargin
-      val breakpoints =
-        if (isScala3)
-          Seq(
-            Breakpoint(7)(Evaluation.success("list(0)", 1)),
-            Breakpoint(8)(
-              Evaluation.success("list(0)", 1),
-              Evaluation.success("x", 1)
-            ),
-            Breakpoint(9)(), // calling map
-            Breakpoint(9)(), // adapted lambda
-            Breakpoint(9)(Evaluation.success("x + y", 2)), // finally we are into the lifted lambda x + y
-            Breakpoint(8)(), // still in the same lifted lambda (the line position does not make any sense)
-            Breakpoint(9)(), // again in the lifted lambda
-            Breakpoint(8)(), // going out of the lifted lambda
-            Breakpoint(13)(), // calling withFilter
-            Breakpoint(13)(Evaluation.success("x", 1)),
-            Breakpoint(15)(Evaluation.success("list(0)", 1)),
-            Breakpoint(15)(),
-            Breakpoint(16)(Evaluation.success("list(0)", 1)),
-            Breakpoint(16)()
-          )
-        else
-          Seq(
-            Breakpoint(7)(),
-            Breakpoint(7)(Evaluation.ignore("list(0)", 1)),
-            Breakpoint(8)(
-              Evaluation.success("list(0)", 1),
-              Evaluation.success("x", 1)
-            ),
-            Breakpoint(8)(),
-            Breakpoint(9)(Evaluation.ignore("x + y", 2)),
-            Breakpoint(8)(),
-            Breakpoint(9)(),
-            Breakpoint(8)(),
-            Breakpoint(8)(),
-            Breakpoint(13)(Evaluation.successOrIgnore("x", 1, isScala212)),
-            Breakpoint(13, ignore = isScala213)(),
-            Breakpoint(15)(Evaluation.ignore("x", 1)),
-            Breakpoint(15)(),
-            Breakpoint(16)(Evaluation.success("list(0)", 1)),
-            Breakpoint(16)()
-          )
-      assertInMainClass(source, "example.Main")(breakpoints*)
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      if (isScala3)
+        check(
+          Breakpoint(7),
+          Evaluation.success("list(0)", 1),
+          Breakpoint(8),
+          Evaluation.success("list(0)", 1),
+          Evaluation.success("x", 1),
+          Breakpoint(9), // calling map
+          Breakpoint(9), // adapted lambda
+          Breakpoint(9),
+          Evaluation.success("x + y", 2), // finally we are into the lifted lambda x + y
+          Breakpoint(8), // still in the same lifted lambda (the line position does not make any sense)
+          Breakpoint(9), // again in the lifted lambda
+          Breakpoint(8), // going out of the lifted lambda
+          Breakpoint(13), // calling withFilter
+          Breakpoint(13),
+          Evaluation.success("x", 1),
+          Breakpoint(15),
+          Evaluation.success("list(0)", 1),
+          Breakpoint(15),
+          Breakpoint(16),
+          Evaluation.success("list(0)", 1),
+          Breakpoint(16)
+        )
+      else
+        check(
+          Breakpoint(7),
+          Breakpoint(7),
+          Evaluation.ignore("list(0)", 1),
+          Breakpoint(8),
+          Evaluation.success("list(0)", 1),
+          Evaluation.success("x", 1),
+          Breakpoint(8),
+          Breakpoint(9),
+          Evaluation.ignore("x + y", 2),
+          Breakpoint(8),
+          Breakpoint(9),
+          Breakpoint(8),
+          Breakpoint(8),
+          Breakpoint(13),
+          Evaluation.successOrIgnore("x", 1, isScala212),
+          if (isScala212) Breakpoint(13) else NoStep(),
+          Breakpoint(15),
+          Evaluation.ignore("x", 1),
+          Breakpoint(15),
+          Breakpoint(16),
+          Evaluation.success("list(0)", 1),
+          Breakpoint(16)
+        )
     }
   }
 }

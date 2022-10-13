@@ -1,7 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.stepfilter
 
 import utest._
-import ch.epfl.scala.debugadapter.MainDebuggee
+import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSig
 import ch.epfl.scala.debugadapter.NoopLogger
@@ -42,7 +42,7 @@ abstract class Scala2StepFilterTests(scalaVersion: ScalaVersion) extends TestSui
            |  def mbis(a: Main.type): Main.type = a
            |}
            |""".stripMargin
-      val debuggee = MainDebuggee.mainClassRunner(source, "", scalaVersion)
+      val debuggee = TestingDebuggee.mainClass(source, "", scalaVersion)
       val stepFilter = new Scala2StepFilter(null, scalaVersion, NoopLogger, testMode = true)
 
       val scalaSig = decompile(debuggee, "example/Main.class")
@@ -85,7 +85,7 @@ abstract class Scala2StepFilterTests(scalaVersion: ScalaVersion) extends TestSui
              |  def m(x: "a"): 1 = 1
              |}
              |""".stripMargin
-        val debuggee = MainDebuggee.mainClassRunner(source, "", scalaVersion)
+        val debuggee = TestingDebuggee.mainClass(source, "", scalaVersion)
         val stepFilter = new Scala2StepFilter(null, scalaVersion, NoopLogger, testMode = true)
 
         val scalaSig = decompile(debuggee, "example/Main.class")
@@ -101,7 +101,7 @@ abstract class Scala2StepFilterTests(scalaVersion: ScalaVersion) extends TestSui
     }
 
     "all Java types are known by the class loader" - {
-      val debuggee = MainDebuggee.mainClassRunner("", "", scalaVersion)
+      val debuggee = TestingDebuggee.mainClass("", "", scalaVersion)
       val sourceLookUp = SourceLookUpProvider(debuggee.classEntries, PrintLogger)
       val stepFilter = new Scala2StepFilter(sourceLookUp, scalaVersion, NoopLogger, testMode = true)
 
@@ -111,7 +111,7 @@ abstract class Scala2StepFilterTests(scalaVersion: ScalaVersion) extends TestSui
     }
   }
 
-  private def decompile(debuggee: MainDebuggee, classFile: String): ScalaSig = {
+  private def decompile(debuggee: TestingDebuggee, classFile: String): ScalaSig = {
     val classBytes = debuggee.mainModule.readBytes(classFile)
     val scalaSig = Decompiler.decompile(classBytes, classFile, NoopLogger)
     assert(scalaSig.isDefined)

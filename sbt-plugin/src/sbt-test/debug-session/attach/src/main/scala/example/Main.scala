@@ -1,4 +1,6 @@
-object BreakpointTest {
+package example
+
+object Main {
   def main(args: Array[String]): Unit = {
     println("Breakpoint in main method")
     val h = new Hello

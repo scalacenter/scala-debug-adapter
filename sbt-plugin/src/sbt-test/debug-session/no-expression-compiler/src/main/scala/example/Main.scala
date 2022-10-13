@@ -1,5 +1,5 @@
 package example
 
-object Hello extends App {
+object Main extends App {
   println("Hello")
 }

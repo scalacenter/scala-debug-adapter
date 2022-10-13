@@ -1,11 +1,12 @@
 package ch.epfl.scala.debugadapter
 
-import utest._
+import utest.*
+import ch.epfl.scala.debugadapter.testfmk.*
 
-object Scala213BreakpointEvaluationTests extends BreakpointEvaluationTests(ScalaVersion.`2.13`)
-object Scala32BreakpointEvaluationTests extends BreakpointEvaluationTests(ScalaVersion.`3.2`)
+object Scala213BreakpointConditionTests extends BreakpointConditionTests(ScalaVersion.`2.13`)
+object Scala32BreakpointConditionTests extends BreakpointConditionTests(ScalaVersion.`3.2`)
 
-abstract class BreakpointEvaluationTests(scalaVersion: ScalaVersion) extends ScalaEvaluationSuite(scalaVersion) {
+abstract class BreakpointConditionTests(scalaVersion: ScalaVersion) extends DebugTestSuite {
 
   def tests: Tests = Tests {
     "evaluate simple breakpoint" - {
@@ -18,9 +19,8 @@ abstract class BreakpointEvaluationTests(scalaVersion: ScalaVersion) extends Sca
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5, "x == 42")(Evaluation.success("x", 42))
-      )
+      implicit val debugggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(5, "x == 42"), Evaluation.success("x", 42))
     }
 
     "evaluate breakpoint in lambda" - {
@@ -36,10 +36,8 @@ abstract class BreakpointEvaluationTests(scalaVersion: ScalaVersion) extends Sca
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5, "i == 2")(Evaluation.success("i", 2)),
-        Breakpoint(8)()
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(5, "i == 2"), Evaluation.success("i", 2), Breakpoint(8))
     }
   }
 }

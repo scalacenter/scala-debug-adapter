@@ -1,5 +1,5 @@
 import scala.concurrent.ExecutionContext
-import ch.epfl.scala.debugadapter.testing.TestDebugClient
+import ch.epfl.scala.debugadapter.testfmk.TestDebugClient
 
 val checkDebugSession = inputKey[Unit]("Check the test suite debug session")
 
@@ -18,8 +18,8 @@ checkDebugSession := {
     client.initialize()
     client.launch()
 
-    val breakpoints = client.setBreakpoints(mainSource, Array(3)) ++
-      client.setBreakpoints(specSource, Array(6, 8))
+    val breakpoints = client.setBreakpoints(mainSource, Array(5)) ++
+      client.setBreakpoints(specSource, Array(8, 10))
     assert(breakpoints.size == 3)
     assert(breakpoints.forall(_.verified))
 

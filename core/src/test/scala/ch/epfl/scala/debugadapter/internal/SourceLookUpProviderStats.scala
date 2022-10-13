@@ -2,7 +2,7 @@ package ch.epfl.scala.debugadapter.internal
 
 import utest._
 import coursier._
-import ch.epfl.scala.debugadapter.Coursier
+import ch.epfl.scala.debugadapter.testfmk.TestingResolver
 import ch.epfl.scala.debugadapter.NoopLogger
 
 object SourceLookUpProviderStats extends TestSuite {
@@ -46,7 +46,7 @@ object SourceLookUpProviderStats extends TestSuite {
   private def printAndCheck(
       project: String
   )(deps: Dependency*)(expectedClasses: Int, expectedOrphans: Int): Unit = {
-    val classPath = Coursier.fetch(deps: _*)
+    val classPath = TestingResolver.fetch(deps: _*)
     val (duration, lookUp) =
       TimeUtils.timed(SourceLookUpProvider(classPath, NoopLogger))
     val entriesCount = lookUp.classPathEntries.size

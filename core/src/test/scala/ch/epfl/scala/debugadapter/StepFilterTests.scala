@@ -1,12 +1,13 @@
 package ch.epfl.scala.debugadapter
 
 import utest._
+import ch.epfl.scala.debugadapter.testfmk.*
 
 object Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
 object Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`)
 object Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.2`)
 
-abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSuite(scalaVersion) {
+abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuite {
 
   def tests: Tests = Tests {
     "should not step into mixin forwarder" - {
@@ -61,20 +62,36 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |
            |object F extends A
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(10)(StepInto.line(4), StepOut.line(10)),
-        Breakpoint(12)(StepInto.line(4), StepOut.line(12)),
-        Breakpoint(14)(StepInto.line(44), StepOut.line(14)),
-        Breakpoint(16)(StepInto.line(44), StepOut.line(16)),
-        Breakpoint(17)(StepInto.line(4), StepOut.line(17)),
-        Breakpoint(19)(StepInto.line(31), StepOut.line(19)),
-        Breakpoint(21)(StepInto.line(4), StepOut.line(21)),
-        Breakpoint(23)(
-          if (isScala3) StepInto.line(4)
-          else StepInto.line(22), // cannot skip method in local class
-          StepOut.line(23)
-        ),
-        Breakpoint(27)(StepInto.line(25), StepOut.line(27))
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(10),
+        StepIn.line(4),
+        StepOut.line(10),
+        Breakpoint(12),
+        StepIn.line(4),
+        StepOut.line(12),
+        Breakpoint(14),
+        StepIn.line(44),
+        StepOut.line(14),
+        Breakpoint(16),
+        StepIn.line(44),
+        StepOut.line(16),
+        Breakpoint(17),
+        StepIn.line(4),
+        StepOut.line(17),
+        Breakpoint(19),
+        StepIn.line(31),
+        StepOut.line(19),
+        Breakpoint(21),
+        StepIn.line(4),
+        StepOut.line(21),
+        Breakpoint(23),
+        if (isScala3) StepIn.line(4)
+        else StepIn.line(22), // cannot skip method in local class
+        StepOut.line(23),
+        Breakpoint(27),
+        StepIn.line(25),
+        StepOut.line(27)
       )
     }
 
@@ -135,19 +152,32 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |case class D(d1: String)
            |
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(14)(StepInto.line(10)),
-        Breakpoint(15)(StepInto.line(10)),
-        Breakpoint(16)(StepInto.line(10)),
-        Breakpoint(17)(StepInto.line(10)),
-        Breakpoint(43)(StepInto.line(10)),
-        Breakpoint(44)(StepInto.line(10)),
-        Breakpoint(45)(StepInto.line(10)),
-        Breakpoint(46)(StepInto.line(10)),
-        Breakpoint(47)(StepInto.line(10)),
-        Breakpoint(48)(StepInto.line(10)),
-        Breakpoint(49)(StepInto.line(10)),
-        Breakpoint(23)(StepInto.line(10))
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(14),
+        StepIn.line(10),
+        Breakpoint(15),
+        StepIn.line(10),
+        Breakpoint(16),
+        StepIn.line(10),
+        Breakpoint(17),
+        StepIn.line(10),
+        Breakpoint(43),
+        StepIn.line(10),
+        Breakpoint(44),
+        StepIn.line(10),
+        Breakpoint(45),
+        StepIn.line(10),
+        Breakpoint(46),
+        StepIn.line(10),
+        Breakpoint(47),
+        StepIn.line(10),
+        Breakpoint(48),
+        StepIn.line(10),
+        Breakpoint(49),
+        StepIn.line(10),
+        Breakpoint(23),
+        StepIn.line(10)
       )
     }
 
@@ -192,19 +222,18 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |}
            |
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(8)(
-          StepInto.line(9),
-          StepInto.line(11)
-        ),
-        Breakpoint(30)(
-          StepInto.line(31),
-          StepInto.line(32),
-          StepInto.line(33),
-          StepInto.line(34),
-          StepInto.line(35),
-          StepInto.line(12)
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(8),
+        StepIn.line(9),
+        StepIn.line(11),
+        Breakpoint(30),
+        StepIn.line(31),
+        StepIn.line(32),
+        StepIn.line(33),
+        StepIn.line(34),
+        StepIn.line(35),
+        StepIn.line(12)
       )
     }
 
@@ -228,9 +257,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |}
            |
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(14)(StepInto.line(8), StepOut.line(14))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(14), StepIn.line(8), StepOut.line(14))
     }
 
     "should step into methods of value classes" - {
@@ -250,9 +278,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(12)(StepInto.line(5), StepOut.line(12))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(12), StepIn.line(5), StepOut.line(12))
     }
 
     "should step into methods with several parameter lists" - {
@@ -274,14 +301,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  override def toString(): String = "B"
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(6)(
-          StepInto.line(10),
-          StepInto.line(15),
-          StepOut.line(10),
-          StepOut.line(6)
-        )
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(6), StepIn.line(10), StepIn.line(15), StepOut.line(10), StepOut.line(6))
     }
 
     "should step into lazy initializer" - {
@@ -308,52 +329,50 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |}
            |""".stripMargin
 
-      val breakpoints = if (isScala3) {
-        Seq(
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+      if (isScala3) {
+        check(
           // TODO: clean debug line table in Scala 3 compiler
           // TODO: introduce $lazyinit$ to isolate user code
-          Breakpoint(9)(
-            StepInto.line(4),
-            StepInto.line(6),
-            StepInto.line(4),
-            StepInto.line(6),
-            StepInto.line(5),
-            StepOut.line(9),
-            StepInto.method("Predef$.println(Object)")
-          ),
-          Breakpoint(10)(
-            StepInto.line(4),
-            StepInto.line(6),
-            StepInto.line(4),
-            StepInto.line(6),
-            StepOut.line(10),
-            StepInto.method("Predef$.println(Object)")
-          ),
-          Breakpoint(11)(
-            StepInto.line(18),
-            StepOut.line(11),
-            StepInto.method("Predef$.println(Object)")
-          ),
-          Breakpoint(12)(StepInto.method("Predef$.println(Object)"))
+          Breakpoint(9),
+          StepIn.line(4),
+          StepIn.line(6),
+          StepIn.line(4),
+          StepIn.line(6),
+          StepIn.line(5),
+          StepOut.line(9),
+          StepIn.method("Predef$.println(Object)"),
+          Breakpoint(10),
+          StepIn.line(4),
+          StepIn.line(6),
+          StepIn.line(4),
+          StepIn.line(6),
+          StepOut.line(10),
+          StepIn.method("Predef$.println(Object)"),
+          Breakpoint(11),
+          StepIn.line(18),
+          StepOut.line(11),
+          StepIn.method("Predef$.println(Object)"),
+          Breakpoint(12),
+          StepIn.method("Predef$.println(Object)")
         )
       } else {
-        Seq(
-          Breakpoint(9)(
-            StepInto.line(4),
-            StepInto.line(5),
-            StepOut.line(9),
-            StepInto.method("Predef$.println(Object)")
-          ),
-          Breakpoint(10)(StepInto.method("Predef$.println(Object)")),
-          Breakpoint(11)(
-            StepInto.line(18),
-            StepOut.line(11),
-            StepInto.method("Predef$.println(Object)")
-          ),
-          Breakpoint(12)(StepInto.method("Predef$.println(Object)"))
+        check(
+          Breakpoint(9),
+          StepIn.line(4),
+          StepIn.line(5),
+          StepOut.line(9),
+          StepIn.method("Predef$.println(Object)"),
+          Breakpoint(10),
+          StepIn.method("Predef$.println(Object)"),
+          Breakpoint(11),
+          StepIn.line(18),
+          StepOut.line(11),
+          StepIn.method("Predef$.println(Object)"),
+          Breakpoint(12),
+          StepIn.method("Predef$.println(Object)")
         )
       }
-      assertInMainClass(source, "example.A")(breakpoints: _*)
     }
 
     "should not step into synthetic method of case class" - {
@@ -382,18 +401,26 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |    val x = A.unapply(a)
            |  }
            |}""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(10)(StepInto.method("ScalaRunTime$._toString(Product)"), StepOut.line(10)),
-        Breakpoint(11)(StepInto.method("A.<init>(String)"), StepOut.line(11)),
-        Breakpoint(12)(StepInto.method("ScalaRunTime$._hashCode(Product)"), StepOut.line(12)),
-        Breakpoint(13)(StepInto.method("String.equals(Object)"), StepOut.line(13)),
-        Breakpoint(14)(
-          StepInto.line(15),
-          StepInto.line(16),
-          StepInto.line(17),
-          if (isScala2) StepInto.method("ScalaRunTime$.typedProductIterator(Product)")
-          else StepInto.method("Product.productIterator()")
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(10),
+        StepIn.method("ScalaRunTime$._toString(Product)"),
+        StepOut.line(10),
+        Breakpoint(11),
+        StepIn.method("A.<init>(String)"),
+        StepOut.line(11),
+        Breakpoint(12),
+        StepIn.method("ScalaRunTime$._hashCode(Product)"),
+        StepOut.line(12),
+        Breakpoint(13),
+        StepIn.method("String.equals(Object)"),
+        StepOut.line(13),
+        Breakpoint(14),
+        StepIn.line(15),
+        StepIn.line(16),
+        StepIn.line(17),
+        if (isScala2) StepIn.method("ScalaRunTime$.typedProductIterator(Product)")
+        else StepIn.method("Product.productIterator()")
       )
     }
 
@@ -408,9 +435,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5)(StepInto.line(6), StepInto.line(5), StepOut.line(6))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(5), StepIn.line(6), StepIn.line(5), StepOut.line(6))
     }
 
     "should step in method that return this.type" - {
@@ -433,10 +459,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(12)(StepInto.line(4)),
-        Breakpoint(15)(StepInto.line(4))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(12), StepIn.line(4), Breakpoint(15), StepIn.line(4))
     }
 
     "should step into default value method" - {
@@ -464,22 +488,24 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            | def default: String = "b"
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(6)(StepInto.line(11), StepInto.line(6), StepInto.line(12)),
-        Breakpoint(7)(
-          StepInto.line(16),
-          StepInto.line(7),
-          StepInto.line(16),
-          StepInto.line(7),
-          StepInto.line(16)
-        ),
-        Breakpoint(8)(
-          StepInto.line(18),
-          StepInto.line(21),
-          StepOut.line(18),
-          StepOut.line(8),
-          StepInto.method("B.<init>(String)")
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(6),
+        StepIn.line(11),
+        StepIn.line(6),
+        StepIn.line(12),
+        Breakpoint(7),
+        StepIn.line(16),
+        StepIn.line(7),
+        StepIn.line(16),
+        StepIn.line(7),
+        StepIn.line(16),
+        Breakpoint(8),
+        StepIn.line(18),
+        StepIn.line(21),
+        StepOut.line(18),
+        StepOut.line(8),
+        StepIn.method("B.<init>(String)")
       )
     }
 
@@ -505,10 +531,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(16)(StepInto.line(8)),
-        Breakpoint(17)(StepInto.line(4))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(16), StepIn.line(8), Breakpoint(17), StepIn.line(4))
     }
 
     "should match all kinds of types" - {
@@ -552,24 +576,31 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(22)(StepInto.line(12)),
-        Breakpoint(24)(StepInto.line(13)),
-        Breakpoint(27)(StepInto.line(14)),
-        Breakpoint(28)(StepInto.line(15)),
-        Breakpoint(30)(StepInto.line(16)),
-        Breakpoint(31)(StepInto.line(17)),
-        Breakpoint(32)(
-          StepInto.method("BoxesRunTime.boxToInteger(int)"),
-          StepOut.line(32),
-          StepInto.line(18)
-        ),
-        Breakpoint(33)(StepInto.line(19))
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(22),
+        StepIn.line(12),
+        Breakpoint(24),
+        StepIn.line(13),
+        Breakpoint(27),
+        StepIn.line(14),
+        Breakpoint(28),
+        StepIn.line(15),
+        Breakpoint(30),
+        StepIn.line(16),
+        Breakpoint(31),
+        StepIn.line(17),
+        Breakpoint(32),
+        StepIn.method("BoxesRunTime.boxToInteger(int)"),
+        StepOut.line(32),
+        StepIn.line(18),
+        Breakpoint(33),
+        StepIn.line(19)
       )
     }
 
     "step into method with constant result type" - {
-      if (isScala213) {
+      if (scalaVersion.isScala213) {
         val source =
           """|package example
              |
@@ -581,9 +612,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
              |  }
              |}
              |""".stripMargin
-        assertInMainClass(source, "example.Main")(
-          Breakpoint(7)(StepInto.line(4))
-        )
+        implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+        check(Breakpoint(7), StepIn.line(4))
       }
     }
 
@@ -604,11 +634,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(12)(
-          StepInto.line(8)
-        )
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(12), StepIn.line(8))
     }
 
     "step into method with refined result type" - {
@@ -633,10 +660,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(16)(StepInto.line(8)),
-        Breakpoint(17)(StepInto.line(12))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(16), StepIn.line(8), Breakpoint(17), StepIn.line(12))
     }
 
     "step into method with parametric result type" - {
@@ -665,10 +690,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(20)(StepInto.line(8)),
-        Breakpoint(21)(StepInto.line(9))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(20), StepIn.line(8), Breakpoint(21), StepIn.line(9))
     }
 
     "step into method with external nested class" - {
@@ -688,9 +711,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(12)(StepInto.line(9))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(12), StepIn.line(9))
     }
 
     "step into method with external nested class" - {
@@ -710,9 +732,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(12)(StepInto.line(9))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(12), StepIn.line(9))
     }
 
     "should match Null and Nothing" - {
@@ -730,10 +751,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(9)(StepInto.line(5)),
-        Breakpoint(10)(StepInto.line(4))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(9), StepIn.line(5), Breakpoint(10), StepIn.line(4))
     }
 
     "should catch ClassNotLoadedException" - {
@@ -751,9 +770,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(10)(StepInto.line(5))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(10), StepIn.line(5))
     }
 
     "should match on Array[T] whose erasure is Object" - {
@@ -769,9 +787,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(8)(StepInto.line(4))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(8), StepIn.line(4))
     }
 
     "should match on PolyType" - {
@@ -793,10 +810,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(13)(StepInto.line(4)),
-        Breakpoint(14)(StepInto.line(4))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(13), StepIn.line(4), Breakpoint(14), StepIn.line(4))
     }
 
     "should step into trait initializer, if it is not empty" - {
@@ -828,36 +843,41 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |}
            |
            |""".stripMargin
-      val breakpoints = if (isScala3) {
-        Seq(
-          Breakpoint(19)(
-            StepInto.method("D.<init>()"),
-            StepInto.method("Object.<init>()"),
-            StepInto.method("D.<init>()"),
-            StepInto.method("A.$init$(A)"),
-            StepInto.method("D.<init>()"),
-            StepInto.method("Statics.releaseFence()")
-          ),
-          Breakpoint(21)(StepInto.line(8)),
-          Breakpoint(22)(StepInto.line(23), StepInto.line(12))
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      if (isScala3) {
+        check(
+          Breakpoint(19),
+          StepIn.method("D.<init>()"),
+          StepIn.method("Object.<init>()"),
+          StepIn.method("D.<init>()"),
+          StepIn.method("A.$init$(A)"),
+          StepIn.method("D.<init>()"),
+          StepIn.method("Statics.releaseFence()"),
+          Breakpoint(21),
+          StepIn.line(8),
+          Breakpoint(22),
+          StepIn.line(23),
+          StepIn.line(12)
         )
       } else {
-        Seq(
-          Breakpoint(19)(
-            StepInto.method("D.<init>()"),
-            StepInto.method("Object.<init>()"),
-            StepInto.method("D.<init>()"),
-            StepInto.method("A.$init$(A)"),
-            StepInto.method("A.$init$(A)"),
-            StepInto.method("D.<init>()"),
-            if (isScala213) StepInto.method("Statics.releaseFence()")
-            else StepInto.line(19)
-          ),
-          Breakpoint(20)(StepInto.line(21), StepInto.line(8)),
-          Breakpoint(22)(StepInto.line(23), StepInto.line(12))
+        check(
+          Breakpoint(19),
+          StepIn.method("D.<init>()"),
+          StepIn.method("Object.<init>()"),
+          StepIn.method("D.<init>()"),
+          StepIn.method("A.$init$(A)"),
+          StepIn.method("A.$init$(A)"),
+          StepIn.method("D.<init>()"),
+          if (isScala213) StepIn.method("Statics.releaseFence()")
+          else StepIn.line(19),
+          Breakpoint(20),
+          StepIn.line(21),
+          StepIn.line(8),
+          Breakpoint(22),
+          StepIn.line(23),
+          StepIn.line(12)
         )
       }
-      assertInMainClass(source, "example.Main")(breakpoints: _*)
     }
 
     "should match on vararg type" - {
@@ -877,11 +897,16 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |}
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(8)(StepInto.method("A.<init>(Seq)")),
-        Breakpoint(9)(StepInto.method("Predef$.println(Object)")),
-        Breakpoint(10)(StepInto.method("StringContext.<init>(Seq)")),
-        Breakpoint(11)(StepInto.method("Predef$.println(Object)"))
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(8),
+        StepIn.method("A.<init>(Seq)"),
+        Breakpoint(9),
+        StepIn.method("Predef$.println(Object)"),
+        Breakpoint(10),
+        StepIn.method("StringContext.<init>(Seq)"),
+        Breakpoint(11),
+        StepIn.method("Predef$.println(Object)")
       )
     }
 
@@ -904,10 +929,14 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |}
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5)(StepInto.method("$less$greater.<init>()")),
-        Breakpoint(6)(StepInto.method("$less$greater.m()")),
-        Breakpoint(7)(StepInto.method("Main$.$amp($less$greater)"))
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(5),
+        StepIn.method("$less$greater.<init>()"),
+        Breakpoint(6),
+        StepIn.method("$less$greater.m()"),
+        Breakpoint(7),
+        StepIn.method("Main$.$amp($less$greater)")
       )
     }
 
@@ -930,15 +959,15 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |}
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(5)(
-          StepInto.line(13),
-          StepInto.line(10),
-          StepInto.line(11),
-          StepInto.line(10),
-          StepOut.line(13),
-          StepOut.line(5)
-        )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(5),
+        StepIn.line(13),
+        StepIn.line(10),
+        StepIn.line(11),
+        StepIn.line(10),
+        StepOut.line(13),
+        StepOut.line(5)
       )
     }
 
@@ -958,20 +987,19 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |}
            |""".stripMargin
 
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(9)(
-          StepInto.method("LazyRef.initialized()"),
-          StepInto.method(
-            if (isScala3) "Main$.foo$lzyINIT1$1(LazyRef)"
-            else "Main$.foo$lzycompute$1(LazyRef)"
-          ),
-          StepOut.line(9)
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(
+        Breakpoint(9),
+        StepIn.method("LazyRef.initialized()"),
+        StepIn.method(
+          if (isScala3) "Main$.foo$lzyINIT1$1(LazyRef)"
+          else "Main$.foo$lzycompute$1(LazyRef)"
         ),
-        Breakpoint(10)(
-          StepInto.method("LazyRef.initialized()"),
-          StepInto.method("LazyRef.value()"),
-          StepInto.line(10)
-        )
+        StepOut.line(9),
+        Breakpoint(10),
+        StepIn.method("LazyRef.initialized()"),
+        StepIn.method("LazyRef.value()"),
+        StepIn.line(10)
       )
     }
 
@@ -987,7 +1015,8 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends StepFilterSui
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(Breakpoint(7)(StepInto.method("A.<init>()")))
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      check(Breakpoint(7), StepIn.method("A.<init>()"))
     }
   }
 }

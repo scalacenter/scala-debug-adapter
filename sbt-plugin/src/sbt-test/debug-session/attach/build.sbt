@@ -1,5 +1,5 @@
 import scala.concurrent.ExecutionContext
-import ch.epfl.scala.debugadapter.testing.TestDebugClient
+import ch.epfl.scala.debugadapter.testfmk.TestDebugClient
 
 val checkDebugSession = inputKey[Unit]("Check the attach debug session")
 
@@ -18,7 +18,7 @@ checkDebugSession := {
     client.initialize()
     client.attach("localhost", 1045)
 
-    val breakpoints = client.setBreakpoints(source, Array(3, 5, 9))
+    val breakpoints = client.setBreakpoints(source, Array(5, 7, 11))
     assert(breakpoints.size == 3)
     assert(breakpoints.forall(_.verified))
 

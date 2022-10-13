@@ -1,7 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.scalasig
 
 import utest._
-import ch.epfl.scala.debugadapter.MainDebuggee
+import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.NoopLogger
 
@@ -28,7 +28,7 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |}
            |""".stripMargin
 
-      val debuggee = MainDebuggee.mainClassRunner(source, "", scalaVersion)
+      val debuggee = TestingDebuggee.mainClass(source, "", scalaVersion)
 
       val scalaSig = decompile(debuggee, "example/A.class")
       val methods = scalaSig.entries.collect { case m: MethodSymbol => m }
@@ -50,7 +50,7 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |  lazy val b = "b"
            |}
            |""".stripMargin
-      val debuggee = MainDebuggee.mainClassRunner(source, "", scalaVersion)
+      val debuggee = TestingDebuggee.mainClass(source, "", scalaVersion)
 
       val scalaSigA = decompile(debuggee, "example/A.class")
       val methodsA = scalaSigA.entries.collect { case m: MethodSymbol => m }
@@ -67,7 +67,7 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
            |case class A(a: String)
            |""".stripMargin
 
-      val debuggee = MainDebuggee.mainClassRunner(source, "", scalaVersion)
+      val debuggee = TestingDebuggee.mainClass(source, "", scalaVersion)
 
       val scalaSig = decompile(debuggee, "example/A.class")
       val methods =
@@ -94,7 +94,7 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
     }
   }
 
-  private def decompile(debuggee: MainDebuggee, classFile: String): ScalaSig = {
+  private def decompile(debuggee: TestingDebuggee, classFile: String): ScalaSig = {
     val classBytes = debuggee.mainModule.readBytes(classFile)
     val scalaSig = Decompiler.decompile(classBytes, classFile, NoopLogger)
     assert(scalaSig.isDefined)
@@ -102,7 +102,7 @@ abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
   }
 
   private def assertNoScalaSig(
-      debuggee: MainDebuggee,
+      debuggee: TestingDebuggee,
       classFile: String
   ): Unit = {
     val classBytes = debuggee.mainModule.readBytes(classFile)

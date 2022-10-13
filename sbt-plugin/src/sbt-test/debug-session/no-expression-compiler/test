@@ -1,2 +1,2 @@
-> 'checkDebugSession {"class":"example.Hello","arguments":[],"jvmOptions":[]}'
+> 'checkDebugSession {"class":"example.Main","arguments":[],"jvmOptions":[]}'
 > stopDebugSession

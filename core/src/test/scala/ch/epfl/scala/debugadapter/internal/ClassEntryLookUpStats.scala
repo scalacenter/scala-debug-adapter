@@ -3,7 +3,7 @@ package ch.epfl.scala.debugadapter.internal
 import utest._
 import coursier.jvm.JvmCache
 
-import ch.epfl.scala.debugadapter.Coursier
+import ch.epfl.scala.debugadapter.testfmk.TestingResolver
 import ch.epfl.scala.debugadapter.JavaRuntime
 import ch.epfl.scala.debugadapter.ClassEntry
 import ch.epfl.scala.debugadapter.NoopLogger
@@ -179,7 +179,7 @@ object ClassEntryLookUpStats extends TestSuite {
       expectedClasses: Int,
       expectedOrphans: Int
   ): Unit = {
-    val entry = Coursier.fetchOnly(org, name, version)
+    val entry = TestingResolver.fetchOnly(org, name, version)
     printAndCheck(name, entry)(_ == expectedClasses, _ == expectedOrphans)
   }
 

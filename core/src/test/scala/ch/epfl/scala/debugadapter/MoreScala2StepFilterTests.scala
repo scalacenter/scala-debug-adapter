@@ -1,8 +1,9 @@
 package ch.epfl.scala.debugadapter
 
 import utest._
+import ch.epfl.scala.debugadapter.testfmk.*
 
-object MoreScala213StepFilterTests extends StepFilterSuite(ScalaVersion.`2.13`) {
+object MoreScala213StepFilterTests extends DebugTestSuite {
   def tests: Tests = Tests(
     "should match all kinds of Scala 2 types (not valid in Scala 3)" - {
       val source =
@@ -25,10 +26,8 @@ object MoreScala213StepFilterTests extends StepFilterSuite(ScalaVersion.`2.13`) 
            |  }
            |}
            |""".stripMargin
-      assertInMainClass(source, "example.Main")(
-        Breakpoint(14)(StepInto.line(9)),
-        Breakpoint(16)(StepInto.line(10))
-      )
+      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`2.13`)
+      check(Breakpoint(14), StepIn.line(9), Breakpoint(16), StepIn.line(10))
     }
   )
 }
