@@ -9,7 +9,7 @@ val pluginVersion = sys.props
   }
 
 addSbtPlugin("ch.epfl.scala" % "sbt-debug-adapter" % pluginVersion)
-libraryDependencies += "ch.epfl.scala" %% "debug-adapter-test-client" % pluginVersion
+libraryDependencies += "ch.epfl.scala" %% "scala-debug-adapter-test" % pluginVersion
 
 // this plugin add the tools.jar from the JDK into the classpath as an unmanaged jar.
 addSbtPlugin("org.scala-debugger" % "sbt-jdi-tools" % "1.1.1")

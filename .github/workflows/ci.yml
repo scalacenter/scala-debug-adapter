@@ -29,9 +29,9 @@ jobs:
       run: sbt +expressionCompiler/publishLocal
     - name: Publish the Scala 3 step filter
       run: sbt scala3StepFilter/publishLocal
-    - name: Test core project
-      run: sbt core/test
+    - name: Unit tests
+      run: sbt test
       shell: bash
-    - name: Test sbt plugin
+    - name: Scripted sbt tests
       run: sbt sbtPlugin/scripted
       shell: bash
