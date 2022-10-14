@@ -28,7 +28,13 @@ inThisBuild(
 
 lazy val root = project
   .in(file("."))
-  .aggregate(core, tests, sbtPlugin, expressionCompiler, scala3StepFilter)
+  .aggregate(
+    // format: off
+    core, tests, sbtPlugin, 
+    expressionCompiler212, expressionCompiler213, expressionCompiler3,
+    scala3StepFilter
+    // format: on
+  )
   .settings(
     publish / skip := true
   )
@@ -49,7 +55,7 @@ lazy val core = project
     buildInfoKeys := Seq[BuildInfoKey](
       BuildInfoKey.action("organization")(organization.value),
       BuildInfoKey.action("version")(version.value),
-      BuildInfoKey.action("expressionCompilerName")((expressionCompiler / name).value),
+      BuildInfoKey.action("expressionCompilerName")((expressionCompiler212 / name).value),
       BuildInfoKey.action("scala3StepFilterName")((scala3StepFilter / name).value),
       BuildInfoKey.action("defaultScala2Version")(Dependencies.scala213),
       BuildInfoKey.action("defaultScala3Version")(Dependencies.scala3)
@@ -68,7 +74,15 @@ lazy val tests = project
     // Test / javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=1044",
     Test / fork := true,
     // do not use sbt logger, otherwise the output of a test only appears at the end of the suite
-    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "+l")
+    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "+l"),
+    Test / test := (Test / test)
+      .dependsOn(
+        expressionCompiler212 / publishLocal,
+        expressionCompiler213 / publishLocal,
+        expressionCompiler3 / publishLocal,
+        scala3StepFilter / publishLocal
+      )
+      .value
   )
   .dependsOn(core)
 
@@ -82,54 +96,51 @@ lazy val sbtPlugin = project
     Compile / generateContrabands / contrabandFormatsForType := ContrabandConfig.getFormats,
     scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
     scriptedBufferLog := false,
-    scriptedDependencies := {
-      publishLocal.value
-      (core / publishLocal).value
-      (tests / publishLocal).value
-    }
+    scriptedDependencies := scriptedDependencies
+      .dependsOn(publishLocal, core / publishLocal, tests / publishLocal)
+      .value
   )
   .dependsOn(core)
 
-lazy val expressionCompiler = project
+lazy val expressionCompiler212 = expressionCompiler.jvm(Dependencies.scala212)
+lazy val expressionCompiler213 = expressionCompiler.jvm(Dependencies.scala213)
+lazy val expressionCompiler3 = expressionCompiler.jvm(Dependencies.scala3)
+lazy val expressionCompiler = projectMatrix
   .in(file("expression-compiler"))
+  .jvmPlatform(scalaVersions = Seq(Dependencies.scala3, Dependencies.scala213, Dependencies.scala212))
   .settings(
     name := "scala-expression-compiler",
-    scalaVersion := Dependencies.scala3,
-    crossScalaVersions := Seq(
-      // format: off
-      "3.2.0", "3.1.3", "3.1.2", "3.1.1", "3.1.0", "3.0.2", "3.0.1", "3.0.0",
-      "2.13.10", "2.13.9", "2.13.8", "2.13.7", "2.13.6", "2.13.5", "2.13.4", "2.13.3",
-      "2.12.17", "2.12.16", "2.12.15", "2.12.14", "2.12.13", "2.12.12", "2.12.11", "2.12.10"
-      // format: on
-    ),
+    crossScalaVersions ++= {
+      CrossVersion
+        .partialVersion(scalaVersion.value)
+        .collect {
+          case (2, 12) => Seq("2.12.17", "2.12.16", "2.12.15", "2.12.14", "2.12.13", "2.12.12", "2.12.11", "2.12.10")
+          case (2, 13) => Seq("2.13.10", "2.13.9", "2.13.8", "2.13.7", "2.13.6", "2.13.5", "2.13.4", "2.13.3")
+          case (3, _) => Seq("3.2.0", "3.1.3", "3.1.2", "3.1.1", "3.1.0", "3.0.2", "3.0.1", "3.0.0")
+        }
+        .toSeq
+        .flatten
+    },
     crossTarget := target.value / s"scala-${scalaVersion.value}",
     crossVersion := CrossVersion.full,
     Compile / unmanagedSourceDirectories ++= {
       val sourceDir = (Compile / sourceDirectory).value
       CrossVersion.partialVersion(scalaVersion.value).collect {
-        case (3, 0) =>
-          sourceDir / s"scala-3.0"
-        case (3, minor) =>
-          sourceDir / s"scala-3.1+"
+        case (3, 0) => sourceDir / s"scala-3.0"
+        case (3, minor) => sourceDir / s"scala-3.1+"
       }
     },
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= {
-      CrossVersion.partialVersion(scalaVersion.value) match {
-        case Some((2, _)) =>
-          Seq("org.scala-lang" % "scala-compiler" % scalaVersion.value)
-        case Some((3, _)) =>
-          Seq("org.scala-lang" %% "scala3-compiler" % scalaVersion.value)
-        case _ => Seq.empty
+      CrossVersion.partialVersion(scalaVersion.value).collect {
+        case (2, _) => "org.scala-lang" % "scala-compiler" % scalaVersion.value
+        case (3, _) => "org.scala-lang" %% "scala3-compiler" % scalaVersion.value
       }
     },
     scalacOptions ++= {
-      CrossVersion.partialVersion(scalaVersion.value) match {
-        case Some((2, 12)) =>
-          Seq("-Ywarn-unused-import")
-        case Some((2, 13)) =>
-          Seq("-Wunused:imports")
-        case _ => Seq.empty
+      CrossVersion.partialVersion(scalaVersion.value).collect {
+        case (2, 12) => "-Ywarn-unused-import"
+        case (2, 13) => "-Wunused:imports"
       }
     }
   )
