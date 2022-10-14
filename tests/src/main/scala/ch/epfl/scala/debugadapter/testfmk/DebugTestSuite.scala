@@ -14,7 +14,9 @@ import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
 import munit.FunSuite
 import munit.Assertions._
 
-abstract class DebugTestSuite extends FunSuite with DebugTest
+abstract class DebugTestSuite extends FunSuite with DebugTest {
+  override def munitTimeout: Duration = 120 seconds
+}
 
 trait DebugTest {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests

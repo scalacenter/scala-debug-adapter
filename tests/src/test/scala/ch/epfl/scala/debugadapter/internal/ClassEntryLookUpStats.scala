@@ -7,81 +7,83 @@ import ch.epfl.scala.debugadapter.JavaRuntime
 import ch.epfl.scala.debugadapter.ClassEntry
 import ch.epfl.scala.debugadapter.testfmk.NoopLogger
 import munit.FunSuite
+import scala.concurrent.duration.*
 
 /**
  * This is a test class that also
  * prints some stats about loading the look-up of some libraries
  */
 class ClassEntryLookUpStats extends FunSuite {
+  override def munitTimeout: Duration = 120.seconds
   private val jvmCache = JvmCache().withDefaultIndex
 
   test("adopt:1.8.0-292") {
     printAndCheck("adopt:1.8.0-292")(
-      classCount => classCount > 0,
-      orphanClassCount => orphanClassCount == 0
+      classCount => assert(classCount > 0),
+      orphanClassCount => assertEquals(orphanClassCount, 0)
     )
   }
 
   test("adopt:1.9.0-0") {
     printAndCheck("adopt:1.9.0-0")(
-      classCount => classCount > 0,
-      orphanClassCount => orphanClassCount == 0
+      classCount => assert(classCount > 0),
+      orphanClassCount => assertEquals(orphanClassCount, 0)
     )
   }
 
   test("adopt:1.10.0-2") {
     printAndCheck("adopt:1.10.0-2")(
-      classCount => classCount > 0,
-      orphanClassCount => orphanClassCount == 0
+      classCount => assert(classCount > 0),
+      orphanClassCount => assertEquals(orphanClassCount, 0)
     )
   }
 
   test("adopt:1.11.0-11") {
     printAndCheck("adopt:1.11.0-11")(
-      classCount => classCount > 0,
-      orphanClassCount => orphanClassCount == 0
+      classCount => assert(classCount > 0),
+      orphanClassCount => assertEquals(orphanClassCount, 0)
     )
   }
 
   test("adopt:1.12.0-2") {
     printAndCheck("adopt:1.12.0-2")(
-      classCount => classCount > 0,
-      orphanClassCount => orphanClassCount == 0
+      classCount => assert(classCount > 0),
+      orphanClassCount => assertEquals(orphanClassCount, 0)
     )
   }
 
   test("adopt:1.13.0-2") {
     printAndCheck("adopt:1.13.0-2")(
-      classCount => classCount > 0,
-      orphanClassCount => orphanClassCount == 0
+      classCount => assert(classCount > 0),
+      orphanClassCount => assertEquals(orphanClassCount, 0)
     )
   }
 
   test("adopt:1.14.0-2") {
     printAndCheck("adopt:1.14.0-2")(
-      classCount => classCount > 0,
-      orphanClassCount => orphanClassCount == 0
+      classCount => assert(classCount > 0),
+      orphanClassCount => assertEquals(orphanClassCount, 0)
     )
   }
 
   test("adopt:1.15.0-2") {
     printAndCheck("adopt:1.15.0-2")(
-      classCount => classCount > 0,
-      orphanClassCount => orphanClassCount == 0
+      classCount => assert(classCount > 0),
+      orphanClassCount => assertEquals(orphanClassCount, 0)
     )
   }
 
   test("adopt:1.16.0-1") {
     printAndCheck("adopt:1.16.0-1")(
-      classCount => classCount > 0,
-      orphanClassCount => orphanClassCount == 0
+      classCount => assert(classCount > 0),
+      orphanClassCount => assertEquals(orphanClassCount, 0)
     )
   }
 
   test("zulu:17.0.2") {
     printAndCheck("zulu:17.0.2")(
-      classCount => classCount > 0,
-      orphanClassCount => orphanClassCount == 0
+      classCount => assert(classCount > 0),
+      orphanClassCount => assert(orphanClassCount == 0)
     )
   }
 
@@ -166,8 +168,8 @@ class ClassEntryLookUpStats extends FunSuite {
   }
 
   private def printAndCheck(jvm: String)(
-      classCountAssertion: Int => Boolean,
-      orphanAssertion: Int => Boolean
+      classCountAssertion: Int => Unit,
+      orphanAssertion: Int => Unit
   ): Unit = {
     import scala.concurrent.ExecutionContext.Implicits.global
     val javaHome = jvmCache.get(jvm).unsafeRun()
@@ -180,12 +182,15 @@ class ClassEntryLookUpStats extends FunSuite {
       expectedOrphans: Int
   ): Unit = {
     val entry = TestingResolver.fetchOnly(org, name, version)
-    printAndCheck(name, entry)(_ == expectedClasses, _ == expectedOrphans)
+    printAndCheck(name, entry)(
+      classCount => assertEquals(classCount, expectedClasses),
+      orphanCount => assertEquals(orphanCount, expectedOrphans)
+    )
   }
 
   private def printAndCheck(name: String, entry: ClassEntry)(
-      classCountAssertion: Int => Boolean,
-      orphanAssertion: Int => Boolean
+      classCountAssertion: Int => Unit,
+      orphanAssertion: Int => Unit
   ): Unit = {
     val (duration, lookup) =
       TimeUtils.timed(ClassEntryLookUp(entry, NoopLogger))
@@ -200,6 +205,7 @@ class ClassEntryLookUpStats extends FunSuite {
         s"  - $orphanClassCount orphan class files ($orphanClassFilePercent%)"
       )
     }
-    assert(classCountAssertion(classCount), orphanAssertion(orphanClassCount))
+    classCountAssertion(classCount)
+    orphanAssertion(orphanClassCount)
   }
 }
