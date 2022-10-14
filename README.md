@@ -64,10 +64,10 @@ addSbtPlugin("org.scala-debugger" % "sbt-jdi-tools" % "1.1.1")
 
 # Development
 
-## test-client
+## tests
 
-The `test-client` module is used internally to test the debug server.
-It contains the [TestDebugClient](./test-client/src/main/scala/ch/epfl/scala/debugadapter/testing/TestDebugClient.scala), a minimal debug client that is used to communicate with the real server via socket.
+The `tests` module is used internally to test the debug server.
+It contains the [TestingDebugClient](./tests/src/main/scala/ch/epfl/scala/debugadapter/testfmk/TestingDebugClient.scala), a minimal debug client that is used to communicate with the real server via socket.
 
 # References
 

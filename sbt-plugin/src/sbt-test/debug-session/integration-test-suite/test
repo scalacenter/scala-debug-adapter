@@ -1,2 +1,2 @@
-> 'checkDebugSession ["BreakpointSpec"]'
+> 'checkDebugSession ["example.MySuite"]'
 > stopDebugSession

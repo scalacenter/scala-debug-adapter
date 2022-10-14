@@ -22,20 +22,15 @@ inThisBuild(
       if (isRelease) dynVer
       else "3.0.2-SNAPSHOT" // only for local publishing
     },
-    libraryDependencies ++= {
-      if (isCI) Nil
-      else List(Dependencies.pprint)
-    },
     resolvers += Resolver.mavenLocal
   )
 )
 
 lazy val root = project
   .in(file("."))
-  .aggregate(core, sbtPlugin, expressionCompiler, scala3StepFilter)
+  .aggregate(core, tests, sbtPlugin, expressionCompiler, scala3StepFilter)
   .settings(
-    PgpKeys.publishSigned := {},
-    publishLocal := {}
+    publish / skip := true
   )
 
 lazy val core = project
@@ -49,10 +44,7 @@ lazy val core = project
       Dependencies.asm,
       Dependencies.asmUtil,
       Dependencies.javaDebug,
-      Dependencies.sbtTestAgent,
-      Dependencies.utest % Test,
-      Dependencies.coursier % Test,
-      Dependencies.coursierJvm % Test
+      Dependencies.sbtTestAgent
     ),
     buildInfoKeys := Seq[BuildInfoKey](
       BuildInfoKey.action("organization")(organization.value),
@@ -62,24 +54,23 @@ lazy val core = project
       BuildInfoKey.action("defaultScala2Version")(Dependencies.scala213),
       BuildInfoKey.action("defaultScala3Version")(Dependencies.scala3)
     ),
-    buildInfoPackage := "ch.epfl.scala.debugadapter",
-    testFrameworks += new TestFramework("utest.runner.Framework"),
-    // Test / javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=1044",
-    Test / fork := true
+    buildInfoPackage := "ch.epfl.scala.debugadapter"
   )
-  .dependsOn(testClient % Test)
 
-lazy val testClient = project
-  .in(file("test-client"))
+lazy val tests = project
+  .in(file("tests"))
   .settings(
-    name := "debug-adapter-test-client",
-    libraryDependencies ++= List(
-      Dependencies.asm,
-      Dependencies.asmUtil,
-      Dependencies.javaDebug
-    ),
-    scalacOptions ++= Seq("-Xsource:3", "-Ywarn-unused-import")
+    name := "scala-debug-adapter-test",
+    libraryDependencies ++= List(Dependencies.munit, Dependencies.coursier, Dependencies.coursierJvm),
+    scalacOptions ++= Seq("-Xsource:3", "-Ywarn-unused-import"),
+    PgpKeys.publishSigned := {},
+    publish := {},
+    // Test / javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=1044",
+    Test / fork := true,
+    // do not use sbt logger, otherwise the output of a test only appears at the end of the suite
+    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "+l")
   )
+  .dependsOn(core)
 
 lazy val sbtPlugin = project
   .in(file("sbt-plugin"))
@@ -94,7 +85,7 @@ lazy val sbtPlugin = project
     scriptedDependencies := {
       publishLocal.value
       (core / publishLocal).value
-      (testClient / publishLocal).value
+      (tests / publishLocal).value
     }
   )
   .dependsOn(core)
@@ -105,30 +96,11 @@ lazy val expressionCompiler = project
     name := "scala-expression-compiler",
     scalaVersion := Dependencies.scala3,
     crossScalaVersions := Seq(
-      "3.2.0",
-      "3.1.3",
-      "3.1.2",
-      "3.1.1",
-      "3.1.0",
-      "3.0.2",
-      "3.0.1",
-      "3.0.0",
-      "2.13.10",
-      "2.13.9",
-      "2.13.8",
-      "2.13.7",
-      "2.13.6",
-      "2.13.5",
-      "2.13.4",
-      "2.13.3",
-      "2.12.17",
-      "2.12.16",
-      "2.12.15",
-      "2.12.14",
-      "2.12.13",
-      "2.12.12",
-      "2.12.11",
-      "2.12.10"
+      // format: off
+      "3.2.0", "3.1.3", "3.1.2", "3.1.1", "3.1.0", "3.0.2", "3.0.1", "3.0.0",
+      "2.13.10", "2.13.9", "2.13.8", "2.13.7", "2.13.6", "2.13.5", "2.13.4", "2.13.3",
+      "2.12.17", "2.12.16", "2.12.15", "2.12.14", "2.12.13", "2.12.12", "2.12.11", "2.12.10"
+      // format: on
     ),
     crossTarget := target.value / s"scala-${scalaVersion.value}",
     crossVersion := CrossVersion.full,
@@ -172,8 +144,8 @@ lazy val scala3StepFilter = project
     libraryDependencies ++= Seq(
       "ch.epfl.scala" %% "tasty-query" % "0.1.1",
       "org.scala-lang" %% "tasty-core" % scalaVersion.value,
-      Dependencies.utest % Test,
+      Dependencies.munit % Test,
       Dependencies.coursier.cross(CrossVersion.for3Use2_13) % Test
     ),
-    testFrameworks += new TestFramework("utest.runner.Framework")
+    test / logBuffered := false
   )
