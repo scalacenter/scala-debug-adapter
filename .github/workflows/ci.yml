@@ -21,13 +21,18 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
+    - name: Checkout java-debug
+      uses: actions/checkout@v3
+      with:
+        repository: scalacenter/java-debug
+        ref: debug
+        path: java-debug
     - uses: coursier/setup-action@v1.2.0
       with:
         jvm: ${{ matrix.jvm }}
         app: sbt
+    - run: ./mvnw install
+      working-directory: java-debug/com.microsoft.java.debug.core 
     - name: Unit tests
       run: sbt test
-      shell: bash
-    - name: Scripted sbt tests
-      run: sbt sbtPlugin/scripted
       shell: bash

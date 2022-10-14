@@ -10,7 +10,7 @@ object Dependencies {
 
   val asm = "org.ow2.asm" % "asm" % asmVersion
   val asmUtil = "org.ow2.asm" % "asm-util" % asmVersion
-  val javaDebug = "ch.epfl.scala" % "com-microsoft-java-debug-core" % "0.34.0+7"
+  val javaDebug = "ch.epfl.scala" % "com-microsoft-java-debug-core" % "0.34.0+8-SNAPSHOT"
 
   def scalaCompiler(scalaVersion: String): ModuleID = {
     CrossVersion.partialVersion(scalaVersion) match {

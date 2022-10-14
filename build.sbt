@@ -93,8 +93,8 @@ lazy val tests = projectMatrix
     Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "+l"),
     Test / testOptions := (Test / testOptions)
       .dependsOn(
-        expressionCompiler212 / publishLocal,
-        expressionCompiler213 / publishLocal,
+        // expressionCompiler212 / publishLocal,
+        // expressionCompiler213 / publishLocal,
         expressionCompiler30 / publishLocal,
         expressionCompiler32 / publishLocal,
         // break cyclic reference
