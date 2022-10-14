@@ -1,6 +1,5 @@
 package ch.epfl.scala.debugadapter.testfmk
 
-import utest.*
 import ch.epfl.scala.debugadapter.DebugTools
 import ch.epfl.scala.debugadapter.DebugServer
 import java.util.concurrent.Executors
@@ -12,8 +11,10 @@ import scala.concurrent.duration.*
 import ch.epfl.scala.debugadapter.Logger
 import java.net.URI
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
+import munit.FunSuite
+import munit.Assertions._
 
-abstract class DebugTestSuite extends TestSuite with DebugTest
+abstract class DebugTestSuite extends FunSuite with DebugTest
 
 trait DebugTest {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
@@ -46,14 +47,14 @@ trait DebugTest {
   }
 
   def check(uri: URI, attach: Option[Int] = None)(steps: DebugStepAssert[?]*): Unit = {
-    val client = TestDebugClient.connect(uri)
+    val client = TestingDebugClient.connect(uri)
     try check(client, attach)(steps*)
     finally client.close()
   }
 
   def check(steps: DebugStepAssert[?]*)(implicit debuggee: TestingDebuggee): Unit = {
     val server = getDebugServer(debuggee)
-    val client = TestDebugClient.connect(server.uri)
+    val client = TestingDebugClient.connect(server.uri)
     try {
       server.connect()
       check(client, None)(steps*)
@@ -63,7 +64,7 @@ trait DebugTest {
     }
   }
 
-  private def check(client: TestDebugClient, attach: Option[Int])(steps: DebugStepAssert[?]*): Unit = {
+  private def check(client: TestingDebugClient, attach: Option[Int])(steps: DebugStepAssert[?]*): Unit = {
     client.initialize()
     attach match {
       case Some(port) => client.attach("localhost", port)
@@ -78,7 +79,7 @@ trait DebugTest {
           .map(b => (b.line, b.condition.orNull))
           .distinct
         val configuredBreakpoints = client.setConditionalBreakpoints(sourceFile, conditionalBreakpoints)
-        assert(configuredBreakpoints.length == conditionalBreakpoints.length)
+        assertEquals(configuredBreakpoints.length, conditionalBreakpoints.length)
         assert(configuredBreakpoints.forall(_.verified))
       }
     client.configurationDone()

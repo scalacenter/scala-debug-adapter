@@ -1,8 +1,16 @@
-package ch.epfl.scala.debugadapter
+package ch.epfl.scala.debugadapter.testfmk
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future, Promise}
 import scala.language.postfixOps
+import ch.epfl.scala.debugadapter.Debuggee
+import ch.epfl.scala.debugadapter.ScalaVersion
+import ch.epfl.scala.debugadapter.DebuggeeListener
+import ch.epfl.scala.debugadapter.CancelableFuture
+import ch.epfl.scala.debugadapter.Module
+import ch.epfl.scala.debugadapter.Library
+import ch.epfl.scala.debugadapter.UnmanagedEntry
+import ch.epfl.scala.debugadapter.JavaRuntime
 
 class MockDebuggee extends Debuggee {
   val scalaVersion: ScalaVersion = ScalaVersion.`2.12`

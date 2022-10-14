@@ -21,7 +21,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Promise
 import scala.concurrent.Await
 
-class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
+class TestingDebugClient(socket: Socket, debug: String => Unit)(implicit
     ec: ExecutionContext
 ) extends AbstractDebugClient(
       socket.getInputStream,
@@ -235,16 +235,16 @@ class TestDebugClient(socket: Socket, debug: String => Unit)(implicit
   }
 }
 
-object TestDebugClient {
+object TestingDebugClient {
   def connect(
       uri: URI,
       timeout: Duration = 4.seconds,
       debug: String => Unit = _ => ()
-  )(implicit ec: ExecutionContext): TestDebugClient = {
+  )(implicit ec: ExecutionContext): TestingDebugClient = {
     val socket = new Socket()
     val address = new InetSocketAddress(uri.getHost, uri.getPort)
     socket.connect(address, timeout.toMillis.intValue)
-    val client = new TestDebugClient(socket, debug)
+    val client = new TestingDebugClient(socket, debug)
     val listening = new java.lang.Thread {
       override def run(): Unit = client.run()
     }

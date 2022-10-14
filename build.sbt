@@ -22,10 +22,6 @@ inThisBuild(
       if (isRelease) dynVer
       else "3.0.2-SNAPSHOT" // only for local publishing
     },
-    libraryDependencies ++= {
-      if (isCI) Nil
-      else List(Dependencies.pprint)
-    },
     resolvers += Resolver.mavenLocal
   )
 )
@@ -34,8 +30,7 @@ lazy val root = project
   .in(file("."))
   .aggregate(core, tests, sbtPlugin, expressionCompiler, scala3StepFilter)
   .settings(
-    PgpKeys.publishSigned := {},
-    publishLocal := {}
+    publish / skip := true
   )
 
 lazy val core = project
@@ -66,12 +61,14 @@ lazy val tests = project
   .in(file("tests"))
   .settings(
     name := "scala-debug-adapter-test",
-    libraryDependencies ++= List(Dependencies.utest, Dependencies.coursier, Dependencies.coursierJvm),
+    libraryDependencies ++= List(Dependencies.munit, Dependencies.coursier, Dependencies.coursierJvm),
     scalacOptions ++= Seq("-Xsource:3", "-Ywarn-unused-import"),
-    publish / skip := true,
-    testFrameworks += new TestFramework("utest.runner.Framework"),
+    PgpKeys.publishSigned := {},
+    publish := {},
     // Test / javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=1044",
-    Test / fork := true
+    Test / fork := true,
+    // do not use sbt logger, otherwise the output of a test only appears at the end of the suite
+    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "+l")
   )
   .dependsOn(core)
 
@@ -147,8 +144,8 @@ lazy val scala3StepFilter = project
     libraryDependencies ++= Seq(
       "ch.epfl.scala" %% "tasty-query" % "0.1.1",
       "org.scala-lang" %% "tasty-core" % scalaVersion.value,
-      Dependencies.utest % Test,
+      Dependencies.munit % Test,
       Dependencies.coursier.cross(CrossVersion.for3Use2_13) % Test
     ),
-    testFrameworks += new TestFramework("utest.runner.Framework")
+    test / logBuffered := false
   )

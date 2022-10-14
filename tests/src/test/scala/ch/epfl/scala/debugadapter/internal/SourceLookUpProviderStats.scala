@@ -1,13 +1,13 @@
 package ch.epfl.scala.debugadapter.internal
 
-import utest._
 import coursier._
 import ch.epfl.scala.debugadapter.testfmk.TestingResolver
 import ch.epfl.scala.debugadapter.testfmk.NoopLogger
+import munit.FunSuite
 
-object SourceLookUpProviderStats extends TestSuite {
-  def tests = Tests {
-    "scaladex" - printAndCheck("scaladex (Test)")(
+class SourceLookUpProviderStats extends FunSuite {
+  test("scaladex") {
+    printAndCheck("scaladex (Test)")(
       dep"ch.qos.logback:logback-classic:1.1.7",
       dep"com.typesafe.scala-logging:scala-logging_2.13:3.9.2",
       dep"com.getsentry.raven:raven-logback:8.0.3",

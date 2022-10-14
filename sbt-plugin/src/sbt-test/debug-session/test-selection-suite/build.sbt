@@ -1,4 +1,5 @@
 import ch.epfl.scala.debugadapter.testfmk._
+import munit.Assertions._
 
 val checkDebugSession = inputKey[Unit]("Check the test suite debug session")
 
@@ -20,7 +21,7 @@ checkDebugSession := {
   val expected = if (isJava8) "test1_954728448_VALUE" else "test1_1073741824_VALUE"
 
   DebugTest.check(uri)(
-    Outputed(msg => utest.assert(msg.contains("test2"))),
+    Outputed(msg => assert(msg.contains("test2"))),
     Outputed(expected)
   )
 }

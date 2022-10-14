@@ -1,97 +1,95 @@
 package ch.epfl.scala.debugadapter.internal.scalasig
 
-import utest._
 import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.testfmk.NoopLogger
+import munit.FunSuite
 
-object Scala212DecompilerTests extends DecompilerSuite(ScalaVersion.`2.12`)
-object Scala213DecompilerTests extends DecompilerSuite(ScalaVersion.`2.13`)
+class Scala212DecompilerTests extends DecompilerSuite(ScalaVersion.`2.12`)
+class Scala213DecompilerTests extends DecompilerSuite(ScalaVersion.`2.13`)
 
-abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends TestSuite {
-  override val tests: Tests = Tests {
-    "cannot decompile local methods and classes" - {
-      val source =
-        """|package example
-           |
-           |class A {
-           |  def m(): String = {
-           |    object B {
-           |      override def toString(): String = "B"
-           |    }
-           |    class C {
-           |      override def toString(): String = "C"
-           |    }
-           |    val f: String => String = x => x
-           |    f(B.toString + (new C).toString)
-           |  }
-           |}
-           |""".stripMargin
+abstract class DecompilerSuite(scalaVersion: ScalaVersion) extends FunSuite {
+  test("cannot decompile local methods and classes") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  def m(): String = {
+         |    object B {
+         |      override def toString(): String = "B"
+         |    }
+         |    class C {
+         |      override def toString(): String = "C"
+         |    }
+         |    val f: String => String = x => x
+         |    f(B.toString + (new C).toString)
+         |  }
+         |}
+         |""".stripMargin
 
-      val debuggee = TestingDebuggee.mainClass(source, "", scalaVersion)
+    val debuggee = TestingDebuggee.mainClass(source, "", scalaVersion)
 
-      val scalaSig = decompile(debuggee, "example/A.class")
-      val methods = scalaSig.entries.collect { case m: MethodSymbol => m }
-      assert(methods.size == 2) // init and m
+    val scalaSig = decompile(debuggee, "example/A.class")
+    val methods = scalaSig.entries.collect { case m: MethodSymbol => m }
+    assert(methods.size == 2) // init and m
 
-      assertNoScalaSig(debuggee, "example/A$B$1$.class")
-      assertNoScalaSig(debuggee, "example/A$C$1.class")
-    }
+    assertNoScalaSig(debuggee, "example/A$B$1$.class")
+    assertNoScalaSig(debuggee, "example/A$C$1.class")
+  }
 
-    "decompiles a lazy field" - {
-      val source =
-        """|package example
-           |
-           |class A extends B {
-           |  lazy val a = "a"
-           |}
-           |
-           |trait B {
-           |  lazy val b = "b"
-           |}
-           |""".stripMargin
-      val debuggee = TestingDebuggee.mainClass(source, "", scalaVersion)
+  test("decompiles a lazy field") {
+    val source =
+      """|package example
+         |
+         |class A extends B {
+         |  lazy val a = "a"
+         |}
+         |
+         |trait B {
+         |  lazy val b = "b"
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "", scalaVersion)
 
-      val scalaSigA = decompile(debuggee, "example/A.class")
-      val methodsA = scalaSigA.entries.collect { case m: MethodSymbol => m }
-      assert(methodsA.size == 2) // init and a
+    val scalaSigA = decompile(debuggee, "example/A.class")
+    val methodsA = scalaSigA.entries.collect { case m: MethodSymbol => m }
+    assert(methodsA.size == 2) // init and a
 
-      val scalaSigB = decompile(debuggee, "example/B.class")
-      val methodsB = scalaSigB.entries.collect { case m: MethodSymbol => m }
-      assert(methodsB.size == 2) // init and b
-    }
+    val scalaSigB = decompile(debuggee, "example/B.class")
+    val methodsB = scalaSigB.entries.collect { case m: MethodSymbol => m }
+    assert(methodsB.size == 2) // init and b
+  }
 
-    "decompiles a case class" - {
-      val source =
-        """|package example
-           |case class A(a: String)
-           |""".stripMargin
+  test("decompiles a case class") {
+    val source =
+      """|package example
+         |case class A(a: String)
+         |""".stripMargin
 
-      val debuggee = TestingDebuggee.mainClass(source, "", scalaVersion)
+    val debuggee = TestingDebuggee.mainClass(source, "", scalaVersion)
 
-      val scalaSig = decompile(debuggee, "example/A.class")
-      val methods =
-        scalaSig.entries
-          .collect { case m: MethodSymbol => m }
-          .filter(m => m.isMethod)
-          .toSeq
+    val scalaSig = decompile(debuggee, "example/A.class")
+    val methods =
+      scalaSig.entries
+        .collect { case m: MethodSymbol => m }
+        .filter(m => m.isMethod)
+        .toSeq
 
-      val (methodsOfObject, methodsOfClass) =
-        methods.partition(m => m.parent.get.isModule)
+    val (methodsOfObject, methodsOfClass) =
+      methods.partition(m => m.parent.get.isModule)
 
-      val (syntheticMethods, nonSyntheticMethods) = methodsOfClass.partition(m => m.isSynthetic)
-      // init and getter
-      assert(nonSyntheticMethods.size == 2)
+    val (syntheticMethods, nonSyntheticMethods) = methodsOfClass.partition(m => m.isSynthetic)
+    // init and getter
+    assert(nonSyntheticMethods.size == 2)
 
-      // copy, toString, equals, hashCode, productArity...
-      val expected = if (scalaVersion.isScala213) 11 else 10
-      assert(syntheticMethods.size == expected)
+    // copy, toString, equals, hashCode, productArity...
+    val expected = if (scalaVersion.isScala213) 11 else 10
+    assert(syntheticMethods.size == expected)
 
-      // init, apply, unapply, toString and writeReplace
-      assert(methodsOfObject.size == 5)
+    // init, apply, unapply, toString and writeReplace
+    assert(methodsOfObject.size == 5)
 
-      assertNoScalaSig(debuggee, "example/A$.class")
-    }
+    assertNoScalaSig(debuggee, "example/A$.class")
   }
 
   private def decompile(debuggee: TestingDebuggee, classFile: String): ScalaSig = {

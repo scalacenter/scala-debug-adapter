@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter.testfmk
 import java.nio.file.Path
 import com.microsoft.java.debug.core.protocol.Types.StackFrame
 import DebugStepAssert.*
+import munit.Assertions.*
 
 final case class DebugStepAssert[T](step: DebugStep[T], assertion: T => Unit)
 
@@ -17,16 +18,12 @@ final case class NoStep() extends DebugStep[Nothing]
 
 object DebugStepAssert {
   def assertOnFrame(expectedSource: Path, expectedLine: Int)(frame: StackFrame): Unit = {
-    val source = frame.source.path
-    val line = frame.line
-    utest.assert(source == expectedSource.toString)
-    utest.assert(line == expectedLine)
+    assertEquals(frame.source.path, expectedSource.toString)
+    assertEquals(frame.line, expectedLine)
   }
 
-  def assertOnFrame(expectedName: String)(frame: StackFrame): Unit = {
-    val name = frame.name
-    utest.assert(name == expectedName)
-  }
+  def assertOnFrame(expectedName: String)(frame: StackFrame): Unit =
+    assertEquals(frame.name, expectedName)
 }
 
 object Breakpoint {
@@ -118,18 +115,18 @@ object Evaluation {
   }
 
   private def assertFailed(response: Either[String, String]): Unit =
-    utest.assert(response.isLeft)
+    assert(response.isLeft)
 
   private def assertFailed(assertion: String => Unit)(response: Either[String, String]): Unit = {
-    utest.assert(response.isLeft)
+    assert(response.isLeft)
     val error = response.left.toOption.get
     assertion(error)
   }
 
   private def assertFailed(expectedError: String)(response: Either[String, String]): Unit = {
-    utest.assert(response.isLeft)
+    assert(response.isLeft)
     val error = response.left.toOption.get
-    utest.assert(error.contains(expectedError))
+    assert(error.contains(expectedError))
   }
 
   private def assertIgnore(
@@ -139,7 +136,7 @@ object Evaluation {
   }
 
   private def assertSuccess(assertion: String => Unit)(response: Either[String, String]): Unit = {
-    utest.assert(response.isRight)
+    assert(response.isRight)
     val result = response.toOption.get
     assertion(result)
   }
@@ -147,29 +144,29 @@ object Evaluation {
   private def assertSuccess(
       expectedResult: Any
   )(response: Either[String, String])(implicit ctx: DebugContext): Unit = {
-    utest.assert(response.isRight)
+    assert(response.isRight)
     val result = response.toOption.get
     expectedResult match {
       case expected: String =>
-        utest.assert(result == '"' + expected + '"')
+        assertEquals(result, '"' + expected + '"')
       case () =>
-        if (ctx.scalaVersion.isScala3) utest.assert(result.endsWith("\"()\""))
-        else utest.assert(result == "<void value>")
+        if (ctx.scalaVersion.isScala3) assert(result.endsWith("\"()\""))
+        else assertEquals(result, "<void value>")
       case expected @ (_: Boolean | _: Byte | _: Char | _: Int | _: Long | _: Short) =>
-        utest.assert(result == expected.toString)
+        assertEquals(result, expected.toString)
       case floating @ (_: Double | _: Float) =>
         val expected = String.format("%f", floating.toString().toDouble: java.lang.Double)
-        utest.assert(result == expected)
+        assertEquals(result, expected)
       case expected =>
         // they have the same toString
-        utest.assert(result.endsWith("\"" + expected + "\""))
+        assert(result.endsWith("\"" + expected + "\""))
     }
   }
 }
 
 object Outputed {
   def apply(expected: String): DebugStepAssert[String] =
-    apply(message => utest.assert(message == expected))
+    apply(message => assertEquals(message, expected))
 
   def apply(assertion: String => Unit): DebugStepAssert[String] =
     new DebugStepAssert(Outputed(), assertion)

@@ -243,7 +243,7 @@ object TestingDebuggee {
     val classDir = tempDir.resolve("classes")
     Files.createDirectory(classDir)
 
-    val srcFile = srcDir.resolve(s"$mainClassName.java")
+    val srcFile = srcDir.resolve(mainClassName.split('.').last + ".java")
     Files.write(srcFile, source.getBytes())
 
     val command = Array(
