@@ -1910,7 +1910,7 @@ abstract class Scala2EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("should use tasty-reader") {
+  test("should use tasty-reader".only) {
     val scala2Source =
       """|package example
          |
@@ -1938,7 +1938,7 @@ abstract class Scala2EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(
       scala3Source,
       "example.Main",
-      ScalaVersion.`3.1`,
+      ScalaVersion.`3.2`,
       Seq.empty,
       Seq(scala2Debugee.mainModule)
     )

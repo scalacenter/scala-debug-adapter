@@ -33,20 +33,18 @@ object DebugTools {
     val scala3Entries = debuggee.managedEntries.filter(_.isScala3)
     val scala2Version =
       if (debuggee.scalaVersion.isScala2) debuggee.scalaVersion
-      else {
+      else
         debuggee.libraries
           .find(_.artifactId == "scala-library")
           .flatMap(_.scalaVersion)
-          .getOrElse(ScalaVersion(BuildInfo.defaultScala2Version))
-      }
+          .getOrElse(ScalaVersion.`2.13`)
     val scala3Version =
       if (debuggee.scalaVersion.isScala3) debuggee.scalaVersion
-      else {
+      else
         debuggee.libraries
           .find(_.artifactId.startsWith("scala3-library"))
           .map(lib => ScalaVersion(lib.version))
-          .getOrElse(ScalaVersion(BuildInfo.defaultScala3Version))
-      }
+          .getOrElse(ScalaVersion.`3.2`)
 
     def resolveCompilerClassLoader(scalaVersion: ScalaVersion): Option[ClassLoader] =
       resolver
