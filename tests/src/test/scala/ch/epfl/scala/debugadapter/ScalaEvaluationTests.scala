@@ -1910,7 +1910,7 @@ abstract class Scala2EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("should use tasty-reader".only) {
+  test("should use tasty-reader") {
     val scala2Source =
       """|package example
          |

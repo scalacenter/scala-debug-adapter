@@ -190,7 +190,7 @@ lazy val scalacOptionsSetting = Def.settings(
 // Custom Scala version axis with minor version as suffix
 lazy val scala212Axis = VirtualAxis.ScalaVersionAxis(Dependencies.scala212, "2_12")
 lazy val scala213Axis = VirtualAxis.ScalaVersionAxis(Dependencies.scala213, "2_13")
-lazy val scala30Axis = VirtualAxis.ScalaVersionAxis(Dependencies.scala32, "3_0")
+lazy val scala30Axis = VirtualAxis.ScalaVersionAxis(Dependencies.scala30, "3_0")
 lazy val scala32Axis = VirtualAxis.ScalaVersionAxis(Dependencies.scala32, "3_2")
 
 def onScalaVersion[T](scala212: T, scala213: T, scala3: T) = Def.setting {
