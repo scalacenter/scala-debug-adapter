@@ -27,7 +27,7 @@ lazy val root = project
   .in(file("."))
   .aggregate(
     // format: off
-    core212, tests, sbtPlugin, 
+    core212, tests212, sbtPlugin, 
     expressionCompiler212, expressionCompiler213, expressionCompiler3,
     scala3StepFilter
     // format: on
@@ -39,41 +39,46 @@ lazy val root = project
 lazy val core212 = core.jvm(Dependencies.scala212)
 lazy val core = projectMatrix
   .in(file("core"))
-  .jvmPlatform(scalaVersions = Seq(Dependencies.scala3, Dependencies.scala213, Dependencies.scala212))
+  .jvmPlatform(scalaVersions = Seq(Dependencies.scala212, Dependencies.scala213, Dependencies.scala3))
   .enablePlugins(SbtJdiTools, BuildInfoPlugin)
   .settings(
     name := "scala-debug-adapter",
     scalacOptionsSetting,
     libraryDependencies ++= List(
-      Dependencies.scalaReflect,
-      Dependencies.scalaCollectionCompat,
+      Dependencies.scalaReflect(scalaVersion.value),
       Dependencies.asm,
       Dependencies.asmUtil,
       Dependencies.javaDebug,
       Dependencies.sbtTestAgent
     ),
-    libraryDependencies ++= onScalaVersion(
-      scala212 = None,
-      scala213 = Some(Dependencies.scalaParallelCollection),
-      scala3 = Some(Dependencies.scalaParallelCollection)
+    libraryDependencies += onScalaVersion(
+      scala212 = Dependencies.scalaCollectionCompat,
+      scala213 = Dependencies.scalaParallelCollection,
+      scala3 = Dependencies.scalaParallelCollection
     ).value,
     buildInfoKeys := Seq[BuildInfoKey](
       BuildInfoKey.action("organization")(organization.value),
       BuildInfoKey.action("version")(version.value),
       BuildInfoKey.action("expressionCompilerName")((expressionCompiler212 / name).value),
-      BuildInfoKey.action("scala3StepFilterName")((scala3StepFilter / name).value),
+      BuildInfoKey.action("scala3StepFilterName")((LocalProject("scala3StepFilter") / name).value),
       BuildInfoKey.action("defaultScala2Version")(Dependencies.scala213),
       BuildInfoKey.action("defaultScala3Version")(Dependencies.scala3)
     ),
     buildInfoPackage := "ch.epfl.scala.debugadapter"
   )
 
-lazy val tests = project
+lazy val tests212 = tests.jvm(Dependencies.scala212)
+lazy val tests3 = tests.jvm(Dependencies.scala3)
+lazy val tests = projectMatrix
   .in(file("tests"))
+  .jvmPlatform(scalaVersions = Seq(Dependencies.scala212, Dependencies.scala213, Dependencies.scala3))
   .settings(
     name := "scala-debug-adapter-test",
-    libraryDependencies ++= List(Dependencies.munit, Dependencies.coursier, Dependencies.coursierJvm),
-    scalaVersion := Dependencies.scala212,
+    libraryDependencies ++= Seq(
+      Dependencies.munit,
+      Dependencies.coursier.cross(CrossVersion.for3Use2_13),
+      Dependencies.coursierJvm.cross(CrossVersion.for3Use2_13)
+    ),
     scalacOptionsSetting,
     PgpKeys.publishSigned := {},
     publish := {},
@@ -86,11 +91,12 @@ lazy val tests = project
         expressionCompiler212 / publishLocal,
         expressionCompiler213 / publishLocal,
         expressionCompiler3 / publishLocal,
-        scala3StepFilter / publishLocal
+        // break cyclic reference
+        LocalProject("scala3StepFilter") / publishLocal
       )
       .value
   )
-  .dependsOn(core212)
+  .dependsOn(core)
 
 lazy val sbtPlugin = project
   .in(file("sbt-plugin"))
@@ -105,7 +111,7 @@ lazy val sbtPlugin = project
     scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
     scriptedBufferLog := false,
     scriptedDependencies := scriptedDependencies
-      .dependsOn(publishLocal, core212 / publishLocal, tests / publishLocal)
+      .dependsOn(publishLocal, core212 / publishLocal, tests212 / publishLocal)
       .value
   )
   .dependsOn(core212)
@@ -123,6 +129,11 @@ lazy val expressionCompiler = projectMatrix
       scala213 = Seq("2.13.10", "2.13.9", "2.13.8", "2.13.7", "2.13.6", "2.13.5", "2.13.4", "2.13.3"),
       scala3 = Seq("3.2.0", "3.1.3", "3.1.2", "3.1.1", "3.1.0", "3.0.2", "3.0.1", "3.0.0")
     ).value,
+    libraryDependencies ++= onScalaVersion(
+      scala212 = Some(Dependencies.scalaCollectionCompat),
+      scala213 = None,
+      scala3 = None
+    ).value,
     crossTarget := target.value / s"scala-${scalaVersion.value}",
     crossVersion := CrossVersion.full,
     Compile / unmanagedSourceDirectories ++= {
@@ -133,16 +144,14 @@ lazy val expressionCompiler = projectMatrix
       }
     },
     Compile / doc / sources := Seq.empty,
-    libraryDependencies ++= CrossVersion.partialVersion(scalaVersion.value).collect {
-      case (2, _) => "org.scala-lang" % "scala-compiler" % scalaVersion.value
-      case (3, _) => "org.scala-lang" %% "scala3-compiler" % scalaVersion.value
-    },
+    libraryDependencies += Dependencies.scalaCompiler(scalaVersion.value),
     scalacOptionsSetting
   )
 
-lazy val scala3StepFilter = project
+lazy val scala3StepFilter: Project = project
   .in(file("scala-3-step-filter"))
   .disablePlugins(SbtJdiTools)
+  .dependsOn(tests3 % "test->compile")
   .settings(
     name := "scala-debug-step-filter",
     scalaVersion := Dependencies.scala3,
@@ -150,10 +159,8 @@ lazy val scala3StepFilter = project
     libraryDependencies ++= Seq(
       "ch.epfl.scala" %% "tasty-query" % "0.1.1",
       "org.scala-lang" %% "tasty-core" % scalaVersion.value,
-      Dependencies.munit % Test,
-      Dependencies.coursier.cross(CrossVersion.for3Use2_13) % Test
-    ),
-    test / logBuffered := false
+      Dependencies.munit % Test
+    )
   )
 
 lazy val scalacOptionsSetting = Def.settings(

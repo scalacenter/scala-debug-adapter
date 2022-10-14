@@ -26,7 +26,7 @@ class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`) {
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`2.13`)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`2.13`)
     check(Breakpoint(14), StepIn.line(9), Breakpoint(16), StepIn.line(10))
   }
 }
@@ -84,7 +84,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |
          |object F extends A
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(10),
       StepIn.line(4),
@@ -174,7 +174,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |case class D(d1: String)
          |
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(14),
       StepIn.line(10),
@@ -244,7 +244,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |}
          |
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(8),
       StepIn.line(9),
@@ -279,7 +279,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |}
          |
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(14), StepIn.line(8), StepOut.line(14))
   }
 
@@ -300,7 +300,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(12), StepIn.line(5), StepOut.line(12))
   }
 
@@ -323,7 +323,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  override def toString(): String = "B"
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(6), StepIn.line(10), StepIn.line(15), StepOut.line(10), StepOut.line(6))
   }
 
@@ -351,7 +351,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |}
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
     if (isScala3) {
       check(
         // TODO: clean debug line table in Scala 3 compiler
@@ -423,7 +423,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |    val x = A.unapply(a)
          |  }
          |}""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(10),
       StepIn.method("ScalaRunTime$._toString(Product)"),
@@ -457,7 +457,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(5), StepIn.line(6), StepIn.line(5), StepOut.line(6))
   }
 
@@ -481,7 +481,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(12), StepIn.line(4), Breakpoint(15), StepIn.line(4))
   }
 
@@ -510,7 +510,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          | def default: String = "b"
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(6),
       StepIn.line(11),
@@ -553,7 +553,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(16), StepIn.line(8), Breakpoint(17), StepIn.line(4))
   }
 
@@ -598,7 +598,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(22),
       StepIn.line(12),
@@ -634,7 +634,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
            |  }
            |}
            |""".stripMargin
-      implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+      implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
       check(Breakpoint(7), StepIn.line(4))
     }
   }
@@ -656,7 +656,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(12), StepIn.line(8))
   }
 
@@ -682,7 +682,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(16), StepIn.line(8), Breakpoint(17), StepIn.line(12))
   }
 
@@ -712,7 +712,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(20), StepIn.line(8), Breakpoint(21), StepIn.line(9))
   }
 
@@ -733,7 +733,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(12), StepIn.line(9))
   }
 
@@ -754,7 +754,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(12), StepIn.line(9))
   }
 
@@ -773,7 +773,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(9), StepIn.line(5), Breakpoint(10), StepIn.line(4))
   }
 
@@ -792,7 +792,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(10), StepIn.line(5))
   }
 
@@ -809,7 +809,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(8), StepIn.line(4))
   }
 
@@ -832,7 +832,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(13), StepIn.line(4), Breakpoint(14), StepIn.line(4))
   }
 
@@ -865,7 +865,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |}
          |
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     if (isScala3) {
       check(
         Breakpoint(19),
@@ -919,7 +919,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |}
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(8),
       StepIn.method("A.<init>(Seq)"),
@@ -951,7 +951,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |}
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(5),
       StepIn.method("$less$greater.<init>()"),
@@ -981,7 +981,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |}
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(5),
       StepIn.line(13),
@@ -1009,7 +1009,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |}
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(9),
       StepIn.method("LazyRef.initialized()"),
@@ -1037,7 +1037,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(7), StepIn.method("A.<init>()"))
   }
 }

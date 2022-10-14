@@ -309,7 +309,7 @@ class AbstractDebugClient(
       request: Messages.Request,
       timeout: Duration
   ): Messages.Response = {
-    responsePromise = Promise[Messages.Response]
+    responsePromise = Promise[Messages.Response]()
     sendMessage(request)
     Await.result(responsePromise.future, timeout)
   }

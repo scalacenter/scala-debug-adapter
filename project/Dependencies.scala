@@ -9,10 +9,22 @@ object Dependencies {
 
   val asm = "org.ow2.asm" % "asm" % asmVersion
   val asmUtil = "org.ow2.asm" % "asm-util" % asmVersion
-  val javaDebug =
-    "ch.epfl.scala" % "com-microsoft-java-debug-core" % "0.34.0+7"
-  val scalaCompiler = "org.scala-lang" % "scala-compiler" % scala212
-  val scalaReflect = "org.scala-lang" % "scala-reflect" % scala212
+  val javaDebug = "ch.epfl.scala" % "com-microsoft-java-debug-core" % "0.34.0+7"
+
+  def scalaCompiler(scalaVersion: String): ModuleID = {
+    CrossVersion.partialVersion(scalaVersion) match {
+      case Some((3, _)) => "org.scala-lang" %% "scala3-compiler" % scalaVersion
+      case _ => "org.scala-lang" % "scala-compiler" % scalaVersion
+    }
+  }
+
+  def scalaReflect(scalaVersion: String): ModuleID = {
+    CrossVersion.partialVersion(scalaVersion) match {
+      case Some((3, _)) => "org.scala-lang" % "scala-reflect" % scala213
+      case _ => "org.scala-lang" % "scala-reflect" % scalaVersion
+    }
+  }
+
   val scalaParallelCollection = "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4"
   val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.8.1"
   val sbtTestAgent = "org.scala-sbt" % "test-agent" % "1.7.1"

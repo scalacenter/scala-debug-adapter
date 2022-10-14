@@ -148,14 +148,14 @@ object Evaluation {
     val result = response.toOption.get
     expectedResult match {
       case expected: String =>
-        assertEquals(result, '"' + expected + '"')
+        assertEquals(result, '"'.toString + expected + '"')
       case () =>
-        if (ctx.scalaVersion.isScala3) assert(result.endsWith("\"()\""))
+        if (ctx.scalaVersion.isScala3) assert(result.endsWith('"'.toString + "()" + '"'))
         else assertEquals(result, "<void value>")
       case expected @ (_: Boolean | _: Byte | _: Char | _: Int | _: Long | _: Short) =>
         assertEquals(result, expected.toString)
       case floating @ (_: Double | _: Float) =>
-        val expected = String.format("%f", floating.toString().toDouble: java.lang.Double)
+        val expected = String.format("%f", floating.toString.toDouble: java.lang.Double)
         assertEquals(result, expected)
       case expected =>
         // they have the same toString

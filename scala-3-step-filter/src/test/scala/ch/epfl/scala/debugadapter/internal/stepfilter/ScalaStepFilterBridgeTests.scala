@@ -1,25 +1,16 @@
 package ch.epfl.scala.debugadapter.internal.stepfilter
 
 import munit.FunSuite
-import munit.Assertions.*
-import ch.epfl.scala.debugadapter.ScalaInstanceCache
 import ch.epfl.scala.debugadapter.ScalaVersion
-import tastyquery.jdk.ClasspathLoaders.FileKind
-import tastyquery.Contexts
+import ch.epfl.scala.debugadapter.Debuggee
+import ch.epfl.scala.debugadapter.Java8
+import ch.epfl.scala.debugadapter.Java9OrAbove
 import tastyquery.Contexts.Context
-import tastyquery.jdk.ClasspathLoaders
 import tastyquery.Names.*
 import tastyquery.Flags
-import java.nio.file.Paths
-import scala.util.Properties
-import java.nio.file.Files
+import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 
 class ScalaStepFilterBridgeTests extends FunSuite:
-  val javaHome = Paths.get(Properties.jdkHome)
-  val runtimeJar = Seq("jre/lib/rt.jar", "lib/rt.jar")
-    .map(javaHome.resolve)
-    .find(Files.exists(_))
-
   test("should not step into mixin forwarder") {
     val source =
       """|package example
@@ -37,9 +28,8 @@ class ScalaStepFilterBridgeTests extends FunSuite:
          |
          |class B extends A
          |""".stripMargin
-    val classpath = ScalaInstanceCache.compile(source, ScalaVersion.`3.2`)
-    val stepFilter =
-      new ScalaStepFilterBridge(classpath.toArray, println, true)
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`3.2`)
+    val stepFilter = getStepFilter(debuggee)
 
     val termsOfA = stepFilter.extractScalaTerms("example.A", false)
     assert(termsOfA.size == 2) // <init> and m
@@ -60,9 +50,8 @@ class ScalaStepFilterBridgeTests extends FunSuite:
          |}
          |""".stripMargin
 
-    val classpath = ScalaInstanceCache.compile(source, ScalaVersion.`3.2`)
-    val stepFilter =
-      new ScalaStepFilterBridge(classpath.toArray, println, true)
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`3.2`)
+    val stepFilter = getStepFilter(debuggee)
 
     val terms = stepFilter.extractScalaTerms("example.Main$", false)
     assert(terms.size == 4)
@@ -85,9 +74,8 @@ class ScalaStepFilterBridgeTests extends FunSuite:
          |}
          |""".stripMargin
 
-    val classpath = ScalaInstanceCache.compile(source, ScalaVersion.`3.2`)
-    val stepFilter =
-      new ScalaStepFilterBridge(classpath.toArray, println, true)
+    val debuggee = TestingDebuggee.mainClass(source, "example.A", ScalaVersion.`3.2`)
+    val stepFilter = getStepFilter(debuggee)
 
     val objTerms = stepFilter.extractScalaTerms("example.A$", false)
     assert(objTerms.size == 2) // writeReplace and <init>
@@ -98,14 +86,20 @@ class ScalaStepFilterBridgeTests extends FunSuite:
   }
 
   test("should not step into synthetic methods of case classes") {
-    val classpath = ScalaInstanceCache.compile("", ScalaVersion.`3.2`)
-    val stepFilter = new ScalaStepFilterBridge(
-      classpath.toArray ++ runtimeJar,
-      println,
-      true
-    )
+    val debuggee = TestingDebuggee.mainClass("", "example.Main", ScalaVersion.`3.2`)
+    val stepFilter = getStepFilter(debuggee)
 
     val objTerms =
       stepFilter.extractScalaTerms("scala.runtime.ScalaRunTime$", false)
     assert(objTerms.size == 31)
+  }
+
+  private def getStepFilter(debuggee: Debuggee): ScalaStepFilterBridge = {
+    val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
+      case Java8(_, classJars, _) => classJars
+      case java9OrAbove: Java9OrAbove =>
+        java9OrAbove.classSystems.map(_.fileSystem.getPath("/modules", "java.base"))
+    }
+    val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
+    new ScalaStepFilterBridge(debuggeeClasspath, println, true)
   }

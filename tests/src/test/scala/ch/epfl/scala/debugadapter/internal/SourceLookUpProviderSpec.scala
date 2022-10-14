@@ -11,7 +11,7 @@ class SourceLookUpProviderSpec extends FunSuite {
   test("fix https://github.com/scalameta/metals/issues/3477#issuecomment-1013458270") {
     val artifacts = coursier
       .Fetch()
-      .addDependencies(dep"org.openjfx:javafx-controls:17.0.1")
+      .addDependencies(Dependency(Module(Organization("org.openjfx"), ModuleName("javafx-controls")), "17.0.1"))
       .addClassifiers(Classifier.sources, Classifier("win"), Classifier("linux"), Classifier("mac"))
       .withMainArtifacts()
       .run()

@@ -19,7 +19,7 @@ class Scala3DebugTest extends ScalaDebugTests(ScalaVersion.`3.2`) {
          |    def greet(): Unit =
          |      println("Breakpoint in hello class")
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(5), Breakpoint(11), Breakpoint(7))
   }
 
@@ -37,7 +37,7 @@ class Scala3DebugTest extends ScalaDebugTests(ScalaVersion.`3.2`) {
          |    println("Breakpoint in hello class")
          |
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.app", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.app", scalaVersion)
     check(Breakpoint(4), Breakpoint(10), Breakpoint(6))
   }
 }
@@ -52,7 +52,7 @@ abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTest
       client.initialize()
       client.launch()
 
-      val breakpoints = client.setBreakpoints(debuggee.sourceFiles.head, Array(5, 13, 22, 14, 9))
+      val breakpoints = client.setBreakpoints(debuggee.sourceFiles.head, Seq(5, 13, 22, 14, 9))
       assert(breakpoints.size == 5)
       assert(breakpoints.forall(_.verified))
 
@@ -130,7 +130,7 @@ abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTest
       server.connect()
       client.initialize()
       client.launch()
-      client.setBreakpoints(debuggee.sourceFiles.head, Array(7))
+      client.setBreakpoints(debuggee.sourceFiles.head, Seq(7))
       client.configurationDone()
 
       val stopped = client.stopped()
@@ -165,7 +165,7 @@ abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTest
       server.connect()
       client.initialize()
       client.launch()
-      client.setBreakpoints(debuggee.sourceFiles.head, Array(7))
+      client.setBreakpoints(debuggee.sourceFiles.head, Seq(7))
       client.configurationDone()
 
       val stopped = client.stopped()
@@ -219,7 +219,7 @@ abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTest
       server.connect()
       client.initialize()
       client.launch()
-      client.setBreakpoints(debuggee.sourceFiles.head, Array(6, 12))
+      client.setBreakpoints(debuggee.sourceFiles.head, Seq(6, 12))
       client.configurationDone()
 
       val stopped = client.stopped()

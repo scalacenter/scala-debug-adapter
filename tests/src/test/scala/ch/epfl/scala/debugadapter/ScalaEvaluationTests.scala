@@ -18,7 +18,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(5),
       Evaluation.failedOrIgnore("\"foo\" + bar", isScala2) { error =>
@@ -38,7 +38,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(4),
       Evaluation.success("true", true),
@@ -63,7 +63,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(6),
       Evaluation.success("x1 + 2", 3),
@@ -108,7 +108,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  private[example] object H
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
     check(
       Breakpoint(5),
       Evaluation.success("a1", "a1"),
@@ -157,7 +157,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  private def c2(str: String) = s"c2: $str"
          |}
       """.stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
     check(
       Breakpoint(5),
       Evaluation.success("a1(\"foo\")", "a1: foo"),
@@ -197,7 +197,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  private def c2(str: String) = s"c2: $str"
          |}
       """.stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
     check(
       Breakpoint(13),
       Evaluation.success("b1", "b1"),
@@ -235,7 +235,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(6),
       Evaluation.success("a.a1", "a.a1"),
@@ -277,7 +277,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(7),
       Evaluation.success("m(\"foo\")", "foo"),
@@ -314,7 +314,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |
          |
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(5),
       Evaluation.success("m()", "m"),
@@ -364,7 +364,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
     check(
       Breakpoint(5),
       Evaluation.success("a1()")(result => assert(result.startsWith("A$B@"))),
@@ -397,7 +397,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
     check(
       Breakpoint(6),
       Evaluation.success("new b.C")(result => assert(result.startsWith("B$C@"))),
@@ -431,7 +431,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(11),
       Evaluation.success("x1 + x2 + x3", "ax1bx2x3"),
@@ -464,7 +464,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(8), Evaluation.success("a", "a"))
   }
 
@@ -492,7 +492,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(7),
       Evaluation.success("a1", if (isScala3) new NoSuchFieldException("$outer") else new NoSuchFieldError("$outer"))
@@ -526,7 +526,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(11),
       // B captures the local value x1
@@ -583,7 +583,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
     check(
       Breakpoint(18),
       Evaluation.success("m1(\"x\")", "m1(x)"),
@@ -606,7 +606,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         |  }
         |}
         |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(4), Evaluation.success("1 + 2", 3))
   }
 
@@ -619,7 +619,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(4), Evaluation.success("new java.util.ArrayList[String]().toString", "[]"))
   }
 
@@ -640,7 +640,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  def m1(): Int = 9
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(6),
       Evaluation.success("n", 1),
@@ -668,7 +668,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  val b = 2
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(5),
       Evaluation.success("1 + 2", 3),
@@ -690,7 +690,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(3), Evaluation.success("1 + 2", 3))
   }
 
@@ -703,7 +703,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(4), Evaluation.success("val x = 123", ()))
   }
 
@@ -717,7 +717,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(5),
       Evaluation.success(
@@ -744,7 +744,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(7), Evaluation.success("x + 1", 4))
   }
 
@@ -764,7 +764,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |    println(m1("foo"))
          |  }
          |}""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
     check(
       Breakpoint(7),
       Evaluation.success("m1(\"bar\")", "m1(bar)"),
@@ -814,7 +814,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |    a.m()
          |  }
          |}""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(30), // in A#m
       Evaluation.success("new B")(result => assert(result.startsWith("A$B$1@"))), // captures x1
@@ -889,7 +889,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(15), Evaluation.success("x", "x3"), Evaluation.success("m()", "x3"))
   }
 
@@ -927,7 +927,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(9),
       Evaluation.success("x", 1),
@@ -976,7 +976,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(7),
       Evaluation.successOrIgnore("x", 1, isScala2),
@@ -1023,7 +1023,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(9),
       Evaluation.successOrIgnore("x", "x", isScala2),
@@ -1068,7 +1068,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  private class C[X, Y](x: X)(y: Y)
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(5),
       Evaluation.success("m1[String]", "m1[X]"),
@@ -1118,7 +1118,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |class C(val size: Int) extends AnyVal
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(8),
       Evaluation.success("b1", "foo"),
@@ -1164,7 +1164,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |class Size(val value: Int) extends AnyVal
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(10),
       Evaluation.success("size", 1),
@@ -1201,7 +1201,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |class Size(val value: Int) extends AnyVal
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(14),
       Evaluation.success("new A(\"foo\")")(result => assert(result.startsWith("Main$A$1@"))),
@@ -1248,7 +1248,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(8),
       Evaluation.success("x", 1),
@@ -1296,7 +1296,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(8),
       Evaluation.successOrIgnore("this.m(2)", "fofo", isScala2),
@@ -1328,7 +1328,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(6), Evaluation.success("f(x)", 2))
   }
 
@@ -1344,7 +1344,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(7), Evaluation.success("msg", "Hello World!"))
   }
 
@@ -1360,7 +1360,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(5), Evaluation.success("1 + 1", 2))
   }
 
@@ -1377,7 +1377,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(4),
       Evaluation.success("throwException()", new Exception("error"))
@@ -1395,7 +1395,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.munitTestSuite(source, "example.MySuite", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.munitTestSuite(source, "example.MySuite", scalaVersion)
     check(
       Breakpoint(6),
       // the program stops twice before Scala 3.2
@@ -1426,7 +1426,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(16),
       Evaluation.success("List(1, 2, 3).map(_ * a * b * c).sum", 36),
@@ -1447,7 +1447,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(6), Evaluation.success("f(\"foo\")", 3))
   }
 
@@ -1468,7 +1468,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(5),
       Evaluation.success("write(value)", ()),
@@ -1495,7 +1495,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(5), Evaluation.success("f(\"foo\")", "oof"))
   }
 
@@ -1509,7 +1509,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(5),
       Evaluation.successOrIgnore(
@@ -1536,7 +1536,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(5),
       Evaluation.success(
@@ -1568,7 +1568,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(7),
       Evaluation.success("a", "A.a"),
@@ -1593,7 +1593,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(6),
       Evaluation.successOrIgnore("!", "!", isScala2),
@@ -1624,7 +1624,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     if (isScala3) {
       check(
         Breakpoint(5),
@@ -1664,7 +1664,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(6), Evaluation.success("1+1", 2))
   }
 
@@ -1679,7 +1679,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(6),
       Evaluation.successOrIgnore(
@@ -1724,7 +1724,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(5),
       Evaluation.successOrIgnore("foo(1)", isScala2)(result => assert(result.contains("AssertionError@")))
@@ -1745,7 +1745,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  val msg = "x"
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(5), Evaluation.success("Foo.msg", "x"))
   }
 
@@ -1780,7 +1780,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(11),
       Evaluation.successOrIgnore("x", true, isScala2),
@@ -1804,7 +1804,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion, Seq("-Xfatal-warnings"))
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClass(source, "example.Main", scalaVersion, Seq("-Xfatal-warnings"))
     // a pure expression does nothing in statement position
     check(Breakpoint(6), Evaluation.success("x\nx", "Hello"))
   }
@@ -1830,7 +1831,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     if (isScala3)
       check(
         Breakpoint(7),
@@ -1963,7 +1964,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(7), Evaluation.success("foo", "bar"), Breakpoint(9), Evaluation.success("foo", "foo"))
   }
 
@@ -1980,7 +1981,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |  def main(args: Array[String]): Unit =
          |    println("Hello, World!")
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(10), Evaluation.success("x1 + x2")(_.contains("3.3")), Evaluation.success("A.x1", "x1"))
   }
 
@@ -1997,7 +1998,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |  def main(args: Array[String]): Unit =
          |    new A().m1()
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(6), Evaluation.success("x1", "x1"))
   }
 
@@ -2018,7 +2019,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |    val b = new a.B()
          |    b.m1()
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(8), // Stops once in the constructor of B
       Breakpoint(8),
@@ -2033,7 +2034,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
         |    def main(args: Array[String]): Unit =
         |      println("Hello, World!")
         |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(4),
       Evaluation.success("1 + 2", 3)
@@ -2050,7 +2051,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |  def main(args: Array[String]): Unit =
          |    new Foo().bar()
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(3), Evaluation.success("1 + 2", 3))
   }
 
@@ -2060,7 +2061,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |@main def foo(): Unit =
          |  println("Hello, World!")
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.foo", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.foo", scalaVersion)
     check(Breakpoint(3), Evaluation.success("val x = 123", ()))
   }
 
@@ -2086,7 +2087,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |  def main(args: Array[String]): Unit =
          |    new Foo().bar()
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(6),
       Evaluation.success("this.p(\"foo\")", "foo"),
@@ -2109,7 +2110,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |  ): Unit =
          |    println("foo")
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(7), Evaluation.success("x + 1", 4))
   }
 
@@ -2133,7 +2134,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |  def main(args: Array[String]): Unit =
          |    new Foo().bar()
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(13),
       Evaluation.success("msg(\"Alice\")", "Hello, Alice!"),
@@ -2155,7 +2156,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |  def main(args: Array[String]): Unit =
          |    val result = f(2)
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(6), Evaluation.success("f(x)", 2))
   }
 
@@ -2173,7 +2174,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |  inline def bar(inline str: String): String = str.reverse
          |
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(6),
       Evaluation.success("msg", "Hello, World!"),
@@ -2209,7 +2210,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |    Expr(expr.asTerm.tpe.widen.show)
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(
       Seq("Main.scala" -> mainSource, "Macro.scala" -> macroSource),
       "example.Main",
       scalaVersion
@@ -2258,7 +2259,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |    println(b.bar)
          |""".stripMargin
 
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(12),
       Breakpoint(12),
@@ -2298,7 +2299,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |    val a = new A("foo")
          |    println(a.m(2))
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(9),
       Evaluation.success("self", "foo"),
@@ -2323,7 +2324,8 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |    val classLoader = getClass.getClassLoader
          |    println(classLoader.toString)
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion, Seq("-Yexplicit-nulls"))
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClass(source, "example.Main", scalaVersion, Seq("-Yexplicit-nulls"))
     check(
       Breakpoint(6),
       Evaluation.failed(

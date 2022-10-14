@@ -19,7 +19,7 @@ abstract class DebugTestSuite extends FunSuite with DebugTest
 trait DebugTest {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
   val executorService = Executors.newFixedThreadPool(1)
-  implicit val ec = ExecutionContext.fromExecutorService(executorService)
+  implicit val ec: ExecutionContext = ExecutionContext.fromExecutorService(executorService)
 
   def isScala3(implicit ctx: DebugContext) = ctx.scalaVersion.isScala3
   def isScala2(implicit ctx: DebugContext) = ctx.scalaVersion.isScala2
