@@ -6,7 +6,7 @@ import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
 import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSigPrinter
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.ScalaVersion
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters.*
 
 class Scala2StepFilter(
     sourceLookUp: SourceLookUpProvider,
@@ -381,8 +381,7 @@ class Scala2StepFilter(
             else prefix + "."
           }
         case _ =>
-          val prefix =
-            sym.parent.map(encodePrefix).getOrElse("") + sym.name + "$"
+          val prefix = sym.parent.flatMap(encodePrefix).getOrElse("") + sym.name + "$"
           Some(prefix).filter(sourceLookUp.containsClass)
       }
     }

@@ -14,9 +14,9 @@ case class ScalaVersion(value: String) {
 }
 
 object ScalaVersion {
-  val `2.12` = ScalaVersion("2.12.17")
-  val `2.13` = ScalaVersion(BuildInfo.defaultScala2Version)
-  val `3.0` = ScalaVersion("3.0.2")
-  val `3.1` = ScalaVersion("3.1.2")
-  val `3.2` = ScalaVersion(BuildInfo.defaultScala3Version)
+  val `2.12` = ScalaVersion(BuildInfo.scala212)
+  val `2.13` = ScalaVersion(BuildInfo.scala213)
+  val `3.0` = ScalaVersion(BuildInfo.scala30)
+  // val `3.1` = ScalaVersion("3.1.2")
+  val `3.2` = ScalaVersion(BuildInfo.scala32)
 }

@@ -2,7 +2,7 @@ package ch.epfl.scala.debugadapter.internal
 
 import com.sun.jdi._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters.*
 
 package object evaluator {
   private[evaluator] def method(

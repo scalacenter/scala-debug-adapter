@@ -3,7 +3,7 @@ package scala.tools.nsc
 import java.nio.file.Path
 import java.util.function.Consumer
 import java.{util => ju}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.tools.nsc.reporters.StoreReporter
 import scala.util.control.NonFatal
 
@@ -31,7 +31,7 @@ final class ExpressionCompilerBridge {
     ) ++ options :+ sourceFile.toString
 
     val command = new CompilerCommand(args, errorConsumer.accept(_))
-    val reporter = new StoreReporter
+    val reporter = new StoreReporter(command.settings)
     val global = new ExpressionGlobal(
       command.settings,
       reporter,

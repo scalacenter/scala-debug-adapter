@@ -167,7 +167,7 @@ class DebugServerTests extends DebugTestSuite {
   }
 
   test("should send output event when debuggee prints to stdout") {
-    implicit val debuggee = TestingDebuggee.helloWorld
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.helloWorld
     check(Outputed("Hello, World!"))
   }
 
@@ -263,7 +263,7 @@ class DebugServerTests extends DebugTestSuite {
          |}
          |
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.fromJavaSource(source, "example.Main", ScalaVersion.`2.12`)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.fromJavaSource(source, "example.Main", ScalaVersion.`2.12`)
     check(Breakpoint(5), Breakpoint(12), Breakpoint(16), Breakpoint(8))
   }
 

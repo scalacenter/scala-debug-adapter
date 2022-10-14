@@ -2,7 +2,7 @@ package ch.epfl.scala.debugadapter.testing
 
 import sbt.testing.{Event, Status}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters.*
 
 trait TestSuiteEventHandler {
   def handle(testSuiteEvent: TestSuiteEvent): Unit

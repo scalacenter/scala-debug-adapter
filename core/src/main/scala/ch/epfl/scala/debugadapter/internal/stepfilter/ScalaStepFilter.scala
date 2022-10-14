@@ -8,7 +8,7 @@ import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
 import ch.epfl.scala.debugadapter.Debuggee
 import ch.epfl.scala.debugadapter.DebugTools
 import ch.epfl.scala.debugadapter.Logger
-import scala.collection.JavaConverters.*
+import scala.jdk.CollectionConverters.*
 import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
 
 trait ScalaStepFilter extends StepFilter {

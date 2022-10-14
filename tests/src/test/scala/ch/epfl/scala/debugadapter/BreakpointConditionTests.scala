@@ -16,7 +16,7 @@ abstract class BreakpointConditionTests(scalaVersion: ScalaVersion) extends Debu
          |  }
          |}
          |""".stripMargin
-    implicit val debugggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(5, "x == 42"), Evaluation.success("x", 42))
   }
 
@@ -33,7 +33,7 @@ abstract class BreakpointConditionTests(scalaVersion: ScalaVersion) extends Debu
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(5, "i == 2"), Evaluation.success("i", 2), Breakpoint(8))
   }
 }

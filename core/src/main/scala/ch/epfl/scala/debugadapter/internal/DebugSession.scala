@@ -188,7 +188,7 @@ private[debugadapter] final class DebugSession private (
     }
   }
 
-  protected override def sendResponse(response: Response): Unit = {
+  override def sendResponse(response: Response): Unit = {
     val requestId = response.request_seq
     response.command match {
       case "attach" if launchedRequests(requestId) =>
@@ -206,7 +206,7 @@ private[debugadapter] final class DebugSession private (
     }
   }
 
-  protected override def sendEvent(event: Events.DebugEvent): Unit = {
+  override def sendEvent(event: Events.DebugEvent): Unit = {
     try {
       super.sendEvent(event)
     } finally {
@@ -255,25 +255,22 @@ private[debugadapter] object DebugSession {
   /**
    * The debugger has asked for a restart
    */
-  final case object Restarted extends ExitStatus
+  case object Restarted extends ExitStatus
 
   /**
    * The debugger has disconnected
    */
-  final case object Disconnected extends ExitStatus
+  case object Disconnected extends ExitStatus
 
   /**
    * The debuggee has terminated
    */
-  final case object Terminated extends ExitStatus
+  case object Terminated extends ExitStatus
 
   sealed trait State
-
-  final case object Ready extends State
-
-  final case class Started(process: CancelableFuture[Unit]) extends State
-
-  final case object Stopped extends State
+  case object Ready extends State
+  case class Started(process: CancelableFuture[Unit]) extends State
+  case object Stopped extends State
 
   def apply(
       socket: Socket,
