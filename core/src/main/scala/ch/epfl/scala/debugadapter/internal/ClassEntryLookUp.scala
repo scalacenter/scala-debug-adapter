@@ -5,7 +5,7 @@ import org.objectweb.asm._
 
 import java.net.URI
 import java.nio.file._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters.*
 import scala.collection.mutable
 import ClassEntryLookUp.readSourceContent
 
@@ -256,8 +256,8 @@ private object ClassEntryLookUp {
         sourceUriToSourceFile,
         sourceUriToClassFiles.toMap,
         classNameToSourceFile.toMap,
-        missingSourceFileClassFiles,
-        orphanClassFiles,
+        missingSourceFileClassFiles.toSeq,
+        orphanClassFiles.toSeq,
         logger
       )
     }

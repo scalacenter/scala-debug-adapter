@@ -145,10 +145,9 @@ private[internal] object EvaluationProvider {
       logger: Logger,
       testMode: Boolean
   ): IEvaluationProvider = {
-    val allEvaluators =
-      debugTools.expressionCompilers.mapValues { compiler =>
-        new ExpressionEvaluator(compiler, logger, testMode)
-      }
+    val allEvaluators = debugTools.expressionCompilers.view.map { case (k, v) =>
+      (k, new ExpressionEvaluator(v, logger, testMode))
+    }.toMap
     new EvaluationProvider(sourceLookUp, allEvaluators, logger)
   }
 }

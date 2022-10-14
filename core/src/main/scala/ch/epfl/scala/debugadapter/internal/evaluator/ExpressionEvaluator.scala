@@ -3,7 +3,7 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import com.sun.jdi._
 
 import java.nio.file.Files
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters.*
 import scala.util.Try
 import java.nio.charset.StandardCharsets
 import ch.epfl.scala.debugadapter.Logger

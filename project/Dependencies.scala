@@ -13,6 +13,8 @@ object Dependencies {
     "ch.epfl.scala" % "com-microsoft-java-debug-core" % "0.34.0+7"
   val scalaCompiler = "org.scala-lang" % "scala-compiler" % scala212
   val scalaReflect = "org.scala-lang" % "scala-reflect" % scala212
+  val scalaParallelCollection = "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4"
+  val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.8.1"
   val sbtTestAgent = "org.scala-sbt" % "test-agent" % "1.7.1"
 
   // test dependencies

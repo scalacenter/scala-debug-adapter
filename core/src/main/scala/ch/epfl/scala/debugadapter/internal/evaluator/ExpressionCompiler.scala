@@ -4,7 +4,7 @@ import java.lang.reflect.Method
 import java.lang.reflect.InvocationTargetException
 import java.nio.file.Path
 import java.util.function.Consumer
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters.*
 import scala.util.Try
 import scala.util.Failure
 import scala.util.Success

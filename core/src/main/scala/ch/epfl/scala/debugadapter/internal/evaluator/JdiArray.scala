@@ -2,7 +2,7 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi.{ArrayReference, ObjectReference, ThreadReference, Value}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters.*
 
 object JdiArray {
   def apply(
@@ -45,5 +45,5 @@ class JdiArray(reference: ArrayReference, thread: ThreadReference) extends JdiOb
 
   def setValues(values: List[Value]): Unit = reference.setValues(values.asJava)
 
-  def getValues(): Seq[Value] = reference.getValues().asScala
+  def getValues: Seq[Value] = reference.getValues.asScala.toSeq
 }

@@ -2,12 +2,7 @@ package ch.epfl.scala.debugadapter.sbtplugin.internal
 
 import ch.epfl.scala.debugadapter._
 import sbt.{ScalaVersion => _, _}
-import sbt.librarymanagement.DependencyResolution
-import sbt.librarymanagement.ScalaModuleInfo
-import sbt.librarymanagement.UnresolvedWarningConfiguration
-import sbt.librarymanagement.UpdateConfiguration
 
-import java.net.URLClassLoader
 import scala.util.Properties
 
 private[sbtplugin] object InternalTasks {

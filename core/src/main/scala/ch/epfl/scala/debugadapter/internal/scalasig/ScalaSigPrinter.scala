@@ -128,7 +128,7 @@ class ScalaSigPrinter(builder: StringBuilder) {
   }
 
   def isCaseClassObject(o: ObjectSymbol): Boolean = {
-    val TypeRefType(_, Ref(classSymbol: ClassSymbol), _) = o.infoType
+    val TypeRefType(_, Ref(classSymbol: ClassSymbol), _) = o.infoType: @unchecked
     o.isFinal && (classSymbol.children.find(x => x.isCase && x.isInstanceOf[MethodSymbol]) match {
       case Some(_) => true
       case None => false
@@ -293,7 +293,7 @@ class ScalaSigPrinter(builder: StringBuilder) {
     print("object ")
     val poName = o.symbolInfo.owner.get.name
     print(processName(poName))
-    val TypeRefType(_, Ref(classSymbol: ClassSymbol), _) = o.infoType
+    val TypeRefType(_, Ref(classSymbol: ClassSymbol), _) = o.infoType: @unchecked
     printType(classSymbol)
     print(" {\n")
     printChildren(level, classSymbol)
@@ -305,7 +305,7 @@ class ScalaSigPrinter(builder: StringBuilder) {
     printModifiers(o)
     print("object ")
     print(processName(o.name))
-    val TypeRefType(_, Ref(classSymbol: ClassSymbol), _) = o.infoType
+    val TypeRefType(_, Ref(classSymbol: ClassSymbol), _) = o.infoType: @unchecked
     printType(classSymbol)
     print(" {\n")
     printChildren(level, classSymbol)

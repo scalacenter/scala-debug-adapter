@@ -8,7 +8,7 @@ import java.nio.file.FileSystems
 import java.nio.file.FileSystem
 import java.nio.file.Path
 import java.nio.file.Files
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters.*
 import java.net.URI
 
 private case class SourceFile(

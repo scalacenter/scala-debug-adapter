@@ -31,7 +31,7 @@ final class ExpressionCompilerBridge {
     ) ++ options :+ sourceFile.toString
 
     val command = new CompilerCommand(args, errorConsumer.accept(_))
-    val reporter = new StoreReporter
+    val reporter = new StoreReporter(command.settings)
     val global = new ExpressionGlobal(
       command.settings,
       reporter,
