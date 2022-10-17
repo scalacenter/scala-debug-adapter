@@ -144,6 +144,7 @@ lazy val expressionCompiler = projectMatrix
       }
       .toSeq
       .flatten,
+    crossScalaVersions := crossScalaVersions.value.distinct,
     libraryDependencies ++= onScalaVersion(
       scala212 = Some(Dependencies.scalaCollectionCompat),
       scala213 = None,
