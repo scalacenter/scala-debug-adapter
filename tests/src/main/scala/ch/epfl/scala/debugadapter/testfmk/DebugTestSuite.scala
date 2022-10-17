@@ -15,7 +15,7 @@ import munit.FunSuite
 import munit.Assertions._
 
 abstract class DebugTestSuite extends FunSuite with DebugTest {
-  override def munitTimeout: Duration = 120 seconds
+  override def munitTimeout: Duration = 120.seconds
 }
 
 trait DebugTest {
