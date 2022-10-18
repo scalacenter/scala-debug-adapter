@@ -21,6 +21,7 @@ abstract class ScalaStepFilter(scalaVersion: ScalaVersion) extends StepFilter {
     else if (isJava(method)) false
     else if (isConstructor(method)) false
     else if (isStaticConstructor(method)) false
+    else if (isAdaptedMethod(method)) true
     else if (isAnonFunction(method)) false
     else if (isLiftedMethod(method)) !isLazyInitializer(method) && isLazyGetter(method)
     else if (isAnonClass(method.declaringType)) false
@@ -56,6 +57,9 @@ abstract class ScalaStepFilter(scalaVersion: ScalaVersion) extends StepFilter {
 
   private def isLiftedMethod(method: Method): Boolean =
     method.name.matches(".+\\$\\d+")
+
+  private def isAdaptedMethod(method: Method): Boolean =
+    method.name.matches(".+\\$adapted(\\$\\d+)?")
 
   private def isLazyInitializer(method: Method): Boolean =
     method.name.contains("$lzyINIT") || method.name.contains("$lzycompute$")
