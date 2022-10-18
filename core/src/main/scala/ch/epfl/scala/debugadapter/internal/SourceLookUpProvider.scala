@@ -45,6 +45,9 @@ private[debugadapter] final class SourceLookUpProvider(
     }
   }
 
+  def getClassFile(fqcn: String): Option[ClassFile] =
+    fqcnToClassPathEntry.get(fqcn).flatMap(_.getClassFile(fqcn))
+
   def getClassEntry(fqcn: String): Option[ClassEntry] =
     fqcnToClassPathEntry.get(fqcn).map(_.entry)
 

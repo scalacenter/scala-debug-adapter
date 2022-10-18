@@ -13,7 +13,7 @@ class Scala2StepFilter(
     scalaVersion: ScalaVersion,
     logger: Logger,
     testMode: Boolean
-) extends ScalaStepFilter {
+) extends ScalaStepFilter(scalaVersion) {
   override protected def skipScalaMethod(method: jdi.Method): Boolean = {
     if (isLazyInitializer(method)) {
       skipLazyInitializer(method)
@@ -302,7 +302,8 @@ class Scala2StepFilter(
       "scala.package.Either" -> "scala.util.Either",
       "scala.package.Left" -> "scala.util.Left",
       "scala.package.Right" -> "scala.util.Right",
-      "scala.<repeated>" -> "scala.collection.immutable.Seq"
+      "scala.<repeated>" -> "scala.collection.immutable.Seq",
+      "scala.<byname>" -> "scala.Function0"
     ) ++ (
       if (scalaVersion.isScala212)
         Map(
@@ -356,7 +357,11 @@ class Scala2StepFilter(
               // because we don't want to skip a method that should not be skipped
               true
             }
-          encoded.fold(ifEmpty)(_ == javaType.name)
+          encoded.fold(ifEmpty) { encodedName =>
+            // should not fail because encodedName check that it exists
+            val classFile = sourceLookUp.getClassFile(encodedName).get
+            classFile.isValueClass || encodedName == javaType.name
+          }
         }
     }
   }

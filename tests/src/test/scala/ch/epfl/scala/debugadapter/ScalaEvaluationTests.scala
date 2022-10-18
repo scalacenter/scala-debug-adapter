@@ -1345,7 +1345,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(7), Evaluation.success("msg", "Hello World!"))
+    check(Breakpoint(6), Evaluation.success("msg", "Hello World!"))
   }
 
   test("evaluate at lambda start") {

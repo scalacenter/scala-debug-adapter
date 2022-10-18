@@ -44,50 +44,8 @@ class Scala3DebugTest extends ScalaDebugTests(ScalaVersion.`3.2`) {
 
 abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
   test("should support breakpoints in scala sources") {
-    val debuggee = TestingDebuggee.scalaBreakpointTest(scalaVersion)
-    val server = getDebugServer(debuggee)
-    val client = TestingDebugClient.connect(server.uri)
-    try {
-      server.connect()
-      client.initialize()
-      client.launch()
-
-      val breakpoints = client.setBreakpoints(debuggee.sourceFiles.head, Seq(5, 13, 22, 14, 9))
-      assert(breakpoints.size == 5)
-      assert(breakpoints.forall(_.verified))
-
-      client.configurationDone()
-      val stopped1 = client.stopped()
-      val threadId = stopped1.threadId
-      assert(stopped1.reason == "breakpoint")
-
-      client.continue(threadId)
-      val stopped2 = client.stopped()
-      assert(stopped2.reason == "breakpoint")
-      assert(stopped2.threadId == threadId)
-
-      client.continue(threadId)
-      val stopped3 = client.stopped()
-      assert(stopped3.reason == "breakpoint")
-      assert(stopped3.threadId == threadId)
-
-      client.continue(threadId)
-      val stopped4 = client.stopped()
-      assert(stopped4.reason == "breakpoint")
-      assert(stopped4.threadId == threadId)
-
-      client.continue(threadId)
-      val stopped5 = client.stopped()
-      assert(stopped5.reason == "breakpoint")
-      assert(stopped5.threadId == threadId)
-
-      client.continue(threadId)
-      client.exited()
-      client.terminated()
-    } finally {
-      server.close()
-      client.close()
-    }
+    implicit val debuggee = TestingDebuggee.scalaBreakpointTest(scalaVersion)
+    check(Breakpoint(5), Breakpoint(13), Breakpoint(14), Breakpoint(22), Breakpoint(9))
   }
 
   test("should support breakpoints in fully qualified classes") {

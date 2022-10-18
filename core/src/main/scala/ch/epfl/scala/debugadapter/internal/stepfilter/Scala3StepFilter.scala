@@ -12,11 +12,13 @@ import scala.util.Try
 import java.nio.file.Path
 import scala.util.Success
 import scala.util.Failure
+import ch.epfl.scala.debugadapter.ScalaVersion
 
 class Scala3StepFilter(
+    scalaVersion: ScalaVersion,
     bridge: Any,
     skipMethod: Method
-) extends ScalaStepFilter {
+) extends ScalaStepFilter(scalaVersion) {
   override protected def skipScalaMethod(method: jdi.Method): Boolean =
     try skipMethod.invoke(bridge, method).asInstanceOf[Boolean]
     catch {
@@ -50,7 +52,7 @@ object Scala3StepFilter {
         testMode: java.lang.Boolean
       )
       val skipMethod = cls.getMethods.find(m => m.getName == "skipMethod").get
-      Success(new Scala3StepFilter(bridge, skipMethod))
+      Success(new Scala3StepFilter(debuggee.scalaVersion, bridge, skipMethod))
     } catch {
       case cause: Throwable => Failure(cause)
     }

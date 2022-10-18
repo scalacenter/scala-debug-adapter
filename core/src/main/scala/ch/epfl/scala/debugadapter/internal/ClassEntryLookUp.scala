@@ -15,10 +15,11 @@ import ch.epfl.scala.debugadapter.internal.scalasig.Decompiler
 
 private case class SourceLine(uri: URI, lineNumber: Int)
 
-private case class ClassFile(
+private[internal] case class ClassFile(
     fullyQualifiedName: String,
     sourceName: Option[String],
     relativePath: String,
+    isValueClass: Boolean,
     classSystem: ClassSystem
 ) {
   def className: String = fullyQualifiedName.split('.').last
@@ -282,6 +283,7 @@ private object ClassEntryLookUp {
       path: Path
   ): ClassFile = {
     val inputStream = Files.newInputStream(path)
+    var isValueClass = false
     try {
       val reader = new ClassReader(inputStream)
       val fullyQualifiedName = reader.getClassName.replace('/', '.')
@@ -291,6 +293,21 @@ private object ClassEntryLookUp {
       val visitor = new ClassVisitor(Opcodes.ASM9) {
         override def visitSource(source: String, debug: String): Unit =
           sourceName = Option(source)
+
+        override def visitMethod(
+            access: Int,
+            name: String,
+            descriptor: String,
+            signature: String,
+            exceptions: Array[String]
+        ): MethodVisitor = {
+          if (isStatic(access) && name.endsWith("$extension")) {
+            isValueClass = true
+          }
+          super.visitMethod(access, name, descriptor, signature, exceptions)
+        }
+
+        private def isStatic(access: Int): Boolean = (access & Opcodes.ACC_STATIC) != 0
       }
       reader.accept(visitor, 0)
       val relativePath = root.relativize(path)
@@ -298,6 +315,7 @@ private object ClassEntryLookUp {
         fullyQualifiedName,
         sourceName,
         relativePath.toString,
+        isValueClass,
         classSystem
       )
     } finally {
