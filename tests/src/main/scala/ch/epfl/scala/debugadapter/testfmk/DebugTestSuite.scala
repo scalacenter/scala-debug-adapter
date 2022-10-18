@@ -12,7 +12,7 @@ import ch.epfl.scala.debugadapter.Logger
 import java.net.URI
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
 import munit.FunSuite
-import munit.Assertions._
+import munit.Assertions.*
 
 abstract class DebugTestSuite extends FunSuite with DebugTest {
   override def munitTimeout: Duration = 120.seconds
@@ -35,8 +35,8 @@ trait DebugTest {
       gracePeriod: Duration = 2.seconds,
       logger: Logger = NoopLogger
   ): DebugServer = {
-    val tools = DebugTools(debuggee, TestingResolver, NoopLogger)
-    DebugServer(debuggee, tools, NoopLogger, testMode = true)
+    val tools = DebugTools(debuggee, TestingResolver, logger)
+    DebugServer(debuggee, tools, logger, testMode = true)
   }
 
   def startDebugServer(
@@ -44,8 +44,8 @@ trait DebugTest {
       gracePeriod: Duration = 2.seconds,
       logger: Logger = NoopLogger
   ): DebugServer.Handler = {
-    val tools = DebugTools(debuggee, TestingResolver, NoopLogger)
-    DebugServer.start(debuggee, tools, NoopLogger)
+    val tools = DebugTools(debuggee, TestingResolver, logger)
+    DebugServer.start(debuggee, tools, logger)
   }
 
   def check(uri: URI, attach: Option[Int] = None)(steps: DebugStepAssert[?]*): Unit = {
