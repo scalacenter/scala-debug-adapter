@@ -89,6 +89,7 @@ lazy val tests = projectMatrix
     publish := {},
     // Test / javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=1044",
     Test / fork := true,
+    Test / baseDirectory := (ThisBuild / baseDirectory).value / "tests",
     // do not use sbt logger, otherwise the output of a test only appears at the end of the suite
     Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "+l"),
     Test / testOptions := (Test / testOptions)
