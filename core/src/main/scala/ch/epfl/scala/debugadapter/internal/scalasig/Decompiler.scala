@@ -40,7 +40,6 @@ private[internal] object Decompiler {
 
     val scalaAnnotations = scala.collection.mutable.Buffer[String]()
 
-    val emptyVisitor = new AnnotationVisitor(Opcodes.ASM9) {}
     val scalaVisitor = new AnnotationVisitor(Opcodes.ASM9) {
       override def visitArray(name: String): AnnotationVisitor = {
         if (name == "bytes") {
@@ -49,9 +48,7 @@ private[internal] object Decompiler {
               scalaAnnotations += value.asInstanceOf[String]
             }
           }
-        } else {
-          emptyVisitor
-        }
+        } else super.visitArray(name)
       }
 
       override def visit(name: String, value: Any): Unit = {
@@ -70,7 +67,7 @@ private[internal] object Decompiler {
         descriptor match {
           case SCALA_SIG_ANNOTATION | SCALA_LONG_SIG_ANNOTATION =>
             scalaVisitor
-          case _ => emptyVisitor
+          case _ => super.visitAnnotation(descriptor, visible)
         }
       }
     }

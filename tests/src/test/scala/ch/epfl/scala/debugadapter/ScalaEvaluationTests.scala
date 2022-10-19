@@ -1345,7 +1345,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(7), Evaluation.success("msg", "Hello World!"))
+    check(Breakpoint(6), Evaluation.success("msg", "Hello World!"))
   }
 
   test("evaluate at lambda start") {
@@ -1840,7 +1840,6 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.success("list(0)", 1),
         Evaluation.success("x", 1),
         Breakpoint(9), // calling map
-        Breakpoint(9), // adapted lambda
         Breakpoint(9),
         Evaluation.success("x + y", 2), // finally we are into the lifted lambda x + y
         Breakpoint(8), // still in the same lifted lambda (the line position does not make any sense)
@@ -1859,17 +1858,14 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     else
       check(
         Breakpoint(7),
-        Breakpoint(7),
         Evaluation.ignore("list(0)", 1),
         Breakpoint(8),
         Evaluation.success("list(0)", 1),
         Evaluation.success("x", 1),
-        Breakpoint(8),
         Breakpoint(9),
         Evaluation.ignore("x + y", 2),
         Breakpoint(8),
         Breakpoint(9),
-        Breakpoint(8),
         Breakpoint(8),
         Breakpoint(13),
         Evaluation.successOrIgnore("x", 1, isScala212),

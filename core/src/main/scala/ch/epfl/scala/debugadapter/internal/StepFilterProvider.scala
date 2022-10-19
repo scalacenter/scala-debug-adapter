@@ -16,9 +16,9 @@ class StepFilterProvider(
     testMode: Boolean
 ) extends JavaStepFilterProvider() {
 
-  override def shouldStepInto(method: Method, filters: StepFilters): Boolean = {
+  override def shouldSkipOver(method: Method, filters: StepFilters): Boolean = {
     try {
-      val shouldSkip = super.shouldStepInto(method, filters) || stepFilters.exists(_.shouldStepInto(method))
+      val shouldSkip = super.shouldSkipOver(method, filters) || stepFilters.exists(_.shouldSkipOver(method))
       if (shouldSkip) logger.debug(s"Skipping $method (step into)")
       shouldSkip
     } catch {
@@ -29,11 +29,11 @@ class StepFilterProvider(
     }
   }
 
-  override def shouldStepOut(upperLocation: Location, method: Method): Boolean = {
+  override def shouldSkipOut(upperLocation: Location, method: Method): Boolean = {
     try {
       val shouldSkip =
-        super.shouldStepOut(upperLocation, method) ||
-          stepFilters.exists(_.shouldStepOut(upperLocation, method))
+        super.shouldSkipOut(upperLocation, method) ||
+          stepFilters.exists(_.shouldSkipOut(upperLocation, method))
       if (shouldSkip) logger.debug(s"Skipping $method (step out)")
       shouldSkip
     } catch {

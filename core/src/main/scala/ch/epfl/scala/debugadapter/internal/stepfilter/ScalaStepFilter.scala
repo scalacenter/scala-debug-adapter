@@ -10,19 +10,24 @@ import ch.epfl.scala.debugadapter.DebugTools
 import ch.epfl.scala.debugadapter.Logger
 import scala.jdk.CollectionConverters.*
 import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
+import ch.epfl.scala.debugadapter.ScalaVersion
 
-trait ScalaStepFilter extends StepFilter {
+abstract class ScalaStepFilter(scalaVersion: ScalaVersion) extends StepFilter {
   protected def skipScalaMethod(method: Method): Boolean
 
-  override def shouldStepInto(method: Method): Boolean = {
+  override def shouldSkipOver(method: Method): Boolean = {
     if (method.isBridge) true
     else if (isDynamicClass(method.declaringType)) true
     else if (isJava(method)) false
     else if (isConstructor(method)) false
-    else if (isLocalMethod(method))
-      !isLazyInitializer(method) && isLazyGetter(method)
+    else if (isStaticConstructor(method)) false
+    else if (isAdaptedMethod(method)) true
     else if (isAnonFunction(method)) false
+    else if (isLiftedMethod(method)) !isLazyInitializer(method) && isLazyGetter(method)
+    else if (isAnonClass(method.declaringType)) false
+    // TODO in Scala 3 we should be able to find the symbol of a local class using TASTy Query
     else if (isLocalClass(method.declaringType)) false
+    else if (scalaVersion.isScala2 && isNestedClass(method.declaringType)) false
     else if (isDefaultValue(method)) false
     else if (isTraitInitializer(method)) skipTraitInitializer(method)
     else skipScalaMethod(method)
@@ -44,8 +49,17 @@ trait ScalaStepFilter extends StepFilter {
   private def isConstructor(method: Method): Boolean =
     method.name == "<init>"
 
-  private def isLocalMethod(method: Method): Boolean =
+  private def isStaticConstructor(method: Method): Boolean =
+    method.name == "<clinit>"
+
+  private def isAnonFunction(method: Method): Boolean =
+    method.name.matches(".+\\$anonfun\\$\\d+")
+
+  private def isLiftedMethod(method: Method): Boolean =
     method.name.matches(".+\\$\\d+")
+
+  private def isAdaptedMethod(method: Method): Boolean =
+    method.name.matches(".+\\$adapted(\\$\\d+)?")
 
   private def isLazyInitializer(method: Method): Boolean =
     method.name.contains("$lzyINIT") || method.name.contains("$lzycompute$")
@@ -68,14 +82,17 @@ trait ScalaStepFilter extends StepFilter {
       case _ => false
     }
 
-  private def isAnonFunction(method: Method): Boolean =
-    method.name.contains("$anonfun$")
-
   private def isDefaultValue(method: Method): Boolean =
     method.name.contains("$default$")
 
-  private def isLocalClass(tpe: ReferenceType): Boolean =
+  private def isAnonClass(tpe: ReferenceType): Boolean =
     tpe.name.contains("$anon$")
+
+  private def isLocalClass(tpe: ReferenceType): Boolean =
+    tpe.name.matches(".+\\$\\d+")
+
+  private def isNestedClass(tpe: ReferenceType): Boolean =
+    tpe.name.matches(".+\\$\\.+")
 
   private def isTraitInitializer(method: Method): Boolean =
     method.name == "$init$"
@@ -101,10 +118,10 @@ object ScalaStepFilter {
             .tryLoad(debuggee, classLoader, logger, testMode)
             .warnFailure(logger, s"Cannot load step filter for Scala ${debuggee.scalaVersion}")
         }
-        .getOrElse(fallback)
+        .getOrElse(fallback(debuggee.scalaVersion))
   }
 
-  private def fallback: StepFilter = new ScalaStepFilter {
+  private def fallback(scalaVersion: ScalaVersion): StepFilter = new ScalaStepFilter(scalaVersion) {
     override protected def skipScalaMethod(method: Method): Boolean = false
   }
 }
