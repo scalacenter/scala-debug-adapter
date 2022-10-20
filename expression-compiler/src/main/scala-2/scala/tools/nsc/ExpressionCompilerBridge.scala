@@ -6,6 +6,7 @@ import java.{util => ju}
 import scala.jdk.CollectionConverters._
 import scala.tools.nsc.reporters.StoreReporter
 import scala.util.control.NonFatal
+import scala.annotation
 
 final class ExpressionCompilerBridge {
   def run(
@@ -31,7 +32,7 @@ final class ExpressionCompilerBridge {
     ) ++ options :+ sourceFile.toString
 
     val command = new CompilerCommand(args, errorConsumer.accept(_))
-    val reporter = new StoreReporter(command.settings)
+    val reporter = new StoreReporter(): @annotation.nowarn()
     val global = new ExpressionGlobal(
       command.settings,
       reporter,
