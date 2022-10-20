@@ -82,7 +82,7 @@ private[debugadapter] object SourceLookUpProvider {
     val sourceFilesByEntry = parrallelEntries
       .flatMap(_.sourceEntries)
       .distinct
-      .map(entry => entry -> SourceEntryLookUp.getAllSourceFiles(entry))
+      .map(entry => entry -> SourceEntryLookUp.getAllSourceFiles(entry, logger))
       .toMap
     val allLookUps = parrallelEntries
       .map(entry => ClassEntryLookUp(entry, entry.sourceEntries.flatMap(sourceFilesByEntry.apply), logger))

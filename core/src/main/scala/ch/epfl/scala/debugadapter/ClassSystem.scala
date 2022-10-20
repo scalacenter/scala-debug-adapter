@@ -8,11 +8,12 @@ import java.nio.file.Path
 import java.nio.file.Files
 import java.net.URI
 import scala.collection.mutable
-import scala.util.control.NonFatal
 import java.util.Collections
+import scala.util.Try
 
 sealed trait ClassSystem {
-  def within[T](f: (FileSystem, Path) => T): Option[T]
+  def name: String
+  def within[T](f: (FileSystem, Path) => T): Try[T]
   def readBytes(path: String): Array[Byte] =
     within { (_, root) =>
       Files.readAllBytes(root.resolve(path))
@@ -20,25 +21,25 @@ sealed trait ClassSystem {
 }
 
 final case class ClassJar(absolutePath: Path) extends ClassSystem {
-  def within[T](f: (FileSystem, Path) => T): Option[T] =
+  def name: String = absolutePath.toString
+  def within[T](f: (FileSystem, Path) => T): Try[T] =
     IO.withinJarFile(absolutePath)(fs => f(fs, fs.getPath("/")))
 }
 
 final case class ClassDirectory(absolutePath: Path) extends ClassSystem {
-  def within[T](f: (FileSystem, Path) => T): Option[T] =
-    Some(f(FileSystems.getDefault, absolutePath))
+  def name: String = absolutePath.toString
+  def within[T](f: (FileSystem, Path) => T): Try[T] = Try {
+    f(FileSystems.getDefault, absolutePath)
+  }
 }
 
 final case class JavaRuntimeSystem(classLoader: ClassLoader, javaHome: Path) extends ClassSystem {
+  def name: String = javaHome.toString
   def fileSystem: FileSystem =
     JavaRuntimeSystem.getFileSystem(classLoader, javaHome)
 
-  def within[T](f: (FileSystem, Path) => T): Option[T] = {
-    try {
-      Some(f(fileSystem, fileSystem.getPath("/modules")))
-    } catch {
-      case NonFatal(_) => None
-    }
+  def within[T](f: (FileSystem, Path) => T): Try[T] = Try {
+    f(fileSystem, fileSystem.getPath("/modules"))
   }
 }
 
