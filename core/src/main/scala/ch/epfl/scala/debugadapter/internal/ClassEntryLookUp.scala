@@ -252,9 +252,7 @@ private object ClassEntryLookUp {
       }
 
       if (orphanClassFiles.size > 0)
-        logger.debug(
-          s"Found ${orphanClassFiles.size} orphan class files in ${entry.name}"
-        )
+        logger.debug(s"Found ${orphanClassFiles.size} orphan class files in ${entry.name}")
 
       new ClassEntryLookUp(
         entry,

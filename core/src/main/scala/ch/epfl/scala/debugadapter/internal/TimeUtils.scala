@@ -7,7 +7,7 @@ import ch.epfl.scala.debugadapter.Logger
 private[debugadapter] object TimeUtils {
   def logTime[T](logger: Logger, msg: String)(f: => T): T = {
     val (duration, result) = timed(f)
-    logger.debug(s"$msg in ${prettyPrint(duration)}")
+    logger.info(s"$msg in ${prettyPrint(duration)}")
     result
   }
 

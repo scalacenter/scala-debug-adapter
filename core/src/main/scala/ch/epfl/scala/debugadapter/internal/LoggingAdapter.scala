@@ -19,11 +19,8 @@ private[debugadapter] class LoggingAdapter(
       case Level.INFO | Level.CONFIG => logger.info(message)
       case Level.WARNING => logger.warn(message)
       case Level.SEVERE =>
-        if (isExpectedDuringCancellation(message) || isIgnoredError(message)) {
-          logger.debug(message)
-        } else {
-          logger.error(message)
-        }
+        if (isExpectedDuringCancellation(message) || isIgnoredError(message)) logger.debug(message)
+        else logger.error(message)
       case _ => logger.debug(message)
     }
   }

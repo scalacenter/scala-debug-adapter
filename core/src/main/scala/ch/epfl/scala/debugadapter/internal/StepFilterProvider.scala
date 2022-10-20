@@ -18,28 +18,28 @@ class StepFilterProvider(
 
   override def shouldSkipOver(method: Method, filters: StepFilters): Boolean = {
     try {
-      val shouldSkip = super.shouldSkipOver(method, filters) || stepFilters.exists(_.shouldSkipOver(method))
-      if (shouldSkip) logger.debug(s"Skipping $method (step into)")
-      shouldSkip
+      val skipOver = super.shouldSkipOver(method, filters) || stepFilters.exists(_.shouldSkipOver(method))
+      if (skipOver) logger.debug(s"Skipping over $method")
+      skipOver
     } catch {
       case cause: Throwable =>
         if (testMode) throw cause
-        else logger.error(s"Failed to determine if $method should be stepped into: ${cause.getMessage}")
+        logger.warn(s"Failed to determine if $method should be skipped over: ${cause.getMessage}")
         false
     }
   }
 
   override def shouldSkipOut(upperLocation: Location, method: Method): Boolean = {
     try {
-      val shouldSkip =
+      val skipOut =
         super.shouldSkipOut(upperLocation, method) ||
           stepFilters.exists(_.shouldSkipOut(upperLocation, method))
-      if (shouldSkip) logger.debug(s"Skipping $method (step out)")
-      shouldSkip
+      if (skipOut) logger.debug(s"Skipping out $method")
+      skipOut
     } catch {
       case cause: Throwable =>
         if (testMode) throw cause
-        else logger.error(s"Failed to determine if $method should be stepped out: ${cause.getMessage}")
+        logger.warn(s"Failed to determine if $method should be skipped out: ${cause.getMessage}")
         false
     }
   }

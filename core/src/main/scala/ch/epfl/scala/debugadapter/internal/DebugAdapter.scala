@@ -23,7 +23,7 @@ private[debugadapter] object DebugAdapter {
   DebugSettings.getCurrent.showStaticVariables = true
 
   def context(debuggee: Debuggee, tools: DebugTools, logger: Logger, testMode: Boolean): IProviderContext = {
-    TimeUtils.logTime(logger, "Configured debugger") {
+    TimeUtils.logTime(logger, "Configured debugger context") {
       val context = new ProviderContext
       val classEntries = debuggee.classEntries
       val distinctEntries = classEntries
