@@ -8,6 +8,9 @@ import ch.epfl.scala.debugadapter.ClassEntry
 import ch.epfl.scala.debugadapter.testfmk.NoopLogger
 import munit.FunSuite
 import scala.concurrent.duration.*
+import ch.epfl.scala.debugadapter.Library
+import java.nio.file.Paths
+import ch.epfl.scala.debugadapter.SourceJar
 
 /**
  * This is a test class that also
@@ -16,6 +19,14 @@ import scala.concurrent.duration.*
 class ClassEntryLookUpStats extends FunSuite {
   override def munitTimeout: Duration = 120.seconds
   private val jvmCache = JvmCache().withDefaultIndex
+
+  test("empty source jar") {
+    val entry = getClassEntry("empty")
+    printAndCheck("empty", entry)(
+      classCount => assertEquals(classCount, 0),
+      orphanCount => assertEquals(orphanCount, 0)
+    )
+  }
 
   test("adopt:1.8.0-292") {
     printAndCheck("adopt:1.8.0-292")(
@@ -207,5 +218,13 @@ class ClassEntryLookUpStats extends FunSuite {
     }
     classCountAssertion(classCount)
     orphanAssertion(orphanClassCount)
+  }
+
+  private def getClassEntry(name: String): ClassEntry = {
+    val directory = Paths.get("input/class-entry").toAbsolutePath
+    val classJar = directory.resolve(s"$name.jar")
+    val sourceJar = directory.resolve(s"$name-sources.jar")
+    val sourceEntry = SourceJar(sourceJar)
+    Library(name, "", classJar, Seq(sourceEntry))
   }
 }

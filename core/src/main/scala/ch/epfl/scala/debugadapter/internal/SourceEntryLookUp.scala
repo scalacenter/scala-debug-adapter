@@ -10,6 +10,8 @@ import java.nio.file.Path
 import java.nio.file.Files
 import scala.jdk.CollectionConverters.*
 import java.net.URI
+import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
 
 private case class SourceFile(
     entry: SourceEntry,
@@ -21,12 +23,15 @@ private case class SourceFile(
 }
 
 private object SourceEntryLookUp {
-  def getAllSourceFiles(entry: SourceEntry): Seq[SourceFile] = {
+  def getAllSourceFiles(entry: SourceEntry, logger: Logger): Seq[SourceFile] = {
     entry match {
       case SourceJar(jar) =>
-        IO.withinJarFile(jar) { fileSystem =>
-          getAllSourceFiles(entry, fileSystem, fileSystem.getPath("/")).toVector
-        }.getOrElse(Vector.empty)
+        IO
+          .withinJarFile(jar) { fileSystem =>
+            getAllSourceFiles(entry, fileSystem, fileSystem.getPath("/")).toVector
+          }
+          .warnFailure(logger, s"Cannot list the source files in ${entry.name}")
+          .getOrElse(Vector.empty)
       case SourceDirectory(directory) =>
         getAllSourceFiles(entry, FileSystems.getDefault, directory).toSeq
       case StandaloneSourceFile(absolutePath, relativePath) =>

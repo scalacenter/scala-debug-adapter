@@ -12,6 +12,8 @@ import ClassEntryLookUp.readSourceContent
 import scala.util.matching.Regex
 import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSig
 import ch.epfl.scala.debugadapter.internal.scalasig.Decompiler
+import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
+import scala.util.Try
 
 private case class SourceLine(uri: URI, lineNumber: Int)
 
@@ -60,7 +62,9 @@ private class ClassEntryLookUp(
       sourceUriToClassFiles(sourceUri)
         .groupBy(_.classSystem)
         .foreach { case (classSystem, classFiles) =>
-          classSystem.within((_, root) => loadLineNumbers(root, classFiles, sourceUri))
+          classSystem
+            .within((_, root) => loadLineNumbers(root, classFiles, sourceUri))
+            .warnFailure(logger, s"Cannot load line numbers in ${classSystem.name}")
         }
     }
 
@@ -117,7 +121,7 @@ private class ClassEntryLookUp(
   }
 
   def getSourceContent(sourceUri: URI): Option[String] =
-    sourceUriToSourceFile.get(sourceUri).flatMap(readSourceContent)
+    sourceUriToSourceFile.get(sourceUri).flatMap(readSourceContent(_, logger))
 
   def getSourceFile(fqcn: String): Option[URI] =
     classNameToSourceFile.get(fqcn).map(_.uri)
@@ -161,7 +165,7 @@ private object ClassEntryLookUp {
     new ClassEntryLookUp(entry, Map.empty, Map.empty, Map.empty, Map.empty, Seq.empty, Seq.empty, logger)
 
   private[internal] def apply(entry: ClassEntry, logger: Logger): ClassEntryLookUp = {
-    val sourceFiles = entry.sourceEntries.flatMap(SourceEntryLookUp.getAllSourceFiles)
+    val sourceFiles = entry.sourceEntries.flatMap(SourceEntryLookUp.getAllSourceFiles(_, logger))
     ClassEntryLookUp(entry, sourceFiles, logger)
   }
 
@@ -175,6 +179,7 @@ private object ClassEntryLookUp {
       val classFiles = entry.classSystems.flatMap { classSystem =>
         classSystem
           .within(readAllClassFiles(classSystem))
+          .warnFailure(logger, s"Cannot list the class files in ${classSystem.name}")
           .getOrElse(Vector.empty)
       }
 
@@ -235,7 +240,7 @@ private object ClassEntryLookUp {
                     // so we try to find the right package declaration in each file
                     // it would be very unfortunate that 2 sources file with the same name
                     // declare the same package.
-                    manySourceFiles.filter(s => findPackage(s, classFile.fullPackage)) match {
+                    manySourceFiles.filter(s => findPackage(s, classFile.fullPackage, logger)) match {
                       case sourceFile :: Nil =>
                         recordSourceFile(sourceFile)
                       case _ =>
@@ -325,14 +330,15 @@ private object ClassEntryLookUp {
 
   private def findPackage(
       sourceFile: SourceFile,
-      fullPackage: String
+      fullPackage: String,
+      logger: Logger
   ): Boolean = {
     // for "a.b.c" it returns Seq("a.b.c", "b.c", "c")
     // so that we can match on "package a.b.c" or "package b.c" or "package c"
     val nestedPackages = fullPackage.split('.').foldLeft(Seq.empty[String]) { (nestedParts, newPart) =>
       nestedParts.map(outer => s"$outer.$newPart") :+ newPart
     }
-    val sourceContent = readSourceContent(sourceFile)
+    val sourceContent = readSourceContent(sourceFile, logger)
     nestedPackages.exists { `package` =>
       val quotedPackage = Regex.quote(`package`)
       val matcher = s"package\\s+(object\\s+)?$quotedPackage(\\{|:|;|\\s+)".r
@@ -340,21 +346,19 @@ private object ClassEntryLookUp {
     }
   }
 
-  private def readSourceContent(sourceFile: SourceFile): Option[String] = {
+  private def readSourceContent(sourceFile: SourceFile, logger: Logger): Option[String] = {
     withinSourceEntry(sourceFile.entry) { root =>
       val sourcePath = root.resolve(sourceFile.relativePath)
       new String(Files.readAllBytes(sourcePath))
     }
+      .warnFailure(logger, s"Cannot read content of ${sourceFile.uri}")
   }
 
-  private def withinSourceEntry[T](
-      sourceEntry: SourceEntry
-  )(f: Path => T): Option[T] = {
+  private def withinSourceEntry[T](sourceEntry: SourceEntry)(f: Path => T): Try[T] = {
     sourceEntry match {
       case SourceJar(jar) => IO.withinJarFile(jar)(fs => f(fs.getPath("/")))
-      case SourceDirectory(dir) => Some(f(dir))
-      case StandaloneSourceFile(absolutePath, _) =>
-        Some(f(absolutePath.getParent))
+      case SourceDirectory(dir) => Try(f(dir))
+      case StandaloneSourceFile(absolutePath, _) => Try(f(absolutePath.getParent))
     }
   }
 }
