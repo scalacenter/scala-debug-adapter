@@ -48,6 +48,24 @@ abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTest
     check(Breakpoint(5), Breakpoint(13), Breakpoint(14), Breakpoint(22), Breakpoint(9))
   }
 
+  test("supports breakpoints in top level class and object") {
+    val source =
+      """|object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    println("main method")
+         |    (new A).m()
+         |  }
+         |}
+         |class A {
+         |  def m(): Unit = {
+         |    println("method m in class A")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "Main", scalaVersion)
+    check(Breakpoint(3), Breakpoint(9))
+  }
+
   test("should support breakpoints in fully qualified classes") {
     val debuggee = TestingDebuggee.scalaBreakpointTest(scalaVersion)
     val server = getDebugServer(debuggee)

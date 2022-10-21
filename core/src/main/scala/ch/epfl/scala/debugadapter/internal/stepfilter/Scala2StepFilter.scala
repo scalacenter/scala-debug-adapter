@@ -130,6 +130,7 @@ class Scala2StepFilter(
       .iterate(Option(sym))(opt => opt.flatMap(_.parent))
       .takeWhile(_.isDefined)
       .flatten
+      .filter(_.name != "<empty>") // Top level classes have <empty> packag as owner
       .toSeq
   }
 
