@@ -71,7 +71,9 @@ class ScalaStepFilterBridge(
     val isObject = fqcn.endsWith("$")
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
-      ctx.findSymbolFromRoot(packageNames).asInstanceOf[PackageSymbol]
+      if packageNames.nonEmpty
+      then ctx.findSymbolFromRoot(packageNames).asInstanceOf[PackageSymbol]
+      else ctx.defn.EmptyPackage
     val className = javaParts.last
     def findRec(
         owner: DeclaringSymbol,
