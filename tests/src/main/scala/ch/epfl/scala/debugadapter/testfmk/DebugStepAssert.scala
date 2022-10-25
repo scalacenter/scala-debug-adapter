@@ -9,6 +9,7 @@ final case class DebugStepAssert[T](step: DebugStep[T], assertion: T => Unit)
 
 sealed trait DebugStep[+T]
 final case class Breakpoint(sourceFile: Path, line: Int, condition: Option[String]) extends DebugStep[StackFrame]
+final case class Logpoint(sourceFile: Path, line: Int, logMessage: String) extends DebugStep[String]
 final case class StepIn() extends DebugStep[StackFrame]
 final case class StepOut() extends DebugStep[StackFrame]
 final case class StepOver() extends DebugStep[StackFrame]
@@ -38,6 +39,13 @@ object Breakpoint {
   def apply(line: Int, condition: String)(implicit ctx: DebugContext): DebugStepAssert[StackFrame] = {
     val breakpoint = Breakpoint(ctx.mainSource, line, Some(condition))
     DebugStepAssert(breakpoint, assertOnFrame(ctx.mainSource, line))
+  }
+}
+
+object Logpoint {
+  def apply(line: Int, logMessage: String, expected: String)(implicit ctx: DebugContext): DebugStepAssert[String] = {
+    val logpoint = Logpoint(ctx.mainSource, line, logMessage)
+    DebugStepAssert(logpoint, output => assertEquals(output, expected))
   }
 }
 

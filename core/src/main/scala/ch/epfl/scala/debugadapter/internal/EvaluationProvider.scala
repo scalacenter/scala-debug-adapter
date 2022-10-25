@@ -63,7 +63,9 @@ private[internal] class EvaluationProvider(
       } else if (breakpoint.containsConditionalExpression) {
         compileExpression(breakpoint.getCondition, thread, depth)
       } else if (breakpoint.containsLogpointExpression) {
-        compileExpression(breakpoint.getLogMessage, thread, depth)
+        val tripleQuote = "\"\"\""
+        val expression = s"""println(s$tripleQuote${breakpoint.getLogMessage}$tripleQuote)"""
+        compileExpression(expression, thread, depth)
       } else {
         Failure(new Exception("Missing expression"))
       }

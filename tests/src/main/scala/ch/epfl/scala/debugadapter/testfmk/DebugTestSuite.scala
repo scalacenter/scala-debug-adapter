@@ -13,6 +13,7 @@ import java.net.URI
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
 import munit.FunSuite
 import munit.Assertions.*
+import com.microsoft.java.debug.core.protocol.Types.SourceBreakpoint
 
 abstract class DebugTestSuite extends FunSuite with DebugTest {
   override def munitTimeout: Duration = 120.seconds
@@ -73,15 +74,29 @@ trait DebugTest {
       case None => client.launch()
     }
 
-    val breakpoints = steps.map(_.step).collect { case b: Breakpoint => b }
-    breakpoints
-      .groupBy(_.sourceFile)
-      .foreach { case (sourceFile, breakpoints) =>
-        val conditionalBreakpoints = breakpoints
-          .map(b => (b.line, b.condition.orNull))
-          .distinct
-        val configuredBreakpoints = client.setConditionalBreakpoints(sourceFile, conditionalBreakpoints)
-        assertEquals(configuredBreakpoints.length, conditionalBreakpoints.length)
+    val sourceBreakpoints = steps
+      .map(_.step)
+      .distinct
+      .collect {
+        case b: Breakpoint =>
+          b.sourceFile -> new SourceBreakpoint(b.line, b.condition.getOrElse(null), null)
+        case l: Logpoint =>
+          val breakpoint = new SourceBreakpoint(l.line, null, null)
+          breakpoint.logMessage = l.logMessage
+          l.sourceFile -> breakpoint
+      }
+
+    sourceBreakpoints
+      .groupBy(_._1)
+      .map { case (sourceFile, bs) => (sourceFile, bs.map(_._2)) }
+      .foreach { case (sourceFile, sourceBreakpoints) =>
+        sourceBreakpoints
+          .groupBy(_.line)
+          .foreach { case (line, bs) =>
+            assert(bs.size == 1, s"More than one breakpoint in $sourceFile on line $line")
+          }
+        val configuredBreakpoints = client.setSourceBreakpoints(sourceFile, sourceBreakpoints)
+        assertEquals(configuredBreakpoints.length, sourceBreakpoints.length)
         assert(configuredBreakpoints.forall(_.verified))
       }
     client.configurationDone()
@@ -107,6 +122,10 @@ trait DebugTest {
       case DebugStepAssert(_: Breakpoint, assertion) =>
         continueIfPaused()
         assertStop(assertion)
+      case DebugStepAssert(_: Logpoint, assertion) =>
+        continueIfPaused()
+        val event = client.outputed(m => m.category == Category.stdout)
+        assertion(event.output.trim)
       case DebugStepAssert(_: StepIn, assertion) =>
         println(s"Stepping in, at ${topFrame.source.name} ${topFrame.line}")
         client.stepIn(threadId)
@@ -120,7 +139,7 @@ trait DebugTest {
       case DebugStepAssert(eval: Evaluation, assertion) =>
         println(s"$$ ${eval.expression}")
         val response = client.evaluate(eval.expression, topFrame.id)
-        response.foreach(res => println(s" > $res"))
+        response.foreach(res => println(s"> $res"))
         assertion(response)
       case DebugStepAssert(Outputed(), assertion) =>
         continueIfPaused()
