@@ -41,7 +41,7 @@ lazy val root = project
 
 lazy val core212 = core.jvm(Dependencies.scala212)
 lazy val core = projectMatrix
-  .in(file("core"))
+  .in(file("modules/core"))
   .jvmPlatform(scalaVersions = Seq(Dependencies.scala212, Dependencies.scala213, Dependencies.scala32))
   .enablePlugins(SbtJdiTools, BuildInfoPlugin)
   .settings(
@@ -75,7 +75,7 @@ lazy val core = projectMatrix
 lazy val tests212 = tests.jvm(Dependencies.scala212)
 lazy val tests3 = tests.jvm(Dependencies.scala32)
 lazy val tests = projectMatrix
-  .in(file("tests"))
+  .in(file("modules/tests"))
   .jvmPlatform(scalaVersions = Seq(Dependencies.scala212, Dependencies.scala213, Dependencies.scala32))
   .settings(
     name := "scala-debug-adapter-test",
@@ -89,7 +89,7 @@ lazy val tests = projectMatrix
     publish := {},
     // Test / javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=1044",
     Test / fork := true,
-    Test / baseDirectory := (ThisBuild / baseDirectory).value / "tests",
+    Test / baseDirectory := (ThisBuild / baseDirectory).value / "modules" / "tests",
     // do not use sbt logger, otherwise the output of a test only appears at the end of the suite
     Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "+l"),
     Test / testOptions := (Test / testOptions)
@@ -106,7 +106,7 @@ lazy val tests = projectMatrix
   .dependsOn(core)
 
 lazy val sbtPlugin = project
-  .in(file("sbt-plugin"))
+  .in(file("modules/sbt-plugin"))
   .enablePlugins(SbtPlugin, ContrabandPlugin, JsonCodecPlugin)
   .settings(
     name := "sbt-debug-adapter",
@@ -128,7 +128,7 @@ lazy val expressionCompiler213 = expressionCompiler.finder(scala213Axis)(true)
 lazy val expressionCompiler30 = expressionCompiler.finder(scala30Axis)(true)
 lazy val expressionCompiler32 = expressionCompiler.finder(scala32Axis)(true)
 lazy val expressionCompiler = projectMatrix
-  .in(file("expression-compiler"))
+  .in(file("modules/expression-compiler"))
   .customRow(true, Seq(scala212Axis, VirtualAxis.jvm), identity[Project] _)
   .customRow(true, Seq(scala213Axis, VirtualAxis.jvm), identity[Project] _)
   .customRow(true, Seq(scala30Axis, VirtualAxis.jvm), identity[Project] _)
@@ -166,7 +166,7 @@ lazy val expressionCompiler = projectMatrix
   )
 
 lazy val scala3StepFilter: Project = project
-  .in(file("scala-3-step-filter"))
+  .in(file("modules/scala-3-step-filter"))
   .disablePlugins(SbtJdiTools)
   .dependsOn(tests3 % Test)
   .settings(
