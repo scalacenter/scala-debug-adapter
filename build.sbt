@@ -26,6 +26,7 @@ inThisBuild(
 lazy val root = project
   .in(file("."))
   .aggregate(
+    javaDebug,
     core212,
     tests212,
     sbtPlugin,
@@ -39,10 +40,34 @@ lazy val root = project
     publish / skip := true
   )
 
+lazy val javaDebug = project
+  .in(file("modules/java-debug/com.microsoft.java.debug.core"))
+  .settings(
+    name := "com-microsoft-java-debug-core",
+    crossPaths := false,
+    autoScalaLibrary := false,
+    libraryDependencies ++= Seq(
+      "org.apache.commons" % "commons-lang3" % "3.6",
+      "com.google.code.gson" % "gson" % "2.8.9",
+      "io.reactivex.rxjava2" % "rxjava" % "2.1.1",
+      "org.reactivestreams" % "reactive-streams" % "1.0.0",
+      "commons-io" % "commons-io" % "2.10.0",
+      "junit" % "junit" % "4.13.1" % Test,
+      "org.easymock" % "easymock" % "3.4" % Test,
+      "com.novocode" % "junit-interface" % "0.10" % Test
+    ),
+    Test / fork := true,
+    version := "0.34.0+10-SNAPSHOT"
+  )
+
 lazy val core212 = core.jvm(Dependencies.scala212)
 lazy val core = projectMatrix
   .in(file("modules/core"))
-  .jvmPlatform(scalaVersions = Seq(Dependencies.scala212, Dependencies.scala213, Dependencies.scala32))
+  .jvmPlatform(
+    Seq(Dependencies.scala212, Dependencies.scala213, Dependencies.scala32),
+    Seq.empty,
+    p => p.dependsOn(javaDebug)
+  )
   .enablePlugins(SbtJdiTools, BuildInfoPlugin)
   .settings(
     name := "scala-debug-adapter",
@@ -51,7 +76,6 @@ lazy val core = projectMatrix
       Dependencies.scalaReflect(scalaVersion.value),
       Dependencies.asm,
       Dependencies.asmUtil,
-      Dependencies.javaDebug,
       Dependencies.sbtTestAgent
     ),
     libraryDependencies += onScalaVersion(
