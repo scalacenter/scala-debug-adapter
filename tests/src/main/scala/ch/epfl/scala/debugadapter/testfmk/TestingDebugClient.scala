@@ -79,18 +79,18 @@ class TestingDebugClient(socket: Socket, debug: String => Unit)(implicit
       lines: Seq[Int],
       timeout: Duration = 1.second
   ): Array[Types.Breakpoint] = {
-    val breakpoints = lines.map(l => (l, null))
-    setConditionalBreakpoints(source, breakpoints, timeout)
+    val breakpoints = lines.map(l => new SourceBreakpoint(l, null, null))
+    setSourceBreakpoints(source, breakpoints, timeout)
   }
 
-  def setConditionalBreakpoints(
+  def setSourceBreakpoints(
       source: Path,
-      breakpoints: Seq[(Int, String)],
+      breakpoints: Seq[SourceBreakpoint],
       timeout: Duration = 1.second
   ): Array[Types.Breakpoint] = {
     val args = new SetBreakpointArguments()
     args.source = new Types.Source(source.toString, 0)
-    args.breakpoints = breakpoints.map { case (line, condition) => new SourceBreakpoint(line, condition, null) }.toArray
+    args.breakpoints = breakpoints.toArray
     val request = createRequest(Command.SETBREAKPOINTS, args)
     val response = sendRequest(request, timeout)
     getBody[SetBreakpointsResponseBody](response).breakpoints
