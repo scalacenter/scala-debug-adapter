@@ -124,7 +124,9 @@ trait DebugTest {
         assertStop(assertion)
       case DebugStepAssert(_: Logpoint, assertion) =>
         continueIfPaused()
-        val event = client.outputed(m => m.category == Category.stdout)
+        // A log point needs time for evaluation
+        val event = client.outputed(m => m.category == Category.stdout, 16.seconds)
+        print(s"> ${event.output}")
         assertion(event.output.trim)
       case DebugStepAssert(_: StepIn, assertion) =>
         println(s"Stepping in, at ${topFrame.source.name} ${topFrame.line}")
@@ -144,6 +146,7 @@ trait DebugTest {
       case DebugStepAssert(Outputed(), assertion) =>
         continueIfPaused()
         val event = client.outputed(m => m.category == Category.stdout)
+        print(s"> ${event.output}")
         assertion(event.output.trim)
       case DebugStepAssert(_: NoStep, _) => ()
     }
