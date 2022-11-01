@@ -41,7 +41,7 @@ Congratulations! You are now ready to start coding.
 All the modules are in the `modules` folder. They are composed of:
 - `java-debug`: A fork of [microsoft/java-debug](https://github.com/microsoft/java-debug) on which the scala-debug-adapter depends.
 The `java-debug` project was originally a Maven project.
-The `scala-debug-adapter` only depends on the `com.microsoft.java.debug.core` module and we compiles it directly using sbt.
+The `scala-debug-adapter` only depends on the `com.microsoft.java.debug.core` module and we compile it directly using sbt.
 So we can ignore the Maven configuration and the other modules.
 - `core`: The scala-debug-adapter itself which contains the `DebugServer` and all its configuration classes.
 - `expression-compiler`: An extension of the Scala compiler for compiling a Scala expression in the context of debugging (the current stack frame of a paused JVM) into a class file that can be loaded and invoked.
@@ -100,10 +100,10 @@ The organization of the tests is:
 - `DebugServerTests`: general tests about starting and exiting debug sessions on all kinds of debugees
 - `ScalaDebugTests`: general tests about inspecting threads, stack frames and variables in Scala programs
 - `ScalaEvaluationTests`: tests about the Scala expression evaluator
-- `SourceBreakpointTests`: tests about the different kind of source breakpoints: conditional breakpoints, hit count breakpoints and log points.
+- `SourceBreakpointTests`: tests about the different kinds of source breakpoints: conditional breakpoints, hit count breakpoints, and log points.
 - `StepFilterTests`: tests about stepping in and out of Scala methods.
 
-The tests are quite heavy to run because every test compiles a small Scala programs, creates a debug server that starts a fresh JVM to run the program, and executes a debugging scenario.
+The tests are quite heavy to run because every test compiles a small Scala program, creates a debug server that starts a fresh JVM to run the program, and executes a debugging scenario.
 All of this is repeated on a few Scala versions.
 
 Running all the test can take more than 30 minutes.
@@ -117,7 +117,7 @@ sbt:root> testOnly ch.epfl.scala.debugadapter.Scala32EvaluationTests
 
 You can install and start a local version of the scala-debug-adapter using Metals.
 
-1. In sbt, check out the version of the scala-debug-adapter.
+1. In sbt, check out the version of the scala-debug-adapter project.
 
 ```
 sbt:root> version
@@ -148,7 +148,7 @@ addSbtPlugin("ch.epfl.scala" % "sbt-debug-adapter" % "3.0.2-SNAPSHOT")
 
 6. Switch the build server. In VS Code, open the command palette, run `Metals: switch build server` and select `sbt`.
 
-7. Since we changed the build file, we may need to reload sbt and reimport the build. You can do so by opening the command palette and run the `Metals: Import build` command, or by clicking on `Import build` in Metals'tab.
+7. Since we changed the build file, we may need to reload sbt and re-import the build. You can do so by opening the command palette and running the `Metals: Import build` command, or by clicking on `Import build` in Metals'tab.
 
 8. Start the debugger:
   - click on the `debug` lens on top of a main method
