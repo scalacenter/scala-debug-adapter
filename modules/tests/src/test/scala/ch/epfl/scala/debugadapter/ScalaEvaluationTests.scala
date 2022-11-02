@@ -1880,6 +1880,27 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Breakpoint(16)
       )
   }
+
+  test("evaluate capture of pattern") {
+    assume(!scalaVersion.isScala30) // Won't be fixed in Scala 3.0
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val n = 1
+         |    n match {
+         |      case m =>
+         |        println(m)
+         |        println(m)
+         |    }
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    // a pure expression does nothing in statement position
+    check(Breakpoint(8), Evaluation.successOrIgnore("m", 1, ignore = isScala2))
+  }
 }
 
 abstract class Scala2EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEvaluationTests(scalaVersion) {
