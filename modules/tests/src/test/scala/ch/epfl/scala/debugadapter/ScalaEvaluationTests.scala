@@ -145,7 +145,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |
          |  def a1(str: String) = s"a1: $str"
          |  private def a2(str: String) = s"a2: $str"
-         |  
+         |
          |  private object B {
          |    def b1(str: String) = s"b1: $str"
          |    private[A] def b2(str: String) = s"b2: $str"
@@ -179,7 +179,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |    s"a2: $str"
          |  }
          |  override def toString(): String = a1
-         |  
+         |
          |  private object B {
          |    val b1 = "b1"
          |    def b2(str: String): String = {
@@ -221,7 +221,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |class A(name: String, val n: Int) {
          |  val a1 = s"$name.a1"
          |  private val a2 = s"$name.a2"
-         |  
+         |
          |  object B {
          |    val  b1 = s"$name.B.b1"
          |  }
@@ -294,10 +294,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  def main(args: Array[String]): Unit = {
          |    println("Hello, World!")
          |  }
-         |  
+         |
          |  trait A
          |  class B extends A
-         |  
+         |
          |  private def m(): String = "m"
          |  private def m(n: Int): String = s"m($n: Int)"
          |  private def m(b: Boolean): String = s"m($b: Boolean)"
@@ -354,7 +354,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |class C {
          |  def c1(): Unit =
          |    println("Hello, World!")
-         |  
+         |
          |  private def c2(): D = new D
          |  private def c3(d: D): String = "c3"
          |
@@ -1616,7 +1616,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |      case _ => ()
          |    }
          |  }
-         |  
+         |
          |  def main(args: Array[String]): Unit = {
          |    m(List("a", "b", "c"))
          |    m(List("a"))
@@ -1845,6 +1845,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Breakpoint(8), // still in the same lifted lambda (the line position does not make any sense)
         Breakpoint(9), // again in the lifted lambda
         Breakpoint(8), // going out of the lifted lambda
+        if (isScala32) Breakpoint(8) else NoStep(), // regression in Scala 3.2.1
+        if (isScala32) Breakpoint(9) else NoStep(), // regression in Scala 3.2.1
         Breakpoint(13), // calling withFilter
         Breakpoint(13),
         Evaluation.success("x", 1),
