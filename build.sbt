@@ -48,12 +48,12 @@ lazy val javaDebug = project
     autoScalaLibrary := false,
     libraryDependencies ++= Seq(
       "org.apache.commons" % "commons-lang3" % "3.6",
-      "com.google.code.gson" % "gson" % "2.8.9",
+      "com.google.code.gson" % "gson" % "2.10",
       "io.reactivex.rxjava2" % "rxjava" % "2.1.1",
-      "org.reactivestreams" % "reactive-streams" % "1.0.0",
+      "org.reactivestreams" % "reactive-streams" % "1.0.4",
       "commons-io" % "commons-io" % "2.10.0",
       "junit" % "junit" % "4.13.1" % Test,
-      "org.easymock" % "easymock" % "3.4" % Test,
+      "org.easymock" % "easymock" % "3.6" % Test,
       "com.novocode" % "junit-interface" % "0.11" % Test
     ),
     Test / fork := true,
@@ -198,7 +198,7 @@ lazy val scala3StepFilter: Project = project
     scalaVersion := Dependencies.scala32,
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
-      "ch.epfl.scala" %% "tasty-query" % "0.2.0",
+      "ch.epfl.scala" %% "tasty-query" % "0.3.0",
       "org.scala-lang" %% "tasty-core" % scalaVersion.value,
       Dependencies.munit % Test
     ),
