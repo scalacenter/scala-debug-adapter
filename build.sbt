@@ -47,14 +47,14 @@ lazy val javaDebug = project
     crossPaths := false,
     autoScalaLibrary := false,
     libraryDependencies ++= Seq(
-      "org.apache.commons" % "commons-lang3" % "3.6",
+      "org.apache.commons" % "commons-lang3" % "3.12.0",
       "com.google.code.gson" % "gson" % "2.10",
-      "io.reactivex.rxjava2" % "rxjava" % "2.1.1",
+      "io.reactivex.rxjava2" % "rxjava" % "2.1.17",
       "org.reactivestreams" % "reactive-streams" % "1.0.4",
-      "commons-io" % "commons-io" % "2.10.0",
+      "commons-io" % "commons-io" % "2.11.0",
       "junit" % "junit" % "4.13.2" % Test,
       "org.easymock" % "easymock" % "3.6" % Test,
-      "com.novocode" % "junit-interface" % "0.10" % Test
+      "com.novocode" % "junit-interface" % "0.11" % Test
     ),
     Test / fork := true,
     version := "0.34.0+10-SNAPSHOT"
