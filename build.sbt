@@ -50,7 +50,7 @@ lazy val javaDebug = project
       "org.apache.commons" % "commons-lang3" % "3.6",
       "com.google.code.gson" % "gson" % "2.10",
       "io.reactivex.rxjava2" % "rxjava" % "2.1.1",
-      "org.reactivestreams" % "reactive-streams" % "1.0.0",
+      "org.reactivestreams" % "reactive-streams" % "1.0.4",
       "commons-io" % "commons-io" % "2.10.0",
       "junit" % "junit" % "4.13.1" % Test,
       "org.easymock" % "easymock" % "3.6" % Test,
