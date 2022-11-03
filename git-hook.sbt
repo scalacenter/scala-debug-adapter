@@ -10,7 +10,7 @@ Global / onLoad := { state =>
       """#!/bin/sh
         |set -eux
         |bin/scalafmt --diff --diff-branch main
-        |git diff --exit-code
+        |git diff --exit-code --ignore-submodules=all
         |""".stripMargin.getBytes()
     )
     prePush.toFile.setExecutable(true)

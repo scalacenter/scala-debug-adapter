@@ -51,6 +51,7 @@ It is class-loaded by the `ExpressionCompiler` object from `core`.
 The `scala-3-step-filter`, compiled with Scala 3, is class-loaded by the `Scala3StepFilter` object from `core` in a separate class loader.
 (The Scala 2 step filter is in `core` directly because it is compiled in Scala 2 and does not need to be class-loaded separately)
 - `tests`: The test module. It contains the test infrastructure, in `tests/src/main`, and the unit tests, in `tests/src/test`.
+- `sbt-plugin`: The sbt plugin that allows sbt to start the DAP server.
 
 ## Unit-Testing the debugger
 
