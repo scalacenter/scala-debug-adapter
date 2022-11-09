@@ -52,7 +52,7 @@ lazy val javaDebug = project
       "io.reactivex.rxjava2" % "rxjava" % "2.1.17",
       "org.reactivestreams" % "reactive-streams" % "1.0.4",
       "commons-io" % "commons-io" % "2.11.0",
-      "junit" % "junit" % "4.13.1" % Test,
+      "junit" % "junit" % "4.13.2" % Test,
       "org.easymock" % "easymock" % "5.0.1" % Test,
       "com.novocode" % "junit-interface" % "0.11" % Test
     ),
