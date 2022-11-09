@@ -53,7 +53,7 @@ lazy val javaDebug = project
       "org.reactivestreams" % "reactive-streams" % "1.0.4",
       "commons-io" % "commons-io" % "2.11.0",
       "junit" % "junit" % "4.13.2" % Test,
-      "org.easymock" % "easymock" % "3.6" % Test,
+      "org.easymock" % "easymock" % "5.0.1" % Test,
       "com.novocode" % "junit-interface" % "0.11" % Test
     ),
     Test / fork := true,
@@ -198,7 +198,7 @@ lazy val scala3StepFilter: Project = project
     scalaVersion := Dependencies.scala32,
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
-      "ch.epfl.scala" %% "tasty-query" % "0.3.0",
+      "ch.epfl.scala" %% "tasty-query" % "0.3.1",
       "org.scala-lang" %% "tasty-core" % scalaVersion.value,
       Dependencies.munit % Test
     ),
