@@ -49,7 +49,7 @@ lazy val javaDebug = project
     libraryDependencies ++= Seq(
       "org.apache.commons" % "commons-lang3" % "3.12.0",
       "com.google.code.gson" % "gson" % "2.10",
-      "io.reactivex.rxjava2" % "rxjava" % "2.1.17",
+      "io.reactivex.rxjava2" % "rxjava" % "2.2.21",
       "org.reactivestreams" % "reactive-streams" % "1.0.4",
       "commons-io" % "commons-io" % "2.11.0",
       "junit" % "junit" % "4.13.2" % Test,
