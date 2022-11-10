@@ -54,7 +54,7 @@ lazy val javaDebug = project
       "commons-io" % "commons-io" % "2.11.0",
       "junit" % "junit" % "4.13.2" % Test,
       "org.easymock" % "easymock" % "5.0.1" % Test,
-      "com.novocode" % "junit-interface" % "0.11" % Test
+      "com.github.sbt" % "junit-interface" % "0.13.3" % Test
     ),
     Test / fork := true,
     version := (if (isRelease) "0.34.0+11" else "0.34.0+11-SNAPSHOT")
