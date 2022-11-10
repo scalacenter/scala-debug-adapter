@@ -20,7 +20,10 @@ private[debugadapter] class LoggingAdapter(
       case Level.WARNING => logger.warn(message)
       case Level.SEVERE =>
         if (isExpectedDuringCancellation(message) || isIgnoredError(message)) logger.debug(message)
-        else logger.error(message)
+        else {
+          logger.error(message)
+          Option(record.getThrown).foreach(logger.trace(_))
+        }
       case _ => logger.debug(message)
     }
   }
