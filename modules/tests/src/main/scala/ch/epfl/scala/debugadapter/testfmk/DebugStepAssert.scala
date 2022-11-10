@@ -144,7 +144,7 @@ object Evaluation {
   }
 
   private def assertSuccess(assertion: String => Unit)(response: Either[String, String]): Unit = {
-    assert(response.isRight)
+    assert(clue(response).isRight)
     val result = response.toOption.get
     assertion(result)
   }
@@ -152,7 +152,7 @@ object Evaluation {
   private def assertSuccess(
       expectedResult: Any
   )(response: Either[String, String])(implicit ctx: DebugContext): Unit = {
-    assert(response.isRight)
+    assert(clue(response).isRight)
     val result = response.toOption.get
     expectedResult match {
       case expected: String =>

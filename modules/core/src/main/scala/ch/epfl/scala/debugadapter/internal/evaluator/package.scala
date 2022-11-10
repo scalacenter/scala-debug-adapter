@@ -43,10 +43,10 @@ package object evaluator {
     }
   }
 
-  implicit class SafeList[A](seq: List[Safe[A]]) {
-    def traverse: Safe[List[A]] = {
-      seq.foldRight(Safe.lift(List.empty[A])) { (safeHead, safeTail) =>
-        safeTail.flatMap(tail => safeHead.map(head => head :: tail))
+  implicit class SafeSeq[A](seq: Seq[Safe[A]]) {
+    def traverse: Safe[Seq[A]] = {
+      seq.foldRight(Safe.lift(Seq.empty[A])) { (safeHead, safeTail) =>
+        safeTail.flatMap(tail => safeHead.map(head => head +: tail))
       }
     }
   }
