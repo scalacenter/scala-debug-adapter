@@ -54,7 +54,7 @@ lazy val javaDebug = project
       "commons-io" % "commons-io" % "2.11.0",
       "junit" % "junit" % "4.13.1" % Test,
       "org.easymock" % "easymock" % "3.6" % Test,
-      "com.github.sbt" % "junit-interface" % "0.13.3" % Test
+      "com.novocode" % "junit-interface" % "0.11" % Test
     ),
     Test / fork := true,
     version := "0.34.0+10-SNAPSHOT"
