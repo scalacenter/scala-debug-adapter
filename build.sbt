@@ -57,7 +57,7 @@ lazy val javaDebug = project
       "com.novocode" % "junit-interface" % "0.11" % Test
     ),
     Test / fork := true,
-    version := "0.34.0+10-SNAPSHOT"
+    version := "0.34.0+10"
   )
 
 lazy val core212 = core.jvm(Dependencies.scala212)
