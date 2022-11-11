@@ -27,7 +27,7 @@ object Dependencies {
 
   val scalaParallelCollection = "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4"
   val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.8.1"
-  val sbtTestAgent = "org.scala-sbt" % "test-agent" % "1.7.2"
+  val sbtTestAgent = "org.scala-sbt" % "test-agent" % "1.7.3"
 
   // test dependencies
   val munit = "org.scalameta" %% "munit" % "1.0.0-M6"
