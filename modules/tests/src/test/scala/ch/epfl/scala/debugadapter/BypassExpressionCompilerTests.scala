@@ -382,4 +382,29 @@ class BypassExpressionCompilerTests extends DebugTestSuite {
     // a pure expression does nothing in statement position
     check(Breakpoint(8), Evaluation.success("m", 1))
   }
+
+  test("evaluate in Java file") {
+    val source =
+      """|package example;
+         |
+         |class Main {
+         |  public static void main(String[] args) {
+         |    Main main = new Main();
+         |    main.greet("World");
+         |  }
+         |
+         |  public void greet(String name) {
+         |    System.out.println("Hello " + name);
+         |  }
+         |}
+         |
+         |""".stripMargin
+    implicit val debuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(6),
+      Evaluation.success("main", ObjectRef("Main")),
+      Breakpoint(10),
+      Evaluation.success("name", "World")
+    )
+  }
 }

@@ -445,13 +445,13 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       debuggee: Debuggee,
       resolver: DebugToolsResolver
   ): URI = {
-    val config = DebugConfig.default().copy(autoCloseSession = true)
+    val address = new DebugServer.Address()
     val tools = DebugTools(debuggee, resolver, new LoggerAdapter(state.log))
     jobService.runInBackground(scope, state) { (logger, _) =>
       try {
         // if there is a server for this target then close it
         debugServers.get(target).foreach(_.close())
-        val server = DebugServer(debuggee, tools, new LoggerAdapter(logger), config)
+        val server = DebugServer(debuggee, tools, new LoggerAdapter(logger), address)
         debugServers.update(target, server)
         Await.result(server.start(), Duration.Inf)
       } catch {
@@ -460,8 +460,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           state.log.trace(cause)
       }
     }
-    state.respondEvent(DebugSessionAddress(config.address.uri))
-    config.address.uri
+    state.respondEvent(DebugSessionAddress(address.uri))
+    address.uri
   }
 
   private def singleBuildTarget(

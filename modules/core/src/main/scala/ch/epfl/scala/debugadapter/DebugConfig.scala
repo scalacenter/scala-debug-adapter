@@ -12,7 +12,7 @@ final case class DebugConfig(
 object DebugConfig {
   def default: DebugConfig = DebugConfig(
     5.seconds,
-    autoCloseSession = false,
+    autoCloseSession = true,
     testMode = false,
     evaluationMode = DebugConfig.MixedEvaluation
   )

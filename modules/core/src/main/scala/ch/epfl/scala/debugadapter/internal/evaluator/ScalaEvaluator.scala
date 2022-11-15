@@ -1,7 +1,5 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import ch.epfl.scala.debugadapter.DebugConfig
-import ch.epfl.scala.debugadapter.EvaluationFailed
 import ch.epfl.scala.debugadapter.Logger
 import com.sun.jdi._
 
@@ -9,51 +7,21 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import scala.jdk.CollectionConverters.*
-import scala.util.Failure
-import scala.util.Success
 import scala.util.Try
+import ch.epfl.scala.debugadapter.ClassEntry
 
-private[internal] class ExpressionEvaluator(
+private[internal] class ScalaEvaluator(
+    entry: ClassEntry,
     compiler: ExpressionCompiler,
     logger: Logger,
-    mode: DebugConfig.EvaluationMode,
     testMode: Boolean
 ) {
-
-  def prepare(
-      sourceContent: String,
-      expression: String,
-      frame: FrameReference
-  ): Try[PreparedExpression] = {
-    val encodedExpression = NameTransformer.encode(expression)
-    if (mode.canBypassCompiler && isLocalVariable(frame, encodedExpression))
-      Success(LocalValue(encodedExpression))
-    else if (mode.canUseCompiler) {
-      compile(sourceContent, expression, frame)
-    } else {
-      Failure(new EvaluationFailed(s"Cannot evaluate '$expression' using $mode mode"))
-    }
+  def evaluate(expression: CompiledExpression, frame: FrameReference): Try[Value] = {
+    val CompiledExpression(classDir, className) = expression
+    evaluate(classDir, className, frame)
   }
 
-  def evaluate(expression: PreparedExpression, frame: FrameReference): Try[Value] = {
-    expression match {
-      case CompiledExpression(classDir, className) =>
-        evaluate(classDir, className, frame)
-      case LocalValue(name) =>
-        Try {
-          val currentFrame = frame.current()
-          val variable = currentFrame.visibleVariableByName(name)
-          val rawValue = currentFrame.getValue(variable)
-          derefIfRef(rawValue, frame.thread)
-        }
-    }
-  }
-
-  private def compile(
-      sourceContent: String,
-      expression: String,
-      frame: FrameReference
-  ): Try[CompiledExpression] = {
+  def compile(sourceContent: String, expression: String, frame: FrameReference): Try[CompiledExpression] = {
     logger.debug(s"Compiling expression '$expression'")
     val location = frame.current().location
     val line = location.lineNumber
@@ -71,13 +39,14 @@ private[internal] class ExpressionEvaluator(
 
     val expressionFqcn = if (packageName.isEmpty) expressionClassName else s"$packageName.$expressionClassName"
     val classLoader = findClassLoader(frame)
-    val compiledExpression = for {
-      (names, values) <- extractValuesAndNames(frame, classLoader)
-      localNames = names.map(_.value()).toSet
-      compilation =
-        compiler.compile(outDir, expressionClassName, sourceFile, line, expression, localNames, packageName, testMode)
-      _ <- Safe.lift(compilation)
-    } yield CompiledExpression(outDir, expressionFqcn)
+    val compiledExpression =
+      for {
+        (names, values) <- extractValuesAndNames(frame, classLoader)
+        localNames = names.map(_.value()).toSet
+        _ <- Safe(
+          compiler.compile(outDir, expressionClassName, sourceFile, line, expression, localNames, packageName, testMode)
+        )
+      } yield CompiledExpression(outDir, expressionFqcn)
     compiledExpression.getResult
   }
 
@@ -112,9 +81,7 @@ private[internal] class ExpressionEvaluator(
     JdiClassLoader(classLoader, frame.thread)
   }
 
-  private def evaluateExpression(
-      expressionInstance: JdiObject
-  ): Safe[Value] = {
+  private def evaluateExpression(expressionInstance: JdiObject): Safe[Value] = {
     expressionInstance
       .invoke("evaluate", List())
       .recover {
@@ -150,16 +117,6 @@ private[internal] class ExpressionEvaluator(
       expressionClass <- urlClassLoader.loadClass(className)
       expressionInstance <- expressionClass.newInstance(args)
     } yield expressionInstance
-  }
-
-  private def isLocalVariable(frame: FrameReference, name: String): Boolean = {
-    val localVariables = frame.current().visibleVariables.asScala.toList
-    // we exclude the arguments of type scala.Function0
-    // they could be by-name params, in which case we should invoke apply
-    // but they could also be just normal params and we have no way to know
-    localVariables
-      .find(_.name == name)
-      .exists(v => !v.isArgument || v.typeName != "scala.Function0")
   }
 
   /**
@@ -208,7 +165,7 @@ private[internal] class ExpressionEvaluator(
       (fieldNames, fieldValues) <- thisObjectOpt
         .filter(_ => compiler.scalaVersion.isScala2)
         .map(extractFields)
-        .getOrElse(Safe.lift((Nil, Nil)))
+        .getOrElse(Safe((Nil, Nil)))
       // If `this` is a value class then the breakpoint must be in
       // a generated method of its companion object which takes
       // the erased value`$this` as argument.
@@ -228,7 +185,7 @@ private[internal] class ExpressionEvaluator(
       .zip(variableArray.getValues)
       .map { case (variable, value) =>
         if (isPrimitive(variable)) unboxIfPrimitive(value, frame.thread)
-        else Safe.lift(value)
+        else Safe(value)
       }
       .traverse
 
@@ -257,7 +214,7 @@ private[internal] class ExpressionEvaluator(
         JdiPrimitive.box(value.value(), classLoader, thread)
       case value: ShortValue =>
         JdiPrimitive.box(value.value(), classLoader, thread)
-      case value => Safe.lift(value)
+      case value => Safe(value)
     }
   }
 
@@ -279,29 +236,10 @@ private[internal] class ExpressionEvaluator(
         unboxMethods
           .get(typeName)
           .map(methodName => new JdiObject(ref, thread).invoke(methodName, Nil))
-          .getOrElse(Safe.lift(value))
-      case _ => Safe.lift(value)
+          .getOrElse(Safe(value))
+      case _ => Safe(value)
     }
   }
-
-  private val refTypes = Set(
-    "scala.runtime.BooleanRef",
-    "scala.runtime.ByteRef",
-    "scala.runtime.CharRef",
-    "scala.runtime.DoubleRef",
-    "scala.runtime.FloatRef",
-    "scala.runtime.IntRef",
-    "scala.runtime.LongRef",
-    "scala.runtime.ShortRef",
-    "scala.runtime.ObjectRef"
-  )
-
-  private def derefIfRef(value: Value, thread: ThreadReference): Value =
-    value match {
-      case ref: ObjectReference if refTypes.contains(ref.referenceType.name) =>
-        new JdiObject(ref, thread).getFieldValue("elem")
-      case _ => value
-    }
 
   private def isPrimitive(variable: LocalVariable): Boolean =
     variable.`type`().isInstanceOf[PrimitiveType]

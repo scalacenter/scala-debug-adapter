@@ -25,7 +25,7 @@ trait DebugTest {
   val executorService = Executors.newFixedThreadPool(1)
   implicit val ec: ExecutionContext = ExecutionContext.fromExecutorService(executorService)
 
-  protected def defaultConfig: DebugConfig = DebugConfig.default.copy(testMode = true)
+  protected def defaultConfig: DebugConfig = DebugConfig.default.copy(autoCloseSession = false, testMode = true)
 
   def isScala3(implicit ctx: TestingContext) = ctx.scalaVersion.isScala3
   def isScala2(implicit ctx: TestingContext) = ctx.scalaVersion.isScala2

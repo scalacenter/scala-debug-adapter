@@ -138,9 +138,9 @@ object Evaluation {
   }
 
   private def assertFailed(expectedError: String)(response: Either[String, String]): Unit = {
-    assert(response.isLeft)
+    assert(clue(response).isLeft)
     val error = response.left.toOption.get
-    assert(error.contains(expectedError))
+    assert(clue(error).contains(clue(expectedError)))
   }
 
   private def assertIgnore(

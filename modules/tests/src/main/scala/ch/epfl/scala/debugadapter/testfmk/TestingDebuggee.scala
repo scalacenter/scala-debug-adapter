@@ -248,6 +248,7 @@ object TestingDebuggee {
 
     val command = Array(
       javac.toString,
+      "-g:source,lines,vars",
       "-d",
       classDir.toString,
       srcFile.toString
