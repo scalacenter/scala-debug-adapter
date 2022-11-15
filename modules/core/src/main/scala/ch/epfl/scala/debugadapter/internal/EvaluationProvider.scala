@@ -1,9 +1,16 @@
 package ch.epfl.scala.debugadapter.internal
 
+import ch.epfl.scala.debugadapter.ClassEntry
+import ch.epfl.scala.debugadapter.DebugConfig
+import ch.epfl.scala.debugadapter.DebugTools
 import ch.epfl.scala.debugadapter.Debuggee
+import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.internal.evaluator.CompiledExpression
 import ch.epfl.scala.debugadapter.internal.evaluator.ExpressionEvaluator
+import ch.epfl.scala.debugadapter.internal.evaluator.FrameReference
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
 import ch.epfl.scala.debugadapter.internal.evaluator.MethodInvocationFailed
+import ch.epfl.scala.debugadapter.internal.evaluator.PreparedExpression
 import com.microsoft.java.debug.core.IEvaluatableBreakpoint
 import com.microsoft.java.debug.core.adapter.IDebugAdapterContext
 import com.microsoft.java.debug.core.adapter.IEvaluationProvider
@@ -15,14 +22,9 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.util.Failure
 import scala.util.Success
-import ch.epfl.scala.debugadapter.Logger
 import scala.util.Try
-import ScalaExtension._
-import ch.epfl.scala.debugadapter.DebugTools
-import ch.epfl.scala.debugadapter.ClassEntry
-import ch.epfl.scala.debugadapter.internal.evaluator.CompiledExpression
-import ch.epfl.scala.debugadapter.internal.evaluator.FrameReference
-import ch.epfl.scala.debugadapter.internal.evaluator.PreparedExpression
+
+import ScalaExtension.*
 
 private[internal] class EvaluationProvider(
     sourceLookUp: SourceLookUpProvider,
@@ -148,10 +150,10 @@ private[internal] object EvaluationProvider {
       debugTools: DebugTools,
       sourceLookUp: SourceLookUpProvider,
       logger: Logger,
-      testMode: Boolean
+      config: DebugConfig
   ): IEvaluationProvider = {
     val allEvaluators = debugTools.expressionCompilers.view.map { case (k, v) =>
-      (k, new ExpressionEvaluator(v, logger, testMode))
+      (k, new ExpressionEvaluator(v, logger, config.evaluationMode, config.testMode))
     }.toMap
     new EvaluationProvider(sourceLookUp, allEvaluators, logger)
   }

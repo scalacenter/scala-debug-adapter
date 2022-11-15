@@ -27,7 +27,7 @@ case class TestingDebuggee(
     dependencies: Seq[ManagedEntry],
     mainClass: String
 ) extends Debuggee
-    with DebugContext {
+    with TestingContext {
 
   def mainSource: Path = sourceFiles.head
 

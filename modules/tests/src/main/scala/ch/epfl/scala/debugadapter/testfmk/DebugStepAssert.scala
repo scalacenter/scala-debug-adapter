@@ -4,6 +4,7 @@ import java.nio.file.Path
 import com.microsoft.java.debug.core.protocol.Types.StackFrame
 import DebugStepAssert.*
 import munit.Assertions.*
+import munit.Location
 
 final case class DebugStepAssert[T](step: DebugStep[T], assertion: T => Unit)
 
@@ -17,6 +18,8 @@ final case class Evaluation(expression: String) extends DebugStep[Either[String,
 final case class Outputed() extends DebugStep[String]
 final case class NoStep() extends DebugStep[Nothing]
 
+final case class ObjectRef(clsName: String)
+
 object DebugStepAssert {
   def assertOnFrame(expectedSource: Path, expectedLine: Int)(frame: StackFrame): Unit = {
     assertEquals(frame.source.path, expectedSource.toString)
@@ -28,7 +31,7 @@ object DebugStepAssert {
 }
 
 object Breakpoint {
-  def apply(line: Int)(implicit ctx: DebugContext): DebugStepAssert[StackFrame] =
+  def apply(line: Int)(implicit ctx: TestingContext): DebugStepAssert[StackFrame] =
     Breakpoint(ctx.mainSource, line)
 
   def apply(sourceFile: Path, line: Int): DebugStepAssert[StackFrame] = {
@@ -36,21 +39,21 @@ object Breakpoint {
     DebugStepAssert(breakpoint, assertOnFrame(sourceFile, line))
   }
 
-  def apply(line: Int, condition: String)(implicit ctx: DebugContext): DebugStepAssert[StackFrame] = {
+  def apply(line: Int, condition: String)(implicit ctx: TestingContext): DebugStepAssert[StackFrame] = {
     val breakpoint = Breakpoint(ctx.mainSource, line, Some(condition))
     DebugStepAssert(breakpoint, assertOnFrame(ctx.mainSource, line))
   }
 }
 
 object Logpoint {
-  def apply(line: Int, logMessage: String, expected: String)(implicit ctx: DebugContext): DebugStepAssert[String] = {
+  def apply(line: Int, logMessage: String, expected: String)(implicit ctx: TestingContext): DebugStepAssert[String] = {
     val logpoint = Logpoint(ctx.mainSource, line, logMessage)
     DebugStepAssert(logpoint, output => assertEquals(output, expected))
   }
 }
 
 object StepIn {
-  def line(line: Int)(implicit ctx: DebugContext): DebugStepAssert[StackFrame] =
+  def line(line: Int)(implicit ctx: TestingContext): DebugStepAssert[StackFrame] =
     DebugStepAssert(StepIn(), assertOnFrame(ctx.mainSource, line))
 
   def method(methodName: String): DebugStepAssert[StackFrame] =
@@ -58,7 +61,7 @@ object StepIn {
 }
 
 object StepOut {
-  def line(line: Int)(implicit ctx: DebugContext): DebugStepAssert[StackFrame] =
+  def line(line: Int)(implicit ctx: TestingContext): DebugStepAssert[StackFrame] =
     DebugStepAssert(StepOut(), assertOnFrame(ctx.mainSource, line))
 
   def method(methodName: String): DebugStepAssert[StackFrame] =
@@ -66,7 +69,7 @@ object StepOut {
 }
 
 object StepOver {
-  def line(line: Int)(implicit ctx: DebugContext): DebugStepAssert[StackFrame] =
+  def line(line: Int)(implicit ctx: TestingContext): DebugStepAssert[StackFrame] =
     DebugStepAssert(StepOver(), assertOnFrame(ctx.mainSource, line))
 
   def method(methodName: String): DebugStepAssert[StackFrame] =
@@ -74,7 +77,7 @@ object StepOver {
 }
 
 object Evaluation {
-  def ignore(expression: String, expected: Any)(implicit ctx: DebugContext): DebugStepAssert[Either[String, String]] =
+  def ignore(expression: String, expected: Any)(implicit ctx: TestingContext): DebugStepAssert[Either[String, String]] =
     new DebugStepAssert(Evaluation(expression), assertIgnore(expected.toString))
 
   def failed(expression: String, error: String): DebugStepAssert[Either[String, String]] =
@@ -84,7 +87,7 @@ object Evaluation {
     DebugStepAssert(Evaluation(expression), resp => assertFailed(resp))
 
   def failedOrIgnore(expression: String, error: String, ignore: Boolean)(implicit
-      ctx: DebugContext
+      ctx: TestingContext
   ): DebugStepAssert[Either[String, String]] = {
     new DebugStepAssert(
       Evaluation(expression),
@@ -92,14 +95,17 @@ object Evaluation {
     )
   }
 
-  def failedOrIgnore(expression: String, ignore: Boolean)(assertion: String => Unit)(implicit ctx: DebugContext) = {
+  def failedOrIgnore(expression: String, ignore: Boolean)(assertion: String => Unit)(implicit ctx: TestingContext) = {
     new DebugStepAssert(
       Evaluation(expression),
       if (ignore) assertIgnore("failure") _ else assertFailed(assertion) _
     )
   }
 
-  def success(expression: String, result: Any)(implicit ctx: DebugContext): DebugStepAssert[Either[String, String]] =
+  def success(expression: String, result: Any)(implicit
+      ctx: TestingContext,
+      location: Location
+  ): DebugStepAssert[Either[String, String]] =
     new DebugStepAssert(Evaluation(expression), assertSuccess(result))
 
   def success(expression: String)(assertion: String => Unit): DebugStepAssert[Either[String, String]] = {
@@ -107,7 +113,7 @@ object Evaluation {
   }
 
   def successOrIgnore(expression: String, result: Any, ignore: Boolean)(implicit
-      ctx: DebugContext
+      ctx: TestingContext
   ): DebugStepAssert[Either[String, String]] = {
     val assertion = if (ignore) assertIgnore(result.toString) _ else assertSuccess(result)(_)
     new DebugStepAssert(Evaluation(expression), assertion)
@@ -115,7 +121,7 @@ object Evaluation {
 
   def successOrIgnore(expression: String, ignore: Boolean)(
       assertion: String => Unit
-  )(implicit ctx: DebugContext): DebugStepAssert[Either[String, String]] = {
+  )(implicit ctx: TestingContext): DebugStepAssert[Either[String, String]] = {
     new DebugStepAssert(
       Evaluation(expression),
       if (ignore) assertIgnore("sucess") _ else assertSuccess(assertion)(_)
@@ -139,7 +145,7 @@ object Evaluation {
 
   private def assertIgnore(
       expected: String
-  )(response: Either[String, String])(implicit ctx: DebugContext): Unit = {
+  )(response: Either[String, String])(implicit ctx: TestingContext): Unit = {
     println(s"TODO fix in ${ctx.scalaVersion}: expected $expected")
   }
 
@@ -151,10 +157,12 @@ object Evaluation {
 
   private def assertSuccess(
       expectedResult: Any
-  )(response: Either[String, String])(implicit ctx: DebugContext): Unit = {
+  )(response: Either[String, String])(implicit ctx: TestingContext, location: Location): Unit = {
     assert(clue(response).isRight)
     val result = response.toOption.get
     expectedResult match {
+      case ObjectRef(clsName) =>
+        assert(result.startsWith(clsName + "@"))
       case expected: String =>
         assertEquals(result, '"'.toString + expected + '"')
       case () =>

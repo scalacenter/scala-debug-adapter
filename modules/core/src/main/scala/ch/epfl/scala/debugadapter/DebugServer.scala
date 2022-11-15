@@ -1,22 +1,24 @@
 package ch.epfl.scala.debugadapter
 
-import ch.epfl.scala.debugadapter.internal.DebugSession
-
-import java.net.{InetSocketAddress, ServerSocket, URI}
-import java.util.concurrent.ConcurrentLinkedQueue
-import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.control.NonFatal
-import com.microsoft.java.debug.core.adapter.IProviderContext
 import ch.epfl.scala.debugadapter.internal.DebugAdapter
+import ch.epfl.scala.debugadapter.internal.DebugSession
+import com.microsoft.java.debug.core.adapter.IProviderContext
+
+import java.net.InetSocketAddress
+import java.net.ServerSocket
+import java.net.URI
+import java.util.concurrent.ConcurrentLinkedQueue
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration._
+import scala.util.control.NonFatal
 
 final class DebugServer private (
     debuggee: Debuggee,
     context: IProviderContext,
-    address: DebugServer.Address,
     logger: Logger,
-    autoCloseSession: Boolean,
-    gracePeriod: Duration
+    address: DebugServer.Address,
+    config: DebugConfig
 )(implicit ec: ExecutionContext) {
   private var closedServer = false
   private val ongoingSessions = new ConcurrentLinkedQueue[DebugSession]()
@@ -47,7 +49,7 @@ final class DebugServer private (
    */
   private[debugadapter] def connect(): DebugSession = {
     val socket = serverSocket.accept()
-    val session = DebugSession(socket, debuggee, context, logger, autoCloseSession, gracePeriod)
+    val session = DebugSession(socket, debuggee, context, logger, config)
     lock.synchronized {
       if (closedServer) {
         session.close()
@@ -77,6 +79,7 @@ final class DebugServer private (
 }
 
 object DebugServer {
+  final class Handler(val uri: URI, val running: Future[Unit])
 
   final class Address() {
     private val address = new InetSocketAddress(0)
@@ -89,8 +92,6 @@ object DebugServer {
 
     def uri: URI = URI.create(s"tcp://${address.getHostString}:${serverSocket.getLocalPort}")
   }
-
-  final class Handler(val uri: URI, val running: Future[Unit])
 
   /**
    * Create the server.
@@ -109,12 +110,10 @@ object DebugServer {
       tools: DebugTools,
       logger: Logger,
       address: Address = new Address,
-      autoCloseSession: Boolean = false,
-      gracePeriod: Duration = 5.seconds,
-      testMode: Boolean = false
+      config: DebugConfig = DebugConfig.default
   )(implicit ec: ExecutionContext): DebugServer = {
-    val context = DebugAdapter.context(debuggee, tools, logger, testMode)
-    new DebugServer(debuggee, context, address, logger, autoCloseSession, gracePeriod)
+    val context = DebugAdapter.context(debuggee, tools, logger, config)
+    new DebugServer(debuggee, context, logger, address, config)
   }
 
   /**
@@ -134,12 +133,11 @@ object DebugServer {
       debuggee: Debuggee,
       tools: DebugTools,
       logger: Logger,
-      address: Address = new Address(),
       autoCloseSession: Boolean = false,
-      gracePeriod: Duration = 5.seconds,
-      testMode: Boolean = false
+      gracePeriod: Duration = 5.seconds
   )(implicit ec: ExecutionContext): Handler = {
-    val server = DebugServer(debuggee, tools, logger, address, autoCloseSession, gracePeriod, testMode)
+    val config = DebugConfig.default.copy(gracePeriod = gracePeriod, autoCloseSession = autoCloseSession)
+    val server = DebugServer(debuggee, tools, logger, config = config)
     val running = server.start()
     running.onComplete(_ => server.close())
     new Handler(server.uri, running)

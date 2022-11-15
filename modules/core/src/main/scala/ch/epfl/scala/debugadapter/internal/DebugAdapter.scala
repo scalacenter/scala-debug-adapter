@@ -1,18 +1,19 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter.Debuggee
+import ch.epfl.scala.debugadapter.DebugConfig
 import ch.epfl.scala.debugadapter.DebugTools
+import ch.epfl.scala.debugadapter.Debuggee
 import ch.epfl.scala.debugadapter.Logger
 import com.microsoft.java.debug.core.DebugSettings
 import com.microsoft.java.debug.core.adapter.{StepFilterProvider => _, _}
 import com.microsoft.java.debug.core.protocol.Types
 import com.sun.jdi._
+import io.reactivex.Observable
 
 import java.util
 import java.util.Collections
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
-import io.reactivex.Observable
 
 private[debugadapter] object DebugAdapter {
 
@@ -22,7 +23,7 @@ private[debugadapter] object DebugAdapter {
    */
   DebugSettings.getCurrent.showStaticVariables = true
 
-  def context(debuggee: Debuggee, tools: DebugTools, logger: Logger, testMode: Boolean): IProviderContext = {
+  def context(debuggee: Debuggee, tools: DebugTools, logger: Logger, config: DebugConfig): IProviderContext = {
     TimeUtils.logTime(logger, "Configured debugger context") {
       val context = new ProviderContext
       val classEntries = debuggee.classEntries
@@ -40,12 +41,12 @@ private[debugadapter] object DebugAdapter {
       context.registerProvider(classOf[ISourceLookUpProvider], sourceLookUpProvider)
       context.registerProvider(
         classOf[IEvaluationProvider],
-        EvaluationProvider(debuggee, tools, sourceLookUpProvider, logger, testMode)
+        EvaluationProvider(debuggee, tools, sourceLookUpProvider, logger, config)
       )
       context.registerProvider(classOf[ICompletionsProvider], CompletionsProvider)
       context.registerProvider(
         classOf[IStepFilterProvider],
-        StepFilterProvider(debuggee, tools, sourceLookUpProvider, logger, testMode)
+        StepFilterProvider(debuggee, tools, sourceLookUpProvider, logger, config.testMode)
       )
       context
     }

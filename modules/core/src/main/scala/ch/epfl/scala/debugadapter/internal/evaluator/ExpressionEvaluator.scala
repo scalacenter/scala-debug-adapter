@@ -1,18 +1,22 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
+import ch.epfl.scala.debugadapter.DebugConfig
+import ch.epfl.scala.debugadapter.EvaluationFailed
+import ch.epfl.scala.debugadapter.Logger
 import com.sun.jdi._
 
-import java.nio.file.Files
-import scala.jdk.CollectionConverters.*
-import scala.util.Try
 import java.nio.charset.StandardCharsets
-import ch.epfl.scala.debugadapter.Logger
-import scala.util.Success
+import java.nio.file.Files
 import java.nio.file.Path
+import scala.jdk.CollectionConverters.*
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
 private[internal] class ExpressionEvaluator(
     compiler: ExpressionCompiler,
     logger: Logger,
+    mode: DebugConfig.EvaluationMode,
     testMode: Boolean
 ) {
 
@@ -21,8 +25,14 @@ private[internal] class ExpressionEvaluator(
       expression: String,
       frame: FrameReference
   ): Try[PreparedExpression] = {
-    if (isLocalVariable(frame, expression)) Success(LocalValue(expression))
-    else compile(sourceContent, expression, frame)
+    val encodedExpression = NameTransformer.encode(expression)
+    if (mode.canBypassCompiler && isLocalVariable(frame, encodedExpression))
+      Success(LocalValue(encodedExpression))
+    else if (mode.canUseCompiler) {
+      compile(sourceContent, expression, frame)
+    } else {
+      Failure(new EvaluationFailed(s"Cannot evaluate '$expression' using $mode mode"))
+    }
   }
 
   def evaluate(expression: PreparedExpression, frame: FrameReference): Try[Value] = {
@@ -143,11 +153,12 @@ private[internal] class ExpressionEvaluator(
   }
 
   private def isLocalVariable(frame: FrameReference, name: String): Boolean = {
-    val localVariables = frame.current.visibleVariables().asScala.toList
+    val localVariables = frame.current().visibleVariables.asScala.toList
     // we exclude the arguments of type scala.Function0
     // they could be by-name params, in which case we should invoke apply
     // but they could also be just normal params and we have no way to know
-    localVariables.find(_.name == name)
+    localVariables
+      .find(_.name == name)
       .exists(v => !v.isArgument || v.typeName != "scala.Function0")
   }
 
@@ -166,7 +177,7 @@ private[internal] class ExpressionEvaluator(
     val thisObjectOpt = Option(frame.thisObject) // this object can be null
     def extractVariablesFromFrame(): Safe[(Seq[StringReference], Seq[Value])] = {
       val localVariables = frame.visibleVariables().asScala.toSeq.map(v => v.name -> frame.getValue(v))
-      val thisObject = thisObjectOpt.filter(_ => !localVariables.exists( _._1 == "$this")).map("$this".->)
+      val thisObject = thisObjectOpt.filter(_ => !localVariables.exists(_._1 == "$this")).map("$this".->)
       (localVariables ++ thisObject)
         .map { case (name, value) =>
           for {
@@ -282,7 +293,7 @@ private[internal] class ExpressionEvaluator(
     "scala.runtime.IntRef",
     "scala.runtime.LongRef",
     "scala.runtime.ShortRef",
-    "scala.runtime.ObjectRef",
+    "scala.runtime.ObjectRef"
   )
 
   private def derefIfRef(value: Value, thread: ThreadReference): Value =

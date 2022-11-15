@@ -19,9 +19,11 @@ class DebugServerTests extends DebugTestSuite {
     "Connection reset by peer"
   )
 
+  private def noGracePeriod: DebugConfig = defaultConfig.copy(gracePeriod = Duration.Zero)
+
   test("should prevent connection when closed") {
     val debuggee = new MockDebuggee()
-    val server = getDebugServer(debuggee, gracePeriod = Duration.Zero)
+    val server = getDebugServer(debuggee, noGracePeriod)
     server.close()
     try {
       TestingDebugClient.connect(server.uri)
@@ -37,7 +39,7 @@ class DebugServerTests extends DebugTestSuite {
 
   test("should start session when client connects") {
     val debuggee = new MockDebuggee()
-    val server = getDebugServer(debuggee, gracePeriod = Duration.Zero)
+    val server = getDebugServer(debuggee, noGracePeriod)
     val client = TestingDebugClient.connect(server.uri)
     try {
       val session = server.connect()
@@ -55,7 +57,7 @@ class DebugServerTests extends DebugTestSuite {
 
   test("should stop session when closed") {
     val debuggee = new MockDebuggee()
-    val server = getDebugServer(debuggee, gracePeriod = Duration.Zero)
+    val server = getDebugServer(debuggee, noGracePeriod)
     val client = TestingDebugClient.connect(server.uri)
     try {
       val session = server.connect()
@@ -69,7 +71,7 @@ class DebugServerTests extends DebugTestSuite {
 
   test("should initialize only one connection") {
     val debuggee = new MockDebuggee()
-    val server = getDebugServer(debuggee, gracePeriod = Duration.Zero)
+    val server = getDebugServer(debuggee, noGracePeriod)
     val client1 = TestingDebugClient.connect(server.uri)
     try {
       server.connect()
@@ -95,7 +97,7 @@ class DebugServerTests extends DebugTestSuite {
 
   test("should not launch if the debuggee has not started a jvm") {
     val debuggee = new MockDebuggee()
-    val server = getDebugServer(debuggee, gracePeriod = Duration.Zero)
+    val server = getDebugServer(debuggee, noGracePeriod)
     val client = TestingDebugClient.connect(server.uri)
     try {
       server.connect()
@@ -121,7 +123,8 @@ class DebugServerTests extends DebugTestSuite {
 
   test("should respond failure to launch request if debugee throws an exception") {
     val debuggee = new MockDebuggee()
-    val server = getDebugServer(debuggee, gracePeriod = Duration.Zero)
+    val config = defaultConfig.copy(gracePeriod = Duration.Zero)
+    val server = getDebugServer(debuggee, config)
     val client = TestingDebugClient.connect(server.uri)
     try {
       server.connect()

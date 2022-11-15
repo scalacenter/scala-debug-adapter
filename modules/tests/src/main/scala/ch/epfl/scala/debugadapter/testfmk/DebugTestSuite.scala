@@ -14,6 +14,7 @@ import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
 import munit.FunSuite
 import munit.Assertions.*
 import com.microsoft.java.debug.core.protocol.Types.SourceBreakpoint
+import ch.epfl.scala.debugadapter.DebugConfig
 
 abstract class DebugTestSuite extends FunSuite with DebugTest {
   override def munitTimeout: Duration = 120.seconds
@@ -24,20 +25,22 @@ trait DebugTest {
   val executorService = Executors.newFixedThreadPool(1)
   implicit val ec: ExecutionContext = ExecutionContext.fromExecutorService(executorService)
 
-  def isScala3(implicit ctx: DebugContext) = ctx.scalaVersion.isScala3
-  def isScala2(implicit ctx: DebugContext) = ctx.scalaVersion.isScala2
-  def isScala213(implicit ctx: DebugContext) = ctx.scalaVersion.isScala213
-  def isScala212(implicit ctx: DebugContext) = ctx.scalaVersion.isScala212
-  def isScala30(implicit ctx: DebugContext) = ctx.scalaVersion.isScala30
-  def isScala32(implicit ctx: DebugContext) = ctx.scalaVersion.isScala32
+  protected def defaultConfig: DebugConfig = DebugConfig.default.copy(testMode = true)
+
+  def isScala3(implicit ctx: TestingContext) = ctx.scalaVersion.isScala3
+  def isScala2(implicit ctx: TestingContext) = ctx.scalaVersion.isScala2
+  def isScala213(implicit ctx: TestingContext) = ctx.scalaVersion.isScala213
+  def isScala212(implicit ctx: TestingContext) = ctx.scalaVersion.isScala212
+  def isScala30(implicit ctx: TestingContext) = ctx.scalaVersion.isScala30
+  def isScala32(implicit ctx: TestingContext) = ctx.scalaVersion.isScala32
 
   def getDebugServer(
       debuggee: Debuggee,
-      gracePeriod: Duration = 2.seconds,
+      config: DebugConfig = defaultConfig,
       logger: Logger = NoopLogger
   ): DebugServer = {
     val tools = DebugTools(debuggee, TestingResolver, logger)
-    DebugServer(debuggee, tools, logger, testMode = true)
+    DebugServer(debuggee, tools, logger, config = config)
   }
 
   def startDebugServer(

@@ -2,19 +2,28 @@ package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter._
 import ch.epfl.scala.debugadapter.testing.TestSuiteSummary
-import com.microsoft.java.debug.core.adapter.{IProviderContext, ProtocolServer => DapServer}
+import com.microsoft.java.debug.core.adapter.IProviderContext
+import com.microsoft.java.debug.core.adapter.{ProtocolServer => DapServer}
+import com.microsoft.java.debug.core.protocol.Events
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent
-import com.microsoft.java.debug.core.protocol.Messages.{Request, Response}
+import com.microsoft.java.debug.core.protocol.JsonUtils
+import com.microsoft.java.debug.core.protocol.Messages.Request
+import com.microsoft.java.debug.core.protocol.Messages.Response
 import com.microsoft.java.debug.core.protocol.Requests._
-import com.microsoft.java.debug.core.protocol.{Events, JsonUtils}
 
-import java.net.{InetSocketAddress, Socket}
-import java.util.concurrent.{CancellationException, TimeoutException}
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.util.concurrent.CancellationException
+import java.util.concurrent.TimeoutException
 import scala.collection.mutable
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future, Promise}
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.Promise
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 import scala.util.control.NonFatal
-import scala.util.{Failure, Success, Try}
 
 /**
  * This debug adapter maintains the lifecycle of the debuggee in separation from JDI.
@@ -32,8 +41,7 @@ private[debugadapter] final class DebugSession private (
     context: IProviderContext,
     logger: Logger,
     loggingAdapter: LoggingAdapter,
-    autoClose: Boolean,
-    gracePeriod: Duration
+    config: DebugConfig
 )(implicit executionContext: ExecutionContext)
     extends DapServer(
       socket.getInputStream,
@@ -78,7 +86,7 @@ private[debugadapter] final class DebugSession private (
             result.failed.foreach(cancelPromises)
             // wait for the terminated event then close the session
             terminatedEvent.future.map { _ =>
-              if (autoClose) {
+              if (config.autoCloseSession) {
                 exitStatusPromise.trySuccess(DebugSession.Terminated)
                 close()
               }
@@ -116,7 +124,7 @@ private[debugadapter] final class DebugSession private (
         debuggee.cancel()
 
         // Wait for the debuggee to terminate gracefully
-        try Await.result(terminatedEvent.future, gracePeriod)
+        try Await.result(terminatedEvent.future, config.gracePeriod)
         catch {
           case _: TimeoutException =>
             logger.warn(
@@ -140,7 +148,7 @@ private[debugadapter] final class DebugSession private (
         // and sending an attach request to the java DapServer
         launchedRequests.add(requestId)
         Scheduler
-          .timeout(debuggeeAddress, gracePeriod)
+          .timeout(debuggeeAddress, config.gracePeriod)
           .future
           .onComplete {
             case Success(address) =>
@@ -277,12 +285,11 @@ private[debugadapter] object DebugSession {
       debuggee: Debuggee,
       context: IProviderContext,
       logger: Logger,
-      autoClose: Boolean,
-      gracePeriod: Duration
+      config: DebugConfig
   )(implicit executionContext: ExecutionContext): DebugSession = {
     try {
       val loggingHandler = new LoggingAdapter(logger)
-      new DebugSession(socket, debuggee, context, logger, loggingHandler, autoClose, gracePeriod)
+      new DebugSession(socket, debuggee, context, logger, loggingHandler, config)
     } catch {
       case NonFatal(cause) =>
         logger.error(cause.toString())
