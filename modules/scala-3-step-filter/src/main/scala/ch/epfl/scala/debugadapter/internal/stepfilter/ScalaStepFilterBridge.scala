@@ -26,8 +26,8 @@ class ScalaStepFilterBridge(
   private def warn(msg: String): Unit = warnLogger.accept(msg)
 
   private def throwOrWarn(msg: String): Unit =
-    if (testMode) warn(msg)
-    else throw new Exception(msg)
+    if (testMode) throw new Exception(msg)
+    else warn(msg)
 
   def skipMethod(obj: Any): Boolean =
     val method = jdi.Method(obj)

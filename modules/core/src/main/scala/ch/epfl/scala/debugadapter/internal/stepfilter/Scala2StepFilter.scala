@@ -46,8 +46,8 @@ class Scala2StepFilter(
   }
 
   private def throwOrWarn(msg: String): Unit = {
-    if (testMode) logger.warn(msg)
-    else throw new Exception(msg)
+    if (testMode) throw new Exception(msg)
+    else logger.warn(msg)
   }
 
   private def isLazyInitializer(method: jdi.Method): Boolean =
@@ -228,12 +228,8 @@ class Scala2StepFilter(
         val upperBound = extractUpperBound(typeRef.get)
         matchType(javaType, upperBound, declaringType)
       case other =>
-        val message = s"Unexpected type found: $other"
-        if (testMode) throw new Exception(message)
-        else {
-          logger.warn(message)
-          true
-        }
+        throwOrWarn(s"Unexpected type found: $other")
+        true
     }
   }
 
@@ -351,13 +347,12 @@ class Scala2StepFilter(
           // sym is a primitive or a type alias from the Scala library
           javaType.name == scalaToJavaTypes(path)
         } else {
-          lazy val ifEmpty =
-            if (testMode) throw new Exception(s"Empty encoded value for $path")
-            else {
-              // if the symbol cannot be encoded, we return true
-              // because we don't want to skip a method that should not be skipped
-              true
-            }
+          lazy val ifEmpty = {
+            throwOrWarn(s"Empty encoded value for $path")
+            // if the symbol cannot be encoded, we return true
+            // because we don't want to skip a method that should not be skipped
+            true
+          }
           encoded.fold(ifEmpty) { encodedName =>
             // should not fail because encodedName check that it exists
             val classFile = sourceLookUp.getClassFile(encodedName).get

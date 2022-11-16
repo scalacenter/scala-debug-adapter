@@ -1,15 +1,17 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import java.lang.reflect.Method
+import ch.epfl.scala.debugadapter.CompilationFailed
+import ch.epfl.scala.debugadapter.ScalaVersion
+
 import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Method
 import java.nio.file.Path
 import java.util.function.Consumer
+import scala.collection.mutable.Buffer
 import scala.jdk.CollectionConverters.*
-import scala.util.Try
 import scala.util.Failure
 import scala.util.Success
-import scala.collection.mutable.Buffer
-import ch.epfl.scala.debugadapter.ScalaVersion
+import scala.util.Try
 
 private[debugadapter] class ExpressionCompiler(
     instance: Any,

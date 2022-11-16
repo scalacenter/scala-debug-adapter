@@ -60,9 +60,13 @@ class Safe[+A] private (
 }
 
 object Safe {
-  def apply[A <: Value](f: => A): Safe[A] = {
+  def apply[A](f: => A): Safe[A] = {
     val result = Try(f)
-    result match {
+    apply(result)
+  }
+
+  def apply[A](a: Try[A]): Safe[A] = {
+    a match {
       case Success(value) =>
         value match {
           case obj: ObjectReference =>
@@ -70,17 +74,11 @@ object Safe {
               Try(obj.disableCollection()).map(_ => value),
               () => Try(obj.enableCollection())
             )
-          case _ => lift(value)
+          case _ => new Safe(Success(value), () => ())
         }
       case Failure(exception) =>
         new Safe(Failure(exception), () => ())
     }
-  }
-
-  def lift[A](a: A): Safe[A] = lift(Success(a))
-
-  def lift[A](a: Try[A]): Safe[A] = {
-    new Safe(a, () => ())
   }
 
   def join[A, B](safeA: Safe[A], safeB: Safe[B]): Safe[(A, B)] = {

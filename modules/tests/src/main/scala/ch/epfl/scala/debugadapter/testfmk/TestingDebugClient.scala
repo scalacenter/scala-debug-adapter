@@ -201,7 +201,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
 
   def outputed(
       f: OutputEvent => Boolean,
-      timeout: Duration = 1.second
+      timeout: Duration = 2.second
   ): OutputEvent = {
     val event = receiveEvent(timeout) { e =>
       if (e.event == "output") {

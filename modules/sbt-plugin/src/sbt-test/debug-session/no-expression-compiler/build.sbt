@@ -11,6 +11,6 @@ checkDebugSession := {
   val uri = (Compile / startMainClassDebugSession).evaluated
   val source = (Compile / sources).value.head.toPath
 
-  implicit val debugContext = DebugContext(source, scalaVersion.value)
-  DebugTest.check(uri)(Breakpoint(4), Evaluation.failed("1 + 1", "Missing evaluator"))
+  implicit val ctx = TestingContext(source, scalaVersion.value)
+  DebugTest.check(uri)(Breakpoint(4), Evaluation.failed("1 + 1", "Missing expression compiler"))
 }
