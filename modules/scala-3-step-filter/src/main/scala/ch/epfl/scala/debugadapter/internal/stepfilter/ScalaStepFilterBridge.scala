@@ -101,17 +101,22 @@ class ScalaStepFilterBridge(
       symbol: TermSymbol,
       isExtensionMethod: Boolean
   ): Boolean =
-    matchName(method.name, symbol.name.toString, isExtensionMethod) &&
+    matchName(method, symbol, isExtensionMethod) &&
       matchSignature(method, symbol, isExtensionMethod)
 
   def matchName(
-      javaName: String,
-      scalaName: String,
+      method: jdi.Method,
+      symbol: TermSymbol,
       isExtensionMethod: Boolean
   ): Boolean =
-    val encodedScalaName = NameTransformer.encode(scalaName)
-    if isExtensionMethod then encodedScalaName == javaName.stripSuffix("$extension")
-    else encodedScalaName == javaName
+    val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
+    // if an inner accesses a private method, the backend makes the method public
+    // and prefixes its name with the full class name.
+    // Example: method foo in class example.Inner becomes example$Inner$$foo
+    val expectedName = method.name.stripPrefix(javaPrefix)
+    val encodedScalaName = NameTransformer.encode(symbol.name.toString)
+    if isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
+    else encodedScalaName == expectedName
 
   def matchSignature(
       method: jdi.Method,
