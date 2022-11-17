@@ -1040,4 +1040,29 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(7), StepIn.method("A.<init>()"))
   }
+
+  test("step in private method of outer class") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val outer = new Outer
+         |    val inner = new outer.Inner
+         |    println(inner.bar)
+         |  }
+         |}
+         |
+         |class Outer {
+         |  private def foo: String = "foo"
+         |  class Inner {
+         |    def bar: String = {
+         |      foo
+         |    }
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(15), StepIn.line(12))
+  }
 }

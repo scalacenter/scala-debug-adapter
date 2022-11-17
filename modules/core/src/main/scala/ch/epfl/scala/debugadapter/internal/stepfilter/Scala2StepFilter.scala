@@ -100,10 +100,19 @@ class Scala2StepFilter(
       logger.debug(
         s"aliasRef for ${scalaMethod.name}: ${scalaMethod.aliasRef}"
       )
-
-    javaMethod.name == scalaMethod.name &&
+    matchName(javaMethod, scalaMethod) &&
     matchOwner(javaMethod.declaringType, scalaMethod.parent.get) &&
     matchSignature(javaMethod, scalaMethod.infoType)
+  }
+
+  private def matchName(javaMethod: jdi.Method, scalaMethod: MethodSymbol): Boolean = {
+    val javaName = javaMethod.name
+    val javaPrefix = javaMethod.declaringType.name.replace('.', '$') + "$$"
+    // if an inner accesses a private method, the backend makes the method public
+    // and prefixes its name with the full class name.
+    // Example: method foo in class example.Inner becomes example$Inner$$foo
+    val expectedName = javaName.stripPrefix(javaPrefix)
+    scalaMethod.name == expectedName
   }
 
   private def matchOwner(

@@ -21,7 +21,7 @@ final case class NoStep() extends DebugStep[Nothing]
 final case class ObjectRef(clsName: String)
 
 object DebugStepAssert {
-  def assertOnFrame(expectedSource: Path, expectedLine: Int)(frame: StackFrame): Unit = {
+  def assertOnFrame(expectedSource: Path, expectedLine: Int)(frame: StackFrame)(implicit location: Location): Unit = {
     assertEquals(frame.source.path, expectedSource.toString)
     assertEquals(frame.line, expectedLine)
   }
@@ -53,7 +53,7 @@ object Logpoint {
 }
 
 object StepIn {
-  def line(line: Int)(implicit ctx: TestingContext): DebugStepAssert[StackFrame] =
+  def line(line: Int)(implicit ctx: TestingContext, location: Location): DebugStepAssert[StackFrame] =
     DebugStepAssert(StepIn(), assertOnFrame(ctx.mainSource, line))
 
   def method(methodName: String): DebugStepAssert[StackFrame] =
