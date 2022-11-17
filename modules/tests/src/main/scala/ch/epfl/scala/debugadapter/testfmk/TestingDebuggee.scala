@@ -27,7 +27,7 @@ case class TestingDebuggee(
     dependencies: Seq[ManagedEntry],
     mainClass: String
 ) extends Debuggee
-    with DebugContext {
+    with TestingContext {
 
   def mainSource: Path = sourceFiles.head
 
@@ -248,6 +248,7 @@ object TestingDebuggee {
 
     val command = Array(
       javac.toString,
+      "-g:source,lines,vars",
       "-d",
       classDir.toString,
       srcFile.toString

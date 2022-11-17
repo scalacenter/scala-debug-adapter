@@ -451,7 +451,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       try {
         // if there is a server for this target then close it
         debugServers.get(target).foreach(_.close())
-        val server = DebugServer(debuggee, tools, new LoggerAdapter(logger), address, autoCloseSession = true)
+        val server = DebugServer(debuggee, tools, new LoggerAdapter(logger), address)
         debugServers.update(target, server)
         Await.result(server.start(), Duration.Inf)
       } catch {

@@ -1,4 +1,4 @@
-package ch.epfl.scala.debugadapter.internal.stepfilter
+package ch.epfl.scala.debugadapter.internal.evaluator
 
 /**
  * Adapted from https://github.com/lampepfl/dotty/blob/main/compiler/src/dotty/tools/dotc/util/NameTransformer.scala

@@ -1,9 +1,19 @@
 package ch.epfl.scala.debugadapter.internal
 
+import ch.epfl.scala.debugadapter.ClassEntry
+import ch.epfl.scala.debugadapter.DebugConfig
+import ch.epfl.scala.debugadapter.DebugTools
 import ch.epfl.scala.debugadapter.Debuggee
-import ch.epfl.scala.debugadapter.internal.evaluator.ExpressionEvaluator
+import ch.epfl.scala.debugadapter.EvaluationFailed
+import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.internal.evaluator.CompiledExpression
+import ch.epfl.scala.debugadapter.internal.evaluator.FrameReference
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
+import ch.epfl.scala.debugadapter.internal.evaluator.LocalValue
 import ch.epfl.scala.debugadapter.internal.evaluator.MethodInvocationFailed
+import ch.epfl.scala.debugadapter.internal.evaluator.PreparedExpression
+import ch.epfl.scala.debugadapter.internal.evaluator.ScalaEvaluator
+import ch.epfl.scala.debugadapter.internal.evaluator.SimpleEvaluator
 import com.microsoft.java.debug.core.IEvaluatableBreakpoint
 import com.microsoft.java.debug.core.adapter.IDebugAdapterContext
 import com.microsoft.java.debug.core.adapter.IEvaluationProvider
@@ -15,16 +25,15 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.util.Failure
 import scala.util.Success
-import ch.epfl.scala.debugadapter.Logger
 import scala.util.Try
-import ScalaExtension._
-import ch.epfl.scala.debugadapter.DebugTools
-import ch.epfl.scala.debugadapter.ClassEntry
-import ch.epfl.scala.debugadapter.internal.evaluator.CompiledExpression
+
+import ScalaExtension.*
 
 private[internal] class EvaluationProvider(
     sourceLookUp: SourceLookUpProvider,
-    evaluators: Map[ClassEntry, ExpressionEvaluator],
+    simpleEvaluator: SimpleEvaluator,
+    scalaEvaluators: Map[ClassEntry, ScalaEvaluator],
+    mode: DebugConfig.EvaluationMode,
     logger: Logger
 ) extends IEvaluationProvider {
 
@@ -37,9 +46,10 @@ private[internal] class EvaluationProvider(
   override def isInEvaluation(thread: ThreadReference) = isEvaluating.get
 
   override def evaluate(expression: String, thread: ThreadReference, depth: Int): CompletableFuture[Value] = {
+    val frame = FrameReference(thread, depth)
     val evaluation = for {
-      compiledExpression <- compileExpression(expression, thread, depth)
-      evaluation <- evaluate(compiledExpression, thread, depth)
+      preparedExpression <- prepare(expression, frame)
+      evaluation <- evaluate(preparedExpression, frame)
     } yield evaluation
     completeFuture(evaluation, thread)
   }
@@ -54,25 +64,25 @@ private[internal] class EvaluationProvider(
       breakpoint: IEvaluatableBreakpoint,
       thread: ThreadReference
   ): CompletableFuture[Value] = {
-    val depth = 0
-    val location = thread.frame(depth).location
+    val frame = FrameReference(thread, 0)
+    val location = frame.current().location
     val locationCode = (location.method.name, location.codeIndex).hashCode
-    val compiledExpression: Try[CompiledExpression] =
+    val expression =
       if (breakpoint.getCompiledExpression(locationCode) != null) {
         breakpoint.getCompiledExpression(locationCode).asInstanceOf[Try[CompiledExpression]]
       } else if (breakpoint.containsConditionalExpression) {
-        compileExpression(breakpoint.getCondition, thread, depth)
+        prepare(breakpoint.getCondition, frame)
       } else if (breakpoint.containsLogpointExpression) {
         val tripleQuote = "\"\"\""
         val expression = s"""println(s$tripleQuote${breakpoint.getLogMessage}$tripleQuote)"""
-        compileExpression(expression, thread, depth)
+        prepare(expression, frame)
       } else {
         Failure(new Exception("Missing expression"))
       }
-    breakpoint.setCompiledExpression(locationCode, compiledExpression)
+    breakpoint.setCompiledExpression(locationCode, expression)
     val evaluation = for {
-      compiledExpression <- compiledExpression
-      evaluation <- evaluate(compiledExpression, thread, depth)
+      expression <- expression
+      evaluation <- evaluate(expression, frame)
     } yield evaluation
     completeFuture(evaluation, thread)
   }
@@ -97,27 +107,40 @@ private[internal] class EvaluationProvider(
     completeFuture(invocation.getResult, thread)
   }
 
-  private def compileExpression(expression: String, thread: ThreadReference, depth: Int): Try[CompiledExpression] = {
-    val location = thread.frame(depth).location
-    val fqcn = location.declaringType.name
-
+  private def getScalaEvaluator(fqcn: String): Try[ScalaEvaluator] =
     for {
       entry <- sourceLookUp.getClassEntry(fqcn).toTry(s"Unknown class $fqcn")
-      evaluator <- evaluators.get(entry).toTry(s"Missing evaluator for entry ${entry.name}")
-      sourceContent <- sourceLookUp.getSourceContentFromClassName(fqcn).toTry(s"Cannot find source file of class $fqcn")
-      compiledExpression <- evaluationBlock { evaluator.compile(sourceContent, expression, thread, depth) }
-    } yield compiledExpression
+      evaluator <- scalaEvaluators.get(entry).toTry(s"Missing expression compiler for entry ${entry.name}")
+    } yield evaluator
+
+  private def prepare(expression: String, frame: FrameReference): Try[PreparedExpression] = {
+    lazy val simpleExpression = simpleEvaluator.prepare(expression, frame)
+    if (mode.canBypassCompiler && simpleExpression.isDefined) {
+      Success(simpleExpression.get)
+    } else if (mode.canUseCompiler) {
+      val fqcn = frame.current().location.declaringType.name
+      for {
+        evaluator <- getScalaEvaluator(fqcn)
+        sourceContent <- sourceLookUp
+          .getSourceContentFromClassName(fqcn)
+          .toTry(s"Cannot find source file of class $fqcn")
+        preparedExpression <- evaluator.compile(sourceContent, expression, frame)
+      } yield preparedExpression
+    } else {
+      Failure(new EvaluationFailed(s"Cannot evaluate '$expression' with $mode mode"))
+    }
   }
 
-  private def evaluate(compiledExpression: CompiledExpression, thread: ThreadReference, depth: Int): Try[Value] = {
-    val location = thread.frame(depth).location
-    val fqcn = location.declaringType.name
-
-    for {
-      entry <- sourceLookUp.getClassEntry(fqcn).toTry(s"Unknown class $fqcn")
-      evaluator <- evaluators.get(entry).toTry(s"Missing evaluator for entry ${entry.name}")
-      compiledExpression <- evaluationBlock { evaluator.evaluate(compiledExpression, thread, depth) }
-    } yield compiledExpression
+  private def evaluate(expression: PreparedExpression, frame: FrameReference): Try[Value] = {
+    expression match {
+      case localValue: LocalValue => simpleEvaluator.evaluate(localValue, frame)
+      case expression: CompiledExpression =>
+        val fqcn = frame.current().location.declaringType.name
+        for {
+          evaluator <- getScalaEvaluator(fqcn)
+          compiledExpression <- evaluationBlock { evaluator.evaluate(expression, frame) }
+        } yield compiledExpression
+    }
   }
 
   private def completeFuture[T](result: Try[T], thread: ThreadReference): CompletableFuture[T] = {
@@ -145,11 +168,12 @@ private[internal] object EvaluationProvider {
       debugTools: DebugTools,
       sourceLookUp: SourceLookUpProvider,
       logger: Logger,
-      testMode: Boolean
+      config: DebugConfig
   ): IEvaluationProvider = {
-    val allEvaluators = debugTools.expressionCompilers.view.map { case (k, v) =>
-      (k, new ExpressionEvaluator(v, logger, testMode))
+    val simpleEvaluator = new SimpleEvaluator(logger, config.testMode)
+    val scalaEvaluators = debugTools.expressionCompilers.view.map { case (entry, compiler) =>
+      (entry, new ScalaEvaluator(entry, compiler, logger, config.testMode))
     }.toMap
-    new EvaluationProvider(sourceLookUp, allEvaluators, logger)
+    new EvaluationProvider(sourceLookUp, simpleEvaluator, scalaEvaluators, config.evaluationMode, logger)
   }
 }

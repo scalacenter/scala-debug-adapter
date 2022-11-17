@@ -6,7 +6,7 @@ object Dependencies {
   val scala30 = "3.0.2"
   val scala32 = "3.2.1"
   val asmVersion = "9.4"
-  val coursierVersion = "2.1.0-M7"
+  val coursierVersion = "2.1.0-RC2"
 
   val asm = "org.ow2.asm" % "asm" % asmVersion
   val asmUtil = "org.ow2.asm" % "asm-util" % asmVersion
@@ -27,7 +27,7 @@ object Dependencies {
 
   val scalaParallelCollection = "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4"
   val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.8.1"
-  val sbtTestAgent = "org.scala-sbt" % "test-agent" % "1.7.2"
+  val sbtTestAgent = "org.scala-sbt" % "test-agent" % "1.8.0"
 
   // test dependencies
   val munit = "org.scalameta" %% "munit" % "1.0.0-M6"

@@ -43,7 +43,7 @@ class JdiArray(reference: ArrayReference, thread: ThreadReference) extends JdiOb
   def setValue(index: Int, value: Value): Unit =
     reference.setValue(index, value)
 
-  def setValues(values: List[Value]): Unit = reference.setValues(values.asJava)
+  def setValues(values: Seq[Value]): Unit = reference.setValues(values.asJava)
 
   def getValues: Seq[Value] = reference.getValues.asScala.toSeq
 }

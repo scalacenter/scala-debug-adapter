@@ -20,13 +20,14 @@ import scala.util.control.NonFatal
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Promise
 import scala.concurrent.Await
+import ch.epfl.scala.debugadapter.Logger
 
-class TestingDebugClient(socket: Socket, debug: String => Unit)(implicit
+class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     ec: ExecutionContext
 ) extends AbstractDebugClient(
       socket.getInputStream,
       socket.getOutputStream,
-      debug
+      logger
     ) {
   override def close(): Unit = {
     super.close()
@@ -200,7 +201,7 @@ class TestingDebugClient(socket: Socket, debug: String => Unit)(implicit
 
   def outputed(
       f: OutputEvent => Boolean,
-      timeout: Duration = 1.second
+      timeout: Duration = 2.second
   ): OutputEvent = {
     val event = receiveEvent(timeout) { e =>
       if (e.event == "output") {
@@ -239,12 +240,12 @@ object TestingDebugClient {
   def connect(
       uri: URI,
       timeout: Duration = 4.seconds,
-      debug: String => Unit = _ => ()
+      logger: Logger = NoopLogger
   )(implicit ec: ExecutionContext): TestingDebugClient = {
     val socket = new Socket()
     val address = new InetSocketAddress(uri.getHost, uri.getPort)
     socket.connect(address, timeout.toMillis.intValue)
-    val client = new TestingDebugClient(socket, debug)
+    val client = new TestingDebugClient(socket, logger)
     val listening = new java.lang.Thread {
       override def run(): Unit = client.run()
     }
@@ -256,7 +257,7 @@ object TestingDebugClient {
 class AbstractDebugClient(
     input: InputStream,
     output: OutputStream,
-    debug: String => Unit
+    logger: Logger
 ) {
   private final val BufferSize = 4096
   private final val TwoCRLF = "\r\n\r\n"
@@ -339,7 +340,7 @@ class AbstractDebugClient(
         .flatten
     rawMessages.foreach { raw =>
       try {
-        debug(s"Received $raw")
+        logger.debug(s"Received $raw")
         val message = JsonUtils.fromJson(raw, classOf[Messages.ProtocolMessage])
 
         if (message.`type`.equals("response")) {
@@ -387,7 +388,7 @@ class AbstractDebugClient(
     try {
       this.writer.write(data)
       this.writer.flush()
-      debug(s"Sent $jsonMessage")
+      logger.debug(s"Sent $jsonMessage")
     } catch {
       case NonFatal(e) =>
         System.err.println(s"Write data to io exception: ${e.getMessage}")
