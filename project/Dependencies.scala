@@ -30,7 +30,7 @@ object Dependencies {
   val sbtTestAgent = "org.scala-sbt" % "test-agent" % "1.8.0"
 
   // test dependencies
-  val munit = "org.scalameta" %% "munit" % "1.0.0-M6"
+  val munit = "org.scalameta" %% "munit" % "1.0.0-M7"
   val coursier = "io.get-coursier" %% "coursier" % coursierVersion
   val coursierJvm = "io.get-coursier" %% "coursier-jvm" % coursierVersion
 }
