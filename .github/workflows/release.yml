@@ -13,6 +13,7 @@ jobs:
       - uses: coursier/setup-action@v1.2.0
         with:
           app: sbt
+          jvm: 'adopt:1.8.0-292'
       - run: sbt ci-release
         env:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
