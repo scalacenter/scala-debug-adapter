@@ -46,7 +46,7 @@ lazy val javaDebug = project
     name := "com-microsoft-java-debug-core",
     crossPaths := false,
     autoScalaLibrary := false,
-    javacOptions ++= Seq("-source", "1.8", "-target", "1.8") ,
+    compile / javacOptions ++= Seq("-source", "1.8", "-target", "1.8") ,
     libraryDependencies ++= Seq(
       "org.apache.commons" % "commons-lang3" % "3.12.0",
       "com.google.code.gson" % "gson" % "2.10",
