@@ -46,7 +46,7 @@ lazy val javaDebug = project
     name := "com-microsoft-java-debug-core",
     crossPaths := false,
     autoScalaLibrary := false,
-    compile / javacOptions ++= Seq("-source", "1.8", "-target", "1.8") ,
+    compile / javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
     libraryDependencies ++= Seq(
       "org.apache.commons" % "commons-lang3" % "3.12.0",
       "com.google.code.gson" % "gson" % "2.10",
@@ -199,7 +199,7 @@ lazy val scala3StepFilter: Project = project
     scalaVersion := Dependencies.scala32,
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
-      "ch.epfl.scala" %% "tasty-query" % "0.3.1",
+      "ch.epfl.scala" %% "tasty-query" % "0.4.0",
       "org.scala-lang" %% "tasty-core" % scalaVersion.value,
       Dependencies.munit % Test
     ),
