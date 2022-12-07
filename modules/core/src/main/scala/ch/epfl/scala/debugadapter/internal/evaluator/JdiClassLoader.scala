@@ -2,7 +2,7 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi._
 
-private[evaluator] object JdiClassLoader {
+private[debugadapter] object JdiClassLoader {
   def apply(
       classLoader: ClassLoaderReference,
       thread: ThreadReference
@@ -17,7 +17,7 @@ private[evaluator] object JdiClassLoader {
   }
 }
 
-private[evaluator] case class JdiClassLoader(
+private[debugadapter] case class JdiClassLoader(
     classLoaderRef: ClassLoaderReference,
     loadClassMethod: Method,
     thread: ThreadReference

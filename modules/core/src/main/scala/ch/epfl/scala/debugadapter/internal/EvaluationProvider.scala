@@ -12,6 +12,7 @@ import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
 import ch.epfl.scala.debugadapter.internal.evaluator.LocalValue
 import ch.epfl.scala.debugadapter.internal.evaluator.MethodInvocationFailed
 import ch.epfl.scala.debugadapter.internal.evaluator.PreparedExpression
+import ch.epfl.scala.debugadapter.internal.evaluator.SimpleValue
 import ch.epfl.scala.debugadapter.internal.evaluator.ScalaEvaluator
 import ch.epfl.scala.debugadapter.internal.evaluator.SimpleEvaluator
 import com.microsoft.java.debug.core.IEvaluatableBreakpoint
@@ -20,6 +21,11 @@ import com.microsoft.java.debug.core.adapter.IEvaluationProvider
 import com.sun.jdi.ObjectReference
 import com.sun.jdi.ThreadReference
 import com.sun.jdi.Value
+
+import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
+
+import scala.jdk.CollectionConverters.*
+import ch.epfl.scala.debugadapter.internal.evaluator.JdiClassLoader
 
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
@@ -60,6 +66,10 @@ private[internal] class EvaluationProvider(
       thread: ThreadReference
   ): CompletableFuture[Value] = ???
 
+  def isLogCompilable(logMessage: String): Boolean = {
+    logMessage.contains("$")
+  }
+
   override def evaluateForBreakpoint(
       breakpoint: IEvaluatableBreakpoint,
       thread: ThreadReference
@@ -73,9 +83,13 @@ private[internal] class EvaluationProvider(
       } else if (breakpoint.containsConditionalExpression) {
         prepare(breakpoint.getCondition, frame)
       } else if (breakpoint.containsLogpointExpression) {
-        val tripleQuote = "\"\"\""
-        val expression = s"""println(s$tripleQuote${breakpoint.getLogMessage}$tripleQuote)"""
-        prepare(expression, frame)
+        if (!isLogCompilable(breakpoint.getLogMessage())) {
+          Success(SimpleValue(breakpoint.getLogMessage()))
+        } else {
+          val tripleQuote = "\"\"\""
+          val expression = s"""println(s$tripleQuote${breakpoint.getLogMessage}$tripleQuote)"""
+          prepare(expression, frame)
+        }
       } else {
         Failure(new Exception("Missing expression"))
       }
@@ -131,8 +145,42 @@ private[internal] class EvaluationProvider(
     }
   }
 
+  private def findClassLoader(frame: FrameReference): JdiClassLoader = {
+    val scalaLibClassLoader =
+      for {
+        scalaLibClass <- frame.thread.virtualMachine.allClasses.asScala
+          .find(c => c.name.startsWith("scala.runtime"))
+        classLoader <- Option(scalaLibClass.classLoader)
+      } yield classLoader
+
+    val classLoader = Option(frame.current().location.method.declaringType.classLoader)
+      .orElse(scalaLibClassLoader)
+      .getOrElse(throw new Exception("Cannot find the classloader of the Scala library"))
+    JdiClassLoader(classLoader, frame.thread)
+  }
+
   private def evaluate(expression: PreparedExpression, frame: FrameReference): Try[Value] = {
     expression match {
+      case simpleValue: SimpleValue =>
+        val classLoader = findClassLoader(frame)
+        val vm = frame.thread.virtualMachine()
+        val arg = vm.mirrorOf(simpleValue.name)
+        val predefClass = classLoader.loadClass("scala.Predef$").getResult.get
+        val moduleField = new JdiObject(
+          predefClass
+            .invoke("getDeclaredField", List(vm.mirrorOf("MODULE$")))
+            .getResult
+            .get
+            .asInstanceOf[ObjectReference],
+          frame.thread
+        )
+
+        val predef = new JdiObject(
+          moduleField.invoke("get", List(null)).getResult.get.asInstanceOf[ObjectReference],
+          frame.thread
+        )
+
+        predef.invoke("println", "(Ljava/lang/Object;)V", List(arg)).getResult
       case localValue: LocalValue => simpleEvaluator.evaluate(localValue, frame)
       case expression: CompiledExpression =>
         val fqcn = frame.current().location.declaringType.name

@@ -37,6 +37,25 @@ abstract class SourceBreakpointTests(scalaVersion: ScalaVersion) extends DebugTe
     check(Breakpoint(5, "i == 2"), Evaluation.success("i", 2), Breakpoint(8))
   }
 
+  test("evaluate logpoins with dollar") {
+    val source =
+      """|package example
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val i: Int = 3
+         |    
+         |    print(i)
+         |    ()
+         |
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Logpoint(6, "i is $i", "i is 3"))
+    check(Logpoint(6, "${i * i}", "9"))
+    check(Logpoint(6, "{i * i}", "{i * i}"))
+  }
+
   test("evaluate logpoints") {
     val source =
       """|package example
