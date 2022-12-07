@@ -199,7 +199,7 @@ lazy val scala3StepFilter: Project = project
     scalaVersion := Dependencies.scala32,
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
-      "ch.epfl.scala" %% "tasty-query" % "0.4.0",
+      "ch.epfl.scala" %% "tasty-query" % "0.5.0",
       "org.scala-lang" %% "tasty-core" % scalaVersion.value,
       Dependencies.munit % Test
     ),
