@@ -55,7 +55,7 @@ lazy val javaDebug = project
       "org.reactivestreams" % "reactive-streams" % "1.0.4",
       "commons-io" % "commons-io" % "2.11.0",
       "junit" % "junit" % "4.13.2" % Test,
-      "org.easymock" % "easymock" % "5.0.1" % Test,
+      "org.easymock" % "easymock" % "5.1.0" % Test,
       "com.github.sbt" % "junit-interface" % "0.13.3" % Test
     ),
     Test / fork := true,
