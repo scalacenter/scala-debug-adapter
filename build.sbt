@@ -28,6 +28,7 @@ lazy val root = project
   .aggregate(
     javaDebug,
     core212,
+    core213,
     tests212,
     sbtPlugin,
     expressionCompiler212,
@@ -62,6 +63,7 @@ lazy val javaDebug = project
   )
 
 lazy val core212 = core.jvm(Dependencies.scala212)
+lazy val core213 = core.jvm(Dependencies.scala213)
 lazy val core = projectMatrix
   .in(file("modules/core"))
   .jvmPlatform(
