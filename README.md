@@ -109,7 +109,7 @@ addSbtPlugin("org.scala-debugger" % "sbt-jdi-tools" % "1.1.1")
 
 ## tests
 
-The [`tests`](https://github.com/scalacenter/scala-debug-adapter/tree/main/modules/tests/src/test/scala/ch/epfl/scala/debugadapter) module contains most the tests of the Scala Debug Server.
+The [`tests`](https://github.com/scalacenter/scala-debug-adapter/tree/main/modules/tests/src/test/scala/ch/epfl/scala/debugadapter) module contains the tests of the Scala Debug Server.
 It uses the [TestingDebugClient](https://github.com/scalacenter/scala-debug-adapter/blob/main/modules/tests/src/main/scala/ch/epfl/scala/debugadapter/testfmk/TestingDebugClient.scala), a minimal debug client that is used to communicate with the debug server via a socket.
 
 # References
