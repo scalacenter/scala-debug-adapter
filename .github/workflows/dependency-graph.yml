@@ -9,6 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: scalacenter/sbt-dependency-submission@65b9dfcdd634e53508d3545f1b4a5c2b61297171
+      - uses: scalacenter/sbt-dependency-submission@v2
         with:
           configs-ignore: scala-doc-tool
