@@ -2,58 +2,6 @@ package ch.epfl.scala.debugadapter.testing
 
 import sbt.testing.{Event, Status}
 
-import scala.jdk.CollectionConverters.*
-
-trait TestSuiteEventHandler {
-  def handle(testSuiteEvent: TestSuiteEvent): Unit
-}
-
-object TestSuiteEventHandler {
-  def formatError(
-      testName: String,
-      failureMessage: String,
-      indentSize: Int
-  ): String = {
-    val indent = " " * indentSize
-    (testName, failureMessage) match {
-      case ("", failureMessage) => s"$indent* $failureMessage"
-      case (testName, "") => s"$indent* $testName"
-      case (testName, failureMessage) => s"$indent* $testName - $failureMessage"
-    }
-  }
-
-  def summarizeResults(
-      testSuiteResult: TestSuiteEvent.Results
-  ): TestSuiteSummary = {
-    val results = testSuiteResult.events.map { e =>
-      val name = TestUtils.printSelector(e.selector).getOrElse("")
-      val testResult: SingleTestSummary = e.status() match {
-        case Status.Success =>
-          SingleTestResult.Passed(name, testSuiteResult.duration)
-        case Status.Failure =>
-          val failedMsg =
-            TestUtils.printThrowable(e.throwable()).getOrElse("")
-          val formatted =
-            TestSuiteEventHandler.formatError(
-              name,
-              failedMsg,
-              indentSize = 0
-            )
-          SingleTestResult.Failed(name, testSuiteResult.duration, formatted)
-        case _ =>
-          SingleTestResult.Skipped(name)
-      }
-      testResult
-    }.asJava
-    val testResults = TestSuiteSummary(
-      testSuiteResult.testSuite,
-      testSuiteResult.duration,
-      results
-    )
-    testResults
-  }
-}
-
 sealed trait TestSuiteEvent
 object TestSuiteEvent {
   case object Done extends TestSuiteEvent
