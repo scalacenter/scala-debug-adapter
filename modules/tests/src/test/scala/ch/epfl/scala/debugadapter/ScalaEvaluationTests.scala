@@ -1848,8 +1848,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Breakpoint(8), // still in the same lifted lambda (the line position does not make any sense)
         Breakpoint(9), // again in the lifted lambda
         Breakpoint(8), // going out of the lifted lambda
-        if (isScala32) Breakpoint(8) else NoStep(), // regression in Scala 3.2.1
-        if (isScala32) Breakpoint(9) else NoStep(), // regression in Scala 3.2.1
+        if (isScala32) Breakpoint(8) else NoStep(), // regression in Scala 3.2.2
+        if (isScala32) Breakpoint(9) else NoStep(), // regression in Scala 3.2.2
         Breakpoint(13), // calling withFilter
         Breakpoint(13),
         Evaluation.success("x", 1),

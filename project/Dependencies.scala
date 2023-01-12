@@ -4,7 +4,7 @@ object Dependencies {
   val scala212 = "2.12.16"
   val scala213 = "2.13.10"
   val scala30 = "3.0.2"
-  val scala32 = "3.2.1"
+  val scala32 = "3.2.2"
   val asmVersion = "9.4"
   val coursierVersion = "2.1.0-RC4"
 
