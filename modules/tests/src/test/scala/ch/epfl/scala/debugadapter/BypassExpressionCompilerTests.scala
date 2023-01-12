@@ -354,8 +354,8 @@ class BypassExpressionCompilerTests extends DebugTestSuite {
       Breakpoint(8), // still in the same lifted lambda (the line position does not make any sense)
       Breakpoint(9), // again in the lifted lambda
       Breakpoint(8), // going out of the lifted lambda
-      Breakpoint(8), // regression in Scala 3.2.1
-      Breakpoint(9), // regression in Scala 3.2.1
+      Breakpoint(8), // regression in Scala 3.2.2
+      Breakpoint(9), // regression in Scala 3.2.2
       Breakpoint(13), // calling withFilter
       Breakpoint(13),
       Evaluation.success("x", 1)
