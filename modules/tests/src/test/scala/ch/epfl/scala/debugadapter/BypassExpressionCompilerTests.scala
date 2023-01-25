@@ -5,7 +5,7 @@ import ch.epfl.scala.debugadapter.testfmk.*
 class BypassExpressionCompilerTests extends DebugTestSuite {
   private val scalaVersion = ScalaVersion.`3.2`
   protected override def defaultConfig: DebugConfig =
-    super.defaultConfig.copy(evaluationMode = DebugConfig.AlwaysBypassCompiler)
+    super.defaultConfig.copy(evaluationMode = DebugConfig.SimpleEvaluationOnly)
 
   test("evaluate local values") {
     val source =
@@ -399,7 +399,7 @@ class BypassExpressionCompilerTests extends DebugTestSuite {
          |}
          |
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
     check(
       Breakpoint(6),
       Evaluation.success("main", ObjectRef("Main")),

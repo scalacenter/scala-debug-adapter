@@ -26,21 +26,16 @@ package object evaluator {
   ): Safe[Value] = {
     Safe(objRef.invokeMethod(thread, method, args.asJava, ObjectReference.INVOKE_SINGLE_THREADED))
       .recoverWith { case t: InvocationException =>
-        extractMessage(t)(thread)
+        extractMessage(t, thread)
           .map(message => throw new MethodInvocationFailed(message, t.exception()))
       }
   }
 
-  private def extractMessage(
-      invocationException: InvocationException
-  )(thread: ThreadReference): Safe[String] = {
+  private def extractMessage(invocationException: InvocationException, thread: ThreadReference): Safe[String] = {
     val exception = invocationException.exception()
     val getMessageMethod = method("toString", exception.referenceType())
-    val message =
-      invokeMethod(exception, getMessageMethod, List(), thread)
-    message.map(_.toString).recover { case _ =>
-      ""
-    }
+    val message = invokeMethod(exception, getMessageMethod, List(), thread)
+    message.map(_.toString).recover { case _ => "" }
   }
 
   implicit class SafeSeq[A](seq: Seq[Safe[A]]) {

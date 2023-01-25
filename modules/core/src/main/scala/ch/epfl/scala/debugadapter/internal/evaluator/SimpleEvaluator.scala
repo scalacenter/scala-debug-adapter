@@ -19,7 +19,6 @@ class SimpleEvaluator(logger: Logger, testMode: Boolean) {
     val variable = currentFrame.visibleVariableByName(localValue.name)
     val rawValue = currentFrame.getValue(variable)
     derefIfRef(rawValue, frame.thread)
-
   }
 
   private def isLocalVariable(frame: FrameReference, name: String): Boolean = {

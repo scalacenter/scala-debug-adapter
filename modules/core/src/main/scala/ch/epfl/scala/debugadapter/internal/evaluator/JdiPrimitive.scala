@@ -20,9 +20,7 @@ object JdiPrimitive {
         case _: Long => classLoader.loadClass("java.lang.Long")
         case _: Short => classLoader.loadClass("java.lang.Short")
       }
-      objectRef <- clazz
-        .invokeStatic("valueOf", List(jdiValue))
-        .map(_.asInstanceOf[ObjectReference])
-    } yield objectRef
+      objectRef <- clazz.invokeStatic("valueOf", List(jdiValue))
+    } yield objectRef.asInstanceOf[ObjectReference]
   }
 }

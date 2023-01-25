@@ -46,7 +46,10 @@ object Breakpoint {
 }
 
 object Logpoint {
-  def apply(line: Int, logMessage: String, expected: String)(implicit ctx: TestingContext): DebugStepAssert[String] = {
+  def apply(line: Int, logMessage: String, expected: String)(implicit
+      ctx: TestingContext,
+      loc: Location
+  ): DebugStepAssert[String] = {
     val logpoint = Logpoint(ctx.mainSource, line, logMessage)
     DebugStepAssert(logpoint, output => assertEquals(output, expected))
   }
