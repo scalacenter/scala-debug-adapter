@@ -4,7 +4,7 @@ import scala.collection.mutable
 
 def isRelease() =
   System.getenv("GITHUB_REPOSITORY") == "scalacenter/scala-debug-adapter" &&
-    System.getenv("GITHUB_WORKFLOW") == "Release"
+    Option(System.getenv("GITHUB_WORKFLOW")).exists(_.contains("Release"))
 
 def isCI = System.getenv("CI") != null
 
