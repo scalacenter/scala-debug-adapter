@@ -2,7 +2,7 @@ package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testfmk.*
 
-class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.2`)
+class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1+`)
 class Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
 class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`) {
   test("should match all kinds of Scala 2 types (not valid in Scala 3)") {

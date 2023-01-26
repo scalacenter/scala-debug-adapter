@@ -4,7 +4,7 @@ import ch.epfl.scala.debugadapter.testfmk.*
 
 class Scala212DebugTest extends ScalaDebugTests(ScalaVersion.`2.12`)
 class Scala213DebugTest extends ScalaDebugTests(ScalaVersion.`2.13`)
-class Scala3DebugTest extends ScalaDebugTests(ScalaVersion.`3.2`) {
+class Scala3DebugTest extends ScalaDebugTests(ScalaVersion.`3.1+`) {
   test("should support breakpoints in scala 3 with brace-less syntax") {
     val source =
       """|package example

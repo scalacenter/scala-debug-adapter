@@ -28,7 +28,7 @@ class ScalaStepFilterBridgeTests extends FunSuite:
          |
          |class B extends A
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`3.2`)
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`3.1+`)
     val stepFilter = getStepFilter(debuggee)
 
     val termsOfA = stepFilter.extractScalaTerms("example.A", false)
@@ -50,7 +50,7 @@ class ScalaStepFilterBridgeTests extends FunSuite:
          |}
          |""".stripMargin
 
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`3.2`)
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`3.1+`)
     val stepFilter = getStepFilter(debuggee)
 
     val terms = stepFilter.extractScalaTerms("example.Main$", false)
@@ -74,7 +74,7 @@ class ScalaStepFilterBridgeTests extends FunSuite:
          |}
          |""".stripMargin
 
-    val debuggee = TestingDebuggee.mainClass(source, "example.A", ScalaVersion.`3.2`)
+    val debuggee = TestingDebuggee.mainClass(source, "example.A", ScalaVersion.`3.1+`)
     val stepFilter = getStepFilter(debuggee)
 
     val objTerms = stepFilter.extractScalaTerms("example.A$", false)
@@ -86,7 +86,7 @@ class ScalaStepFilterBridgeTests extends FunSuite:
   }
 
   test("should not step into synthetic methods of case classes") {
-    val debuggee = TestingDebuggee.mainClass("", "example.Main", ScalaVersion.`3.2`)
+    val debuggee = TestingDebuggee.mainClass("", "example.Main", ScalaVersion.`3.1+`)
     val stepFilter = getStepFilter(debuggee)
 
     val objTerms =

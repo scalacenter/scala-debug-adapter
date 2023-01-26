@@ -5,7 +5,7 @@ import ch.epfl.scala.debugadapter.testfmk.*
 class Scala212EvaluationTests extends Scala2EvaluationTests(ScalaVersion.`2.12`)
 class Scala213EvaluationTests extends Scala2EvaluationTests(ScalaVersion.`2.13`)
 class Scala30EvaluationTests extends Scala3EvaluationTests(ScalaVersion.`3.0`)
-class Scala32EvaluationTests extends Scala3EvaluationTests(ScalaVersion.`3.2`)
+class Scala31PlusEvaluationTests extends Scala3EvaluationTests(ScalaVersion.`3.1+`)
 
 abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTestSuite {
   protected override def defaultConfig: DebugConfig =
@@ -1402,7 +1402,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(
       Breakpoint(6),
       // the program stops twice before Scala 3.2
-      if (!isScala32) Breakpoint(6) else NoStep(),
+      if (!isScala31Plus) Breakpoint(6) else NoStep(),
       Evaluation.success("1 + 1", 2)
     )
   }
@@ -1848,8 +1848,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Breakpoint(8), // still in the same lifted lambda (the line position does not make any sense)
         Breakpoint(9), // again in the lifted lambda
         Breakpoint(8), // going out of the lifted lambda
-        if (isScala32) Breakpoint(8) else NoStep(), // regression in Scala 3.2.2
-        if (isScala32) Breakpoint(9) else NoStep(), // regression in Scala 3.2.2
+        if (isScala31Plus) Breakpoint(8) else NoStep(), // regression in Scala 3.2.2
+        if (isScala31Plus) Breakpoint(9) else NoStep(), // regression in Scala 3.2.2
         Breakpoint(13), // calling withFilter
         Breakpoint(13),
         Evaluation.success("x", 1),
@@ -1960,7 +1960,7 @@ abstract class Scala2EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(
       scala3Source,
       "example.Main",
-      ScalaVersion.`3.2`,
+      ScalaVersion.`3.1+`,
       Seq.empty,
       Seq(scala2Debugee.mainModule)
     )
