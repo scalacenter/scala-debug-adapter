@@ -69,7 +69,7 @@ package ch.epfl.scala.debugadapter
 import ch.epfl.scala.debugadapter.testfmk.*
 
 class MyDebugTests extends DebugTestSuite {
-  private val scalaVersion: ScalaVersion = ScalaVersion.`3.2`
+  private val scalaVersion: ScalaVersion = ScalaVersion.`3.1+`
 
   test("my simple test") {
     val source =
@@ -111,7 +111,7 @@ Running all the test can take more than 30 minutes.
 We recommend that locally you run only some tests using the sbt `testOnly` task or using your IDE:
 
 ```
-sbt:root> testOnly ch.epfl.scala.debugadapter.Scala32EvaluationTests
+sbt:root> testOnly ch.epfl.scala.debugadapter.Scala31PlusEvaluationTests
 ```
 
 ## Running the debugger locally

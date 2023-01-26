@@ -3,7 +3,7 @@ package ch.epfl.scala.debugadapter
 import ch.epfl.scala.debugadapter.testfmk.*
 
 class BypassExpressionCompilerTests extends DebugTestSuite {
-  private val scalaVersion = ScalaVersion.`3.2`
+  private val scalaVersion = ScalaVersion.`3.1+`
   protected override def defaultConfig: DebugConfig =
     super.defaultConfig.copy(evaluationMode = DebugConfig.AlwaysBypassCompiler)
 

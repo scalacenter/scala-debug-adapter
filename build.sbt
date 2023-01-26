@@ -34,7 +34,7 @@ lazy val root = project
     expressionCompiler212,
     expressionCompiler213,
     expressionCompiler30,
-    expressionCompiler32,
+    expressionCompiler3,
     scala3StepFilter
   )
   .settings(
@@ -67,7 +67,7 @@ lazy val core213 = core.jvm(Dependencies.scala213)
 lazy val core = projectMatrix
   .in(file("modules/core"))
   .jvmPlatform(
-    Seq(Dependencies.scala212, Dependencies.scala213, Dependencies.scala32),
+    Seq(Dependencies.scala212, Dependencies.scala213, Dependencies.scala31Plus),
     Seq.empty,
     p => p.dependsOn(javaDebug)
   )
@@ -94,16 +94,16 @@ lazy val core = projectMatrix
       BuildInfoKey.action("scala212")(Dependencies.scala212),
       BuildInfoKey.action("scala213")(Dependencies.scala213),
       BuildInfoKey.action("scala30")(Dependencies.scala30),
-      BuildInfoKey.action("scala32")(Dependencies.scala32)
+      BuildInfoKey.action("scala31Plus")(Dependencies.scala31Plus)
     ),
     buildInfoPackage := "ch.epfl.scala.debugadapter"
   )
 
 lazy val tests212 = tests.jvm(Dependencies.scala212)
-lazy val tests3 = tests.jvm(Dependencies.scala32)
+lazy val tests3 = tests.jvm(Dependencies.scala31Plus)
 lazy val tests = projectMatrix
   .in(file("modules/tests"))
-  .jvmPlatform(scalaVersions = Seq(Dependencies.scala212, Dependencies.scala213, Dependencies.scala32))
+  .jvmPlatform(scalaVersions = Seq(Dependencies.scala212, Dependencies.scala213, Dependencies.scala31Plus))
   .settings(
     name := "scala-debug-adapter-test",
     libraryDependencies ++= Seq(
@@ -124,7 +124,7 @@ lazy val tests = projectMatrix
         expressionCompiler212 / publishLocal,
         expressionCompiler213 / publishLocal,
         expressionCompiler30 / publishLocal,
-        expressionCompiler32 / publishLocal,
+        expressionCompiler3 / publishLocal,
         // break cyclic reference
         LocalProject("scala3StepFilter") / publishLocal
       )
@@ -153,13 +153,13 @@ lazy val sbtPlugin = project
 lazy val expressionCompiler212 = expressionCompiler.finder(scala212Axis)(true)
 lazy val expressionCompiler213 = expressionCompiler.finder(scala213Axis)(true)
 lazy val expressionCompiler30 = expressionCompiler.finder(scala30Axis)(true)
-lazy val expressionCompiler32 = expressionCompiler.finder(scala32Axis)(true)
+lazy val expressionCompiler3 = expressionCompiler.finder(scala3Axis)(true)
 lazy val expressionCompiler = projectMatrix
   .in(file("modules/expression-compiler"))
   .customRow(true, Seq(scala212Axis, VirtualAxis.jvm), identity[Project] _)
   .customRow(true, Seq(scala213Axis, VirtualAxis.jvm), identity[Project] _)
   .customRow(true, Seq(scala30Axis, VirtualAxis.jvm), identity[Project] _)
-  .customRow(true, Seq(scala32Axis, VirtualAxis.jvm), identity[Project] _)
+  .customRow(true, Seq(scala3Axis, VirtualAxis.jvm), identity[Project] _)
   .settings(
     name := "scala-expression-compiler",
     crossScalaVersions ++= CrossVersion
@@ -198,7 +198,7 @@ lazy val scala3StepFilter: Project = project
   .dependsOn(tests3 % Test)
   .settings(
     name := "scala-debug-step-filter",
-    scalaVersion := Dependencies.scala32,
+    scalaVersion := Dependencies.scala31Plus,
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
       "ch.epfl.scala" %% "tasty-query" % "0.5.7",
@@ -220,7 +220,7 @@ lazy val scalacOptionsSetting = Def.settings(
 lazy val scala212Axis = VirtualAxis.ScalaVersionAxis(Dependencies.scala212, "2_12")
 lazy val scala213Axis = VirtualAxis.ScalaVersionAxis(Dependencies.scala213, "2_13")
 lazy val scala30Axis = VirtualAxis.ScalaVersionAxis(Dependencies.scala30, "3_0")
-lazy val scala32Axis = VirtualAxis.ScalaVersionAxis(Dependencies.scala32, "3_2")
+lazy val scala3Axis = VirtualAxis.ScalaVersionAxis(Dependencies.scala31Plus, "3")
 
 def onScalaVersion[T](scala212: T, scala213: T, scala3: T) = Def.setting {
   CrossVersion.partialVersion(scalaVersion.value) match {

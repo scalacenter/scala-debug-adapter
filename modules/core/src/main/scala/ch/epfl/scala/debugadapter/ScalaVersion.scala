@@ -6,7 +6,7 @@ case class ScalaVersion(value: String) {
   def isScala212: Boolean = value.startsWith("2.12")
   def isScala213: Boolean = value.startsWith("2.13")
   def isScala30: Boolean = value.startsWith("3.0")
-  def isScala32: Boolean = value.startsWith("3.2")
+  def isScala31Plus: Boolean = value.startsWith("3") && !isScala30
 
   def binaryVersion: String = if (isScala3) "3" else if (isScala213) "2.13" else "2.12"
 
@@ -17,6 +17,5 @@ object ScalaVersion {
   val `2.12` = ScalaVersion(BuildInfo.scala212)
   val `2.13` = ScalaVersion(BuildInfo.scala213)
   val `3.0` = ScalaVersion(BuildInfo.scala30)
-  // val `3.1` = ScalaVersion("3.1.2")
-  val `3.2` = ScalaVersion(BuildInfo.scala32)
+  val `3.1+` = ScalaVersion(BuildInfo.scala31Plus)
 }
