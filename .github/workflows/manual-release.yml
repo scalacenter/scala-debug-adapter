@@ -4,10 +4,6 @@ on:
     inputs:
       scala-version:
         required: true
-      tag:
-        description: 'Example v3.0.6'
-        default: main
-        required: true
 
 jobs:
   test:
@@ -15,11 +11,12 @@ jobs:
       fail-fast: false
     name: Test with Scala ${{ inputs.scala-version }} on ${{ inputs.tag }}
     runs-on: ubuntu-latest
+    env:
+      SCALA_VERSION: ${{ inputs.scala-version }}
     steps:
     - uses: actions/checkout@v3
       with:
         submodules: true
-        ref: ${{ inputs.tag }}
     - uses: coursier/setup-action@v1.2.0
       with:
         jvm: 'temurin:1.17.0.3'
@@ -28,7 +25,7 @@ jobs:
       run: sbt test
       shell: bash
   publish:
-    if: startsWith(inputs.tag, 'v')
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     env:
       SCALA_VERSION: ${{ inputs.scala-version }}
@@ -40,7 +37,6 @@ jobs:
       - uses: actions/checkout@v3
         with:  
           submodules: true
-          ref: ${{ inputs.tag }}
       - uses: coursier/setup-action@v1.2.0
         with:
           app: sbt
