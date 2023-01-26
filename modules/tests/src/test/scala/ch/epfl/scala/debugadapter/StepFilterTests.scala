@@ -356,7 +356,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
       check(
         Breakpoint(9),
         StepIn.line(4),
-        StepIn.method("String.toString"),
+        StepIn.method("String.toString()"),
         StepIn.line(4),
         StepIn.line(9),
         StepIn.method("Predef$.println(Object)"),
@@ -366,7 +366,7 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
         StepIn.method("Predef$.println(Object)"),
         Breakpoint(11),
         StepIn.line(18),
-        StepIn.method("String.toString"),
+        StepIn.method("String.toString()"),
         StepIn.line(18),
         StepIn.line(11),
         StepIn.method("Predef$.println(Object)"),
