@@ -21,3 +21,8 @@ private[internal] class JdiObject(
     invokeMethod(reference, m, args, thread)
   }
 }
+
+private[internal] object JdiObject {
+  def apply(value: Value, thread: ThreadReference): JdiObject =
+    new JdiObject(value.asInstanceOf[ObjectReference], thread)
+}

@@ -9,7 +9,7 @@ class Scala31PlusEvaluationTests extends Scala3EvaluationTests(ScalaVersion.`3.1
 
 abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTestSuite {
   protected override def defaultConfig: DebugConfig =
-    super.defaultConfig.copy(evaluationMode = DebugConfig.ExpressionCompilerOnly)
+    super.defaultConfig.copy(evaluationMode = DebugConfig.ScalaEvaluationOnly)
 
   test("report source and position in error, and no colors") {
     val source =

@@ -14,12 +14,10 @@ class JdiClassObject(
       objects <- JdiArray("java.lang.Object", args.size, classLoader)
       _ = objects.setValues(args)
       constructor <- invoke("getConstructor", parameterTypes)
-        .map(_.asInstanceOf[ObjectReference])
-        .map(new JdiObject(_, thread))
+        .map(JdiObject(_, thread))
       jdiObject <- constructor
         .invoke("newInstance", List(objects.reference))
-        .map(_.asInstanceOf[ObjectReference])
-        .map(new JdiObject(_, thread))
+        .map(JdiObject(_, thread))
     } yield jdiObject
   }
 
@@ -30,12 +28,8 @@ class JdiClassObject(
     val parameterTypes = args.map(_.referenceType.classObject())
     for {
       methodNameValue <- classLoader.mirrorOf(methodName)
-      method <- invoke(
-        "getMethod",
-        methodNameValue :: parameterTypes
-      )
-        .map(_.asInstanceOf[ObjectReference])
-        .map(new JdiObject(_, thread))
+      method <- invoke("getMethod", methodNameValue :: parameterTypes)
+        .map(JdiObject(_, thread))
       result <- method.invoke("invoke", List(null) ++ args)
     } yield result
   }

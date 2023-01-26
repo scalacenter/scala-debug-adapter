@@ -38,9 +38,9 @@ private[internal] class ScalaEvaluator(
     Files.write(sourceFile, sourceContent.getBytes(StandardCharsets.UTF_8))
 
     val expressionFqcn = if (packageName.isEmpty) expressionClassName else s"$packageName.$expressionClassName"
-    val classLoader = findClassLoader(frame)
     val compiledExpression =
       for {
+        classLoader <- JdiClassLoader.fromFrame(frame)
         (names, values) <- extractValuesAndNames(frame, classLoader)
         localNames = names.map(_.value()).toSet
         _ <- Safe(
@@ -51,8 +51,8 @@ private[internal] class ScalaEvaluator(
   }
 
   private def evaluate(classDir: Path, className: String, frame: FrameReference): Try[Value] = {
-    val classLoader = findClassLoader(frame)
     val evaluatedValue = for {
+      classLoader <- JdiClassLoader.fromFrame(frame)
       (names, values) <- extractValuesAndNames(frame, classLoader)
       namesArray <- JdiArray("java.lang.String", names.size, classLoader)
       valuesArray <- JdiArray("java.lang.Object", values.size, classLoader)
@@ -65,20 +65,6 @@ private[internal] class ScalaEvaluator(
       unboxedValue <- unboxIfPrimitive(evaluatedValue, frame.thread)
     } yield unboxedValue
     evaluatedValue.getResult
-  }
-
-  private def findClassLoader(frame: FrameReference): JdiClassLoader = {
-    val scalaLibClassLoader =
-      for {
-        scalaLibClass <- frame.thread.virtualMachine.allClasses.asScala
-          .find(c => c.name.startsWith("scala.runtime"))
-        classLoader <- Option(scalaLibClass.classLoader)
-      } yield classLoader
-
-    val classLoader = Option(frame.current().location.method.declaringType.classLoader)
-      .orElse(scalaLibClassLoader)
-      .getOrElse(throw new Exception("Cannot find the classloader of the Scala library"))
-    JdiClassLoader(classLoader, frame.thread)
   }
 
   private def evaluateExpression(expressionInstance: JdiObject): Safe[Value] = {

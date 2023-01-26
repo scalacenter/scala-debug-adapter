@@ -18,15 +18,19 @@ object DebugConfig {
   )
 
   sealed trait EvaluationMode {
-    def canUseCompiler: Boolean = true
-    def canBypassCompiler: Boolean = true
+    def allowScalaEvaluation: Boolean = false
+    def allowSimpleEvaluation: Boolean = false
   }
 
-  case object ExpressionCompilerOnly extends EvaluationMode {
-    override def canBypassCompiler: Boolean = false
+  case object ScalaEvaluationOnly extends EvaluationMode {
+    override def allowScalaEvaluation: Boolean = true
   }
-  case object AlwaysBypassCompiler extends EvaluationMode {
-    override def canUseCompiler: Boolean = false
+  case object SimpleEvaluationOnly extends EvaluationMode {
+    override def allowSimpleEvaluation: Boolean = true
   }
-  case object MixedEvaluation extends EvaluationMode
+  case object NoEvaluation extends EvaluationMode
+  case object MixedEvaluation extends EvaluationMode {
+    override def allowScalaEvaluation: Boolean = true
+    override def allowSimpleEvaluation: Boolean = true
+  }
 }

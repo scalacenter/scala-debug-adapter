@@ -59,6 +59,18 @@ trait DebugTest {
     finally client.close()
   }
 
+  def check(config: DebugConfig)(steps: DebugStepAssert[?]*)(implicit debuggee: TestingDebuggee): Unit = {
+    val server = getDebugServer(debuggee, config = config)
+    val client = TestingDebugClient.connect(server.uri)
+    try {
+      server.connect()
+      check(client, None)(steps*)
+    } finally {
+      client.close()
+      server.close()
+    }
+  }
+
   def check(steps: DebugStepAssert[?]*)(implicit debuggee: TestingDebuggee): Unit = {
     val server = getDebugServer(debuggee)
     val client = TestingDebugClient.connect(server.uri)

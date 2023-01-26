@@ -10,7 +10,9 @@ import ch.epfl.scala.debugadapter.internal.evaluator.CompiledExpression
 import ch.epfl.scala.debugadapter.internal.evaluator.FrameReference
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
 import ch.epfl.scala.debugadapter.internal.evaluator.LocalValue
+import ch.epfl.scala.debugadapter.internal.evaluator.MessageLogger
 import ch.epfl.scala.debugadapter.internal.evaluator.MethodInvocationFailed
+import ch.epfl.scala.debugadapter.internal.evaluator.PlainLogMessage
 import ch.epfl.scala.debugadapter.internal.evaluator.PreparedExpression
 import ch.epfl.scala.debugadapter.internal.evaluator.ScalaEvaluator
 import ch.epfl.scala.debugadapter.internal.evaluator.SimpleEvaluator
@@ -32,6 +34,7 @@ import ScalaExtension.*
 private[internal] class EvaluationProvider(
     sourceLookUp: SourceLookUpProvider,
     simpleEvaluator: SimpleEvaluator,
+    messageLogger: MessageLogger,
     scalaEvaluators: Map[ClassEntry, ScalaEvaluator],
     mode: DebugConfig.EvaluationMode,
     logger: Logger
@@ -69,13 +72,11 @@ private[internal] class EvaluationProvider(
     val locationCode = (location.method.name, location.codeIndex).hashCode
     val expression =
       if (breakpoint.getCompiledExpression(locationCode) != null) {
-        breakpoint.getCompiledExpression(locationCode).asInstanceOf[Try[CompiledExpression]]
+        breakpoint.getCompiledExpression(locationCode).asInstanceOf[Try[PreparedExpression]]
       } else if (breakpoint.containsConditionalExpression) {
         prepare(breakpoint.getCondition, frame)
       } else if (breakpoint.containsLogpointExpression) {
-        val tripleQuote = "\"\"\""
-        val expression = s"""println(s$tripleQuote${breakpoint.getLogMessage}$tripleQuote)"""
-        prepare(expression, frame)
+        prepareLogMessage(breakpoint.getLogMessage, frame)
       } else {
         Failure(new Exception("Missing expression"))
       }
@@ -113,11 +114,21 @@ private[internal] class EvaluationProvider(
       evaluator <- scalaEvaluators.get(entry).toTry(s"Missing expression compiler for entry ${entry.name}")
     } yield evaluator
 
+  private def prepareLogMessage(message: String, frame: FrameReference): Try[PreparedExpression] = {
+    if (!message.contains("$")) {
+      Success(PlainLogMessage(message))
+    } else {
+      val tripleQuote = "\"\"\""
+      val expression = s"""println(s$tripleQuote$message$tripleQuote)"""
+      prepare(expression, frame)
+    }
+  }
+
   private def prepare(expression: String, frame: FrameReference): Try[PreparedExpression] = {
     lazy val simpleExpression = simpleEvaluator.prepare(expression, frame)
-    if (mode.canBypassCompiler && simpleExpression.isDefined) {
+    if (mode.allowSimpleEvaluation && simpleExpression.isDefined) {
       Success(simpleExpression.get)
-    } else if (mode.canUseCompiler) {
+    } else if (mode.allowScalaEvaluation) {
       val fqcn = frame.current().location.declaringType.name
       for {
         evaluator <- getScalaEvaluator(fqcn)
@@ -133,6 +144,7 @@ private[internal] class EvaluationProvider(
 
   private def evaluate(expression: PreparedExpression, frame: FrameReference): Try[Value] = {
     expression match {
+      case logMessage: PlainLogMessage => messageLogger.log(logMessage, frame)
       case localValue: LocalValue => simpleEvaluator.evaluate(localValue, frame)
       case expression: CompiledExpression =>
         val fqcn = frame.current().location.declaringType.name
@@ -174,6 +186,14 @@ private[internal] object EvaluationProvider {
     val scalaEvaluators = debugTools.expressionCompilers.view.map { case (entry, compiler) =>
       (entry, new ScalaEvaluator(entry, compiler, logger, config.testMode))
     }.toMap
-    new EvaluationProvider(sourceLookUp, simpleEvaluator, scalaEvaluators, config.evaluationMode, logger)
+    val messageLogger = new MessageLogger()
+    new EvaluationProvider(
+      sourceLookUp,
+      simpleEvaluator,
+      messageLogger,
+      scalaEvaluators,
+      config.evaluationMode,
+      logger
+    )
   }
 }
