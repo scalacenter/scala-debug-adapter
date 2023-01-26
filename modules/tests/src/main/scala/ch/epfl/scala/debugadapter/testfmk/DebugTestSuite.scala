@@ -33,6 +33,7 @@ trait DebugTest {
   def isScala212(implicit ctx: TestingContext) = ctx.scalaVersion.isScala212
   def isScala30(implicit ctx: TestingContext) = ctx.scalaVersion.isScala30
   def isScala31Plus(implicit ctx: TestingContext) = ctx.scalaVersion.isScala31Plus
+  def isScala33(implicit ctx: TestingContext) = ctx.scalaVersion.isScala33
 
   def getDebugServer(
       debuggee: Debuggee,

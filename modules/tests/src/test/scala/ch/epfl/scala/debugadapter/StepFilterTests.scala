@@ -352,7 +352,28 @@ abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuit
          |""".stripMargin
 
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
-    if (isScala3) {
+    if (isScala33) {
+      check(
+        Breakpoint(9),
+        StepIn.line(4),
+        StepIn.method("String.toString"),
+        StepIn.line(4),
+        StepIn.line(9),
+        StepIn.method("Predef$.println(Object)"),
+        Breakpoint(10),
+        StepIn.line(4),
+        StepOut.line(10),
+        StepIn.method("Predef$.println(Object)"),
+        Breakpoint(11),
+        StepIn.line(18),
+        StepIn.method("String.toString"),
+        StepIn.line(18),
+        StepIn.line(11),
+        StepIn.method("Predef$.println(Object)"),
+        Breakpoint(12),
+        StepIn.method("Predef$.println(Object)")
+      )
+    } else if (isScala3) {
       check(
         // TODO: clean debug line table in Scala 3 compiler
         // TODO: introduce $lazyinit$ to isolate user code
