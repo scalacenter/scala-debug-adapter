@@ -1,0 +1,55 @@
+name: Manual Release
+on:
+  workflow_dispatch:
+    inputs:
+      scala-version:
+        required: true
+      tag:
+        description: 'Example v3.0.6'
+        default: main
+        required: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+    name: Test with Scala ${{ inputs.scala-version }} on ${{ inputs.tag }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+        ref: ${{ inputs.tag }}
+    - uses: coursier/setup-action@v1.2.0
+      with:
+        jvm: 'temurin:1.17.0.3'
+        app: sbt
+    - name: Unit tests
+      run: sbt test
+      shell: bash
+  publish:
+    if: startsWith(inputs.tag, 'v')
+    runs-on: ubuntu-latest
+    env:
+      SCALA_VERSION: ${{ inputs.scala-version }}
+      PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
+      PGP_SECRET: ${{ secrets.PGP_SECRET }}
+      SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+      SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+    steps:
+      - uses: actions/checkout@v3
+        with:  
+          submodules: true
+          ref: ${{ inputs.tag }}
+      - uses: coursier/setup-action@v1.2.0
+        with:
+          app: sbt
+          jvm: 'adopt:1.8.0-292'
+      - run: sbt 'expressionCompiler3/publishSigned;sonatypeBundleRelease'
+        if: startsWith(inputs.scala-version, '3') && !startsWith(inputs.scala-version, '3.0')
+      - run: sbt 'expressionCompiler3_0/publishSigned;sonatypeBundleRelease'
+        if: startsWith(inputs.scala-version, '3.0')
+      - run: sbt 'expressionCompiler2_13/publishSigned;sonatypeBundleRelease'
+        if: startsWith(inputs.scala-version, '2.13')
+      - run: sbt 'expressionCompiler2_12/publishSigned;sonatypeBundleRelease'
+        if: startsWith(inputs.scala-version, '2.12')
