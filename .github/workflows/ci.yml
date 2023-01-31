@@ -20,7 +20,7 @@ jobs:
           submodules: true
       - uses: coursier/setup-action@v1.2.0
         with:
-          app: sbt
+          apps: sbt
       - run: sbt +compile
   test:
     strategy:
@@ -37,7 +37,7 @@ jobs:
     - uses: coursier/setup-action@v1.2.0
       with:
         jvm: ${{ matrix.jvm }}
-        app: sbt
+        apps: sbt
     - name: Unit tests
       run: sbt test
       shell: bash
