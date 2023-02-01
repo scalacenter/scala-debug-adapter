@@ -20,7 +20,7 @@ jobs:
     - uses: coursier/setup-action@v1.2.0
       with:
         jvm: 'temurin:1.17.0.3'
-        app: sbt
+        apps: sbt
     - name: Unit tests
       run: sbt test
       shell: bash
