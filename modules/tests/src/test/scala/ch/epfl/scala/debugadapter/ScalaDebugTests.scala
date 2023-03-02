@@ -24,7 +24,6 @@ class Scala3DebugTest extends ScalaDebugTests(ScalaVersion.`3.1+`) {
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(5), Breakpoint(11), Breakpoint(7))
   }
-
   test("should support breakpoints in scala 3 with @main") {
     val source =
       """|package example

@@ -14,6 +14,36 @@ import scala.jdk.CollectionConverters.*
 
 abstract class ScalaStepFilter(scalaVersion: ScalaVersion) extends StepFilter {
   protected def skipScalaMethod(method: Method): Boolean
+  def format(method: Method): Option[String] = {
+    if (method.isBridge) None
+    else if (isDynamicClass(method.declaringType)) None
+    else if (isJava(method)) Some(formatJava(method))
+    // TODO add in shouldSkipOver and test in StepFilterBridgeTest
+    else if (isStaticMain(method)) None
+    else if (isConstructor(method)) Some(formatJava(method))
+    else if (isStaticConstructor(method)) Some(formatJava(method))
+    else if (isAdaptedMethod(method)) None
+    else if (isAnonFunction(method)) Some(formatJava(method))
+    else if (isLiftedMethod(method)) Some(formatJava(method))
+    else if (isAnonClass(method.declaringType)) Some(formatJava(method))
+    // TODO in Scala 3 we should be able to find the symbol of a local class using TASTy Query
+    else if (isLocalClass(method.declaringType)) Some(formatJava(method))
+    else if (scalaVersion.isScala2 && isNestedClass(method.declaringType)) Some(formatJava(method))
+    else if (isDefaultValue(method)) Some(formatJava(method))
+    else if (isTraitInitializer(method)) Some(formatJava(method))
+    else formatScala(method)
+  }
+  def formatScala(method: Method): Option[String] = Some(formatJava(method))
+  def formatJava(method: Method): String = {
+    val declaringType = method.declaringType().name.split("\\.").last
+    val methodName = method.name()
+    val argumentTypes = method.argumentTypes.asScala.toList
+      .map(t => t.name().split("\\.").last)
+      .mkString(",")
+    val returnType = method.returnTypeName()
+    s"$declaringType.$methodName(${if (argumentTypes.nonEmpty) argumentTypes else ""}): $returnType"
+
+  }
 
   override def shouldSkipOver(method: Method): Boolean = {
     if (method.isBridge) true
@@ -32,6 +62,9 @@ abstract class ScalaStepFilter(scalaVersion: ScalaVersion) extends StepFilter {
     else if (isTraitInitializer(method)) skipTraitInitializer(method)
     else skipScalaMethod(method)
   }
+
+  private def isStaticMain(m: Method): Boolean =
+    m.isStatic && m.name == "main"
 
   private def isDynamicClass(tpe: ReferenceType): Boolean =
     try {
@@ -108,7 +141,7 @@ object ScalaStepFilter {
       tools: DebugTools,
       logger: Logger,
       testMode: Boolean
-  ): StepFilter = {
+  ): ScalaStepFilter = {
     if (debuggee.scalaVersion.isScala2)
       new Scala2StepFilter(tools.sourceLookUp, debuggee.scalaVersion, logger, testMode)
     else
@@ -121,7 +154,7 @@ object ScalaStepFilter {
         .getOrElse(fallback(debuggee.scalaVersion))
   }
 
-  private def fallback(scalaVersion: ScalaVersion): StepFilter = new ScalaStepFilter(scalaVersion) {
+  private def fallback(scalaVersion: ScalaVersion): ScalaStepFilter = new ScalaStepFilter(scalaVersion) {
     override protected def skipScalaMethod(method: Method): Boolean = false
   }
 }

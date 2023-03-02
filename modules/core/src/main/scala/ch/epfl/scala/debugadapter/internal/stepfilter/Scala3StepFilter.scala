@@ -12,18 +12,32 @@ import scala.util.Try
 import java.nio.file.Path
 import scala.util.Success
 import scala.util.Failure
+import java.util.Optional
 import ch.epfl.scala.debugadapter.ScalaVersion
+import scala.jdk.OptionConverters._
 
 class Scala3StepFilter(
     scalaVersion: ScalaVersion,
     bridge: Any,
-    skipMethod: Method
+    skipMethod: Method,
+    formatMethod: Method
 ) extends ScalaStepFilter(scalaVersion) {
-  override protected def skipScalaMethod(method: jdi.Method): Boolean =
+  override protected def skipScalaMethod(method: com.sun.jdi.Method): Boolean = {
     try skipMethod.invoke(bridge, method).asInstanceOf[Boolean]
     catch {
       case e: InvocationTargetException => throw e.getCause
     }
+  }
+
+  override def formatScala(method: jdi.Method): Option[String] = {
+    try {
+
+      formatMethod.invoke(bridge, method).asInstanceOf[Optional[String]].toScala
+
+    } catch {
+      case e: InvocationTargetException => throw e.getCause
+    }
+  }
 }
 
 object Scala3StepFilter {
@@ -52,7 +66,9 @@ object Scala3StepFilter {
         testMode: java.lang.Boolean
       )
       val skipMethod = cls.getMethods.find(m => m.getName == "skipMethod").get
-      Success(new Scala3StepFilter(debuggee.scalaVersion, bridge, skipMethod))
+      val formatMethod = cls.getMethods.find(m => m.getName == "formatMethodSig").get
+
+      Success(new Scala3StepFilter(debuggee.scalaVersion, bridge, skipMethod, formatMethod))
     } catch {
       case cause: Throwable => Failure(cause)
     }

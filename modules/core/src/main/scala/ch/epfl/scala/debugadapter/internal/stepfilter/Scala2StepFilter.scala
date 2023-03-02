@@ -402,4 +402,5 @@ class Scala2StepFilter(
     }
     encoded.filter(sourceLookUp.containsClass)
   }
+
 }

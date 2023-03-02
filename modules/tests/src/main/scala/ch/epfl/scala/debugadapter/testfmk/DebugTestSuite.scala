@@ -139,13 +139,14 @@ trait DebugTest {
       }
     }
 
-    def assertStop(assertion: StackFrame => Unit): Unit = {
+    def assertStop(assertion: List[StackFrame] => Unit): Unit = {
       val stopped = client.stopped()
       paused = true
       threadId = stopped.threadId
       val stackTrace = client.stackTrace(threadId)
       topFrame = stackTrace.stackFrames.head
-      assertion(topFrame)
+
+      assertion(stackTrace.stackFrames.toList)
     }
     steps.foreach {
       case SingleStepAssert(_: Breakpoint, assertion) =>
