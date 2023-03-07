@@ -2,7 +2,27 @@ package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testfmk.*
 
-class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1+`)
+class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1+`) {
+  test("step into method with @targetName") {
+    val source =
+      """|package example
+         |
+         |import scala.annotation.targetName
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit =
+         |    m("Hello")
+         |
+         |  @targetName("mTarget")
+         |  def m(message: String): Unit =
+         |    println(message)
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(7), StepIn.method("Main$.mTarget(String)"))
+  }
+}
+
 class Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
 class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`) {
   test("should match all kinds of Scala 2 types (not valid in Scala 3)") {
@@ -31,7 +51,7 @@ class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`) {
   }
 }
 
-abstract class StepFilterTests(scalaVersion: ScalaVersion) extends DebugTestSuite {
+abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends DebugTestSuite {
   test("should not step into mixin forwarder") {
     val source =
       """|package example
