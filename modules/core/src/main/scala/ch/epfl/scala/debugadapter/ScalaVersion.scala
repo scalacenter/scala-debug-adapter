@@ -11,6 +11,8 @@ case class ScalaVersion(value: String) {
 
   def binaryVersion: String = if (isScala3) "3" else if (isScala213) "2.13" else "2.12"
 
+  def isRelease: Boolean = !value.contains("-")
+
   override def toString: String = value
 }
 

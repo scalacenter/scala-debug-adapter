@@ -3,7 +3,47 @@ package ch.epfl.scala.debugadapter
 import ch.epfl.scala.debugadapter.testfmk.*
 
 class Scala212EvaluationTests extends Scala2EvaluationTests(ScalaVersion.`2.12`)
-class Scala213EvaluationTests extends Scala2EvaluationTests(ScalaVersion.`2.13`)
+class Scala213EvaluationTests extends Scala2EvaluationTests(ScalaVersion.`2.13`) {
+  if (ScalaVersion.`3.1+`.isRelease) {
+    test("should use tasty-reader") {
+      val scala2Source =
+        """|package example
+           |
+           |trait Msg
+           |
+           |object Sender {
+           |  def send(msg: Msg): Unit = {
+           |    println(msg)
+           |  }
+           |}
+           |""".stripMargin
+
+      val scala2Debugee = TestingDebuggee.mainClass(scala2Source, "example.Sender", scalaVersion)
+      val scala3Source =
+        """|package example
+           |
+           |case class Scala3Msg(msg: String) extends Msg:
+           |  override def toString: String = msg
+           |
+           |object Main:
+           |  def main(args: Array[String]): Unit =
+           |    Sender.send(Scala3Msg("Hello"))
+           |""".stripMargin
+
+      implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(
+        scala3Source,
+        "example.Main",
+        ScalaVersion.`3.1+`,
+        Seq.empty,
+        Seq(scala2Debugee.mainModule)
+      )
+      check(
+        Breakpoint(scala2Debugee.sourceFiles.head, 7),
+        Evaluation.success("msg.asInstanceOf[Scala3Msg].msg", "Hello")
+      )
+    }
+  }
+}
 class Scala30EvaluationTests extends Scala3EvaluationTests(ScalaVersion.`3.0`)
 class Scala31PlusEvaluationTests extends Scala3EvaluationTests(ScalaVersion.`3.1+`)
 
@@ -1906,7 +1946,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
   }
 }
 
-abstract class Scala2EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEvaluationTests(scalaVersion) {
+abstract class Scala2EvaluationTests(val scalaVersion: ScalaVersion) extends ScalaEvaluationTests(scalaVersion) {
   test("should use -Xsource:3") {
     val source =
       """|package example
@@ -1929,44 +1969,6 @@ abstract class Scala2EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     check(
       Breakpoint(10),
       Evaluation.success("""m(Seq("a", "b")*)""", "a, b")
-    )
-  }
-
-  test("should use tasty-reader") {
-    val scala2Source =
-      """|package example
-         |
-         |trait Msg
-         |
-         |object Sender {
-         |  def send(msg: Msg): Unit = {
-         |    println(msg)
-         |  }
-         |}
-         |""".stripMargin
-
-    val scala2Debugee = TestingDebuggee.mainClass(scala2Source, "example.Sender", scalaVersion)
-    val scala3Source =
-      """|package example
-         |
-         |case class Scala3Msg(msg: String) extends Msg:
-         |  override def toString: String = msg
-         |
-         |object Main:
-         |  def main(args: Array[String]): Unit =
-         |    Sender.send(Scala3Msg("Hello"))
-         |""".stripMargin
-
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(
-      scala3Source,
-      "example.Main",
-      ScalaVersion.`3.1+`,
-      Seq.empty,
-      Seq(scala2Debugee.mainModule)
-    )
-    check(
-      Breakpoint(scala2Debugee.sourceFiles.head, 7),
-      Evaluation.success("msg.asInstanceOf[Scala3Msg].msg", "Hello")
     )
   }
 }

@@ -59,7 +59,7 @@ lazy val javaDebug = project
       "com.github.sbt" % "junit-interface" % "0.13.3" % Test
     ),
     Test / fork := true,
-    version := (if (isRelease) "0.34.0+12" else "0.34.0+12-SNAPSHOT")
+    version := Option(System.getenv("JAVA_DEBUG_VERSION")).getOrElse("0.34.0-SNAPSHOT")
   )
 
 lazy val core212 = core.jvm(Dependencies.scala212)
