@@ -1,8 +1,10 @@
-name: Release
+name: Full Release (manual)
 on:
   workflow_dispatch:
-  push:
-    tags: ["*"]
+    inputs:
+      java-debug-version:
+        required: true
+        description: 'Go find next version at https://repo1.maven.org/maven2/ch/epfl/scala/com-microsoft-java-debug-core/'
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -16,6 +18,7 @@ jobs:
           jvm: 'adopt:1.8.0-292'
       - run: sbt ci-release
         env:
+          JAVA_DEBUG_VERSION: ${{ inputs.java-debug-version }}
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
           PGP_SECRET: ${{ secrets.PGP_SECRET }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
