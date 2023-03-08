@@ -4,7 +4,7 @@ on:
     inputs:
       java-debug-version:
         required: true
-        description: 'Go find next version at https://repo1.maven.org/maven2/ch/epfl/scala/com-microsoft-java-debug-core/'
+        description: 'Next version of java-debug-core (https://repo1.maven.org/maven2/ch/epfl/scala/com-microsoft-java-debug-core/)'
 jobs:
   publish:
     runs-on: ubuntu-latest
