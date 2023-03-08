@@ -30,7 +30,6 @@ jobs:
     env:
       SCALA_VERSION: ${{ inputs.scala-version }}
       PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
-      PGP_SECRET: ${{ secrets.PGP_SECRET }}
       SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
       SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
     steps:
@@ -39,8 +38,10 @@ jobs:
           submodules: true
       - uses: coursier/setup-action@v1.3.0
         with:
-          app: sbt
+          apps: sbt
           jvm: 'adopt:1.8.0-292'
+      - name: setup GPG secret key
+        run: echo ${{ secrets.PGP_SECRET }} | base64 --decode | gpg --batch --import
       - run: sbt 'expressionCompiler3/publishSigned;sonatypeBundleRelease'
         if: startsWith(inputs.scala-version, '3') && !startsWith(inputs.scala-version, '3.0')
       - run: sbt 'expressionCompiler3_0/publishSigned;sonatypeBundleRelease'
