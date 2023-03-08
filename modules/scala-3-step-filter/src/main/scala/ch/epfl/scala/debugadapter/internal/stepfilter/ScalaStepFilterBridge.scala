@@ -63,10 +63,7 @@ class ScalaStepFilterBridge(
         .collect { case sym: TermSymbol if sym.isTerm => sym }
     yield term
 
-  private def findDeclaringType(
-      fqcn: String,
-      isExtensionMethod: Boolean
-  ): Option[DeclaringSymbol] =
+  private def findDeclaringType(fqcn: String, isExtensionMethod: Boolean): Option[DeclaringSymbol] =
     val javaParts = fqcn.split('.')
     val isObject = fqcn.endsWith("$")
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
@@ -75,36 +72,30 @@ class ScalaStepFilterBridge(
       then ctx.findSymbolFromRoot(packageNames).asInstanceOf[PackageSymbol]
       else ctx.defn.EmptyPackage
     val className = javaParts.last
-    def findRec(
-        owner: DeclaringSymbol,
-        encodedName: String
-    ): Seq[DeclaringSymbol] =
-      owner.declarations
-        .collect { case sym: DeclaringSymbol => sym }
-        .flatMap { sym =>
-          val encodedSymName = NameTransformer.encode(sym.name.toString)
-          val Symbol = s"${Regex.quote(encodedSymName)}\\$$?(.*)".r
-          encodedName match
-            case Symbol(remaining) =>
-              if remaining.isEmpty then Some(sym)
-              else findRec(sym, remaining)
-            case _ => None
-        }
-    val clsSymbols = findRec(packageSym, className)
+    val clsSymbols = findSymbolsRecursively(packageSym, className)
     val obj = clsSymbols.filter(_.is(Flags.Module))
     val cls = clsSymbols.filter(!_.is(Flags.Module))
     assert(obj.size <= 1 && cls.size <= 1)
     if isObject && !isExtensionMethod then obj.headOption else cls.headOption
 
-  private def matchSymbol(
-      method: jdi.Method,
-      symbol: TermSymbol,
-      isExtensionMethod: Boolean
-  ): Boolean =
-    matchName(method, symbol, isExtensionMethod) &&
+  private def findSymbolsRecursively(owner: DeclaringSymbol, encodedName: String): Seq[DeclaringSymbol] =
+    owner.declarations
+      .collect { case sym: DeclaringSymbol => sym }
+      .flatMap { sym =>
+        val encodedSymName = NameTransformer.encode(sym.name.toString)
+        val Symbol = s"${Regex.quote(encodedSymName)}\\$$?(.*)".r
+        encodedName match
+          case Symbol(remaining) =>
+            if remaining.isEmpty then Some(sym)
+            else findSymbolsRecursively(sym, remaining)
+          case _ => None
+      }
+
+  private def matchSymbol(method: jdi.Method, symbol: TermSymbol, isExtensionMethod: Boolean): Boolean =
+    matchTargetName(method, symbol, isExtensionMethod) &&
       matchSignature(method, symbol, isExtensionMethod)
 
-  def matchName(
+  def matchTargetName(
       method: jdi.Method,
       symbol: TermSymbol,
       isExtensionMethod: Boolean
@@ -114,7 +105,7 @@ class ScalaStepFilterBridge(
     // and prefixes its name with the full class name.
     // Example: method foo in class example.Inner becomes example$Inner$$foo
     val expectedName = method.name.stripPrefix(javaPrefix)
-    val encodedScalaName = NameTransformer.encode(symbol.name.toString)
+    val encodedScalaName = NameTransformer.encode(symbol.targetName.toString)
     if isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
     else encodedScalaName == expectedName
 
