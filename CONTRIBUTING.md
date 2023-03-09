@@ -155,3 +155,25 @@ addSbtPlugin("ch.epfl.scala" % "sbt-debug-adapter" % "3.0.2-SNAPSHOT")
   - click on the `debug` lens on top of a main method
   - or right-click on a test and run `Debug test`
   - or add a `Scala` debug configuration in the `.vscode/launch.json` file
+
+## Releasing
+
+### Releasing the full scala-debug-adapter
+
+To publish a new release you can go to the [release page](https://github.com/scalacenter/scala-debug-adapter/releases/new), to create a new tag and generate the release notes.
+
+**The release is not triggered automatically.**
+
+You then need to go to the [Full Release (manual)](https://github.com/scalacenter/scala-debug-adapter/actions/workflows/release-full.yml) workflow and trigger it.
+Click on `Run Workflow`, choose the freshly created tag, and a new version for java-debug-core.
+To find the next version of java-debug-core you can see all versions in [Maven Central](https://repo1.maven.org/maven2/ch/epfl/scala/com-microsoft-java-debug-core/).
+
+### Releasing the expression-compiler on a specific Scala version
+
+The Expression Compiler, that is used in the debug console to evaluate expression, is cross-compiled on each Scala version.
+If a version of the Expression Compiler is missing for some version of Scala, you can release it using the [Release Expression Compiler (manual)](https://github.com/scalacenter/scala-debug-adapter/actions/workflows/release-expression-compiler.yml) workflow.
+This workflow was introduced in tag v3.0.9, it does not work on previous tags.
+
+Click on `Run Workflow`, choose the latest tag, or the one we use in Bloop and Metals, and specify the Scala version.
+
+This workflow triggers the tests, to check that the new Scala version did not break anything, and the release of the Scala Expression Compiler.
