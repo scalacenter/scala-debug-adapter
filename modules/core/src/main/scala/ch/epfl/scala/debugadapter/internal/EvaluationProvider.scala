@@ -1,11 +1,15 @@
 package ch.epfl.scala.debugadapter.internal
 
+import ch.epfl.scala.debugadapter.BuildInfo
 import ch.epfl.scala.debugadapter.ClassEntry
 import ch.epfl.scala.debugadapter.DebugConfig
 import ch.epfl.scala.debugadapter.DebugTools
 import ch.epfl.scala.debugadapter.Debuggee
 import ch.epfl.scala.debugadapter.EvaluationFailed
+import ch.epfl.scala.debugadapter.JavaRuntime
 import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.ManagedEntry
+import ch.epfl.scala.debugadapter.UnmanagedEntry
 import ch.epfl.scala.debugadapter.internal.evaluator.CompiledExpression
 import ch.epfl.scala.debugadapter.internal.evaluator.FrameReference
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
@@ -111,8 +115,22 @@ private[internal] class EvaluationProvider(
   private def getScalaEvaluator(fqcn: String): Try[ScalaEvaluator] =
     for {
       entry <- sourceLookUp.getClassEntry(fqcn).toTry(s"Unknown class $fqcn")
-      evaluator <- scalaEvaluators.get(entry).toTry(s"Missing expression compiler for entry ${entry.name}")
+      evaluator <- scalaEvaluators.get(entry).toTry(missingEvaluatorMessage(entry))
     } yield evaluator
+
+  private def missingEvaluatorMessage(entry: ClassEntry): String =
+    entry match {
+      case m: ManagedEntry =>
+        m.scalaVersion match {
+          case None => s"Unsupported evaluation in Java classpath entry: ${entry.name}"
+          case Some(sv) =>
+            s"""|Missing scala-expression-compiler_{$sv} with version ${BuildInfo.version}.
+                |You can open an issue at https://github.com/scalacenter/scala-debug-adapter.""".stripMargin
+        }
+      case _: JavaRuntime => s"Unsupported evaluation in JDK: ${entry.name}"
+      case _: UnmanagedEntry => s"Unsupported evaluation in unmanaged classpath entry: ${entry.name}"
+      case _ => s"Unsupported evaluation in ${entry.name}"
+    }
 
   private def prepareLogMessage(message: String, frame: FrameReference): Try[PreparedExpression] = {
     if (!message.contains("$")) {
