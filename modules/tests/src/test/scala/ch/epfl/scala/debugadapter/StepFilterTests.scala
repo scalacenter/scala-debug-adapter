@@ -663,7 +663,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
   }
 
   test("step into method with constant result type") {
-    if (scalaVersion.isScala213) {
+    if (scalaVersion.isScala213 || scalaVersion.isScala3) {
       val source =
         """|package example
            |
@@ -676,6 +676,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
            |}
            |""".stripMargin
       implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+
       check(Breakpoint(7), StepIn.line(4))
     }
   }

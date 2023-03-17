@@ -30,13 +30,16 @@ class ScalaStepFilterBridge(
     else warn(msg)
 
   def skipMethod(obj: Any): Boolean =
+    findSymbol(obj).forall(skip)
+
+  private[stepfilter] def findSymbol(obj: Any): Option[TermSymbol] =
     val method = jdi.Method(obj)
     val isExtensionMethod = method.name.endsWith("$extension")
     val fqcn = method.declaringType.name
     findDeclaringType(fqcn, isExtensionMethod) match
       case None =>
         throwOrWarn(s"Cannot find Scala symbol of $fqcn")
-        false
+        None
       case Some(declaringType) =>
         val matchingSymbols =
           declaringType.declarations
@@ -51,7 +54,7 @@ class ScalaStepFilterBridge(
           matchingSymbols.foreach(sym => builder.append(s"\n$sym"))
           throwOrWarn(builder.toString)
 
-        matchingSymbols.forall(skip)
+        matchingSymbols.headOption
 
   private[stepfilter] def extractScalaTerms(
       fqcn: String,
