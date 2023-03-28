@@ -456,8 +456,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         Await.result(server.start(), Duration.Inf)
       } catch {
         case NonFatal(cause) =>
-          state.log.error("Failed to start server")
-          state.log.trace(cause)
+          logger.error("Failed to start server")
+          logger.trace(cause)
       }
     }
     state.respondEvent(DebugSessionAddress(address.uri))

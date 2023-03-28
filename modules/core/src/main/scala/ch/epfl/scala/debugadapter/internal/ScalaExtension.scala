@@ -10,7 +10,7 @@ private[debugadapter] object ScalaExtension {
     def warnFailure(logger: Logger, message: String): Option[T] = x match {
       case Success(value) => Some(value)
       case Failure(e) =>
-        logger.warn(s"$message: ${e.getMessage}")
+        logger.warn(s"$message: ${e.getClass.getSimpleName} ${e.getMessage}")
         None
     }
   }
