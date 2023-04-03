@@ -174,97 +174,94 @@ private object ClassEntryLookUp {
       sourceFiles: Seq[SourceFile],
       logger: Logger
   ): ClassEntryLookUp = {
-    if (sourceFiles.isEmpty) ClassEntryLookUp.empty(entry, logger)
-    else {
-      val classFiles = entry.classSystems.flatMap { classSystem =>
-        classSystem
-          .within(readAllClassFiles(classSystem))
-          .warnFailure(logger, s"Cannot list the class files in ${classSystem.name}")
-          .getOrElse(Vector.empty)
-      }
-
-      val classNameToClassFile =
-        classFiles.map(c => (c.fullyQualifiedName, c)).toMap
-
-      val sourceUriToSourceFile = sourceFiles.map(f => (f.uri, f)).toMap
-      val sourceNameToSourceFile = sourceFiles.groupBy(f => f.fileName)
-
-      val classNameToSourceFile = mutable.Map[String, SourceFile]()
-      val sourceUriToClassFiles = mutable.Map[URI, Seq[ClassFile]]()
-      val orphanClassFiles = mutable.Buffer[ClassFile]()
-      val missingSourceFileClassFiles = mutable.Buffer[ClassFile]()
-
-      for (classFile <- classFiles) {
-        def recordSourceFile(sourceFile: SourceFile): Unit = {
-          classNameToSourceFile.put(classFile.fullyQualifiedName, sourceFile)
-          sourceUriToClassFiles.update(
-            sourceFile.uri,
-            sourceUriToClassFiles.getOrElse(
-              sourceFile.uri,
-              Seq.empty
-            ) :+ classFile
-          )
-        }
-
-        classFile.sourceName
-          .flatMap(sourceNameToSourceFile.get)
-          .getOrElse(Seq.empty)
-          .toList match {
-          case Nil =>
-            // the source name is missing from the class file
-            // or the source file is missing from the source entry
-            missingSourceFileClassFiles.append(classFile)
-          case sourceFile :: Nil =>
-            // there is only one file with that name, it must be the right one
-            // even if its relative path does not match the class package
-            recordSourceFile(sourceFile)
-          case manySourceFiles =>
-            // there are several files with the same name
-            // we find the one whose relative path matches the class package
-            manySourceFiles.find(f => f.folderPath == classFile.folderPath) match {
-              case Some(sourceFile) => recordSourceFile(sourceFile)
-              case None =>
-                // in some modules of the java 9+ runtimes, the pattern of the path
-                // of the source files is <module>/<project>/src/<package>/<fileName>.java
-                // we find the package name by splitting at "src/"
-                manySourceFiles
-                  .filter(_.folderPath.contains("src/"))
-                  .find(f =>
-                    f.folderPath
-                      .split("src/")
-                      .last == classFile.fullPackageAsPath
-                  ) match {
-                  case Some(sourceFile) => recordSourceFile(sourceFile)
-                  case None =>
-                    // there is no source file with the correct relative path
-                    // so we try to find the right package declaration in each file
-                    // it would be very unfortunate that 2 sources file with the same name
-                    // declare the same package.
-                    manySourceFiles.filter(s => findPackage(s, classFile.fullPackage, logger)) match {
-                      case sourceFile :: Nil =>
-                        recordSourceFile(sourceFile)
-                      case _ =>
-                        orphanClassFiles.append(classFile)
-                    }
-                }
-            }
-        }
-      }
-
-      if (orphanClassFiles.size > 0)
-        logger.debug(s"Found ${orphanClassFiles.size} orphan class files in ${entry.name}")
-
-      new ClassEntryLookUp(
-        entry,
-        classNameToClassFile,
-        sourceUriToSourceFile,
-        sourceUriToClassFiles.toMap,
-        classNameToSourceFile.toMap,
-        missingSourceFileClassFiles.toSeq,
-        orphanClassFiles.toSeq,
-        logger
-      )
+    val classFiles = entry.classSystems.flatMap { classSystem =>
+      classSystem
+        .within(readAllClassFiles(classSystem))
+        .warnFailure(logger, s"Cannot list the class files in ${classSystem.name}")
+        .getOrElse(Vector.empty)
     }
+
+    val classNameToClassFile =
+      classFiles.map(c => (c.fullyQualifiedName, c)).toMap
+
+    val sourceUriToSourceFile = sourceFiles.map(f => (f.uri, f)).toMap
+    val sourceNameToSourceFile = sourceFiles.groupBy(f => f.fileName)
+
+    val classNameToSourceFile = mutable.Map[String, SourceFile]()
+    val sourceUriToClassFiles = mutable.Map[URI, Seq[ClassFile]]()
+    val orphanClassFiles = mutable.Buffer[ClassFile]()
+    val missingSourceFileClassFiles = mutable.Buffer[ClassFile]()
+
+    for (classFile <- classFiles) {
+      def recordSourceFile(sourceFile: SourceFile): Unit = {
+        classNameToSourceFile.put(classFile.fullyQualifiedName, sourceFile)
+        sourceUriToClassFiles.update(
+          sourceFile.uri,
+          sourceUriToClassFiles.getOrElse(
+            sourceFile.uri,
+            Seq.empty
+          ) :+ classFile
+        )
+      }
+
+      classFile.sourceName
+        .flatMap(sourceNameToSourceFile.get)
+        .getOrElse(Seq.empty)
+        .toList match {
+        case Nil =>
+          // the source name is missing from the class file
+          // or the source file is missing from the source entry
+          missingSourceFileClassFiles.append(classFile)
+        case sourceFile :: Nil =>
+          // there is only one file with that name, it must be the right one
+          // even if its relative path does not match the class package
+          recordSourceFile(sourceFile)
+        case manySourceFiles =>
+          // there are several files with the same name
+          // we find the one whose relative path matches the class package
+          manySourceFiles.find(f => f.folderPath == classFile.folderPath) match {
+            case Some(sourceFile) => recordSourceFile(sourceFile)
+            case None =>
+              // in some modules of the java 9+ runtimes, the pattern of the path
+              // of the source files is <module>/<project>/src/<package>/<fileName>.java
+              // we find the package name by splitting at "src/"
+              manySourceFiles
+                .filter(_.folderPath.contains("src/"))
+                .find(f =>
+                  f.folderPath
+                    .split("src/")
+                    .last == classFile.fullPackageAsPath
+                ) match {
+                case Some(sourceFile) => recordSourceFile(sourceFile)
+                case None =>
+                  // there is no source file with the correct relative path
+                  // so we try to find the right package declaration in each file
+                  // it would be very unfortunate that 2 sources file with the same name
+                  // declare the same package.
+                  manySourceFiles.filter(s => findPackage(s, classFile.fullPackage, logger)) match {
+                    case sourceFile :: Nil =>
+                      recordSourceFile(sourceFile)
+                    case _ =>
+                      orphanClassFiles.append(classFile)
+                  }
+              }
+          }
+      }
+    }
+
+    if (orphanClassFiles.size > 0)
+      logger.debug(s"Found ${orphanClassFiles.size} orphan class files in ${entry.name}")
+
+    new ClassEntryLookUp(
+      entry,
+      classNameToClassFile,
+      sourceUriToSourceFile,
+      sourceUriToClassFiles.toMap,
+      classNameToSourceFile.toMap,
+      missingSourceFileClassFiles.toSeq,
+      orphanClassFiles.toSeq,
+      logger
+    )
   }
 
   private def readAllClassFiles(

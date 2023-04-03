@@ -18,8 +18,8 @@ inThisBuild(
     version ~= { dynVer =>
       if (isRelease) dynVer
       else "3.0.2-SNAPSHOT" // only for local publishing
-    },
-    resolvers += Resolver.mavenLocal
+    }
+    // resolvers += Resolver.mavenLocal
   )
 )
 

@@ -126,6 +126,14 @@ trait DebugTest {
         paused = false
       }
     }
+
+    def extractThenPrintSource(frame: StackFrame): Unit = {
+      Option(frame.source) match {
+        case None => println(s"Stepping out, at ${topFrame.name} ${topFrame.line}")
+        case Some(source) => println(s"Stepping out, at ${source.name} ${topFrame.line}")
+      }
+    }
+
     def assertStop(assertion: StackFrame => Unit): Unit = {
       val stopped = client.stopped()
       paused = true
@@ -145,11 +153,11 @@ trait DebugTest {
         print(s"> ${event.output}")
         assertion(event.output.trim)
       case DebugStepAssert(_: StepIn, assertion) =>
-        println(s"Stepping in, at ${topFrame.source.name} ${topFrame.line}")
+        extractThenPrintSource(topFrame)
         client.stepIn(threadId)
         assertStop(assertion)
       case DebugStepAssert(_: StepOut, assertion) =>
-        println(s"Stepping out, at ${topFrame.source.name} ${topFrame.line}")
+        extractThenPrintSource(topFrame)
         client.stepOut(threadId)
         assertStop(assertion)
       case DebugStepAssert(_: StepOver, assertion) =>
