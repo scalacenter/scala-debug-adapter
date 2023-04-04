@@ -161,9 +161,6 @@ private class ClassEntryLookUp(
 }
 
 private object ClassEntryLookUp {
-  private def empty(entry: ClassEntry, logger: Logger): ClassEntryLookUp =
-    new ClassEntryLookUp(entry, Map.empty, Map.empty, Map.empty, Map.empty, Seq.empty, Seq.empty, logger)
-
   private[internal] def apply(entry: ClassEntry, logger: Logger): ClassEntryLookUp = {
     val sourceFiles = entry.sourceEntries.flatMap(SourceEntryLookUp.getAllSourceFiles(_, logger))
     ClassEntryLookUp(entry, sourceFiles, logger)

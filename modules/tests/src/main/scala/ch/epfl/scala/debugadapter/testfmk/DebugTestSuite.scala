@@ -127,10 +127,10 @@ trait DebugTest {
       }
     }
 
-    def extractThenPrintSource(frame: StackFrame): Unit = {
+    def formatFrame(frame: StackFrame): String = {
       Option(frame.source) match {
-        case None => println(s"Stepping out, at ${topFrame.name} ${topFrame.line}")
-        case Some(source) => println(s"Stepping out, at ${source.name} ${topFrame.line}")
+        case None => s"${topFrame.name} ${topFrame.line}"
+        case Some(source) => s"${source.name} ${topFrame.line}"
       }
     }
 
@@ -153,11 +153,11 @@ trait DebugTest {
         print(s"> ${event.output}")
         assertion(event.output.trim)
       case DebugStepAssert(_: StepIn, assertion) =>
-        extractThenPrintSource(topFrame)
+        println(s"Stepping in, at ${formatFrame(topFrame)}")
         client.stepIn(threadId)
         assertStop(assertion)
       case DebugStepAssert(_: StepOut, assertion) =>
-        extractThenPrintSource(topFrame)
+        println(s"Stepping out, at ${formatFrame(topFrame)}")
         client.stepOut(threadId)
         assertStop(assertion)
       case DebugStepAssert(_: StepOver, assertion) =>

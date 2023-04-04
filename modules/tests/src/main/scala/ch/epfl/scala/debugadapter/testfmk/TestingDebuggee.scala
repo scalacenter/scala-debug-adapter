@@ -26,7 +26,7 @@ case class TestingDebuggee(
     mainModule: Module,
     dependencies: Seq[ManagedEntry],
     mainClass: String,
-    javaRunTime: Option[JavaRuntime]
+    javaRuntime: Option[JavaRuntime]
 ) extends Debuggee
     with TestingContext {
 
@@ -43,7 +43,6 @@ case class TestingDebuggee(
     val process = builder.start()
     new MainProcess(process, listener)
   }
-  override def javaRuntime: Option[JavaRuntime] = javaRunTime
 }
 
 object TestingDebuggee {
@@ -108,9 +107,9 @@ object TestingDebuggee {
     mainClass(source, "example.Main", scalaVersion)
   }
 
-  def getRuntime(withSources: Boolean = true): Option[JavaRuntime] = {
-    if (withSources) JavaRuntime(Properties.jdkHome)
-    else JavaRuntime.applyWithoutSources(Properties.jdkHome)
+  private def getRuntime(withSources: Boolean = true): Option[JavaRuntime] = {
+    if (withSources) JavaRuntime(javaHome)
+    else JavaRuntime.java8(javaHome, None).orElse(JavaRuntime.java9OrAbove(javaHome, None))
   }
 
   def mainClass(source: String, mainClassName: String, scalaVersion: ScalaVersion): TestingDebuggee = {
@@ -119,10 +118,11 @@ object TestingDebuggee {
     mainClass(Seq(sourceName -> source), mainClassName, scalaVersion, Seq.empty, Seq.empty)
   }
 
-  def mainClassWithoutSources(source: String, mainClassName: String, scalaVersion: ScalaVersion): TestingDebuggee = {
+  def mainClassWithoutJDKSources(source: String, mainClassName: String, scalaVersion: ScalaVersion): TestingDebuggee = {
     val className = mainClassName.split('.').last
     val sourceName = s"$className.scala"
-    mainClass(Seq(sourceName -> source), mainClassName, scalaVersion, Seq.empty, Seq.empty, false)
+    val runtime = getRuntime(withSources = false)
+    mainClass(Seq(sourceName -> source), mainClassName, scalaVersion, Seq.empty, Seq.empty, runtime)
   }
 
   def mainClass(sources: Seq[(String, String)], mainClassName: String, scalaVersion: ScalaVersion): TestingDebuggee =
@@ -157,7 +157,7 @@ object TestingDebuggee {
       scalaVersion: ScalaVersion,
       scalacOptions: Seq[String],
       dependencies: Seq[ManagedEntry],
-      withSources: Boolean = true
+      javaRuntime: Option[JavaRuntime] = JavaRuntime(Properties.jdkHome)
   ): TestingDebuggee = {
     val tempDir = Files.createTempDirectory("scala-debug-adapter")
 
@@ -187,7 +187,7 @@ object TestingDebuggee {
     }
 
     val mainModule = Module(mainClassName, Some(scalaVersion), scalacOptions, classDir, sourceEntries)
-    TestingDebuggee(scalaVersion, sourceFiles, mainModule, allDependencies, mainClassName, getRuntime(withSources))
+    TestingDebuggee(scalaVersion, sourceFiles, mainModule, allDependencies, mainClassName, javaRuntime)
   }
 
   def munitTestSuite(

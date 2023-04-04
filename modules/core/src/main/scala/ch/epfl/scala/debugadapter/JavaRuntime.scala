@@ -34,11 +34,7 @@ object JavaRuntime {
     java8(javaHome, sources).orElse(java9OrAbove(javaHome, sources))
   }
 
-  def applyWithoutSources(javaHome: String): Option[JavaRuntime] = {
-    java8(Paths.get(javaHome), None).orElse(java9OrAbove(Paths.get(javaHome), None))
-  }
-
-  private def java8(javaHome: Path, srcZip: Option[Path]): Option[JavaRuntime] = {
+  private[debugadapter] def java8(javaHome: Path, srcZip: Option[Path]): Option[JavaRuntime] = {
     for {
       runtimeJar <- Seq("jre/lib/rt.jar", "lib/rt.jar")
         .map(javaHome.resolve)
@@ -51,7 +47,7 @@ object JavaRuntime {
     }
   }
 
-  private def java9OrAbove(
+  private[debugadapter] def java9OrAbove(
       javaHome: Path,
       srcZip: Option[Path]
   ): Option[JavaRuntime] = {
