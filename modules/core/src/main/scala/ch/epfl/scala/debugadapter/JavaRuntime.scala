@@ -10,13 +10,13 @@ sealed trait JavaRuntime extends ClassEntry {
   def name: String = javaHome.getFileName.toString
 }
 
-final case class Java8(javaHome: Path, classJars: Seq[Path], sourceZip: Path) extends JavaRuntime {
-  override def sourceEntries: Seq[SourceEntry] = Seq(SourceJar(sourceZip))
+final case class Java8(javaHome: Path, classJars: Seq[Path], sourceZip: Option[Path]) extends JavaRuntime {
+  override def sourceEntries: Seq[SourceEntry] = sourceZip.map(SourceJar.apply).toSeq
   override def classSystems: Seq[ClassSystem] = classJars.map(ClassJar.apply)
 }
 
-final case class Java9OrAbove(javaHome: Path, fsJar: Path, sourceZip: Path) extends JavaRuntime {
-  override def sourceEntries: Seq[SourceEntry] = Seq(SourceJar(sourceZip))
+final case class Java9OrAbove(javaHome: Path, fsJar: Path, sourceZip: Option[Path]) extends JavaRuntime {
+  override def sourceEntries: Seq[SourceEntry] = sourceZip.map(SourceJar.apply).toSeq
   override def classSystems: Seq[JavaRuntimeSystem] = {
     val classLoader = new URLClassLoader(Array(fsJar.toUri.toURL))
     Seq(JavaRuntimeSystem(classLoader, javaHome))
@@ -28,16 +28,13 @@ object JavaRuntime {
     JavaRuntime(Paths.get(javaHome))
 
   def apply(javaHome: Path): Option[JavaRuntime] = {
-    for {
-      srcZip <- Seq("src.zip", "lib/src.zip", "../src.zip")
-        .map(javaHome.resolve)
-        .find(Files.exists(_))
-      javaRuntime <- java8(javaHome, srcZip)
-        .orElse(java9OrAbove(javaHome, srcZip))
-    } yield javaRuntime
+    val sources = Seq("src.zip", "lib/src.zip", "../src.zip")
+      .map(javaHome.resolve)
+      .find(Files.exists(_))
+    java8(javaHome, sources).orElse(java9OrAbove(javaHome, sources))
   }
 
-  private def java8(javaHome: Path, srcZip: Path): Option[JavaRuntime] = {
+  private[debugadapter] def java8(javaHome: Path, srcZip: Option[Path]): Option[JavaRuntime] = {
     for {
       runtimeJar <- Seq("jre/lib/rt.jar", "lib/rt.jar")
         .map(javaHome.resolve)
@@ -50,9 +47,9 @@ object JavaRuntime {
     }
   }
 
-  private def java9OrAbove(
+  private[debugadapter] def java9OrAbove(
       javaHome: Path,
-      srcZip: Path
+      srcZip: Option[Path]
   ): Option[JavaRuntime] = {
     Some("lib/jrt-fs.jar")
       .map(javaHome.resolve)

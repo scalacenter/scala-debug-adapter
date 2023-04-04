@@ -43,6 +43,24 @@ class Scala3DebugTest extends ScalaDebugTests(ScalaVersion.`3.1+`) {
 }
 
 abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
+  test("should not crash when sources aren't present") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    foo("world")
+         |  }
+         |
+         |  def foo(name: String): Unit = {
+         |    println(name)
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClassWithoutJDKSources(source, "example.Main", scalaVersion)
+    check(Breakpoint(5), StepIn.line(9))
+  }
   test("should support breakpoints in scala sources") {
     implicit val debuggee = TestingDebuggee.scalaBreakpointTest(scalaVersion)
     check(Breakpoint(5), Breakpoint(13), Breakpoint(14), Breakpoint(22), Breakpoint(9))

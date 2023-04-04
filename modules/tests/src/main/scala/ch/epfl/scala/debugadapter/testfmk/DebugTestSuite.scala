@@ -126,6 +126,14 @@ trait DebugTest {
         paused = false
       }
     }
+
+    def formatFrame(frame: StackFrame): String = {
+      Option(frame.source) match {
+        case None => s"${topFrame.name} ${topFrame.line}"
+        case Some(source) => s"${source.name} ${topFrame.line}"
+      }
+    }
+
     def assertStop(assertion: StackFrame => Unit): Unit = {
       val stopped = client.stopped()
       paused = true
@@ -145,11 +153,11 @@ trait DebugTest {
         print(s"> ${event.output}")
         assertion(event.output.trim)
       case DebugStepAssert(_: StepIn, assertion) =>
-        println(s"Stepping in, at ${topFrame.source.name} ${topFrame.line}")
+        println(s"Stepping in, at ${formatFrame(topFrame)}")
         client.stepIn(threadId)
         assertStop(assertion)
       case DebugStepAssert(_: StepOut, assertion) =>
-        println(s"Stepping out, at ${topFrame.source.name} ${topFrame.line}")
+        println(s"Stepping out, at ${formatFrame(topFrame)}")
         client.stepOut(threadId)
         assertStop(assertion)
       case DebugStepAssert(_: StepOver, assertion) =>

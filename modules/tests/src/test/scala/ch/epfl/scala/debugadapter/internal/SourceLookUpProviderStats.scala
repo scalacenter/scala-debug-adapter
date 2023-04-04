@@ -40,7 +40,7 @@ class SourceLookUpProviderStats extends FunSuite {
       dep("com.typesafe.play:play-ahc-ws_2.13:2.8.2"),
       dep("org.apache.ivy:ivy:2.4.0"),
       dep("de.heikoseeberger:akka-http-json4s_2.13:1.29.1")
-    )(32037, 4)
+    )(35136, 4)
   }
 
   private def dep(coord: String): Dependency = {
