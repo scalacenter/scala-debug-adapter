@@ -17,7 +17,7 @@ inThisBuild(
     developers := Developers.list,
     version ~= { dynVer =>
       if (isRelease) dynVer
-      else "3.0.2-SNAPSHOT" // only for local publishing
+      else "3.1.0-SNAPSHOT" // only for local publishing
     },
     resolvers += Resolver.mavenLocal
   )
@@ -59,7 +59,8 @@ lazy val javaDebug = project
       "com.github.sbt" % "junit-interface" % "0.13.3" % Test
     ),
     Test / fork := true,
-    version := Option(System.getenv("JAVA_DEBUG_VERSION")).getOrElse("0.34.0-SNAPSHOT")
+    version := Option(System.getenv("JAVA_DEBUG_VERSION")).getOrElse("0.34.0-SNAPSHOT"),
+    Compile / doc / sources := Seq.empty, // workaround for this issue : https://github.com/scalameta/metals/issues/5096
   )
 
 lazy val core212 = core.jvm(Dependencies.scala212)
