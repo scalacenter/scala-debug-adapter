@@ -53,7 +53,7 @@ abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTest
          |  }
          |
          |  def foo(name: String): Unit = {
-         |    println(foo)
+         |    println(name)
          |  }
          |}
          |""".stripMargin
