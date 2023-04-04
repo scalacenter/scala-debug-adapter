@@ -194,8 +194,8 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |case class D(d1: String)
          |
          |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
+    implicit var debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    def checks = check(
       Breakpoint(14),
       StepIn.line(10),
       Breakpoint(15),
@@ -221,6 +221,9 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       Breakpoint(23),
       StepIn.line(10)
     )
+    checks
+    debuggee = TestingDebuggee.mainClassWithoutSources(source, "example.Main", scalaVersion)
+    checks
   }
 
   test("should not step into setters") {

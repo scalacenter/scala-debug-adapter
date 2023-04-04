@@ -25,7 +25,8 @@ case class TestingDebuggee(
     sourceFiles: Seq[Path],
     mainModule: Module,
     dependencies: Seq[ManagedEntry],
-    mainClass: String
+    mainClass: String,
+    javaRunTime: Option[JavaRuntime]
 ) extends Debuggee
     with TestingContext {
 
@@ -42,7 +43,7 @@ case class TestingDebuggee(
     val process = builder.start()
     new MainProcess(process, listener)
   }
-  override def javaRuntime: Option[JavaRuntime] = JavaRuntime(javaHome)
+  override def javaRuntime: Option[JavaRuntime] = javaRunTime
 }
 
 object TestingDebuggee {
@@ -107,10 +108,21 @@ object TestingDebuggee {
     mainClass(source, "example.Main", scalaVersion)
   }
 
+  def getRuntime(withSources: Boolean = true): Option[JavaRuntime] = {
+    if (withSources) JavaRuntime(Properties.jdkHome)
+    else JavaRuntime.applyWithoutSources(Properties.jdkHome)
+  }
+
   def mainClass(source: String, mainClassName: String, scalaVersion: ScalaVersion): TestingDebuggee = {
     val className = mainClassName.split('.').last
     val sourceName = s"$className.scala"
     mainClass(Seq(sourceName -> source), mainClassName, scalaVersion, Seq.empty, Seq.empty)
+  }
+
+  def mainClassWithoutSources(source: String, mainClassName: String, scalaVersion: ScalaVersion): TestingDebuggee = {
+    val className = mainClassName.split('.').last
+    val sourceName = s"$className.scala"
+    mainClass(Seq(sourceName -> source), mainClassName, scalaVersion, Seq.empty, Seq.empty, false)
   }
 
   def mainClass(sources: Seq[(String, String)], mainClassName: String, scalaVersion: ScalaVersion): TestingDebuggee =
@@ -144,7 +156,8 @@ object TestingDebuggee {
       mainClassName: String,
       scalaVersion: ScalaVersion,
       scalacOptions: Seq[String],
-      dependencies: Seq[ManagedEntry]
+      dependencies: Seq[ManagedEntry],
+      withSources: Boolean = true
   ): TestingDebuggee = {
     val tempDir = Files.createTempDirectory("scala-debug-adapter")
 
@@ -174,7 +187,7 @@ object TestingDebuggee {
     }
 
     val mainModule = Module(mainClassName, Some(scalaVersion), scalacOptions, classDir, sourceEntries)
-    TestingDebuggee(scalaVersion, sourceFiles, mainModule, allDependencies, mainClassName)
+    TestingDebuggee(scalaVersion, sourceFiles, mainModule, allDependencies, mainClassName, getRuntime(withSources))
   }
 
   def munitTestSuite(
@@ -223,7 +236,7 @@ object TestingDebuggee {
 
     val sourceEntry = SourceDirectory(srcDir)
     val mainModule = Module(testSuite, Some(scalaVersion), Seq.empty, classDir, Seq(sourceEntry))
-    TestingDebuggee(scalaVersion, Seq(sourceFile), mainModule, classPath, "TestRunner")
+    TestingDebuggee(scalaVersion, Seq(sourceFile), mainModule, classPath, "TestRunner", getRuntime())
   }
 
   private def getResource(name: String): Path =
@@ -265,7 +278,7 @@ object TestingDebuggee {
 
     val sourceEntry = SourceDirectory(srcDir)
     val mainModule = Module(mainClassName, None, Seq.empty, classDir, Seq(sourceEntry))
-    TestingDebuggee(scalaVersion, Seq(srcFile), mainModule, Seq.empty, mainClassName)
+    TestingDebuggee(scalaVersion, Seq(srcFile), mainModule, Seq.empty, mainClassName, getRuntime())
   }
 
   private def startCrawling(input: InputStream)(f: String => Unit): Unit = {
