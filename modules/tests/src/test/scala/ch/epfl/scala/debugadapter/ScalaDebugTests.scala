@@ -43,7 +43,7 @@ class Scala3DebugTest extends ScalaDebugTests(ScalaVersion.`3.1+`) {
 }
 
 abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
-  test("should not crash when sources aren't present".only) {
+  test("should not crash when sources aren't present") {
     val source =
       """|package example
          |
