@@ -136,11 +136,12 @@ trait DebugTest {
       }
     }
 
-    def evaluateExpression(eval: Evaluation, assertion: Either[String, String] => Unit): Unit = {
+    def evaluateExpression(eval: Evaluation, assertion: Either[String, String] => Unit): Future[Unit] = {
       println(s"$$ ${eval.expression}")
-      val response = client.evaluate(eval.expression, topFrame.id)
-      response.foreach(res => println(s"> $res"))
-      assertion(response)
+      client.evaluate(eval.expression, topFrame.id).map { resp =>
+        resp.foreach(res => println(s"> $res"))
+        assertion(resp)
+      }
     }
 
     def assertStop(assertion: StackFrame => Unit): Unit = {
@@ -172,7 +173,7 @@ trait DebugTest {
       case SingleStepAssert(_: StepOver, assertion) =>
         ???
       case SingleStepAssert(eval: Evaluation, assertion) =>
-        evaluateExpression(eval, assertion)
+        Await.result(evaluateExpression(eval, assertion), 16.seconds)
       case SingleStepAssert(Outputed(), assertion) =>
         continueIfPaused()
         val event = client.outputed(m => m.category == Category.stdout)
@@ -181,11 +182,11 @@ trait DebugTest {
       case SingleStepAssert(_: NoStep, _) => ()
       case ParallelStepsAsserts(steps) =>
         val evaluations = steps.map { step =>
-          Future {
-            evaluateExpression(step.step.asInstanceOf[Evaluation], step.assertion)
-          }
+          evaluateExpression(
+            step.step.asInstanceOf[Evaluation],
+            step.assertion.asInstanceOf[Either[String, String] => Unit]
+          )
         }
-
         Await.result(Future.sequence(evaluations), 32.seconds)
     }
     continueIfPaused()

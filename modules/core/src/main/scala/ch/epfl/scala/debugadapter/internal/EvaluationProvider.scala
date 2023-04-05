@@ -50,12 +50,7 @@ private[internal] class EvaluationProvider(
   private var debugContext: IDebugAdapterContext = _
   private val isEvaluating = new AtomicBoolean(false)
 
-  private def fromTryToFuture[T](t: => Try[T]) = {
-    t match {
-      case Success(value) => Future.successful(value)
-      case Failure(e) => Future.failed(e)
-    }
-  }
+  private def fromTryToFuture[T](t: => Try[T]) = Future(t.get)
 
   override def initialize(debugContext: IDebugAdapterContext, options: java.util.Map[String, AnyRef]): Unit =
     this.debugContext = debugContext
@@ -115,15 +110,19 @@ private[internal] class EvaluationProvider(
       invokeSuper: Boolean
   ): CompletableFuture[Value] = {
     val obj = new JdiObject(thisContext, thread)
-    val invocation = evaluationBlock {
-      obj
-        .invoke(methodName, methodSignature, if (args == null) List() else args.toList)
-        .recover {
-          // if invocation throws an exception, we return that exception as the result
-          case MethodInvocationFailed(msg, exception) => exception
-        }
+    val invocation = fromTryToFuture {
+      val block = evaluationBlock {
+        obj
+          .invoke(methodName, methodSignature, if (args == null) List() else args.toList)
+          .recover {
+            // if invocation throws an exception, we return that exception as the result
+            case MethodInvocationFailed(msg, exception) => exception
+          }
+      }
+      block.getResult
     }
-    completeFuture(fromTryToFuture(invocation.getResult), thread)
+
+    completeFuture(invocation, thread)
   }
 
   private def getScalaEvaluator(fqcn: String): Try[ScalaEvaluator] =
