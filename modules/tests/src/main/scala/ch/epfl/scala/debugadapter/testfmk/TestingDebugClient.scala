@@ -21,6 +21,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Promise
 import scala.concurrent.Await
 import ch.epfl.scala.debugadapter.Logger
+import scala.collection.concurrent.TrieMap
 
 class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     ec: ExecutionContext
@@ -29,6 +30,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
       socket.getOutputStream,
       logger
     ) {
+
   override def close(): Unit = {
     super.close()
     socket.close()
@@ -232,7 +234,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
   ): Messages.Request = {
     val json =
       JsonUtils.toJsonTree(args, tag.runtimeClass).asInstanceOf[JsonObject]
-    new Messages.Request(command.getName, json)
+    new Messages.Request(this.sequenceNumber.getAndIncrement(), command.getName, json)
   }
 }
 
@@ -274,9 +276,10 @@ class AbstractDebugClient(
     new BufferedWriter(new OutputStreamWriter(output, ProtocolEncoding))
   )
 
-  private val sequenceNumber = new AtomicInteger(1)
+  protected val sequenceNumber = new AtomicInteger(1)
 
-  private var responsePromise: Promise[Messages.Response] = _
+  private var responsePromises: TrieMap[Int, Promise[Messages.Response]] =
+    TrieMap()
   private val events = new LinkedBlockingQueue[Messages.Event]()
 
   def close(): Unit = {
@@ -310,9 +313,12 @@ class AbstractDebugClient(
       request: Messages.Request,
       timeout: Duration
   ): Messages.Response = {
-    responsePromise = Promise[Messages.Response]()
+    val promise = Promise[Messages.Response]()
+    responsePromises.put(request.seq, promise)
     sendMessage(request)
-    Await.result(responsePromise.future, timeout)
+    val message = Await.result(promise.future, timeout)
+    responsePromises.remove(request.seq)
+    message
   }
 
   def receiveEvent(
@@ -345,7 +351,7 @@ class AbstractDebugClient(
 
         if (message.`type`.equals("response")) {
           val response = JsonUtils.fromJson(raw, classOf[Messages.Response])
-          responsePromise.success(response)
+          responsePromises(response.request_seq).success(response)
         } else if (message.`type`.equals("event")) {
           val event = JsonUtils.fromJson(raw, classOf[Messages.Event])
           events.put(event)
@@ -375,8 +381,6 @@ class AbstractDebugClient(
   }
 
   private def sendMessage(message: Messages.ProtocolMessage): Unit = {
-    message.seq = this.sequenceNumber.getAndIncrement()
-
     val jsonMessage = JsonUtils.toJson(message)
     val jsonBytes = jsonMessage.getBytes(ProtocolEncoding)
 

@@ -60,7 +60,7 @@ lazy val javaDebug = project
     ),
     Test / fork := true,
     version := Option(System.getenv("JAVA_DEBUG_VERSION")).getOrElse("0.34.0-SNAPSHOT"),
-    Compile / doc / sources := Seq.empty, // workaround for this issue : https://github.com/scalameta/metals/issues/5096
+    Compile / doc / sources := Seq.empty // workaround for this issue : https://github.com/scalameta/metals/issues/5096
   )
 
 lazy val core212 = core.jvm(Dependencies.scala212)

@@ -6,7 +6,9 @@ import DebugStepAssert.*
 import munit.Assertions.*
 import munit.Location
 
-final case class DebugStepAssert[T](step: DebugStep[T], assertion: T => Unit)
+sealed trait DebugStepAssert
+final case class SingleStepAssert[T](step: DebugStep[T], assertion: T => Unit) extends DebugStepAssert
+final case class ParallelStepsAsserts[T](steps: Seq[SingleStepAssert[T]]) extends DebugStepAssert
 
 sealed trait DebugStep[+T]
 final case class Breakpoint(sourceFile: Path, line: Int, condition: Option[String]) extends DebugStep[StackFrame]
@@ -21,6 +23,9 @@ final case class NoStep() extends DebugStep[Nothing]
 final case class ObjectRef(clsName: String)
 
 object DebugStepAssert {
+  def inParallel(steps: SingleStepAssert[Either[String, String]]*): ParallelStepsAsserts[Either[String, String]] =
+    ParallelStepsAsserts(steps)
+
   def assertOnFrame(expectedSource: Path, expectedLine: Int)(frame: StackFrame)(implicit location: Location): Unit = {
     assertEquals(frame.source.path, expectedSource.toString)
     assertEquals(frame.line, expectedLine)
@@ -31,17 +36,17 @@ object DebugStepAssert {
 }
 
 object Breakpoint {
-  def apply(line: Int)(implicit ctx: TestingContext): DebugStepAssert[StackFrame] =
+  def apply(line: Int)(implicit ctx: TestingContext): SingleStepAssert[StackFrame] =
     Breakpoint(ctx.mainSource, line)
 
-  def apply(sourceFile: Path, line: Int): DebugStepAssert[StackFrame] = {
+  def apply(sourceFile: Path, line: Int): SingleStepAssert[StackFrame] = {
     val breakpoint = Breakpoint(sourceFile, line, None)
-    DebugStepAssert(breakpoint, assertOnFrame(sourceFile, line))
+    SingleStepAssert(breakpoint, assertOnFrame(sourceFile, line))
   }
 
-  def apply(line: Int, condition: String)(implicit ctx: TestingContext): DebugStepAssert[StackFrame] = {
+  def apply(line: Int, condition: String)(implicit ctx: TestingContext): SingleStepAssert[StackFrame] = {
     val breakpoint = Breakpoint(ctx.mainSource, line, Some(condition))
-    DebugStepAssert(breakpoint, assertOnFrame(ctx.mainSource, line))
+    SingleStepAssert(breakpoint, assertOnFrame(ctx.mainSource, line))
   }
 }
 
@@ -49,57 +54,59 @@ object Logpoint {
   def apply(line: Int, logMessage: String, expected: String)(implicit
       ctx: TestingContext,
       loc: Location
-  ): DebugStepAssert[String] = {
+  ): SingleStepAssert[String] = {
     val logpoint = Logpoint(ctx.mainSource, line, logMessage)
-    DebugStepAssert(logpoint, output => assertEquals(output, expected))
+    SingleStepAssert(logpoint, output => assertEquals(output, expected))
   }
 }
 
 object StepIn {
-  def line(line: Int)(implicit ctx: TestingContext, location: Location): DebugStepAssert[StackFrame] =
-    DebugStepAssert(StepIn(), assertOnFrame(ctx.mainSource, line))
+  def line(line: Int)(implicit ctx: TestingContext, location: Location): SingleStepAssert[StackFrame] =
+    SingleStepAssert(StepIn(), assertOnFrame(ctx.mainSource, line))
 
-  def method(methodName: String): DebugStepAssert[StackFrame] =
-    DebugStepAssert(StepIn(), assertOnFrame(methodName))
+  def method(methodName: String): SingleStepAssert[StackFrame] =
+    SingleStepAssert(StepIn(), assertOnFrame(methodName))
 }
 
 object StepOut {
-  def line(line: Int)(implicit ctx: TestingContext): DebugStepAssert[StackFrame] =
-    DebugStepAssert(StepOut(), assertOnFrame(ctx.mainSource, line))
+  def line(line: Int)(implicit ctx: TestingContext): SingleStepAssert[StackFrame] =
+    SingleStepAssert(StepOut(), assertOnFrame(ctx.mainSource, line))
 
-  def method(methodName: String): DebugStepAssert[StackFrame] =
-    DebugStepAssert(StepOut(), assertOnFrame(methodName))
+  def method(methodName: String): SingleStepAssert[StackFrame] =
+    SingleStepAssert(StepOut(), assertOnFrame(methodName))
 }
 
 object StepOver {
-  def line(line: Int)(implicit ctx: TestingContext): DebugStepAssert[StackFrame] =
-    DebugStepAssert(StepOver(), assertOnFrame(ctx.mainSource, line))
+  def line(line: Int)(implicit ctx: TestingContext): SingleStepAssert[StackFrame] =
+    SingleStepAssert(StepOver(), assertOnFrame(ctx.mainSource, line))
 
-  def method(methodName: String): DebugStepAssert[StackFrame] =
-    DebugStepAssert(StepOver(), assertOnFrame(methodName))
+  def method(methodName: String): SingleStepAssert[StackFrame] =
+    SingleStepAssert(StepOver(), assertOnFrame(methodName))
 }
 
 object Evaluation {
-  def ignore(expression: String, expected: Any)(implicit ctx: TestingContext): DebugStepAssert[Either[String, String]] =
-    new DebugStepAssert(Evaluation(expression), assertIgnore(expected.toString))
+  def ignore(expression: String, expected: Any)(implicit
+      ctx: TestingContext
+  ): SingleStepAssert[Either[String, String]] =
+    SingleStepAssert(Evaluation(expression), assertIgnore(expected.toString))
 
-  def failed(expression: String, error: String): DebugStepAssert[Either[String, String]] =
-    DebugStepAssert(Evaluation(expression), assertFailed(error))
+  def failed(expression: String, error: String): SingleStepAssert[Either[String, String]] =
+    SingleStepAssert(Evaluation(expression), assertFailed(error))
 
-  def failed(expression: String): DebugStepAssert[Either[String, String]] =
-    DebugStepAssert(Evaluation(expression), resp => assertFailed(resp))
+  def failed(expression: String): SingleStepAssert[Either[String, String]] =
+    SingleStepAssert(Evaluation(expression), resp => assertFailed(resp))
 
   def failedOrIgnore(expression: String, error: String, ignore: Boolean)(implicit
       ctx: TestingContext
-  ): DebugStepAssert[Either[String, String]] = {
-    new DebugStepAssert(
+  ): SingleStepAssert[Either[String, String]] = {
+    SingleStepAssert(
       Evaluation(expression),
       if (ignore) assertIgnore(error) _ else assertFailed(error) _
     )
   }
 
   def failedOrIgnore(expression: String, ignore: Boolean)(assertion: String => Unit)(implicit ctx: TestingContext) = {
-    new DebugStepAssert(
+    SingleStepAssert(
       Evaluation(expression),
       if (ignore) assertIgnore("failure") _ else assertFailed(assertion) _
     )
@@ -108,24 +115,24 @@ object Evaluation {
   def success(expression: String, result: Any)(implicit
       ctx: TestingContext,
       location: Location
-  ): DebugStepAssert[Either[String, String]] =
-    new DebugStepAssert(Evaluation(expression), assertSuccess(result))
+  ): SingleStepAssert[Either[String, String]] =
+    new SingleStepAssert(Evaluation(expression), assertSuccess(result))
 
-  def success(expression: String)(assertion: String => Unit): DebugStepAssert[Either[String, String]] = {
-    new DebugStepAssert(Evaluation(expression), assertSuccess(assertion))
+  def success(expression: String)(assertion: String => Unit): SingleStepAssert[Either[String, String]] = {
+    new SingleStepAssert(Evaluation(expression), assertSuccess(assertion))
   }
 
   def successOrIgnore(expression: String, result: Any, ignore: Boolean)(implicit
       ctx: TestingContext
-  ): DebugStepAssert[Either[String, String]] = {
+  ): SingleStepAssert[Either[String, String]] = {
     val assertion = if (ignore) assertIgnore(result.toString) _ else assertSuccess(result)(_)
-    new DebugStepAssert(Evaluation(expression), assertion)
+    new SingleStepAssert(Evaluation(expression), assertion)
   }
 
   def successOrIgnore(expression: String, ignore: Boolean)(
       assertion: String => Unit
-  )(implicit ctx: TestingContext): DebugStepAssert[Either[String, String]] = {
-    new DebugStepAssert(
+  )(implicit ctx: TestingContext): SingleStepAssert[Either[String, String]] = {
+    new SingleStepAssert(
       Evaluation(expression),
       if (ignore) assertIgnore("sucess") _ else assertSuccess(assertion)(_)
     )
@@ -184,14 +191,14 @@ object Evaluation {
 }
 
 object Outputed {
-  def apply(expected: String): DebugStepAssert[String] =
+  def apply(expected: String): SingleStepAssert[String] =
     apply(message => assertEquals(message, expected))
 
-  def apply(assertion: String => Unit): DebugStepAssert[String] =
-    new DebugStepAssert(Outputed(), assertion)
+  def apply(assertion: String => Unit): SingleStepAssert[String] =
+    new SingleStepAssert(Outputed(), assertion)
 }
 
 object NoStep {
-  def apply(): DebugStepAssert[Nothing] =
-    new DebugStepAssert[Nothing](new NoStep(), _ => ())
+  def apply(): SingleStepAssert[Nothing] =
+    new SingleStepAssert[Nothing](new NoStep(), _ => ())
 }
