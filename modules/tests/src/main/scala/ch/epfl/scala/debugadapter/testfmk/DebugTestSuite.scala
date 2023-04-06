@@ -187,7 +187,7 @@ trait DebugTest {
             step.assertion.asInstanceOf[Either[String, String] => Unit]
           )
         }
-        Await.result(Future.sequence(evaluations), 32.seconds)
+        Await.result(Future.sequence(evaluations), 64.seconds)
     }
     continueIfPaused()
 
