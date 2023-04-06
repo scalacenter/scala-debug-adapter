@@ -32,8 +32,6 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
       logger
     ) {
 
-  val defaultTimeout = 16.second
-
   override def close(): Unit = {
     super.close()
     socket.close()
@@ -73,11 +71,11 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
   def continue(
       threadId: Long,
       timeout: Duration = 8.seconds
-  ): Future[Messages.Response] = {
+  ): Messages.Response = {
     val args = new ContinueArguments()
     args.threadId = threadId
     val request = createRequest(Command.CONTINUE, args)
-    sendRequest(request)
+    Await.result(sendRequest(request), timeout)
   }
 
   def setBreakpoints(
@@ -221,7 +219,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     getBody[OutputEvent](event)
   }
 
-  def stopped(timeout: Duration = defaultTimeout): StoppedEvent = {
+  def stopped(timeout: Duration = 16.second): StoppedEvent = {
     val event = receiveEvent(timeout)(e => e != null && e.event == "stopped")
     getBody[StoppedEvent](event)
   }

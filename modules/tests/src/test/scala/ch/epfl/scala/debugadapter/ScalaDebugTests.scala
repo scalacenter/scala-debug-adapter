@@ -1,6 +1,8 @@
 package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testfmk.*
+import scala.concurrent.Await
+import scala.concurrent.duration._
 
 class Scala212DebugTest extends ScalaDebugTests(ScalaVersion.`2.12`)
 class Scala213DebugTest extends ScalaDebugTests(ScalaVersion.`2.13`)
@@ -176,7 +178,8 @@ abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTest
       val localVars = client.variables(localScope.variablesReference)
       assertEquals(localVars.map(_.name).toSeq, Seq("args", "h", "this"))
 
-      client.evaluate("1 + 2", topFrame.id)
+      val evalResponse = Await.result(client.evaluate("1 + 2", topFrame.id), 2.second)
+      assertEquals(evalResponse, Right("3"))
       val localVarsAfterEvaluation = client.variables(localScope.variablesReference)
       assertEquals(localVarsAfterEvaluation.map(_.name).toSeq, Seq("args", "h", "this"))
 

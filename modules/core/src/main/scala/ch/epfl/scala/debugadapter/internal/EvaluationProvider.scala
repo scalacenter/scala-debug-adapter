@@ -31,11 +31,9 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.util.Failure
 import scala.util.Success
+import scala.util.Try
 
 import ScalaExtension.*
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext
-import scala.util.Try
 
 private[internal] class EvaluationProvider(
     sourceLookUp: SourceLookUpProvider,
@@ -44,13 +42,10 @@ private[internal] class EvaluationProvider(
     scalaEvaluators: Map[ClassEntry, ScalaEvaluator],
     mode: DebugConfig.EvaluationMode,
     logger: Logger
-)(implicit context: ExecutionContext)
-    extends IEvaluationProvider {
+) extends IEvaluationProvider {
 
   private var debugContext: IDebugAdapterContext = _
   private val isEvaluating = new AtomicBoolean(false)
-
-  private def fromTryToFuture[T](t: => Try[T]) = Future(t.get)
 
   override def initialize(debugContext: IDebugAdapterContext, options: java.util.Map[String, AnyRef]): Unit =
     this.debugContext = debugContext
@@ -59,12 +54,10 @@ private[internal] class EvaluationProvider(
 
   override def evaluate(expression: String, thread: ThreadReference, depth: Int): CompletableFuture[Value] = {
     val frame = FrameReference(thread, depth)
-    val evaluation = fromTryToFuture {
-      for {
-        preparedExpression <- prepare(expression, frame)
-        evaluation <- evaluate(preparedExpression, frame)
-      } yield evaluation
-    }
+    val evaluation = for {
+      preparedExpression <- prepare(expression, frame)
+      evaluation <- evaluate(preparedExpression, frame)
+    } yield evaluation
     completeFuture(evaluation, thread)
   }
 
@@ -92,12 +85,10 @@ private[internal] class EvaluationProvider(
         Failure(new Exception("Missing expression"))
       }
     breakpoint.setCompiledExpression(locationCode, expression)
-    val evaluation = fromTryToFuture {
-      for {
-        expression <- expression
-        evaluation <- evaluate(expression, frame)
-      } yield evaluation
-    }
+    val evaluation = for {
+      expression <- expression
+      evaluation <- evaluate(expression, frame)
+    } yield evaluation
     completeFuture(evaluation, thread)
   }
 
@@ -110,19 +101,15 @@ private[internal] class EvaluationProvider(
       invokeSuper: Boolean
   ): CompletableFuture[Value] = {
     val obj = new JdiObject(thisContext, thread)
-    val invocation = fromTryToFuture {
-      val block = evaluationBlock {
-        obj
-          .invoke(methodName, methodSignature, if (args == null) List() else args.toList)
-          .recover {
-            // if invocation throws an exception, we return that exception as the result
-            case MethodInvocationFailed(msg, exception) => exception
-          }
-      }
-      block.getResult
+    val invocation = evaluationBlock {
+      obj
+        .invoke(methodName, methodSignature, if (args == null) List() else args.toList)
+        .recover {
+          // if invocation throws an exception, we return that exception as the result
+          case MethodInvocationFailed(msg, exception) => exception
+        }
     }
-
-    completeFuture(invocation, thread)
+    completeFuture(invocation.getResult, thread)
   }
 
   private def getScalaEvaluator(fqcn: String): Try[ScalaEvaluator] =
@@ -186,10 +173,10 @@ private[internal] class EvaluationProvider(
     }
   }
 
-  private def completeFuture[T](result: Future[T], thread: ThreadReference): CompletableFuture[T] = {
+  private def completeFuture[T](result: Try[T], thread: ThreadReference): CompletableFuture[T] = {
     val future = new CompletableFuture[T]()
     debugContext.getStackFrameManager.reloadStackFrames(thread)
-    result.onComplete {
+    result match {
       case Success(value) => future.complete(value)
       case Failure(exception) => future.completeExceptionally(exception)
     }
@@ -212,7 +199,7 @@ private[internal] object EvaluationProvider {
       sourceLookUp: SourceLookUpProvider,
       logger: Logger,
       config: DebugConfig
-  )(implicit context: ExecutionContext): IEvaluationProvider = {
+  ): IEvaluationProvider = {
     val simpleEvaluator = new SimpleEvaluator(logger, config.testMode)
     val scalaEvaluators = debugTools.expressionCompilers.view.map { case (entry, compiler) =>
       (entry, new ScalaEvaluator(entry, compiler, logger, config.testMode))
