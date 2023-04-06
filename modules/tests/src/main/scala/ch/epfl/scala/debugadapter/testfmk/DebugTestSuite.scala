@@ -15,6 +15,8 @@ import munit.FunSuite
 import munit.Assertions.*
 import com.microsoft.java.debug.core.protocol.Types.SourceBreakpoint
 import ch.epfl.scala.debugadapter.DebugConfig
+import scala.concurrent.Future
+import scala.concurrent.Await
 
 abstract class DebugTestSuite extends FunSuite with DebugTest {
   override def munitTimeout: Duration = 120.seconds
@@ -22,7 +24,7 @@ abstract class DebugTestSuite extends FunSuite with DebugTest {
 
 trait DebugTest {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
-  val executorService = Executors.newFixedThreadPool(1)
+  val executorService = Executors.newFixedThreadPool(5)
   implicit val ec: ExecutionContext = ExecutionContext.fromExecutorService(executorService)
 
   protected def defaultConfig: DebugConfig = DebugConfig.default.copy(autoCloseSession = false, testMode = true)
@@ -53,13 +55,13 @@ trait DebugTest {
     DebugServer.start(debuggee, tools, logger)
   }
 
-  def check(uri: URI, attach: Option[Int] = None)(steps: DebugStepAssert[?]*): Unit = {
+  def check(uri: URI, attach: Option[Int] = None)(steps: DebugStepAssert*): Unit = {
     val client = TestingDebugClient.connect(uri)
     try check(client, attach)(steps*)
     finally client.close()
   }
 
-  def check(config: DebugConfig)(steps: DebugStepAssert[?]*)(implicit debuggee: TestingDebuggee): Unit = {
+  def check(config: DebugConfig)(steps: DebugStepAssert*)(implicit debuggee: TestingDebuggee): Unit = {
     val server = getDebugServer(debuggee, config = config)
     val client = TestingDebugClient.connect(server.uri)
     try {
@@ -71,7 +73,7 @@ trait DebugTest {
     }
   }
 
-  def check(steps: DebugStepAssert[?]*)(implicit debuggee: TestingDebuggee): Unit = {
+  def check(steps: DebugStepAssert*)(implicit debuggee: TestingDebuggee): Unit = {
     val server = getDebugServer(debuggee)
     val client = TestingDebugClient.connect(server.uri)
     try {
@@ -83,7 +85,7 @@ trait DebugTest {
     }
   }
 
-  private def check(client: TestingDebugClient, attach: Option[Int])(steps: DebugStepAssert[?]*): Unit = {
+  private def check(client: TestingDebugClient, attach: Option[Int])(steps: DebugStepAssert*): Unit = {
     client.initialize()
     attach match {
       case Some(port) => client.attach("localhost", port)
@@ -91,7 +93,7 @@ trait DebugTest {
     }
 
     val sourceBreakpoints = steps
-      .map(_.step)
+      .collect { case s: SingleStepAssert[?] => s.step }
       .distinct
       .collect {
         case b: Breakpoint =>
@@ -134,6 +136,14 @@ trait DebugTest {
       }
     }
 
+    def evaluateExpression(eval: Evaluation, assertion: Either[String, String] => Unit): Future[Unit] = {
+      println(s"$$ ${eval.expression}")
+      client.evaluate(eval.expression, topFrame.id).map { resp =>
+        resp.foreach(res => println(s"> $res"))
+        assertion(resp)
+      }
+    }
+
     def assertStop(assertion: StackFrame => Unit): Unit = {
       val stopped = client.stopped()
       paused = true
@@ -143,36 +153,41 @@ trait DebugTest {
       assertion(topFrame)
     }
     steps.foreach {
-      case DebugStepAssert(_: Breakpoint, assertion) =>
+      case SingleStepAssert(_: Breakpoint, assertion) =>
         continueIfPaused()
         assertStop(assertion)
-      case DebugStepAssert(_: Logpoint, assertion) =>
+      case SingleStepAssert(_: Logpoint, assertion) =>
         continueIfPaused()
         // A log point needs time for evaluation
         val event = client.outputed(m => m.category == Category.stdout, 16.seconds)
         print(s"> ${event.output}")
         assertion(event.output.trim)
-      case DebugStepAssert(_: StepIn, assertion) =>
+      case SingleStepAssert(_: StepIn, assertion) =>
         println(s"Stepping in, at ${formatFrame(topFrame)}")
         client.stepIn(threadId)
         assertStop(assertion)
-      case DebugStepAssert(_: StepOut, assertion) =>
+      case SingleStepAssert(_: StepOut, assertion) =>
         println(s"Stepping out, at ${formatFrame(topFrame)}")
         client.stepOut(threadId)
         assertStop(assertion)
-      case DebugStepAssert(_: StepOver, assertion) =>
+      case SingleStepAssert(_: StepOver, assertion) =>
         ???
-      case DebugStepAssert(eval: Evaluation, assertion) =>
-        println(s"$$ ${eval.expression}")
-        val response = client.evaluate(eval.expression, topFrame.id)
-        response.foreach(res => println(s"> $res"))
-        assertion(response)
-      case DebugStepAssert(Outputed(), assertion) =>
+      case SingleStepAssert(eval: Evaluation, assertion) =>
+        Await.result(evaluateExpression(eval, assertion), 16.seconds)
+      case SingleStepAssert(Outputed(), assertion) =>
         continueIfPaused()
         val event = client.outputed(m => m.category == Category.stdout)
         print(s"> ${event.output}")
         assertion(event.output.trim)
-      case DebugStepAssert(_: NoStep, _) => ()
+      case SingleStepAssert(_: NoStep, _) => ()
+      case ParallelStepsAsserts(steps) =>
+        val evaluations = steps.map { step =>
+          evaluateExpression(
+            step.step.asInstanceOf[Evaluation],
+            step.assertion.asInstanceOf[Either[String, String] => Unit]
+          )
+        }
+        Await.result(Future.sequence(evaluations), 64.seconds)
     }
     continueIfPaused()
 
