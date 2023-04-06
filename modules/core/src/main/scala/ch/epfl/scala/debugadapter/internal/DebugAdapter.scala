@@ -14,7 +14,6 @@ import java.util
 import java.util.Collections
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
-import scala.concurrent.ExecutionContext
 
 private[debugadapter] object DebugAdapter {
 
@@ -24,9 +23,7 @@ private[debugadapter] object DebugAdapter {
    */
   DebugSettings.getCurrent.showStaticVariables = true
 
-  def context(debuggee: Debuggee, tools: DebugTools, logger: Logger, config: DebugConfig)(implicit
-      ec: ExecutionContext
-  ): IProviderContext = {
+  def context(debuggee: Debuggee, tools: DebugTools, logger: Logger, config: DebugConfig): IProviderContext = {
     TimeUtils.logTime(logger, "Configured debugger context") {
       val context = new ProviderContext
       val classEntries = debuggee.classEntries

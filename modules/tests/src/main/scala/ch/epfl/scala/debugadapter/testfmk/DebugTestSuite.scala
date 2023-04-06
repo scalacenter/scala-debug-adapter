@@ -93,7 +93,7 @@ trait DebugTest {
     }
 
     val sourceBreakpoints = steps
-      .collect { case s: SingleStepAssert[_] => s.step }
+      .collect { case s: SingleStepAssert[?] => s.step }
       .distinct
       .collect {
         case b: Breakpoint =>

@@ -239,7 +239,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
   ): Messages.Request = {
     val json =
       JsonUtils.toJsonTree(args, tag.runtimeClass).asInstanceOf[JsonObject]
-    new Messages.Request(this.sequenceNumber.getAndIncrement(), command.getName, json)
+    new Messages.Request(command.getName, json)
   }
 }
 
@@ -281,7 +281,7 @@ class AbstractDebugClient(
     new BufferedWriter(new OutputStreamWriter(output, ProtocolEncoding))
   )
 
-  protected val sequenceNumber = new AtomicInteger(1)
+  private val sequenceNumber = new AtomicInteger(1)
 
   private var responsePromises: TrieMap[Int, Promise[Messages.Response]] =
     TrieMap()
@@ -317,6 +317,8 @@ class AbstractDebugClient(
   def sendRequest(
       request: Messages.Request
   ): Future[Messages.Response] = {
+    request.seq = this.sequenceNumber.getAndIncrement()
+
     val promise = Promise[Messages.Response]()
     val future = promise.future
 
