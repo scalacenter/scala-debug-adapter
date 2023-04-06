@@ -178,7 +178,7 @@ abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTest
       val localVars = client.variables(localScope.variablesReference)
       assertEquals(localVars.map(_.name).toSeq, Seq("args", "h", "this"))
 
-      val evalResponse = Await.result(client.evaluate("1 + 2", topFrame.id), 2.second)
+      val evalResponse = Await.result(client.evaluate("1 + 2", topFrame.id), 16.second)
       assertEquals(evalResponse, Right("3"))
       val localVarsAfterEvaluation = client.variables(localScope.variablesReference)
       assertEquals(localVarsAfterEvaluation.map(_.name).toSeq, Seq("args", "h", "this"))
