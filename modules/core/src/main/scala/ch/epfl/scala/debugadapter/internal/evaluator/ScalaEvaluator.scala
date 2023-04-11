@@ -107,7 +107,7 @@ private[internal] class ScalaEvaluator(
       val localVariables = frameRef.variablesAndValues().map { case (variable, value) => (variable.name, value) }
       // Exclude the this object if there already is a local $this variable
       // The Scala compiler uses `$this` in the extension methods of AnyVal classes
-      val thisObject = frameRef.thisObject().filter(_ => !localVariables.contains("$this")).map("$this".->)
+      val thisObject = frameRef.thisObject.filter(_ => !localVariables.contains("$this")).map("$this".->)
       (localVariables ++ thisObject)
         .map { case (name, value) =>
           for {
@@ -133,8 +133,7 @@ private[internal] class ScalaEvaluator(
       // expression evaluator.
       // It is dangerous because local values can shadow fields
       // TODO: adapt Scala 2 expression compiler
-      (fieldNames, fieldValues) <- frameRef
-        .thisObject()
+      (fieldNames, fieldValues) <- frameRef.thisObject
         .filter(_ => compiler.scalaVersion.isScala2)
         .map(extractFields)
         .getOrElse(Safe((Nil, Nil)))

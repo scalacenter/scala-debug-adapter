@@ -9,6 +9,8 @@ import ch.epfl.scala.debugadapter.JavaRuntime
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.ManagedEntry
 import ch.epfl.scala.debugadapter.UnmanagedEntry
+import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeEvaluator
+import ch.epfl.scala.debugadapter.internal.evaluator.ParsedExpression
 import ch.epfl.scala.debugadapter.internal.evaluator.CompiledExpression
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiFrame
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
@@ -20,6 +22,10 @@ import ch.epfl.scala.debugadapter.internal.evaluator.PlainLogMessage
 import ch.epfl.scala.debugadapter.internal.evaluator.PreparedExpression
 import ch.epfl.scala.debugadapter.internal.evaluator.ScalaEvaluator
 import ch.epfl.scala.debugadapter.internal.evaluator.SimpleEvaluator
+import ch.epfl.scala.debugadapter.internal.evaluator.Recoverable
+import ch.epfl.scala.debugadapter.internal.evaluator.Valid
+import ch.epfl.scala.debugadapter.internal.evaluator.Unrecoverable
+import evaluator.RuntimeEvaluatorBooleanPatterns.MethodCall
 import com.microsoft.java.debug.core.IEvaluatableBreakpoint
 import com.microsoft.java.debug.core.adapter.IDebugAdapterContext
 import com.microsoft.java.debug.core.adapter.IEvaluationProvider
@@ -34,7 +40,7 @@ import scala.util.Success
 import scala.util.Try
 
 import ScalaExtension.*
-
+import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeValidationTree
 private[internal] class EvaluationProvider(
     sourceLookUp: SourceLookUpProvider,
     simpleEvaluator: SimpleEvaluator,
@@ -52,13 +58,38 @@ private[internal] class EvaluationProvider(
 
   override def isInEvaluation(thread: ThreadReference) = isEvaluating.get
 
+  // TODO: test fallback
   override def evaluate(expression: String, thread: ThreadReference, depth: Int): CompletableFuture[Value] = {
     val frame = JdiFrame(thread, depth)
-    val evaluation = for {
-      preparedExpression <- prepare(expression, frame)
-      evaluation <- evaluate(preparedExpression, frame)
-    } yield evaluation
-    completeFuture(evaluation, thread)
+    val evaluationMode = mode.allowRuntimeEvaluation
+    val evaluator = RuntimeEvaluator(frame, logger)
+
+    def compileEval = {
+      for {
+        preparedExpression <- prepare(expression, frame)
+        evaluation <- evaluate(preparedExpression, frame)
+      } yield evaluation
+    }
+    def runtimeEval(tree: RuntimeValidationTree) = evaluator.evaluate(tree).getResult
+
+    val evaluation: Try[Value] = {
+      if (evaluationMode) {
+        evaluator.validate(expression) match {
+          case Valid(MethodCall(tree)) if mode.allowScalaEvaluation =>
+            compileEval.orElse(runtimeEval(tree).map(_.value))
+          case Valid(tree) => runtimeEval(tree).map(_.value)
+          case Recoverable(e) =>
+            println(s"\u001b[33mValidation recoverable error: ${e}\u001b[0m")
+            compileEval
+          case Unrecoverable(e) => Failure(e)
+        }
+      } else compileEval
+    }
+
+    evaluation match {
+      case Success(value) => completeFuture(Success(value), thread)
+      case Failure(e) => completeFuture(Failure(e), thread)
+    }
   }
 
   override def evaluate(
@@ -166,6 +197,7 @@ private[internal] class EvaluationProvider(
     expression match {
       case logMessage: PlainLogMessage => messageLogger.log(logMessage, frame)
       case localValue: LocalValue => simpleEvaluator.evaluate(localValue, frame)
+      case expression: ParsedExpression => ???
       case expression: CompiledExpression =>
         val fqcn = frame.current().location.declaringType.name
         for {

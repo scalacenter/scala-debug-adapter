@@ -1,6 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi._
+import scala.util.Failure
 
 private[internal] class JdiValue(val value: Value, val thread: ThreadReference) {
   def asObject: JdiObject = JdiObject(value, thread)
@@ -27,6 +28,54 @@ private[internal] class JdiValue(val value: Value, val thread: ThreadReference) 
       case ref: ObjectReference if JdiValue.refTypes.contains(ref.referenceType.name) =>
         asObject.getField("elem")
       case _ => this
+    }
+
+  def toDouble: Safe[Double] =
+    value match {
+      case value: PrimitiveValue => Safe(value.doubleValue())
+      case _ => Safe(Failure(new Exception("Cannot convert to double")))
+    }
+
+  def toFloat: Safe[Float] =
+    value match {
+      case value: PrimitiveValue => Safe(value.floatValue())
+      case _ => Safe(Failure(new Exception("Cannot convert to float")))
+    }
+
+  def toLong: Safe[Long] =
+    value match {
+      case value: PrimitiveValue => Safe(value.longValue())
+      case _ => Safe(Failure(new Exception("Cannot convert to long")))
+    }
+
+  def toInt: Safe[Int] =
+    value match {
+      case value: PrimitiveValue => Safe(value.intValue())
+      case _ => Safe(Failure(new Exception("Cannot convert to int")))
+    }
+
+  def toShort: Safe[Short] =
+    value match {
+      case value: PrimitiveValue => Safe(value.shortValue())
+      case _ => Safe(Failure(new Exception("Cannot convert to short")))
+    }
+
+  def toChar: Safe[Char] =
+    value match {
+      case value: PrimitiveValue => Safe(value.charValue())
+      case _ => Safe(Failure(new Exception("Cannot convert to char")))
+    }
+
+  def toByte: Safe[Byte] =
+    value match {
+      case value: PrimitiveValue => Safe(value.byteValue())
+      case _ => Safe(Failure(new Exception("Cannot convert to byte")))
+    }
+
+  def toBoolean: Safe[Boolean] =
+    value match {
+      case value: PrimitiveValue => Safe(value.booleanValue())
+      case _ => Safe(Failure(new Exception("Cannot convert to boolean")))
     }
 }
 
