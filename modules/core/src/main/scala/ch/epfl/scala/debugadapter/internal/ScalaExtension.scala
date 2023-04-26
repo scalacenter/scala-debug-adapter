@@ -4,14 +4,25 @@ import ch.epfl.scala.debugadapter.Logger
 import scala.util.Success
 import scala.util.Failure
 import scala.util.Try
+import java.util.concurrent.CompletableFuture
 
 private[debugadapter] object ScalaExtension {
+
   implicit class TryExtension[T](x: Try[T]) {
     def warnFailure(logger: Logger, message: String): Option[T] = x match {
       case Success(value) => Some(value)
       case Failure(e) =>
         logger.warn(s"$message: ${e.getClass.getSimpleName} ${e.getMessage}")
         None
+    }
+
+    def toCompletableFuture: CompletableFuture[T] = {
+      val future = new CompletableFuture[T]()
+      x match {
+        case Success(value) => future.complete(value)
+        case Failure(e) => future.completeExceptionally(e)
+      }
+      future
     }
   }
 

@@ -50,22 +50,18 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     ExecutionContext.fromExecutor(DebugServerThreadPool.executor)
 
   object autoImport {
-    val startMainClassDebugSession = inputKey[URI](
-      "Start a debug session for running a scala main class"
-    ).withRank(KeyRanks.DTask)
-    val startTestSuitesDebugSession = inputKey[URI](
-      "Start a debug session for running test suites"
-    ).withRank(KeyRanks.DTask)
-    val startTestSuitesSelectionDebugSession = inputKey[URI](
-      "Start a debug session for running test suites"
-    ).withRank(KeyRanks.DTask)
-    val startRemoteDebugSession = inputKey[URI](
-      "Start a debug session on a remote process"
-    ).withRank(KeyRanks.DTask)
-    val debugAdapterConfig = settingKey[DebugConfig](
-      "Configure the debug session"
-    ).withRank(KeyRanks.DTask)
-    val stopDebugSession =
+    val startMainClassDebugSession =
+      inputKey[URI]("Start a debug session for running a scala main class").withRank(KeyRanks.DTask)
+    val startTestSuitesDebugSession =
+      inputKey[URI]("Start a debug session for running test suites").withRank(KeyRanks.DTask)
+    val startTestSuitesSelectionDebugSession =
+      inputKey[URI]("Start a debug session for running test suites").withRank(KeyRanks.DTask)
+    val startRemoteDebugSession =
+      inputKey[URI]("Start a debug session on a remote process").withRank(KeyRanks.DTask)
+    val debugAdapterConfig =
+      settingKey[DebugConfig]("Configure the debug session").withRank(KeyRanks.DTask)
+
+    val stopDebugSession = 
       taskKey[Unit]("Stop the current debug session").withRank(KeyRanks.DTask)
   }
 
