@@ -32,7 +32,7 @@ object Dependencies {
   }
 
   val scalaParallelCollection = "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4"
-  val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.9.0"
+  val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.10.0"
   val sbtTestAgent = "org.scala-sbt" % "test-agent" % "1.8.2"
 
   // test dependencies
