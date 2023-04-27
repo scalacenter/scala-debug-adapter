@@ -292,7 +292,6 @@ private[debugadapter] object DebugSession {
       new DebugSession(socket, debuggee, context, logger, loggingHandler, config)
     } catch {
       case NonFatal(cause) =>
-        logger.error(cause.toString())
         logger.trace(cause)
         throw cause
     }

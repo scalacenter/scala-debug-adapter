@@ -236,7 +236,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           InternalTasks.unmanagedEntries.value,
           InternalTasks.javaRuntime.value,
           params.`class`,
-          params.arguments
+          params.arguments,
+          state.log
         )
       }
 
@@ -361,6 +362,15 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           name -> mainRunner
         }
 
+        // can't provide the loader for test classes, which is in another jvm
+        val dummyLoader = getClass.getClassLoader
+
+        // the setup should happen just before we start the tests
+        // we prefer to run it now, during the execution of the task
+        // in case it needs the streams (which will get closed after the end of the task)
+        // unfortunately we cannot do the same for cleanup
+        setups.foreach(_.setup(dummyLoader))
+
         new TestSuitesDebuggee(
           target,
           ScalaVersion(Keys.scalaVersion.value),
@@ -369,11 +379,11 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           InternalTasks.libraries.value,
           InternalTasks.unmanagedEntries.value,
           InternalTasks.javaRuntime.value,
-          setups,
           cleanups,
           parallel,
           testRunners,
-          testDefinitions
+          testDefinitions,
+          state.log
         )
       }
 
@@ -432,7 +442,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         InternalTasks.modules.value,
         InternalTasks.libraries.value,
         InternalTasks.unmanagedEntries.value,
-        InternalTasks.javaRuntime.value
+        InternalTasks.javaRuntime.value,
+        state.log
       )
       startServer(jobService, scope, state, target, debuggee, debugToolsResolver)
     }
@@ -442,13 +453,15 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       scope: ScopedKey[_],
       state: State,
       target: BuildTargetIdentifier,
-      debuggee: Debuggee,
+      debuggee: SbtDebuggee,
       resolver: DebugToolsResolver
   ): URI = {
     val address = new DebugServer.Address()
     val tools = DebugTools(debuggee, resolver, new LoggerAdapter(state.log))
     jobService.runInBackground(scope, state) { (logger, _) =>
       try {
+        // the state logger is closed, switch to the background job logger
+        debuggee.logger = logger
         // if there is a server for this target then close it
         debugServers.get(target).foreach(_.close())
         val server = DebugServer(debuggee, tools, new LoggerAdapter(logger), address)
