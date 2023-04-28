@@ -2,7 +2,7 @@ package ch.epfl.scala.debugadapter.sbtplugin.internal
 
 import ch.epfl.scala.debugadapter.*
 import ch.epfl.scala.debugadapter.sbtplugin.{AnnotatedFingerscan, SubclassFingerscan}
-import sbt.Tests.{Cleanup, Setup}
+import sbt.Tests.Cleanup
 import sbt.internal.bsp.BuildTargetIdentifier
 import sbt.io.IO
 import sbt.testing.*
@@ -14,6 +14,12 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
 import ch.epfl.scala.debugadapter.testing.TestSuiteEvent
 
+private[debugadapter] sealed trait SbtDebuggee extends Debuggee {
+  // logger is mutable because we use a different logger
+  // for logging during the task and during the background job
+  var logger: sbt.Logger
+}
+
 private[debugadapter] final class MainClassDebuggee(
     target: BuildTargetIdentifier,
     val scalaVersion: ScalaVersion,
@@ -23,15 +29,15 @@ private[debugadapter] final class MainClassDebuggee(
     val unmanagedEntries: Seq[UnmanagedEntry],
     val javaRuntime: Option[JavaRuntime],
     mainClass: String,
-    args: Seq[String]
+    args: Seq[String],
+    var logger: sbt.Logger
 )(implicit ec: ExecutionContext)
-    extends Debuggee {
+    extends SbtDebuggee {
   override def name: String =
     s"${getClass.getSimpleName}(${target.uri}, $mainClass)"
 
-  override def run(listener: DebuggeeListener): CancelableFuture[Unit] = {
-    DebuggeeProcess.start(forkOptions, classPath, mainClass, args, listener)
-  }
+  override def run(listener: DebuggeeListener): CancelableFuture[Unit] =
+    DebuggeeProcess.start(forkOptions, classPath, mainClass, args, listener, logger)
 }
 
 private[debugadapter] final class TestSuitesDebuggee(
@@ -42,13 +48,13 @@ private[debugadapter] final class TestSuitesDebuggee(
     val libraries: Seq[Library],
     val unmanagedEntries: Seq[UnmanagedEntry],
     val javaRuntime: Option[JavaRuntime],
-    setups: Seq[Setup],
     cleanups: Seq[Cleanup],
     parallel: Boolean,
     runners: Map[TestFramework, Runner],
-    tests: Seq[TestDefinition]
+    tests: Seq[TestDefinition],
+    var logger: sbt.Logger
 )(implicit executionContext: ExecutionContext)
-    extends Debuggee {
+    extends SbtDebuggee {
 
   override def name: String =
     s"${getClass.getSimpleName}(${target.uri}, [${tests.mkString(", ")}])"
@@ -149,20 +155,26 @@ private[debugadapter] final class TestSuitesDebuggee(
       IO.classLocationPath[SubclassFingerscan] // sbt-plugin
     )
 
-    // can't provide the loader for test classes, which is in another jvm
-    val dummyLoader = getClass.getClassLoader
-
-    setups.foreach(_.setup(dummyLoader))
     val process = DebuggeeProcess.start(
       forkOptions,
       fullClasspath,
       mainClass,
       args,
-      listener
+      listener,
+      logger
     )
     process.future.onComplete { _ =>
       Acceptor.close()
-      cleanups.foreach(_.cleanup(dummyLoader))
+      try {
+        // the setup happens during the execution of the test
+        // the cleanup can crash if it needs the sbt streams (which is already closed)
+        val dummyLoader = getClass.getClassLoader
+        cleanups.foreach(_.cleanup(dummyLoader))
+      } catch {
+        case NonFatal(cause) =>
+          logger.warn(s"Failed to cleanup the tests")
+          logger.trace(cause)
+      }
     }
 
     process
@@ -175,8 +187,9 @@ private[debugadapter] final class AttachRemoteDebuggee(
     val modules: Seq[Module],
     val libraries: Seq[Library],
     val unmanagedEntries: Seq[UnmanagedEntry],
-    val javaRuntime: Option[JavaRuntime]
-) extends Debuggee {
+    val javaRuntime: Option[JavaRuntime],
+    var logger: sbt.Logger
+) extends SbtDebuggee {
   override def name: String = s"${getClass.getSimpleName}(${target.uri})"
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] =
     new CancelableFuture[Unit] {
