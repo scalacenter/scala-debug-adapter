@@ -1,21 +1,18 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi.*
+
 import scala.util.Try
 
 private[internal] class MessageLogger() {
-  def log(logMessage: PlainLogMessage, frame: FrameReference): Try[Value] = {
+  def log(logMessage: PlainLogMessage, frame: JdiFrame): Try[Value] = {
     val result = for {
-      classLoader <- JdiClassLoader.fromFrame(frame)
-      vm = frame.thread.virtualMachine()
-      arg <- Safe(vm.mirrorOf(logMessage.message))
+      classLoader <- frame.classLoader()
+      arg <- classLoader.mirrorOf(logMessage.message)
       predefClass <- classLoader.loadClass("scala.Predef$")
-      moduleField <- predefClass
-        .invoke("getDeclaredField", List(vm.mirrorOf("MODULE$")))
-        .map(JdiObject(_, frame.thread))
-      predef <- moduleField.invoke("get", List(null)).map(JdiObject(_, frame.thread))
+      predef <- predefClass.getStaticField("MODULE$").map(_.asObject)
       res <- predef.invoke("println", "(Ljava/lang/Object;)V", List(arg))
-    } yield res
+    } yield res.value
     result.getResult
   }
 }

@@ -1,14 +1,13 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
+import ch.epfl.scala.debugadapter.ClassEntry
 import ch.epfl.scala.debugadapter.Logger
 import com.sun.jdi._
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
-import scala.jdk.CollectionConverters.*
 import scala.util.Try
-import ch.epfl.scala.debugadapter.ClassEntry
 
 private[internal] class ScalaEvaluator(
     entry: ClassEntry,
@@ -16,12 +15,12 @@ private[internal] class ScalaEvaluator(
     logger: Logger,
     testMode: Boolean
 ) {
-  def evaluate(expression: CompiledExpression, frame: FrameReference): Try[Value] = {
+  def evaluate(expression: CompiledExpression, frame: JdiFrame): Try[Value] = {
     val CompiledExpression(classDir, className) = expression
     evaluate(classDir, className, frame)
   }
 
-  def compile(sourceContent: String, expression: String, frame: FrameReference): Try[CompiledExpression] = {
+  def compile(sourceContent: String, expression: String, frame: JdiFrame): Try[CompiledExpression] = {
     logger.debug(s"Compiling expression '$expression'")
     val location = frame.current().location
     val line = location.lineNumber
@@ -40,9 +39,9 @@ private[internal] class ScalaEvaluator(
     val expressionFqcn = if (packageName.isEmpty) expressionClassName else s"$packageName.$expressionClassName"
     val compiledExpression =
       for {
-        classLoader <- JdiClassLoader.fromFrame(frame)
+        classLoader <- frame.classLoader()
         (names, values) <- extractValuesAndNames(frame, classLoader)
-        localNames = names.map(_.value()).toSet
+        localNames = names.map(_.stringValue).toSet
         _ <- Safe(
           compiler.compile(outDir, expressionClassName, sourceFile, line, expression, localNames, packageName, testMode)
         )
@@ -50,24 +49,22 @@ private[internal] class ScalaEvaluator(
     compiledExpression.getResult
   }
 
-  private def evaluate(classDir: Path, className: String, frame: FrameReference): Try[Value] = {
+  private def evaluate(classDir: Path, className: String, frame: JdiFrame): Try[Value] = {
     val evaluatedValue = for {
-      classLoader <- JdiClassLoader.fromFrame(frame)
+      classLoader <- frame.classLoader()
       (names, values) <- extractValuesAndNames(frame, classLoader)
-      namesArray <- JdiArray("java.lang.String", names.size, classLoader)
-      valuesArray <- JdiArray("java.lang.Object", values.size, classLoader)
-      _ = namesArray.setValues(names)
-      _ = valuesArray.setValues(values)
-      args = List(namesArray.reference, valuesArray.reference)
+      namesArray <- classLoader.createArray("java.lang.String", names)
+      valuesArray <- classLoader.createArray("java.lang.Object", values)
+      args = List(namesArray, valuesArray)
       expressionInstance <- createExpressionInstance(classLoader, classDir, className, args)
       evaluatedValue <- evaluateExpression(expressionInstance)
       _ <- updateVariables(valuesArray, frame)
-      unboxedValue <- unboxIfPrimitive(evaluatedValue, frame.thread)
-    } yield unboxedValue
+      unboxedValue <- evaluatedValue.unboxIfPrimitive
+    } yield unboxedValue.value
     evaluatedValue.getResult
   }
 
-  private def evaluateExpression(expressionInstance: JdiObject): Safe[Value] = {
+  private def evaluateExpression(expressionInstance: JdiObject): Safe[JdiValue] = {
     expressionInstance
       .invoke("evaluate", List())
       .recover {
@@ -85,22 +82,13 @@ private[internal] class ScalaEvaluator(
       classLoader: JdiClassLoader,
       classDir: Path,
       className: String,
-      args: List[ObjectReference]
+      args: List[JdiObject]
   ): Safe[JdiObject] = {
     val expressionClassPath = classDir.toUri.toString
+    getClass()
     for {
-      classPathValue <- classLoader.mirrorOf(expressionClassPath)
-      urlClass <- classLoader
-        .loadClass("java.net.URL")
-      url <- urlClass.newInstance(List(classPathValue))
-      urls <- JdiArray("java.net.URL", 1, classLoader)
-      _ = urls.setValue(0, url.reference)
-      urlClassLoader <- classLoader
-        .loadClass("java.net.URLClassLoader")
-        .flatMap(_.newInstance(List(urls.reference)))
-        .map(_.reference.asInstanceOf[ClassLoaderReference])
-        .map(JdiClassLoader(_, classLoader.thread))
-      expressionClass <- urlClassLoader.loadClass(className)
+      expressionClassLoader <- classLoader.createChildLoader(classDir)
+      expressionClass <- expressionClassLoader.loadClass(className)
       expressionInstance <- expressionClass.newInstance(args)
     } yield expressionInstance
   }
@@ -113,33 +101,29 @@ private[internal] class ScalaEvaluator(
    * @return Tuple of extracted names and values
    */
   private def extractValuesAndNames(
-      frameRef: FrameReference,
+      frameRef: JdiFrame,
       classLoader: JdiClassLoader
-  ): Safe[(Seq[StringReference], Seq[Value])] = {
-    val frame = frameRef.current()
-    val thisObjectOpt = Option(frame.thisObject) // this object can be null
-    def extractVariablesFromFrame(): Safe[(Seq[StringReference], Seq[Value])] = {
-      val localVariables = frame.visibleVariables().asScala.toSeq.map(v => v.name -> frame.getValue(v))
-      val thisObject = thisObjectOpt.filter(_ => !localVariables.exists(_._1 == "$this")).map("$this".->)
+  ): Safe[(Seq[JdiString], Seq[JdiValue])] = {
+    def extractVariablesFromFrame(): Safe[(Seq[JdiString], Seq[JdiValue])] = {
+      val localVariables = frameRef.variablesAndValues().map { case (variable, value) => (variable.name, value) }
+      val thisObject = frameRef.thisObject().filter(_ => !localVariables.contains("$this")).map("$this".->)
       (localVariables ++ thisObject)
         .map { case (name, value) =>
           for {
             name <- classLoader.mirrorOf(name)
-            value <- boxIfPrimitive(value, classLoader)
+            value <- classLoader.boxIfPrimitive(value)
           } yield (name, value)
         }
+        .toSeq
         .traverse
         .map(xs => (xs.map(_._1), xs.map(_._2)))
     }
     // Only useful in Scala 2
-    def extractFields(thisObject: ObjectReference): Safe[(Seq[StringReference], Seq[Value])] = {
-      val fields = thisObject.referenceType.fields.asScala.toList
-      val fieldNames = fields.map(_.name).map(classLoader.mirrorOf).traverse
-      val fieldValues = fields
-        .map(field => thisObject.getValue(field))
-        .map(value => boxIfPrimitive(value, classLoader))
-        .traverse
-      Safe.join(fieldNames, fieldValues)
+    def extractFields(thisObject: JdiObject): Safe[(Seq[JdiString], Seq[JdiValue])] = {
+      val fields = thisObject.fields
+      val names = fields.map(_._1).map(classLoader.mirrorOf).traverse
+      val values = fields.map(_._2).map(value => classLoader.boxIfPrimitive(value)).traverse
+      Safe.join(names, values)
     }
 
     for {
@@ -148,7 +132,8 @@ private[internal] class ScalaEvaluator(
       // expression evaluator.
       // It is dangerous because local values can shadow fields
       // TODO: adapt Scala 2 expression compiler
-      (fieldNames, fieldValues) <- thisObjectOpt
+      (fieldNames, fieldValues) <- frameRef
+        .thisObject()
         .filter(_ => compiler.scalaVersion.isScala2)
         .map(extractFields)
         .getOrElse(Safe((Nil, Nil)))
@@ -162,71 +147,18 @@ private[internal] class ScalaEvaluator(
     }
   }
 
-  private def updateVariables(variableArray: JdiArray, frame: FrameReference): Safe[Unit] = {
-    def localVariables(): List[LocalVariable] =
-      // we must get a new StackFrame object after each invocation
-      frame.current().visibleVariables().asScala.toList
-
-    val unboxedValues = localVariables()
+  private def updateVariables(variableArray: JdiArray, frame: JdiFrame): Safe[Unit] = {
+    val unboxedValues = frame
+      .variables()
       .zip(variableArray.getValues)
       .map { case (variable, value) =>
-        if (isPrimitive(variable)) unboxIfPrimitive(value, frame.thread)
+        if (variable.`type`.isInstanceOf[PrimitiveType]) value.unboxIfPrimitive
         else Safe(value)
       }
       .traverse
 
     for (values <- unboxedValues)
-      yield {
-        for ((variable, value) <- localVariables().zip(values)) {
-          frame.current().setValue(variable, value)
-        }
-      }
+      yield for ((variable, value) <- frame.variables().zip(values))
+        frame.setVariable(variable, value)
   }
-
-  private def boxIfPrimitive(value: Value, classLoader: JdiClassLoader): Safe[Value] = {
-    val thread = classLoader.thread
-    value match {
-      case value: BooleanValue =>
-        JdiPrimitive.box(value.value(), classLoader, thread)
-      case value: CharValue =>
-        JdiPrimitive.box(value.value(), classLoader, thread)
-      case value: DoubleValue =>
-        JdiPrimitive.box(value.value(), classLoader, thread)
-      case value: FloatValue =>
-        JdiPrimitive.box(value.value(), classLoader, thread)
-      case value: IntegerValue =>
-        JdiPrimitive.box(value.value(), classLoader, thread)
-      case value: LongValue =>
-        JdiPrimitive.box(value.value(), classLoader, thread)
-      case value: ShortValue =>
-        JdiPrimitive.box(value.value(), classLoader, thread)
-      case value => Safe(value)
-    }
-  }
-
-  private val unboxMethods = Map(
-    "java.lang.Boolean" -> "booleanValue",
-    "java.lang.Byte" -> "byteValue",
-    "java.lang.Character" -> "charValue",
-    "java.lang.Double" -> "doubleValue",
-    "java.lang.Float" -> "floatValue",
-    "java.lang.Integer" -> "intValue",
-    "java.lang.Long" -> "longValue",
-    "java.lang.Short" -> "shortValue"
-  )
-
-  private def unboxIfPrimitive(value: Value, thread: ThreadReference): Safe[Value] = {
-    value match {
-      case ref: ObjectReference =>
-        val typeName = ref.referenceType.name
-        unboxMethods
-          .get(typeName)
-          .map(methodName => new JdiObject(ref, thread).invoke(methodName, Nil))
-          .getOrElse(Safe(value))
-      case _ => Safe(value)
-    }
-  }
-
-  private def isPrimitive(variable: LocalVariable): Boolean =
-    variable.`type`().isInstanceOf[PrimitiveType]
 }
