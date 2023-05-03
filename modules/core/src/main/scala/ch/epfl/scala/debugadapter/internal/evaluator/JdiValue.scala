@@ -3,10 +3,10 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import com.sun.jdi._
 
 private[internal] class JdiValue(val value: Value, val thread: ThreadReference) {
-  def asObject: JdiObject = JdiObject(value.asInstanceOf[ObjectReference], thread)
-  def asClass: JdiClass = JdiClass(value.asInstanceOf[ClassObjectReference], thread)
-  def asClassLoader: JdiClassLoader = JdiClassLoader(value.asInstanceOf[ClassLoaderReference], thread)
-  def asArray: JdiArray = JdiArray(value.asInstanceOf[ArrayReference], thread)
+  def asObject: JdiObject = JdiObject(value, thread)
+  def asClass: JdiClass = JdiClass(value, thread)
+  def asClassLoader: JdiClassLoader = JdiClassLoader(value, thread)
+  def asArray: JdiArray = JdiArray(value, thread)
   def asString: JdiString = new JdiString(value.asInstanceOf[StringReference], thread)
 
   def unboxIfPrimitive: Safe[JdiValue] = {
@@ -15,12 +15,13 @@ private[internal] class JdiValue(val value: Value, val thread: ThreadReference) 
         val typeName = ref.referenceType.name
         JdiValue.unboxMethods
           .get(typeName)
-          .map(methodName => asObject.invoke(methodName, Nil))
+          .map(methodName => JdiObject(ref, thread).invoke(methodName, Nil))
           .getOrElse(Safe(this))
       case _ => Safe(this)
     }
   }
 
+  // The ref types are used by the compiler to mutate local vars in nested methods
   def derefIfRef: JdiValue =
     value match {
       case ref: ObjectReference if JdiValue.refTypes.contains(ref.referenceType.name) =>

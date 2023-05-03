@@ -52,7 +52,6 @@ private[internal] class JdiClass(
     Safe(cls.getValue(cls.fieldByName(fieldName))).map(JdiValue(_, thread))
 
   def invokeStatic(methodName: String, args: Seq[JdiValue]): Safe[JdiValue] = {
-    cls.methodsByName(methodName).forEach(m => println(m.signature))
     val method = cls.methodsByName(methodName).asScala.head
     invokeStatic(method, args)
   }
@@ -62,16 +61,16 @@ private[internal] class JdiClass(
     invokeStatic(method, args)
   }
 
-  protected def invokeStatic(method: Method, args: Seq[JdiValue]): Safe[JdiValue] =
+  private def invokeStatic(method: Method, args: Seq[JdiValue]): Safe[JdiValue] =
     Safe(cls.invokeMethod(thread, method, args.map(_.value).asJava, ObjectReference.INVOKE_SINGLE_THREADED))
       .map(JdiValue(_, thread))
       .recoverWith(recoverInvocationException(thread))
 }
 
 object JdiClass {
-  def apply(classType: ReferenceType, thread: ThreadReference): JdiClass =
+  def apply(classType: Type, thread: ThreadReference): JdiClass =
     new JdiClass(classType.asInstanceOf[ClassType], thread)
 
-  def apply(classObject: ClassObjectReference, thread: ThreadReference): JdiClass =
-    new JdiClass(classObject.reflectedType.asInstanceOf[ClassType], thread)
+  def apply(classObject: Value, thread: ThreadReference): JdiClass =
+    JdiClass(classObject.asInstanceOf[ClassObjectReference].reflectedType, thread)
 }

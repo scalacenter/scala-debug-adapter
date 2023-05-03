@@ -6,16 +6,16 @@ import com.sun.jdi.Value
 
 import scala.jdk.CollectionConverters.*
 
-class JdiArray(reference: ArrayReference, thread: ThreadReference) extends JdiObject(reference, thread) {
+class JdiArray(arrayRef: ArrayReference, thread: ThreadReference) extends JdiObject(arrayRef, thread) {
   def setValue(index: Int, value: Value): Unit =
-    reference.setValue(index, value)
+    arrayRef.setValue(index, value)
 
-  def setValues(values: Seq[JdiValue]): Unit = reference.setValues(values.map(_.value).asJava)
+  def setValues(values: Seq[JdiValue]): Unit = arrayRef.setValues(values.map(_.value).asJava)
 
-  def getValues: Seq[JdiValue] = reference.getValues.asScala.toSeq.map(JdiValue(_, thread))
+  def getValues: Seq[JdiValue] = arrayRef.getValues.asScala.toSeq.map(JdiValue(_, thread))
 }
 
 object JdiArray {
-  def apply(value: Value, thread: ThreadReference): JdiArray =
-    new JdiArray(value.asInstanceOf[ArrayReference], thread)
+  def apply(arrayValue: Value, thread: ThreadReference): JdiArray =
+    new JdiArray(arrayValue.asInstanceOf[ArrayReference], thread)
 }

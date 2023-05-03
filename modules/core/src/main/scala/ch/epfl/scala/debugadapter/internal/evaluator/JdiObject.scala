@@ -45,6 +45,7 @@ private[internal] class JdiObject(
       .map(_.asString.stringValue)
       .recover { case _ => "" }
 
+  // we use a Seq instead of a Map because the ScalaEvaluator rely on the order of the fields
   def fields: Seq[(String, JdiValue)] =
     reference.referenceType.fields.asScala.toSeq
       .map(f => (f.name, JdiValue(reference.getValue(f), thread)))

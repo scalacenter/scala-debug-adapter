@@ -97,15 +97,15 @@ private[internal] class EvaluationProvider(
       thisContext: ObjectReference,
       methodName: String,
       methodSignature: String,
-      rawArgs: Array[Value],
+      args: Array[Value],
       thread: ThreadReference,
       invokeSuper: Boolean
   ): CompletableFuture[Value] = {
     val obj = JdiObject(thisContext, thread)
-    val args = if (rawArgs == null) Seq.empty else rawArgs.toSeq.map(JdiValue(_, thread))
+    val wrappedArgs = if (args == null) Seq.empty else args.toSeq.map(JdiValue(_, thread))
     val invocation = evaluationBlock {
       obj
-        .invoke(methodName, methodSignature, args)
+        .invoke(methodName, methodSignature, wrappedArgs)
         .recover {
           // if invocation throws an exception, we return that exception as the result
           case MethodInvocationFailed(msg, exception) => exception

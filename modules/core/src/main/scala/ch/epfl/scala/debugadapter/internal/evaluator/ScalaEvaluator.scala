@@ -106,6 +106,8 @@ private[internal] class ScalaEvaluator(
   ): Safe[(Seq[JdiString], Seq[JdiValue])] = {
     def extractVariablesFromFrame(): Safe[(Seq[JdiString], Seq[JdiValue])] = {
       val localVariables = frameRef.variablesAndValues().map { case (variable, value) => (variable.name, value) }
+      // Exclude the this object if there already is a local $this variable
+      // The Scala compiler uses `$this` in the extension methods of AnyVal classes
       val thisObject = frameRef.thisObject().filter(_ => !localVariables.contains("$this")).map("$this".->)
       (localVariables ++ thisObject)
         .map { case (name, value) =>
@@ -148,17 +150,19 @@ private[internal] class ScalaEvaluator(
   }
 
   private def updateVariables(variableArray: JdiArray, frame: JdiFrame): Safe[Unit] = {
-    val unboxedValues = frame
+    frame
       .variables()
       .zip(variableArray.getValues)
-      .map { case (variable, value) =>
-        if (variable.`type`.isInstanceOf[PrimitiveType]) value.unboxIfPrimitive
-        else Safe(value)
+      .map {
+        case (variable, value) if variable.`type`.isInstanceOf[PrimitiveType] => value.unboxIfPrimitive
+        case (_, value) => Safe(value)
       }
       .traverse
-
-    for (values <- unboxedValues)
-      yield for ((variable, value) <- frame.variables().zip(values))
-        frame.setVariable(variable, value)
+      .map { values =>
+        frame
+          .variables()
+          .zip(values)
+          .foreach { case (variable, value) => frame.setVariable(variable, value) }
+      }
   }
 }

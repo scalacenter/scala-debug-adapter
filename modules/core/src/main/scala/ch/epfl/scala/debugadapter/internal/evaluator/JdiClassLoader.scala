@@ -90,6 +90,6 @@ private[internal] class JdiClassLoader(
 }
 
 private[internal] object JdiClassLoader {
-  def apply(ref: ClassLoaderReference, thread: ThreadReference): JdiClassLoader =
-    new JdiClassLoader(ref, thread)
+  def apply(ref: Value, thread: ThreadReference): JdiClassLoader =
+    new JdiClassLoader(ref.asInstanceOf[ClassLoaderReference], thread)
 }

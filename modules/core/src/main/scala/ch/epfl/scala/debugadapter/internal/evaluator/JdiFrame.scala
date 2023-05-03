@@ -11,7 +11,7 @@ final case class JdiFrame(thread: ThreadReference, depth: Int) {
   def current(): StackFrame = thread.frame(depth)
 
   // it's a Safe because it can fail, but it could also be a Try
-  def classLoader(): Safe[JdiClassLoader] = Safe {
+  def classLoader(): Safe[JdiClassLoader] = {
     def getClassLoaderRecursively(depth: Int): Option[ClassLoaderReference] =
       if (depth == thread.frameCount) None
       else {
@@ -19,9 +19,11 @@ final case class JdiFrame(thread: ThreadReference, depth: Int) {
           .orElse(getClassLoaderRecursively(depth + 1))
       }
 
-    val classLoader = getClassLoaderRecursively(depth)
-      .getOrElse(throw new Exception("Cannot find any classloader in the stack trace"))
-    JdiClassLoader(classLoader, thread)
+    Safe {
+      val classLoader = getClassLoaderRecursively(depth)
+        .getOrElse(throw new Exception("Cannot find any classloader in the stack trace"))
+      JdiClassLoader(classLoader, thread)
+    }
   }
 
   // this object can be null
