@@ -11,8 +11,9 @@ import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.ManagedEntry
 import ch.epfl.scala.debugadapter.UnmanagedEntry
 import ch.epfl.scala.debugadapter.internal.evaluator.CompiledExpression
-import ch.epfl.scala.debugadapter.internal.evaluator.FrameReference
+import ch.epfl.scala.debugadapter.internal.evaluator.JdiFrame
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
+import ch.epfl.scala.debugadapter.internal.evaluator.JdiValue
 import ch.epfl.scala.debugadapter.internal.evaluator.LocalValue
 import ch.epfl.scala.debugadapter.internal.evaluator.MessageLogger
 import ch.epfl.scala.debugadapter.internal.evaluator.MethodInvocationFailed
@@ -53,7 +54,7 @@ private[internal] class EvaluationProvider(
   override def isInEvaluation(thread: ThreadReference) = isEvaluating.get
 
   override def evaluate(expression: String, thread: ThreadReference, depth: Int): CompletableFuture[Value] = {
-    val frame = FrameReference(thread, depth)
+    val frame = JdiFrame(thread, depth)
     val evaluation = for {
       preparedExpression <- prepare(expression, frame)
       evaluation <- evaluate(preparedExpression, frame)
@@ -71,7 +72,7 @@ private[internal] class EvaluationProvider(
       breakpoint: IEvaluatableBreakpoint,
       thread: ThreadReference
   ): CompletableFuture[Value] = {
-    val frame = FrameReference(thread, 0)
+    val frame = JdiFrame(thread, 0)
     val location = frame.current().location
     val locationCode = (location.method.name, location.codeIndex).hashCode
     val expression =
@@ -100,14 +101,16 @@ private[internal] class EvaluationProvider(
       thread: ThreadReference,
       invokeSuper: Boolean
   ): CompletableFuture[Value] = {
-    val obj = new JdiObject(thisContext, thread)
+    val obj = JdiObject(thisContext, thread)
+    val wrappedArgs = if (args == null) Seq.empty else args.toSeq.map(JdiValue(_, thread))
     val invocation = evaluationBlock {
       obj
-        .invoke(methodName, methodSignature, if (args == null) List() else args.toList)
+        .invoke(methodName, methodSignature, wrappedArgs)
         .recover {
           // if invocation throws an exception, we return that exception as the result
           case MethodInvocationFailed(msg, exception) => exception
         }
+        .map(_.value)
     }
     completeFuture(invocation.getResult, thread)
   }
@@ -132,7 +135,7 @@ private[internal] class EvaluationProvider(
       case _ => s"Unsupported evaluation in ${entry.name}"
     }
 
-  private def prepareLogMessage(message: String, frame: FrameReference): Try[PreparedExpression] = {
+  private def prepareLogMessage(message: String, frame: JdiFrame): Try[PreparedExpression] = {
     if (!message.contains("$")) {
       Success(PlainLogMessage(message))
     } else {
@@ -142,7 +145,7 @@ private[internal] class EvaluationProvider(
     }
   }
 
-  private def prepare(expression: String, frame: FrameReference): Try[PreparedExpression] = {
+  private def prepare(expression: String, frame: JdiFrame): Try[PreparedExpression] = {
     lazy val simpleExpression = simpleEvaluator.prepare(expression, frame)
     if (mode.allowSimpleEvaluation && simpleExpression.isDefined) {
       Success(simpleExpression.get)
@@ -160,7 +163,7 @@ private[internal] class EvaluationProvider(
     }
   }
 
-  private def evaluate(expression: PreparedExpression, frame: FrameReference): Try[Value] = {
+  private def evaluate(expression: PreparedExpression, frame: JdiFrame): Try[Value] = {
     expression match {
       case logMessage: PlainLogMessage => messageLogger.log(logMessage, frame)
       case localValue: LocalValue => simpleEvaluator.evaluate(localValue, frame)

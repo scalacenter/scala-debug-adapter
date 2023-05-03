@@ -1,27 +1,28 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import scala.jdk.CollectionConverters.*
-import scala.util.Try
-import com.sun.jdi.*
-import scala.util.Success
-import scala.util.Failure
 import ch.epfl.scala.debugadapter.Logger
+import com.sun.jdi.*
+
+import scala.jdk.CollectionConverters.*
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
 class SimpleEvaluator(logger: Logger, testMode: Boolean) {
-  def prepare(expression: String, frame: FrameReference): Option[LocalValue] = {
+  def prepare(expression: String, frame: JdiFrame): Option[LocalValue] = {
     val encodedExpression = NameTransformer.encode(expression)
     if (isLocalVariable(frame, encodedExpression)) Some(LocalValue(encodedExpression))
     else None
   }
 
-  def evaluate(localValue: LocalValue, frame: FrameReference): Try[Value] = Try {
+  def evaluate(localValue: LocalValue, frame: JdiFrame): Try[Value] = Try {
     val currentFrame = frame.current()
     val variable = currentFrame.visibleVariableByName(localValue.name)
     val rawValue = currentFrame.getValue(variable)
-    derefIfRef(rawValue, frame.thread)
+    JdiValue(rawValue, frame.thread).derefIfRef.value
   }
 
-  private def isLocalVariable(frame: FrameReference, name: String): Boolean = {
+  private def isLocalVariable(frame: JdiFrame, name: String): Boolean = {
     Try(frame.current().visibleVariables.asScala.toList) match {
       case Success(localVariables) =>
         // we exclude the arguments of type scala.Function0
@@ -41,22 +42,4 @@ class SimpleEvaluator(logger: Logger, testMode: Boolean) {
     if (testMode) throw new Exception(message, throwable)
     else logger.warn(message)
   }
-
-  private val refTypes = Set(
-    "scala.runtime.BooleanRef",
-    "scala.runtime.ByteRef",
-    "scala.runtime.CharRef",
-    "scala.runtime.DoubleRef",
-    "scala.runtime.FloatRef",
-    "scala.runtime.IntRef",
-    "scala.runtime.LongRef",
-    "scala.runtime.ShortRef",
-    "scala.runtime.ObjectRef"
-  )
-  private def derefIfRef(value: Value, thread: ThreadReference): Value =
-    value match {
-      case ref: ObjectReference if refTypes.contains(ref.referenceType.name) =>
-        new JdiObject(ref, thread).getFieldValue("elem")
-      case _ => value
-    }
 }
