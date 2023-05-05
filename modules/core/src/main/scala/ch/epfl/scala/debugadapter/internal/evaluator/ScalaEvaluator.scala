@@ -42,9 +42,9 @@ private[internal] class ScalaEvaluator(
         classLoader <- frame.classLoader()
         (names, values) <- extractValuesAndNames(frame, classLoader)
         localNames = names.map(_.stringValue).toSet
-        _ <- Safe(
-          compiler.compile(outDir, expressionClassName, sourceFile, line, expression, localNames, packageName, testMode)
-        )
+        _ <- compiler
+          .compile(outDir, expressionClassName, sourceFile, line, expression, localNames, packageName, testMode)
+          .toSafe
       } yield CompiledExpression(outDir, expressionFqcn)
     compiledExpression.getResult
   }
@@ -85,7 +85,6 @@ private[internal] class ScalaEvaluator(
       args: List[JdiObject]
   ): Safe[JdiObject] = {
     val expressionClassPath = classDir.toUri.toString
-    getClass()
     for {
       expressionClassLoader <- classLoader.createChildLoader(classDir)
       expressionClass <- expressionClassLoader.loadClass(className)
