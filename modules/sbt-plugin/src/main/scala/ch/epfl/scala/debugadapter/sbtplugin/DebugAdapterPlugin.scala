@@ -115,8 +115,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
    * }}}
    */
   def testSettings: Seq[Def.Setting[_]] = Seq(
-    startTestSuitesDebugSession := testSuitesSessionTask.evaluated,
-    startTestSuitesSelectionDebugSession := testSuitesSelectionSessionTask.evaluated,
+    startTestSuitesDebugSession := testSuitesSessionTask(convertFromArrayToTestSuites).evaluated,
+    startTestSuitesSelectionDebugSession := testSuitesSessionTask(convertToTestSuites).evaluated,
     startRemoteDebugSession := remoteSessionTask.evaluated,
     stopDebugSession := stopSessionTask.value
   )
@@ -145,7 +145,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     ServerIntent.request {
       case r: JsonRpcRequestMessage if r.method == DebugSessionStart =>
         val commandLine = for {
-          params <- getDebugSessionParams(r)
+          json <- r.params.toRight(Error.paramsMissing(r.method))
+          params <- convertToParams(json)
           targetId <- singleBuildTarget(params)
           scope <- workspace
             .get(targetId)
@@ -165,15 +166,13 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
               startTestSuitesSelectionDebugSession.key
             case DataKind.ScalaAttachRemote => startRemoteDebugSession.key
           }
-          val data = params.data.map(CompactPrinter.apply).getOrElse("")
-          val project =
-            scope.project.toOption.get.asInstanceOf[ProjectRef].project
+          val project = scope.project.toOption.get.asInstanceOf[ProjectRef].project
           val config = configMap(scope.config.toOption.get).id
 
           // the project and config that correspond to the target identifier
           // the task that will create the debugee and start the debugServer
           // the data containing the debuggee parameters
-          s"$project / $config / $task $data"
+          s"$project / $config / $task ${CompactPrinter(json)}"
         }
 
         commandLine match {
@@ -204,9 +203,10 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val debugToolsResolver = InternalTasks.debugToolsResolver.value
       val javaOptions = (Keys.run / Keys.javaOptions).value
 
-      val debuggee = for {
+      val res = for {
         json <- jsonParser.parsed
-        params <- Converter.fromJson[ScalaMainClass](json).toEither.left.map { cause =>
+        params <- convertToParams(json)
+        mainClass <- Converter.fromJson[ScalaMainClass](params.data.get).toEither.left.map { cause =>
           Error.invalidParams(
             s"expected data of kind ${DataKind.ScalaMainClass}: ${cause.getMessage}"
           )
@@ -217,9 +217,9 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           outputStrategy = None,
           bootJars = Vector.empty[File],
           workingDirectory = Option(workingDirectory),
-          runJVMOptions = javaOptions.toVector ++ params.jvmOptions,
+          runJVMOptions = javaOptions.toVector ++ mainClass.jvmOptions,
           connectInput = false,
-          envVars = envVars ++ params.environmentVariables
+          envVars = envVars ++ mainClass.environmentVariables
             .flatMap(_.split("=", 2).toList match {
               case key :: value :: Nil => Some(key -> value)
               case _ => None
@@ -227,7 +227,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             .toMap
         )
 
-        new MainClassDebuggee(
+        val debuggee = new MainClassDebuggee(
           target,
           ScalaVersion(Keys.scalaVersion.value),
           forkOptions,
@@ -235,67 +235,28 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           InternalTasks.libraries.value,
           InternalTasks.unmanagedEntries.value,
           InternalTasks.javaRuntime.value,
-          params.`class`,
-          params.arguments,
-          state.log
+          mainClass.`class`,
+          mainClass.arguments,
+          new LoggerAdapter(state.log)
         )
+        val skipConfiguration = params.skipConfiguration.getOrElse(false)
+        startServer(jobService, scope, state, target, debuggee, debugToolsResolver, skipConfiguration)
       }
 
-      debuggee match {
+      res match {
         case Left(error) =>
           Keys.state.value.respondError(error.code, error.message)
           throw new MessageOnlyException(error.message)
-        case Right(debuggee) =>
-          startServer(jobService, scope, state, target, debuggee, debugToolsResolver)
+        case Right(uri) => uri
       }
-    }
-
-  /**
-   * Parses arguments for ScalaTestSuites request.
-   * @param json is expected to be an array of strings
-   */
-  private def testSuitesSessionTask(): Def.Initialize[InputTask[URI]] =
-    testSuitesSessionTaskImpl { json =>
-      Converter
-        .fromJson[Array[String]](json)
-        .toEither
-        .map { names =>
-          val testSelection = names
-            .map(name => ScalaTestSuiteSelection(name, Vector.empty))
-            .toVector
-          ScalaTestSuites(testSelection, Vector.empty, Vector.empty)
-        }
-        .left
-        .map { cause =>
-          Error.invalidParams(
-            s"expected data of kind ${DataKind.ScalaTestSuites}: ${cause.getMessage}"
-          )
-        }
-    }
-
-  /**
-   * Parses arguments for ScalaTestSuitesSelection request.
-   * @param json is expected to be an instance of ScalaTestSuites
-   */
-  private def testSuitesSelectionSessionTask(): Def.Initialize[InputTask[URI]] =
-    testSuitesSessionTaskImpl { json =>
-      Converter
-        .fromJson[ScalaTestSuites](json)
-        .toEither
-        .left
-        .map { cause =>
-          Error.invalidParams(
-            s"expected data of kind ${DataKind.ScalaTestSuitesSelection}: ${cause.getMessage}"
-          )
-        }
     }
 
   /**
    * Handles debug request for both
    * ScalaTestSuites and ScalaTestSuitesSelection kinds.
    */
-  private def testSuitesSessionTaskImpl(
-      parseFn: JValue => Result[ScalaTestSuites]
+  private def testSuitesSessionTask(
+      convertToTestSuites: JValue => Result[ScalaTestSuites]
   ): Def.Initialize[InputTask[URI]] =
     Def.inputTask {
       val target = Keys.bspTargetIdentifier.value
@@ -310,9 +271,10 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val scope = Keys.resolvedScoped.value
       val debugToolsResolver = InternalTasks.debugToolsResolver.value
 
-      val debuggee = for {
+      val res = for {
         json <- jsonParser.parsed
-        testSuites <- parseFn(json)
+        params <- convertToParams(json)
+        testSuites <- convertToTestSuites(params.data.get)
         selectedTests = testSuites.suites
           .map(suite => (suite.className, suite.tests))
           .toMap
@@ -371,7 +333,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         // unfortunately we cannot do the same for cleanup
         setups.foreach(_.setup(dummyLoader))
 
-        new TestSuitesDebuggee(
+        val debuggee = new TestSuitesDebuggee(
           target,
           ScalaVersion(Keys.scalaVersion.value),
           forkOptions,
@@ -383,16 +345,17 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           parallel,
           testRunners,
           testDefinitions,
-          state.log
+          new LoggerAdapter(state.log)
         )
+        val skipConfiguration = params.skipConfiguration.getOrElse(false)
+        startServer(jobService, scope, state, target, debuggee, debugToolsResolver, skipConfiguration)
       }
 
-      debuggee match {
+      res match {
         case Left(error) =>
           state.respondError(error.code, error.message)
           throw new MessageOnlyException(error.message)
-        case Right(debuggee) =>
-          startServer(jobService, scope, state, target, debuggee, debugToolsResolver)
+        case Right(uri) => uri
       }
     }
 
@@ -443,9 +406,22 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         InternalTasks.libraries.value,
         InternalTasks.unmanagedEntries.value,
         InternalTasks.javaRuntime.value,
-        state.log
+        new LoggerAdapter(state.log)
       )
-      startServer(jobService, scope, state, target, debuggee, debugToolsResolver)
+
+      val res = for {
+        json <- jsonParser.parsed
+        params <- convertToParams(json)
+      } yield {
+        val skipConfiguration = params.skipConfiguration.getOrElse(false)
+        startServer(jobService, scope, state, target, debuggee, debugToolsResolver, skipConfiguration)
+      }
+      res match {
+        case Left(error) =>
+          Keys.state.value.respondError(error.code, error.message)
+          throw new MessageOnlyException(error.message)
+        case Right(uri) => uri
+      }
     }
 
   private def startServer(
@@ -454,14 +430,20 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       state: State,
       target: BuildTargetIdentifier,
       debuggee: SbtDebuggee,
-      resolver: DebugToolsResolver
+      resolver: DebugToolsResolver,
+      skipConfiguration: Boolean
   ): URI = {
     val address = new DebugServer.Address()
-    val tools = DebugTools(debuggee, resolver, new LoggerAdapter(state.log))
+    val tools =
+      if (skipConfiguration) {
+        state.log.info("Skipping configuration of debugger")
+        DebugTools.none
+      } else DebugTools(debuggee, resolver, debuggee.logger)
+
     jobService.runInBackground(scope, state) { (logger, _) =>
       try {
         // the state logger is closed, switch to the background job logger
-        debuggee.logger = logger
+        debuggee.logger.underlying = logger
         // if there is a server for this target then close it
         debugServers.get(target).foreach(_.close())
         val server = DebugServer(debuggee, tools, new LoggerAdapter(logger), address)
@@ -497,16 +479,45 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     }
   }
 
-  private def getDebugSessionParams(
-      r: JsonRpcRequestMessage
-  ): Result[DebugSessionParams] = {
-    r.params match {
-      case None => Left(Error.paramsMissing(r.method))
-      case Some(value: JValue) =>
-        Converter.fromJson[DebugSessionParams](value) match {
-          case Success(params: DebugSessionParams) => Right(params)
-          case Failure(err) => Left(Error.invalidParams(err.getMessage))
-        }
+  /**
+   * Parses data for ScalaTestSuites request.
+   * @param json is expected to be an array of strings
+   */
+  private def convertFromArrayToTestSuites(json: JValue): Result[ScalaTestSuites] =
+    Converter
+      .fromJson[Array[String]](json)
+      .toEither
+      .map { names =>
+        val testSelection = names
+          .map(name => ScalaTestSuiteSelection(name, Vector.empty))
+          .toVector
+        ScalaTestSuites(testSelection, Vector.empty, Vector.empty)
+      }
+      .left
+      .map { cause =>
+        Error.invalidParams(
+          s"expected data of kind ${DataKind.ScalaTestSuites}: ${cause.getMessage}"
+        )
+      }
+
+  /**
+   * Parses arguments for ScalaTestSuitesSelection request.
+   * @param json is expected to be an instance of ScalaTestSuites
+   */
+  private def convertToTestSuites(json: JValue): Result[ScalaTestSuites] =
+    Converter
+      .fromJson[ScalaTestSuites](json)
+      .toEither
+      .left
+      .map { cause =>
+        Error.invalidParams(
+          s"expected data of kind ${DataKind.ScalaTestSuitesSelection}: ${cause.getMessage}"
+        )
+      }
+
+  private def convertToParams(json: JValue): Result[DebugSessionParams] =
+    Converter.fromJson[DebugSessionParams](json) match {
+      case Success(params: DebugSessionParams) => Right(params)
+      case Failure(err) => Left(Error.invalidParams(err.getMessage))
     }
-  }
 }

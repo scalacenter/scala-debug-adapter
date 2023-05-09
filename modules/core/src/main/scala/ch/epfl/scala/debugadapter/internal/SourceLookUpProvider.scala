@@ -77,6 +77,9 @@ private[debugadapter] final class SourceLookUpProvider(
 }
 
 private[debugadapter] object SourceLookUpProvider {
+  def empty: SourceLookUpProvider =
+    new SourceLookUpProvider(Seq.empty, Map.empty, Map.empty)
+
   def apply(entries: Seq[ClassEntry], logger: Logger): SourceLookUpProvider = {
     val parrallelEntries = ParVector(entries*)
     val sourceFilesByEntry = parrallelEntries

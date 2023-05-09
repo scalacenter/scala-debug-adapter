@@ -24,32 +24,20 @@ private[debugadapter] object DebugAdapter {
   DebugSettings.getCurrent.showStaticVariables = true
 
   def context(debuggee: Debuggee, tools: DebugTools, logger: Logger, config: DebugConfig): IProviderContext = {
-    TimeUtils.logTime(logger, "Configured debugger context") {
-      val context = new ProviderContext
-      val classEntries = debuggee.classEntries
-      val distinctEntries = classEntries
-        .groupBy(e => e.name)
-        .map { case (name, group) =>
-          if (group.size > 1) logger.warn(s"Found duplicate entry $name in debuggee ${debuggee.name}")
-          group.head
-        }
-        .toSeq
-      val sourceLookUpProvider = SourceLookUpProvider(distinctEntries, logger)
-
-      context.registerProvider(classOf[IHotCodeReplaceProvider], HotCodeReplaceProvider)
-      context.registerProvider(classOf[IVirtualMachineManagerProvider], VirtualMachineManagerProvider)
-      context.registerProvider(classOf[ISourceLookUpProvider], sourceLookUpProvider)
-      context.registerProvider(
-        classOf[IEvaluationProvider],
-        EvaluationProvider(debuggee, tools, sourceLookUpProvider, logger, config)
-      )
-      context.registerProvider(classOf[ICompletionsProvider], CompletionsProvider)
-      context.registerProvider(
-        classOf[IStepFilterProvider],
-        StepFilterProvider(debuggee, tools, sourceLookUpProvider, logger, config.testMode)
-      )
-      context
-    }
+    val context = new ProviderContext
+    context.registerProvider(classOf[IHotCodeReplaceProvider], HotCodeReplaceProvider)
+    context.registerProvider(classOf[IVirtualMachineManagerProvider], VirtualMachineManagerProvider)
+    context.registerProvider(classOf[ISourceLookUpProvider], tools.sourceLookUp)
+    context.registerProvider(
+      classOf[IEvaluationProvider],
+      EvaluationProvider(debuggee, tools, tools.sourceLookUp, logger, config)
+    )
+    context.registerProvider(classOf[ICompletionsProvider], CompletionsProvider)
+    context.registerProvider(
+      classOf[IStepFilterProvider],
+      StepFilterProvider(debuggee, tools, tools.sourceLookUp, logger, config.testMode)
+    )
+    context
   }
 
   object CompletionsProvider extends ICompletionsProvider {

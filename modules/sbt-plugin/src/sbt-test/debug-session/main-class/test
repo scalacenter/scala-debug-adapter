@@ -1,2 +1,5 @@
-> 'checkDebugSession {"class":"example.Main","arguments":[],"jvmOptions":[]}'
+> 'checkDebugSession {"data":{"class":"example.Main","arguments":[],"jvmOptions":[]}}'
+> stopDebugSession
+
+> 'checkDebugSessionWithSkipConfig {"data":{"class":"example.Main","arguments":[],"jvmOptions":[]},"skipConfiguration":true}'
 > stopDebugSession

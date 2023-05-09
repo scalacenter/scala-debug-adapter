@@ -17,6 +17,8 @@ type DebugSessionParams {
 
   ## A language-agnostic JSON object interpreted by the server.
   data: sjsonnew.shaded.scalajson.ast.unsafe.JValue
+
+  skipConfiguration: Boolean = false
 }
 
 type ScalaMainClass {

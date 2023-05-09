@@ -1,2 +1,2 @@
-> 'checkDebugSession ["example.MySuite"]'
+> 'checkDebugSession {"data":["example.MySuite"]}'
 > stopDebugSession

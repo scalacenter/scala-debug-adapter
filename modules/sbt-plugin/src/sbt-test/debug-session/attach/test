@@ -1,2 +1,2 @@
-> 'checkDebugSession {}'
+> 'checkDebugSession {"data":{}}'
 > stopDebugSession

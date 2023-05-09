@@ -1,17 +1,60 @@
 package ch.epfl.scala.debugadapter
 
-import scala.reflect.io.File
 import ch.epfl.scala.debugadapter.internal.ScalaExtension._
+import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
+import ch.epfl.scala.debugadapter.internal.TimeUtils
 import ch.epfl.scala.debugadapter.internal.evaluator.ExpressionCompiler
 
-final case class DebugTools(expressionCompilers: Map[ClassEntry, ExpressionCompiler], stepFilter: Option[ClassLoader])
+import scala.reflect.io.File
+
+final class DebugTools(
+    private[debugadapter] val expressionCompilers: Map[ClassEntry, ExpressionCompiler],
+    private[debugadapter] val stepFilter: Option[ClassLoader],
+    private[debugadapter] val sourceLookUp: SourceLookUpProvider
+)
 
 object DebugTools {
 
+  def none: DebugTools =
+    new DebugTools(Map.empty, None, SourceLookUpProvider.empty)
+
   /**
-   * Resolve the expression compilers and the step filter of the debuggee
+   * Resolve the expression compilers and the step filter of the debuggee,
+   * Link all classes with source file in the SourceLookUpProvider
    *
-   * At most 2 expression compilers are resolved, one for Scala 2 and one for Scala 3
+   * TODO if scala3Entries is not empty we should use the Scala 3 step filter
+   */
+  def apply(debuggee: Debuggee, resolver: DebugToolsResolver, logger: Logger): DebugTools = {
+    val allCompilers = TimeUtils.logTime(logger, "Loaded expression compiler") {
+      loadExpressionCompiler(debuggee, resolver, logger)
+    }
+
+    val stepFilter =
+      if (debuggee.scalaVersion.isScala3) {
+        TimeUtils.logTime(logger, "Loaded step filter") {
+          resolver
+            .resolveStepFilter(debuggee.scalaVersion)
+            .warnFailure(logger, s"Cannot fetch step filter of Scala ${debuggee.scalaVersion}")
+        }
+      } else None
+
+    val sourceLookup =
+      TimeUtils.logTime(logger, "Loaded all sources and classes") {
+        val classEntries = debuggee.classEntries
+        val distinctEntries = classEntries
+          .groupBy(e => e.name)
+          .map { case (name, group) =>
+            if (group.size > 1) logger.warn(s"Found duplicate entry $name in debuggee ${debuggee.name}")
+            group.head
+          }
+          .toSeq
+        SourceLookUpProvider(distinctEntries, logger)
+      }
+
+    new DebugTools(allCompilers, stepFilter, sourceLookup)
+  }
+
+  /* At most 2 expression compilers are resolved, one for Scala 2 and one for Scala 3
    * For both Scala 2 and Scala 3 we want to use the most recent known version:
    *   - the version of the main module
    *   - or the version of the scala-library/scala3-library in the classpath
@@ -25,10 +68,12 @@ object DebugTools {
    * The scalacOptions are adapted so that:
    *   - both compilers can unpickle Scala 2 AND Scala 3
    *   - both compilers does not fail on warnings
-   *
-   * TODO if scala3Entries is not empty we should use the Scala 3 step filter
    */
-  def apply(debuggee: Debuggee, resolver: DebugToolsResolver, logger: Logger): DebugTools = {
+  private def loadExpressionCompiler(
+      debuggee: Debuggee,
+      resolver: DebugToolsResolver,
+      logger: Logger
+  ): Map[ClassEntry, ExpressionCompiler] = {
     val scala2Entries = debuggee.managedEntries.filter(_.isScala2)
     val scala3Entries = debuggee.managedEntries.filter(_.isScala3)
     val scala2Version =
@@ -74,15 +119,7 @@ object DebugTools {
       } yield entry -> compiler
     }
 
-    val allCompilers = debuggee.managedEntries.flatMap(loadExpressionCompiler).toMap
-    val stepFilter =
-      if (debuggee.scalaVersion.isScala3) {
-        resolver
-          .resolveStepFilter(debuggee.scalaVersion)
-          .warnFailure(logger, s"Cannot fetch step filter of Scala ${debuggee.scalaVersion}")
-      } else None
-
-    new DebugTools(allCompilers, stepFilter)
+    debuggee.managedEntries.flatMap(loadExpressionCompiler).toMap
   }
 
   private val optionsToRemove = Set("-Xfatal-warnings", "-Werror")

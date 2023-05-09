@@ -1,2 +1,5 @@
-> 'checkDebugSession {"suites":[{"className":"example.TestSuite","tests":["test1"]}],"jvmOptions":["-Xmx1G"],"environmentVariables":["KEY=VALUE"]}'
+> 'checkDebugSession {"data":{"suites":[{"className":"example.TestSuite","tests":["test1"]}],"jvmOptions":["-Xmx1G"],"environmentVariables":["KEY=VALUE"]}}'
+> stopDebugSession
+
+> 'checkDebugSession {"data":{"suites":[{"className":"example.TestSuite","tests":["test1"]}],"jvmOptions":["-Xmx1G"],"environmentVariables":["KEY=VALUE"]}, "skipConfiguration":true}'
 > stopDebugSession

@@ -2,6 +2,7 @@ package ch.epfl.scala.debugadapter.sbtplugin.internal
 
 import ch.epfl.scala.debugadapter.CancelableFuture
 import ch.epfl.scala.debugadapter.DebuggeeListener
+import ch.epfl.scala.debugadapter.Logger
 import sbt.ForkOptions
 import sbt.io.syntax._
 
@@ -41,7 +42,7 @@ private object DebuggeeProcess {
       mainClass: String,
       arguments: Seq[String],
       listener: DebuggeeListener,
-      logger: sbt.Logger
+      logger: Logger
   )(implicit ec: ExecutionContext): DebuggeeProcess = {
     val javaHome = forkOptions.javaHome.getOrElse(new File(System.getProperty("java.home")))
     val javaBin = (javaHome / "bin" / "java").getAbsolutePath
