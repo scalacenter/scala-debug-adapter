@@ -63,13 +63,12 @@ private[sbtplugin] object InternalTasks {
     } yield javaRuntime
   }
 
-  lazy val debugToolsResolver: Def.Initialize[Task[DebugToolsResolver]] = Def.task {
+  lazy val debugToolsResolver: Def.Initialize[Task[xsbti.Logger => DebugToolsResolver]] = Def.task {
     val dependencyRes = Keys.dependencyResolution.value
     val updateConfig = Keys.updateConfiguration.value
     val warningConfig = (Keys.update / Keys.unresolvedWarningConfiguration).value
-    val logger = Keys.streams.value.log
     val scalaInstance = Keys.scalaInstance.value
-    new SbtDebugToolsResolver(scalaInstance, dependencyRes, updateConfig, warningConfig, logger)
+    logger => new SbtDebugToolsResolver(scalaInstance, dependencyRes, updateConfig, warningConfig, logger)
   }
 
   private def module(proj: ProjectRef, config: ConfigKey): Def.Initialize[Task[Module]] = Def.task {

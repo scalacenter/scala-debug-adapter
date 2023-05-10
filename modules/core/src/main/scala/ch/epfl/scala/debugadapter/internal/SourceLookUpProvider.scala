@@ -1,10 +1,11 @@
 package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter.ClassEntry
-import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
-import java.net.URI
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSig
+import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
+
+import java.net.URI
 import scala.collection.parallel.immutable.ParVector
 
 private[debugadapter] final class SourceLookUpProvider(
@@ -77,6 +78,9 @@ private[debugadapter] final class SourceLookUpProvider(
 }
 
 private[debugadapter] object SourceLookUpProvider {
+  def empty: SourceLookUpProvider =
+    new SourceLookUpProvider(Seq.empty, Map.empty, Map.empty)
+
   def apply(entries: Seq[ClassEntry], logger: Logger): SourceLookUpProvider = {
     val parrallelEntries = ParVector(entries*)
     val sourceFilesByEntry = parrallelEntries

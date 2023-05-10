@@ -1,6 +1,5 @@
 package ch.epfl.scala.debugadapter.testfmk
 
-import ch.epfl.scala.debugadapter.DebugTools
 import ch.epfl.scala.debugadapter.DebugServer
 import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
@@ -41,19 +40,15 @@ trait DebugTest {
       debuggee: Debuggee,
       config: DebugConfig = defaultConfig,
       logger: Logger = NoopLogger
-  ): DebugServer = {
-    val tools = DebugTools(debuggee, TestingResolver, logger)
-    DebugServer(debuggee, tools, logger, config = config)
-  }
+  ): DebugServer =
+    DebugServer(debuggee, TestingResolver, logger, config = config)
 
   def startDebugServer(
       debuggee: Debuggee,
       gracePeriod: Duration = 2.seconds,
       logger: Logger = NoopLogger
-  ): DebugServer.Handler = {
-    val tools = DebugTools(debuggee, TestingResolver, logger)
-    DebugServer.start(debuggee, tools, logger)
-  }
+  ): DebugServer.Handler =
+    DebugServer.start(debuggee, TestingResolver, logger)
 
   def check(uri: URI, attach: Option[Int] = None)(steps: DebugStepAssert*): Unit = {
     val client = TestingDebugClient.connect(uri)

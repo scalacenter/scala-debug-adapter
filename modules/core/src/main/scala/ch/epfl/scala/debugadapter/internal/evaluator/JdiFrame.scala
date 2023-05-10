@@ -5,7 +5,7 @@ import com.sun.jdi.LocalVariable
 import com.sun.jdi.StackFrame
 import com.sun.jdi.ThreadReference
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters.*
 
 final case class JdiFrame(thread: ThreadReference, depth: Int) {
   def current(): StackFrame = thread.frame(depth)

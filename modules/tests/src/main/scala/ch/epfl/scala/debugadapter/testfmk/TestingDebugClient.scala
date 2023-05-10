@@ -53,7 +53,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
   def attach(
       hostName: String,
       port: Int,
-      timeout: Duration = 1.second
+      timeout: Duration = 8.seconds
   ): Messages.Response = {
     val arguments = new AttachArguments()
     arguments.hostName = hostName

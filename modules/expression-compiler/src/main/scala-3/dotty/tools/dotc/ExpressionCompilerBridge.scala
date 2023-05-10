@@ -3,7 +3,7 @@ package dotty.tools.dotc
 import java.nio.file.Path
 import java.util.function.Consumer
 import java.{util => ju}
-import collection.JavaConverters._
+import scala.jdk.CollectionConverters.*
 import scala.util.control.NonFatal
 import dotty.tools.dotc.reporting.StoreReporter
 import dotty.tools.dotc.core.Contexts.Context

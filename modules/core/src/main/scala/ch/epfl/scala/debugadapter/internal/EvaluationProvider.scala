@@ -3,7 +3,6 @@ package ch.epfl.scala.debugadapter.internal
 import ch.epfl.scala.debugadapter.BuildInfo
 import ch.epfl.scala.debugadapter.ClassEntry
 import ch.epfl.scala.debugadapter.DebugConfig
-import ch.epfl.scala.debugadapter.DebugTools
 import ch.epfl.scala.debugadapter.Debuggee
 import ch.epfl.scala.debugadapter.EvaluationFailed
 import ch.epfl.scala.debugadapter.JavaRuntime
@@ -198,18 +197,17 @@ private[internal] class EvaluationProvider(
 private[internal] object EvaluationProvider {
   def apply(
       debuggee: Debuggee,
-      debugTools: DebugTools,
-      sourceLookUp: SourceLookUpProvider,
+      tools: DebugTools,
       logger: Logger,
       config: DebugConfig
   ): IEvaluationProvider = {
     val simpleEvaluator = new SimpleEvaluator(logger, config.testMode)
-    val scalaEvaluators = debugTools.expressionCompilers.view.map { case (entry, compiler) =>
+    val scalaEvaluators = tools.expressionCompilers.view.map { case (entry, compiler) =>
       (entry, new ScalaEvaluator(entry, compiler, logger, config.testMode))
     }.toMap
     val messageLogger = new MessageLogger()
     new EvaluationProvider(
-      sourceLookUp,
+      tools.sourceLookUp,
       simpleEvaluator,
       messageLogger,
       scalaEvaluators,

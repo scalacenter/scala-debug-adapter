@@ -1,15 +1,13 @@
 import ch.epfl.scala.debugadapter.testfmk._
 import munit.Assertions._
 
-val checkDebugSession = inputKey[Unit]("Check the test suite debug session")
-
 libraryDependencies += "com.github.sbt" % "junit-interface" % "0.13.3" % Test
 testFrameworks += TestFrameworks.JUnit
 scalaVersion := "2.12.14"
 
 Test / fork := true
 
-checkDebugSession := {
+InputKey[Unit]("checkDebugSession") := {
   val uri = (Test / startTestSuitesSelectionDebugSession).evaluated
 
   // Xmx is set to 1G

@@ -1,15 +1,14 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter._
+import ch.epfl.scala.debugadapter.*
 import ch.epfl.scala.debugadapter.testing.TestSuiteSummary
-import com.microsoft.java.debug.core.adapter.IProviderContext
-import com.microsoft.java.debug.core.adapter.{ProtocolServer => DapServer}
+import com.microsoft.java.debug.core.adapter.ProtocolServer
 import com.microsoft.java.debug.core.protocol.Events
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent
 import com.microsoft.java.debug.core.protocol.JsonUtils
 import com.microsoft.java.debug.core.protocol.Messages.Request
 import com.microsoft.java.debug.core.protocol.Messages.Response
-import com.microsoft.java.debug.core.protocol.Requests._
+import com.microsoft.java.debug.core.protocol.Requests.*
 
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -38,12 +37,13 @@ import scala.util.control.NonFatal
 private[debugadapter] final class DebugSession private (
     socket: Socket,
     debuggee: Debuggee,
-    context: IProviderContext,
+    context: ScalaProviderContext,
+    resolver: DebugToolsResolver,
     logger: Logger,
     loggingAdapter: LoggingAdapter,
     config: DebugConfig
 )(implicit executionContext: ExecutionContext)
-    extends DapServer(
+    extends ProtocolServer(
       socket.getInputStream,
       socket.getOutputStream,
       context,
@@ -143,7 +143,16 @@ private[debugadapter] final class DebugSession private (
   protected override def dispatchRequest(request: Request): Unit = {
     val requestId = request.seq
     request.command match {
+      case "attach" =>
+        val tools = DebugTools(debuggee, resolver, logger)
+        context.configure(tools)
+        super.dispatchRequest(request)
       case "launch" =>
+        val launchArgs = JsonUtils.fromJson(request.arguments, classOf[LaunchArguments])
+        val tools =
+          if (launchArgs.noDebug) DebugTools.none
+          else DebugTools(debuggee, resolver, logger)
+        context.configure(tools)
         // launch request is implemented by spinning up a JVM
         // and sending an attach request to the java DapServer
         launchedRequests.add(requestId)
@@ -283,13 +292,14 @@ private[debugadapter] object DebugSession {
   def apply(
       socket: Socket,
       debuggee: Debuggee,
-      context: IProviderContext,
+      resolver: DebugToolsResolver,
       logger: Logger,
       config: DebugConfig
   )(implicit executionContext: ExecutionContext): DebugSession = {
     try {
       val loggingHandler = new LoggingAdapter(logger)
-      new DebugSession(socket, debuggee, context, logger, loggingHandler, config)
+      val context = ScalaProviderContext(debuggee, logger, config)
+      new DebugSession(socket, debuggee, context, resolver, logger, loggingHandler, config)
     } catch {
       case NonFatal(cause) =>
         logger.trace(cause)

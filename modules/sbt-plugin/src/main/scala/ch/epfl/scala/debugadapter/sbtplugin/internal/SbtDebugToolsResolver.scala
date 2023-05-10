@@ -8,7 +8,6 @@ import sbt.librarymanagement.UnresolvedWarningConfiguration
 import sbt.librarymanagement.ModuleID
 import sbt.librarymanagement.UpdateReport
 import sbt.io.Hash
-import xsbti.Logger
 import scala.util.Success
 import scala.util.Try
 import scala.util.Failure
@@ -22,7 +21,7 @@ class SbtDebugToolsResolver(
     dependencyRes: DependencyResolution,
     updateConfig: UpdateConfiguration,
     warningConfig: UnresolvedWarningConfiguration,
-    logger: Logger
+    logger: xsbti.Logger
 ) extends DebugToolsResolver {
 
   override def resolveExpressionCompiler(scalaVersion: ScalaVersion): Try[ClassLoader] = {

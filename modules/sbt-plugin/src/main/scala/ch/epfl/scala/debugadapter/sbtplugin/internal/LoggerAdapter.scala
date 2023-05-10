@@ -2,7 +2,11 @@ package ch.epfl.scala.debugadapter.sbtplugin.internal
 
 import ch.epfl.scala.debugadapter.Logger
 
-private[debugadapter] class LoggerAdapter(underlying: sbt.Logger) extends Logger {
+/**
+ * Underlying logger is mutable because we use a different logger
+ * for logging during the task and during the background job
+ */
+private[debugadapter] class LoggerAdapter(var underlying: sbt.Logger) extends Logger {
   override def debug(msg: => String): Unit = ()
   override def info(msg: => String): Unit = underlying.info(msg)
   override def warn(msg: => String): Unit = underlying.warn(msg)
