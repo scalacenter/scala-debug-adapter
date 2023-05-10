@@ -1,7 +1,6 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi.*
-import scala.Predef.*
 import ch.epfl.scala.debugadapter.internal.evaluator.JavaListToScala
 import ch.epfl.scala.debugadapter.internal.evaluator.SafeSeq
 
