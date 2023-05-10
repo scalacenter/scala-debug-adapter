@@ -1,14 +1,12 @@
 package ch.epfl.scala.debugadapter.internal
 
+import ch.epfl.scala.debugadapter.Debuggee
+import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.internal.stepfilter.*
 import com.microsoft.java.debug.core.adapter.{StepFilterProvider => JavaStepFilterProvider}
 import com.microsoft.java.debug.core.protocol.Requests.StepFilters
-import com.sun.jdi.Method
-
-import ch.epfl.scala.debugadapter.Logger
-import ch.epfl.scala.debugadapter.internal.stepfilter._
-import ch.epfl.scala.debugadapter.Debuggee
-import ch.epfl.scala.debugadapter.DebugTools
 import com.sun.jdi.Location
+import com.sun.jdi.Method
 
 class StepFilterProvider(
     stepFilters: Seq[StepFilter],
@@ -49,11 +47,10 @@ object StepFilterProvider {
   def apply(
       debuggee: Debuggee,
       tools: DebugTools,
-      sourceLookUp: SourceLookUpProvider,
       logger: Logger,
       testMode: Boolean
   ): StepFilterProvider = {
-    val scalaStepFilter = ScalaStepFilter(debuggee, tools, sourceLookUp, logger, testMode)
+    val scalaStepFilter = ScalaStepFilter(debuggee, tools, logger, testMode)
     val runtimeStepFilter = RuntimeStepFilter(debuggee.scalaVersion)
     new StepFilterProvider(
       Seq(ClassLoadingStepFilter, runtimeStepFilter, scalaStepFilter),

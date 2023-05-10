@@ -15,9 +15,7 @@ import scala.util.control.NonFatal
 import ch.epfl.scala.debugadapter.testing.TestSuiteEvent
 
 private[debugadapter] sealed trait SbtDebuggee extends Debuggee {
-  // logger is mutable because we use a different logger
-  // for logging during the task and during the background job
-  var logger: sbt.Logger
+  val logger: LoggerAdapter
 }
 
 private[debugadapter] final class MainClassDebuggee(
@@ -30,14 +28,14 @@ private[debugadapter] final class MainClassDebuggee(
     val javaRuntime: Option[JavaRuntime],
     mainClass: String,
     args: Seq[String],
-    var logger: sbt.Logger
+    val logger: LoggerAdapter
 )(implicit ec: ExecutionContext)
     extends SbtDebuggee {
   override def name: String =
     s"${getClass.getSimpleName}(${target.uri}, $mainClass)"
 
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] =
-    DebuggeeProcess.start(forkOptions, classPath, mainClass, args, listener, logger)
+    DebuggeeProcess.start(forkOptions, classPath, mainClass, args, listener, logger.underlying)
 }
 
 private[debugadapter] final class TestSuitesDebuggee(
@@ -52,7 +50,7 @@ private[debugadapter] final class TestSuitesDebuggee(
     parallel: Boolean,
     runners: Map[TestFramework, Runner],
     tests: Seq[TestDefinition],
-    var logger: sbt.Logger
+    val logger: LoggerAdapter
 )(implicit executionContext: ExecutionContext)
     extends SbtDebuggee {
 
@@ -161,7 +159,7 @@ private[debugadapter] final class TestSuitesDebuggee(
       mainClass,
       args,
       listener,
-      logger
+      logger.underlying
     )
     process.future.onComplete { _ =>
       Acceptor.close()
@@ -188,7 +186,7 @@ private[debugadapter] final class AttachRemoteDebuggee(
     val libraries: Seq[Library],
     val unmanagedEntries: Seq[UnmanagedEntry],
     val javaRuntime: Option[JavaRuntime],
-    var logger: sbt.Logger
+    val logger: LoggerAdapter
 ) extends SbtDebuggee {
   override def name: String = s"${getClass.getSimpleName}(${target.uri})"
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] =

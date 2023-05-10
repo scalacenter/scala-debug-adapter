@@ -1,8 +1,8 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import com.sun.jdi._
+import com.sun.jdi.*
 
-import scala.collection.JavaConverters.*
+import scala.jdk.CollectionConverters.*
 
 private[internal] class JdiObject(
     val reference: ObjectReference,

@@ -1,16 +1,16 @@
 package ch.epfl.scala.debugadapter.internal.stepfilter
 
+import ch.epfl.scala.debugadapter.Debuggee
+import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.ScalaVersion
+import ch.epfl.scala.debugadapter.internal.ByteCodes
+import ch.epfl.scala.debugadapter.internal.DebugTools
+import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
+import com.sun.jdi.AbsentInformationException
 import com.sun.jdi.Method
 import com.sun.jdi.ReferenceType
-import com.sun.jdi.AbsentInformationException
-import ch.epfl.scala.debugadapter.internal.ByteCodes
-import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
-import ch.epfl.scala.debugadapter.Debuggee
-import ch.epfl.scala.debugadapter.DebugTools
-import ch.epfl.scala.debugadapter.Logger
+
 import scala.jdk.CollectionConverters.*
-import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
-import ch.epfl.scala.debugadapter.ScalaVersion
 
 abstract class ScalaStepFilter(scalaVersion: ScalaVersion) extends StepFilter {
   protected def skipScalaMethod(method: Method): Boolean
@@ -105,12 +105,11 @@ object ScalaStepFilter {
   def apply(
       debuggee: Debuggee,
       tools: DebugTools,
-      sourceLookUp: SourceLookUpProvider,
       logger: Logger,
       testMode: Boolean
   ): StepFilter = {
     if (debuggee.scalaVersion.isScala2)
-      new Scala2StepFilter(sourceLookUp, debuggee.scalaVersion, logger, testMode)
+      new Scala2StepFilter(tools.sourceLookUp, debuggee.scalaVersion, logger, testMode)
     else
       tools.stepFilter
         .flatMap { classLoader =>
