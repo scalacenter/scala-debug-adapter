@@ -19,17 +19,12 @@ object DebugConfig {
 
   sealed trait EvaluationMode {
     def allowScalaEvaluation: Boolean = false
-    def allowSimpleEvaluation: Boolean = false
     def allowRuntimeEvaluation: Boolean = false
   }
 
   case object ScalaEvaluationOnly extends EvaluationMode {
     override def allowScalaEvaluation: Boolean = true
   }
-  case object SimpleEvaluationOnly extends EvaluationMode {
-    override def allowSimpleEvaluation: Boolean = true
-  }
-
   case object RuntimeEvaluationOnly extends EvaluationMode {
     override def allowRuntimeEvaluation: Boolean = true
   }
@@ -37,7 +32,6 @@ object DebugConfig {
   case object NoEvaluation extends EvaluationMode
   case object MixedEvaluation extends EvaluationMode {
     override def allowScalaEvaluation: Boolean = true
-    override def allowSimpleEvaluation: Boolean = true
-    override def allowRuntimeEvaluation: Boolean = false
+    override def allowRuntimeEvaluation: Boolean = true
   }
 }

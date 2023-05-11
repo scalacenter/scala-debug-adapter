@@ -5,7 +5,7 @@ import ch.epfl.scala.debugadapter.testfmk.*
 class BypassExpressionCompilerTests extends DebugTestSuite {
   private val scalaVersion = ScalaVersion.`3.1+`
   protected override def defaultConfig: DebugConfig =
-    super.defaultConfig.copy(evaluationMode = DebugConfig.SimpleEvaluationOnly)
+    super.defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly)
 
   test("evaluate local values") {
     val source =
@@ -300,29 +300,6 @@ class BypassExpressionCompilerTests extends DebugTestSuite {
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(7), Evaluation.success("b", "b"))
-  }
-
-  test("by-name param vs Function0") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    m1(true)
-         |    m2(() => false)
-         |  }
-         |
-         |  def m1(x: => Boolean): Boolean =
-         |    x
-         |
-         |  def m2(x: () => Boolean): Boolean =
-         |    x()
-         |}
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    // the evaluator refuses to bypass the compiler because it does not know
-    // if x is a Function0 or a by-name param
-    check(Breakpoint(10), Evaluation.failed("x"), Breakpoint(13), Evaluation.failed("x"))
   }
 
   test("evaluate on for loops, generators and guards") {

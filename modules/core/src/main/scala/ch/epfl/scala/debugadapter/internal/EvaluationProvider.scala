@@ -15,13 +15,11 @@ import ch.epfl.scala.debugadapter.internal.evaluator.CompiledExpression
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiFrame
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiValue
-import ch.epfl.scala.debugadapter.internal.evaluator.LocalValue
 import ch.epfl.scala.debugadapter.internal.evaluator.MessageLogger
 import ch.epfl.scala.debugadapter.internal.evaluator.MethodInvocationFailed
 import ch.epfl.scala.debugadapter.internal.evaluator.PlainLogMessage
 import ch.epfl.scala.debugadapter.internal.evaluator.PreparedExpression
 import ch.epfl.scala.debugadapter.internal.evaluator.ScalaEvaluator
-import ch.epfl.scala.debugadapter.internal.evaluator.SimpleEvaluator
 import ch.epfl.scala.debugadapter.internal.evaluator.Recoverable
 import ch.epfl.scala.debugadapter.internal.evaluator.Valid
 import ch.epfl.scala.debugadapter.internal.evaluator.Unrecoverable
@@ -43,7 +41,6 @@ import ScalaExtension.*
 import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeValidationTree
 private[internal] class EvaluationProvider(
     sourceLookUp: SourceLookUpProvider,
-    simpleEvaluator: SimpleEvaluator,
     messageLogger: MessageLogger,
     scalaEvaluators: Map[ClassEntry, ScalaEvaluator],
     mode: DebugConfig.EvaluationMode,
@@ -62,7 +59,7 @@ private[internal] class EvaluationProvider(
   override def evaluate(expression: String, thread: ThreadReference, depth: Int): CompletableFuture[Value] = {
     val frame = JdiFrame(thread, depth)
     val evaluationMode = mode.allowRuntimeEvaluation
-    val evaluator = RuntimeEvaluator(frame, logger)
+    val runtimeEvaluator = RuntimeEvaluator(frame, logger)
 
     def compileEval = {
       for {
@@ -70,17 +67,15 @@ private[internal] class EvaluationProvider(
         evaluation <- evaluate(preparedExpression, frame)
       } yield evaluation
     }
-    def runtimeEval(tree: RuntimeValidationTree) = evaluator.evaluate(tree).getResult
+    def runtimeEval(tree: RuntimeValidationTree) = runtimeEvaluator.evaluate(tree).getResult
 
     val evaluation: Try[Value] = {
       if (evaluationMode) {
-        evaluator.validate(expression) match {
-          case Valid(MethodCall(tree)) if mode.allowScalaEvaluation =>
+        runtimeEvaluator.validate(expression) match {
+          case MethodCall(tree) if mode.allowScalaEvaluation =>
             compileEval.orElse(runtimeEval(tree).map(_.value))
           case Valid(tree) => runtimeEval(tree).map(_.value)
-          case Recoverable(e) =>
-            println(s"\u001b[33mValidation recoverable error: ${e}\u001b[0m")
-            compileEval
+          case Recoverable(e) => compileEval
           case Unrecoverable(e) => Failure(e)
         }
       } else compileEval
@@ -176,10 +171,7 @@ private[internal] class EvaluationProvider(
   }
 
   private def prepare(expression: String, frame: JdiFrame): Try[PreparedExpression] = {
-    lazy val simpleExpression = simpleEvaluator.prepare(expression, frame)
-    if (mode.allowSimpleEvaluation && simpleExpression.isDefined) {
-      Success(simpleExpression.get)
-    } else if (mode.allowScalaEvaluation) {
+    if (mode.allowScalaEvaluation) {
       val fqcn = frame.current().location.declaringType.name
       for {
         evaluator <- getScalaEvaluator(fqcn)
@@ -196,7 +188,6 @@ private[internal] class EvaluationProvider(
   private def evaluate(expression: PreparedExpression, frame: JdiFrame): Try[Value] = {
     expression match {
       case logMessage: PlainLogMessage => messageLogger.log(logMessage, frame)
-      case localValue: LocalValue => simpleEvaluator.evaluate(localValue, frame)
       case expression: ParsedExpression => ???
       case expression: CompiledExpression =>
         val fqcn = frame.current().location.declaringType.name
@@ -233,14 +224,12 @@ private[internal] object EvaluationProvider {
       logger: Logger,
       config: DebugConfig
   ): IEvaluationProvider = {
-    val simpleEvaluator = new SimpleEvaluator(logger, config.testMode)
     val scalaEvaluators = tools.expressionCompilers.view.map { case (entry, compiler) =>
       (entry, new ScalaEvaluator(entry, compiler, logger, config.testMode))
     }.toMap
     val messageLogger = new MessageLogger()
     new EvaluationProvider(
       tools.sourceLookUp,
-      simpleEvaluator,
       messageLogger,
       scalaEvaluators,
       config.evaluationMode,
