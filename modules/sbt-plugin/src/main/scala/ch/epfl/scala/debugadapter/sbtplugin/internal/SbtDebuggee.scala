@@ -153,14 +153,7 @@ private[debugadapter] final class TestSuitesDebuggee(
       IO.classLocationPath[SubclassFingerscan] // sbt-plugin
     )
 
-    val process = DebuggeeProcess.start(
-      forkOptions,
-      fullClasspath,
-      mainClass,
-      args,
-      listener,
-      logger.underlying
-    )
+    val process = DebuggeeProcess.start(forkOptions, fullClasspath, mainClass, args, listener, logger)
     process.future.onComplete { _ =>
       Acceptor.close()
       try {
