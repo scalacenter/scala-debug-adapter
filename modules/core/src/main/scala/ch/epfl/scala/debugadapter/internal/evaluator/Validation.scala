@@ -1,11 +1,18 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import java.util.NoSuchElementException
+import scala.util.Try
+import scala.util.Success
+import scala.util.Failure
 
-sealed abstract class Validation[+A]() {
+sealed abstract class Validation[+A] {
   def isValid: Boolean
-  def canContinue: Boolean
   def isInvalid: Boolean = !isValid
+  def isEmpty: Boolean = isInvalid
+
+  def filter(p: A => Boolean): Validation[A] =
+    if (isValid && p(get)) this
+    else Recoverable(s"Predicate does not hold for $get")
 
   def map[B](f: A => B): Validation[B]
   def flatMap[B](f: A => Validation[B]): Validation[B]
@@ -19,12 +26,14 @@ sealed abstract class Validation[+A]() {
   def getOrElse[B >: A](f: => B): B
   def orElse[B >: A](f: => Validation[B]): Validation[B]
 
+  def recoverWith[B >: A](f: => Validation[B]): Validation[B]
+
   def toOption: Option[A]
+  def toTry: Try[A]
 }
 
 final case class Valid[+A](value: A) extends Validation[A]() {
   override val isValid: Boolean = true
-  override val canContinue: Boolean = true
   override def map[B](f: A => B): Validation[B] = Validation(f(value))
   override def flatMap[B](f: A => Validation[B]): Validation[B] =
     f(value).map(Validation(_)).flatten
@@ -32,7 +41,10 @@ final case class Valid[+A](value: A) extends Validation[A]() {
   override def getOrElse[B >: A](f: => B): B = value
   override def orElse[B >: A](f: => Validation[B]): Validation[B] = this
 
+  override def recoverWith[B >: A](f: => Validation[B]): Validation[B] = this
+
   override def toOption: Option[A] = Some(value)
+  override def toTry: Try[A] = Success(value)
 }
 
 sealed abstract class Invalid(val exception: Exception) extends Validation[Nothing]() {
@@ -42,16 +54,17 @@ sealed abstract class Invalid(val exception: Exception) extends Validation[Nothi
   override def get = throw exception
   override def getOrElse[B >: Nothing](f: => B): B = f
 
+  override def recoverWith[B >: Nothing](f: => Validation[B]): Validation[B] = f
+
   override def toOption: Option[Nothing] = None
+  override def toTry: Try[Nothing] = Failure(exception)
 }
 
 final case class Recoverable(message: String) extends Invalid(new NoSuchElementException(message)) {
-  override val canContinue: Boolean = true
   override def orElse[B >: Nothing](f: => Validation[B]): Validation[B] = f
 }
 
 final case class Unrecoverable(e: Exception) extends Invalid(e) {
-  override val canContinue: Boolean = false
   override def orElse[B >: Nothing](f: => Validation[B]): Validation[B] = this
 }
 

@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import com.sun.jdi._
 
 import java.nio.file.Path
+import RuntimeEvaluatorExtractors.IsAnyVal
 
 private[internal] class JdiClassLoader(
     reference: ClassLoaderReference,
@@ -53,56 +54,86 @@ private[internal] class JdiClassLoader(
   def mirrorOf(short: Short): JdiValue =
     JdiValue(thread.virtualMachine.mirrorOf(short), thread)
 
-  def mirrorOfAnyVal(value: AnyVal): Safe[JdiValue] = Safe {
-    value match {
-      case d: Double => mirrorOf(d)
-      case f: Float => mirrorOf(f)
-      case l: Long => mirrorOf(l)
-      case i: Int => mirrorOf(i)
-      case s: Short => mirrorOf(s)
-      case c: Char => mirrorOf(c)
-      case b: Byte => mirrorOf(b)
-      case b: Boolean => mirrorOf(b)
-    }
+  def mirrorOfVoid(): JdiValue =
+    JdiValue(thread.virtualMachine.mirrorOfVoid(), thread)
+
+  def mirrorOfAnyVal(value: AnyVal): JdiValue = value match {
+    case d: Double => mirrorOf(d)
+    case f: Float => mirrorOf(f)
+    case l: Long => mirrorOf(l)
+    case i: Int => mirrorOf(i)
+    case s: Short => mirrorOf(s)
+    case c: Char => mirrorOf(c)
+    case b: Byte => mirrorOf(b)
+    case b: Boolean => mirrorOf(b)
+  }
+
+  def mirrorOfLiteral(value: Any): Safe[JdiValue] = value match {
+    case IsAnyVal(value) => Safe(mirrorOfAnyVal(value))
+    case value: String => mirrorOf(value)
+    case () => Safe(mirrorOfVoid())
+    case _ => Safe.failed(new IllegalArgumentException(s"Unsupported literal $value"))
   }
 
   def boxIfPrimitive(value: JdiValue): Safe[JdiValue] =
     value.value match {
-      case value: BooleanValue => box(value.value)
-      case value: CharValue => box(value.value)
-      case value: DoubleValue => box(value.value)
-      case value: FloatValue => box(value.value)
-      case value: IntegerValue => box(value.value)
-      case value: LongValue => box(value.value)
-      case value: ShortValue => box(value.value)
-      case value: ByteValue => box(value.value)
+      case _: PrimitiveValue => box(value)
       case _ => Safe(value)
     }
 
-  def box(value: AnyVal): Safe[JdiObject] =
+  def box(value: JdiValue): Safe[JdiObject] = {
     for {
-      jdiValue <- mirrorOf(value.toString)
+      jdiValue <- value.value match {
+        case c: CharValue => Safe(value)
+        case _ => mirrorOf(value.value.toString)
+      }
       _ = getClass
-      (className, sig) = value match {
-        case _: Boolean => ("java.lang.Boolean", "(Ljava/lang/String;)Ljava/lang/Boolean;")
-        case _: Byte => ("java.lang.Byte", "(Ljava/lang/String;)Ljava/lang/Byte;")
-        case _: Char => ("java.lang.Character", "(Ljava/lang/String;)Ljava/lang/Character;")
-        case _: Double => ("java.lang.Double", "(Ljava/lang/String;)Ljava/lang/Double;")
-        case _: Float => ("java.lang.Float", "(Ljava/lang/String;)Ljava/lang/Float;")
-        case _: Int => ("java.lang.Integer", "(Ljava/lang/String;)Ljava/lang/Integer;")
-        case _: Long => ("java.lang.Long", "(Ljava/lang/String;)Ljava/lang/Long;")
-        case _: Short => ("java.lang.Short", "(Ljava/lang/String;)Ljava/lang/Short;")
+      (className, sig) = value.value match {
+        case _: BooleanValue => ("java.lang.Boolean", "(Ljava/lang/String;)Ljava/lang/Boolean;")
+        case _: ByteValue => ("java.lang.Byte", "(Ljava/lang/String;)Ljava/lang/Byte;")
+        case _: CharValue => ("java.lang.Character", "(C)Ljava/lang/Character;")
+        case _: DoubleValue => ("java.lang.Double", "(Ljava/lang/String;)Ljava/lang/Double;")
+        case _: FloatValue => ("java.lang.Float", "(Ljava/lang/String;)Ljava/lang/Float;")
+        case _: IntegerValue => ("java.lang.Integer", "(Ljava/lang/String;)Ljava/lang/Integer;")
+        case _: LongValue => ("java.lang.Long", "(Ljava/lang/String;)Ljava/lang/Long;")
+        case _: ShortValue => ("java.lang.Short", "(Ljava/lang/String;)Ljava/lang/Short;")
       }
       clazz <- loadClass(className)
       objectRef <- clazz.invokeStatic("valueOf", sig, List(jdiValue))
     } yield objectRef.asObject
+  }
+
+  def boxUnboxOnNeed(
+      expected: Seq[Type],
+      received: Seq[JdiValue]
+  ): Safe[Seq[JdiValue]] = {
+    expected
+      .zip(received)
+      .map { case (expect: Type, got: JdiValue) =>
+        (expect, got.value) match {
+          case (argType: ReferenceType, arg: PrimitiveValue) => boxIfPrimitive(got)
+          case (argType: PrimitiveType, arg: ObjectReference) => got.unboxIfPrimitive
+          case (argType, arg) => Safe(got)
+        }
+      }
+      .traverse
+  }
+
+  def boxUnboxOnNeed(
+      expected: java.util.List[Type],
+      received: Seq[JdiValue]
+  ): Safe[Seq[JdiValue]] = boxUnboxOnNeed(expected.asScalaSeq, received)
 
   def createArray(arrayType: String, values: Seq[JdiValue]): Safe[JdiArray] =
     for {
       arrayTypeClass <- loadClass(arrayType)
       arrayClass <- loadClass("java.lang.reflect.Array")
       array <- arrayClass
-        .invokeStatic("newInstance", "(Ljava/lang/Class;I)Ljava/lang/Object;", Seq(arrayTypeClass, mirrorOf(values.size)))
+        .invokeStatic(
+          "newInstance",
+          "(Ljava/lang/Class;I)Ljava/lang/Object;",
+          Seq(arrayTypeClass, mirrorOf(values.size))
+        )
         .map(_.asArray)
     } yield {
       array.setValues(values)

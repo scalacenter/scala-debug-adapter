@@ -2,7 +2,6 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi.*
 import ch.epfl.scala.debugadapter.internal.evaluator.JavaListToScala
-import ch.epfl.scala.debugadapter.internal.evaluator.SafeSeq
 
 import scala.jdk.CollectionConverters.*
 
@@ -40,7 +39,7 @@ private[evaluator] class JdiObject(
         exception <- Safe(invocationException.exception).map(JdiObject(_, thread))
         message <- exception.invoke("toString", List()).map(_.asString.stringValue).recover { case _ => "" }
       } yield {
-        throw new MethodInvocationFailed(message, exception)
+        throw new MethodInvocationFailed(message, Some(exception))
       }
   }
 
@@ -53,29 +52,4 @@ private[evaluator] class JdiObject(
 private[internal] object JdiObject {
   def apply(value: Value, thread: ThreadReference): JdiObject =
     new JdiObject(value.asInstanceOf[ObjectReference], thread)
-
-  def boxUnboxOnNeed(
-      expected: Seq[Type],
-      received: Seq[JdiValue],
-      frame: JdiFrame
-  ): Safe[Seq[JdiValue]] = {
-    val loader = frame.classLoader()
-    expected
-      .zip(received)
-      .map { case (expect: Type, got: JdiValue) =>
-        (expect, got.value) match {
-          case (argType: ReferenceType, arg: PrimitiveValue) =>
-            loader.flatMap(classLoader => classLoader.boxIfPrimitive(got))
-          case (argType: PrimitiveType, arg: ObjectReference) => got.unboxIfPrimitive
-          case (argType, arg) => Safe(got)
-        }
-      }
-      .traverse
-  }
-
-  def boxUnboxOnNeed(
-      expected: java.util.List[Type],
-      received: Seq[JdiValue],
-      frame: JdiFrame
-  ): Safe[Seq[JdiValue]] = boxUnboxOnNeed(expected.asScalaSeq, received, frame)
 }

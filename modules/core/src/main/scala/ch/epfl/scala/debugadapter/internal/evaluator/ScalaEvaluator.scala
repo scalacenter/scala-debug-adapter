@@ -69,7 +69,7 @@ private[internal] class ScalaEvaluator(
       .invoke("evaluate", List())
       .recover {
         // if evaluation throws an exception, we return that exception as the result
-        case MethodInvocationFailed(msg, exception) => exception
+        case MethodInvocationFailed(msg, Some(exception)) => exception
       }
   }
 

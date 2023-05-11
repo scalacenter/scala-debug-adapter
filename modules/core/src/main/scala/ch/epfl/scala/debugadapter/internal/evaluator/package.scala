@@ -16,14 +16,6 @@ package object evaluator {
     }
   }
 
-  implicit class TrySeq[A](seq: Seq[Try[A]]) {
-    def traverse: Try[Seq[A]] = {
-      seq.foldRight(Try(Seq.empty[A])) { (safeHead, safeTail) =>
-        safeTail.flatMap(tail => safeHead.map(head => head +: tail))
-      }
-    }
-  }
-
   implicit class SafeOption[A](opt: Option[Safe[A]]) {
     def traverse: Safe[Option[A]] =
       opt.map(s => s.map(Option.apply)).getOrElse(Safe(None))
@@ -45,7 +37,7 @@ package object evaluator {
     }
   }
 
-  implicit class SeqToJava[A](seq: Seq[A]) {
+  implicit class SeqExtensions[A](seq: Seq[A]) {
     def toValidation(message: String): Validation[A] =
       seq.size match {
         case 1 => Valid(seq.head)

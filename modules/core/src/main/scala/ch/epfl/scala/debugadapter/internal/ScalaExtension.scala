@@ -23,4 +23,12 @@ private[debugadapter] object ScalaExtension {
       }
     }
   }
+
+  implicit class TrySeq[A](seq: Seq[Try[A]]) {
+    def traverse: Try[Seq[A]] = {
+      seq.foldRight(Try(Seq.empty[A])) { (safeHead, safeTail) =>
+        safeTail.flatMap(tail => safeHead.map(head => head +: tail))
+      }
+    }
+  }
 }

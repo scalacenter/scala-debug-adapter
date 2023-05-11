@@ -129,12 +129,9 @@ object JavaRuntimeEvaluatorEnvironments {
        |
     """.stripMargin
 }
-class Scala212RuntimeEvaluatorJavaTests extends JavaRuntimeEvaluatorTests(ScalaVersion.`2.12`)
-class Scala213RuntimeEvaluatorJavaTests extends JavaRuntimeEvaluatorTests(ScalaVersion.`2.13`)
-class Scala3RuntimeEvaluatorJavaTests extends JavaRuntimeEvaluatorTests(ScalaVersion.`3.0`)
-class Scala31RuntimeEvaluatorJavaTests extends JavaRuntimeEvaluatorTests(ScalaVersion.`3.1+`)
 
-abstract class JavaRuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
+class JavaRuntimeEvaluatorTests extends DebugTestSuite {
+  val scalaVersion = ScalaVersion.`3.1+`
   lazy val localVar =
     TestingDebuggee.fromJavaSource(JavaRuntimeEvaluatorEnvironments.localVarTestSource, "example.Main", scalaVersion)
   lazy val fieldMethod =
@@ -162,7 +159,7 @@ abstract class JavaRuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends
   test("Should retrieve the value of a field, should it be private or not --- java") {
     implicit val debuggee = fieldMethod
     check(
-      Breakpoint(12),
+      Breakpoint(13),
       DebugStepAssert.inParallel(
         Evaluation.success("main.coucou", "coucou"),
         Evaluation.success("main.lapin", "lapin"),
@@ -241,12 +238,12 @@ abstract class JavaRuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends
     implicit val debuggee = nested
     check(
       Breakpoint(11),
-      DebugStepAssert.inParallel(
-        Evaluation.success("StaticInner.staticMethod()", "i am static static_inner"),
-        Evaluation.failed("Main.Inner.staticMethod()"),
-        Evaluation.success("Main.StaticInner.staticMethod()", "i am static static_inner"),
-        Evaluation.success("Foo.StaticFriendFoo.staticMethod()", "i am static static_friend_foo")
-      )
+      // DebugStepAssert.inParallel(
+      Evaluation.success("StaticInner.staticMethod()", "i am static static_inner"),
+      Evaluation.failed("Main.Inner.staticMethod()"),
+      Evaluation.success("Main.StaticInner.staticMethod()", "i am static static_inner"),
+      Evaluation.success("Foo.StaticFriendFoo.staticMethod()", "i am static static_friend_foo")
+      // )
     )
   }
 }

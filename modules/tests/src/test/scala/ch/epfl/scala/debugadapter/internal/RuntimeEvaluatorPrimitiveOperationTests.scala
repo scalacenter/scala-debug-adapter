@@ -16,6 +16,11 @@ object RuntimeEvaluatorPrimitiveEnvironment {
        |  def main(args: Array[String]): Unit = {
        |    val name = "world"
        |    println(name)
+       |    val foo1 = Foo(1)
+       |    val foo2 = Foo(2)
+       |    val barFoo1 = Bar(foo1)
+       |    val barFoo2 = Bar(foo2)
+       |    println(barFoo1)
        |  }
        |  def int(): Int = 42
        |  def boolean(): Boolean = true
@@ -26,14 +31,12 @@ object RuntimeEvaluatorPrimitiveEnvironment {
        |  def byte(): Byte = 42.toByte
        |  def char(): Char = 'a'
        |}
+       |
+       |case class Foo(x: Int)
+       |case class Bar(foo: Foo)
        |""".stripMargin
 }
 
-class Scala212RuntimeEvaluatorPrimitiveOperationTests
-    extends RuntimeEvaluatorPrimitiveOperationTests(ScalaVersion.`2.12`)
-class Scala213RuntimeEvaluatorPrimitiveOperationTests
-    extends RuntimeEvaluatorPrimitiveOperationTests(ScalaVersion.`2.13`)
-class Scala3RuntimeEvaluatorPrimitiveOperationTests extends RuntimeEvaluatorPrimitiveOperationTests(ScalaVersion.`3.0`)
 class Scala31RuntimeEvaluatorPrimitiveOperationTests
     extends RuntimeEvaluatorPrimitiveOperationTests(ScalaVersion.`3.1+`)
 
@@ -93,7 +96,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute primitive method calls on longs") {
-    implicit val debugge = localVar
+    implicit val debuggee = localVar
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -116,7 +119,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute primitive method calls on ints") {
-    implicit val debugge = localVar
+    implicit val debuggee = localVar
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -139,7 +142,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute primitive method calls on shorts") {
-    implicit val debugge = localVar
+    implicit val debuggee = localVar
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -162,7 +165,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute primitive method calls on bytes") {
-    implicit val debugge = localVar
+    implicit val debuggee = localVar
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -175,7 +178,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute primitive method calls on chars") {
-    implicit val debugge = localVar
+    implicit val debuggee = localVar
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -197,7 +200,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute primitive method calls on booleans") {
-    implicit val debugge = localVar
+    implicit val debuggee = localVar
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -293,11 +296,60 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
       Breakpoint(6),
       DebugStepAssert.inParallel(
         Evaluation.success("new java.lang.Integer(42) + 1", 43),
+        Evaluation.success("1 + new java.lang.Integer(42)", 43),
+        Evaluation.success("new java.lang.Integer(42) + new java.lang.Integer(1)", 43),
         Evaluation.success("new java.lang.Long(42L) + 1", 43L),
+        Evaluation.success("1 + new java.lang.Long(42L)", 43L),
+        Evaluation.success("new java.lang.Long(42L) + new java.lang.Integer(1)", 43L),
         Evaluation.success("new java.lang.Float(42f) + 1", 43.0f),
+        Evaluation.success("1 + new java.lang.Float(42f)", 43.0f),
         Evaluation.success("new java.lang.Double(42.0) + 1", 43.0),
+        Evaluation.success("1 + new java.lang.Double(42.0)", 43.0),
         Evaluation.success("new java.lang.Character('a') + 1", 98),
-        Evaluation.success("new java.lang.Boolean(true) || false", true)
+        Evaluation.success("1 + new java.lang.Character('a')", 98),
+        Evaluation.success("new java.lang.Boolean(true) || false", true),
+        Evaluation.success("true || new java.lang.Boolean(false)", true)
+      )
+    )
+  }
+
+  test("Should decide whether 2 instances are equals or not") {
+    implicit val debuggee = localVar
+    check(
+      Breakpoint(11),
+      DebugStepAssert.inParallel(
+        Evaluation.success("Foo(1) == Foo(1)", true),
+        Evaluation.success("Foo(1) == Foo(2)", false),
+        Evaluation.success("Foo(1) != Foo(1)", false),
+        Evaluation.success("Foo(1) != Foo(2)", true),
+        Evaluation.success("foo1 == foo1", true),
+        Evaluation.success("foo1 == foo2", false),
+        Evaluation.success("foo1 != foo1", false),
+        Evaluation.success("foo1 != foo2", true),
+        Evaluation.success("Bar(Foo(1)) == Bar(Foo(1))", true),
+        Evaluation.success("Bar(Foo(1)) == Bar(Foo(2))", false),
+        Evaluation.success("Bar(Foo(1)) != Bar(Foo(1))", false),
+        Evaluation.success("Bar(Foo(1)) != Bar(Foo(2))", true),
+        Evaluation.success("barFoo1 == barFoo1", true),
+        Evaluation.success("barFoo1 == barFoo2", false),
+        Evaluation.success("barFoo1 != barFoo1", false),
+        Evaluation.success("barFoo1 != barFoo2", true)
+      )
+    )
+  }
+
+  test("Should refuse bad types primitive operations") {
+    implicit val debuggee = localVar
+    check(
+      Breakpoint(6),
+      DebugStepAssert.inParallel(
+        Evaluation.failed("1 + new java.lang.Object()"),
+        Evaluation.failed("new java.lang.Object() + 1"),
+        Evaluation.failed("!1"),
+        Evaluation.failed("1 && true"),
+        Evaluation.failed("true && 1"),
+        Evaluation.failed("1 + true"),
+        Evaluation.failed("true + 1")
       )
     )
   }

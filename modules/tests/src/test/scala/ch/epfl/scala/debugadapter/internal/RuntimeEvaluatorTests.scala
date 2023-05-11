@@ -33,7 +33,7 @@ object RuntimeEvaluatorEnvironments {
        |
        |class SuperFoo { 
        |  private val superfoo: String = "hello super"
-       |  def keeSuperfoo: String = superfoo
+       |  def keepSuperfoo: String = superfoo
        |}
        |
        |case class Foo() extends SuperFoo with FooTrait {
@@ -54,7 +54,7 @@ object RuntimeEvaluatorEnvironments {
        |    val x = f1.InnerFoo.hello
        |    f1.foo
        |    val f2 = Foo_v2("hello ")
-       |    val list = List(0)
+       |    val list = List(0); new NoObjectFoo()
        |    println("ok")
        |  }
        |
@@ -86,6 +86,8 @@ object RuntimeEvaluatorEnvironments {
        |case class Foo_v2(str: String) { def bar(int: Int): String = str + int }
        |
        |object Foo_v2 { val hello: String = "hello foo" }
+       |
+       |class NoObjectFoo { def foo: String = "hello foo" }
        |""".stripMargin
 
   val nested =
@@ -97,7 +99,10 @@ object RuntimeEvaluatorEnvironments {
        |    val inner = Inner(42)
        |    inner.helloInner
        |    val friendFoo = foo.FriendFoo(foo)
-       |    friendFoo.greet
+       |    friendFoo.greet;
+       |    val nested1 = Nested(42);
+       |    val nested2 = Nested(1);
+       |    println("ok")
        |  }
        |
        |  def upperMain = "upper main"
@@ -105,10 +110,14 @@ object RuntimeEvaluatorEnvironments {
        |  case class Inner(x: Int) {
        |    val y = x + 1
        |    def helloInner = s"hello inner $x"
+       |    case class InnerInner() { val str = s"inner inner $y" }
+       |    object InnerInner { val str = s"inner inner $x" }
        |  }
        |  object Inner { 
        |    val z = 42
        |    def helloInner = "hello inner"
+       |    case class DoubleInner(zz: Int) { val str = s"double inner $zz"}
+       |    object DoubleInner { val str = "double inner" }
        |  }
        |}
        |
@@ -118,24 +127,45 @@ object RuntimeEvaluatorEnvironments {
        |    val y = 42
        |    def greet = "Friend"
        |    def add(x: Int, y: Int)= x + y
+       |    case class InnerFriendFoo() { val str = s"inner friend foo $y"}
+       |    object InnerFriendFoo { val str = s"object inner friend foo $y"}
        |  }
        |  object FriendFoo {
        |    val z = 42
        |    def greet = "Friendly"
+       |    case class ObjectFriendFoo() { val str = s"object friend foo $z"}
+       |    object ObjectFriendFoo { val str = s"object object friend foo $z"}
        |  }
        |}
        |
+       |case class Nested(x: Int) {
+       |  object InnerNested { val y = 42 + x }
+       |}
+       |
     """.stripMargin
+
+  val cls =
+    """|package example
+       |
+       |object Main {
+       |  def main(args: Array[String]): Unit = {
+       |    val foo = Foo(2)
+       |    println("ok")
+       |  }
+       |}
+       |
+       |class NoObject
+       |
+       |case class Foo(x: Int)
+       |""".stripMargin
 }
 
 class Scala212RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`2.12`)
 class Scala213RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`2.13`)
-class Scala3RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`3.0`)
 class Scala31RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`3.1+`)
 
 class Scala212RuntimeEvaluatorFallbackTests extends RuntimeEvaluatorFallbackTests(ScalaVersion.`2.12`)
 class Scala213RuntimeEvaluatorFallbackTests extends RuntimeEvaluatorFallbackTests(ScalaVersion.`2.13`)
-class Scala3RuntimeEvaluatorFallbackTests extends RuntimeEvaluatorFallbackTests(ScalaVersion.`3.0`)
 class Scala31RuntimeEvaluatorFallbackTests extends RuntimeEvaluatorFallbackTests(ScalaVersion.`3.1+`)
 
 abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
@@ -144,6 +174,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   lazy val field = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.fieldSource, "example.Main", scalaVersion)
   lazy val method = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.methodSource, "example.Main", scalaVersion)
   lazy val nested = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.nested, "example.Main", scalaVersion)
+  lazy val cls = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.cls, "example.Main", scalaVersion)
 
   protected override def defaultConfig: DebugConfig =
     super.defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly)
@@ -182,6 +213,14 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Evaluation.success("bar1", 42),
       Breakpoint(10),
       Evaluation.success("foo", "hello foo")
+    )
+  }
+
+  test("Should compute a method on a superclass --- scala") {
+    implicit val debuggee = field
+    check(
+      Breakpoint(8),
+      Evaluation.success("f1.keepSuperfoo", "hello super")
     )
   }
 
@@ -281,7 +320,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should get the value of a field in a nested type --- scala") {
     implicit val debuggee = nested
     check(
-      Breakpoint(9),
+      Breakpoint(11),
       DebugStepAssert.inParallel(
         Evaluation.success("Inner.z", 42),
         Evaluation.success("inner.y", 43),
@@ -295,13 +334,14 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should compute a method call on a nested type --- scala") {
     implicit val debuggee = nested
     check(
-      Breakpoint(9),
+      Breakpoint(11),
       DebugStepAssert.inParallel(
         Evaluation.success("Inner.helloInner", "hello inner"),
         Evaluation.success("inner.helloInner", "hello inner 42"),
         Evaluation.success("foo.FriendFoo.greet", "Friendly"),
         Evaluation.success("foo.FriendFoo(foo).greet", "Friend"),
-        Evaluation.success("foo.FriendFoo(foo).add(1, 2)", 3)
+        Evaluation.success("foo.FriendFoo(foo).add(1, 2)", 3),
+        Evaluation.success("Main.Inner.DoubleInner.str", "double inner")
       )
     )
   }
@@ -316,12 +356,62 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   //   )
   // }
 
-  test("Should not access inner / nested types of a class") {
-    implicit val debuggee = method
+  test("Should not access inner / nested types of a non-static class") {
+    implicit val debuggee = nested
     check(
       Breakpoint(10),
-      Evaluation.failed("Foo_v1.InnerFoo(41).hello(1)"),
-      Evaluation.failed("Foo_v1.InnerFoo.hello")
+      Evaluation.failed("Foo.FriendFoo.greet"),
+      Evaluation.failed("Foo.FriendFoo(Foo()).greet")
+    )
+  }
+
+  test(
+    "Should access to multiple layers of nested types. However when the nested class take no parameters there is a conflict with its companion object"
+  ) {
+    implicit val debuggee = nested
+    check(
+      Breakpoint(10),
+      DebugStepAssert.inParallel(
+        Evaluation.success("Main.Inner.helloInner", "hello inner"),
+        Evaluation.success("Main.Inner(41).y", 42),
+        Evaluation.success("Main.Inner.z", 42),
+        Evaluation.success("Main.Inner.DoubleInner(84).str", "double inner 84"),
+        Evaluation.success("Main.Inner.DoubleInner.str", "double inner"),
+        Evaluation.success("Main.Inner(42).InnerInner.str", "inner inner 42"),
+        Evaluation.successOrIgnore("Main.Inner(41).InnerInner().str", "inner inner 42", true),
+        Evaluation.success("Foo().FriendFoo(Foo()).InnerFriendFoo.str", "object inner friend foo 42"),
+        Evaluation.successOrIgnore("Foo().FriendFoo(Foo()).InnerFriendFoo().str", "inner friend foo 42", true),
+        Evaluation.success("Foo().FriendFoo.ObjectFriendFoo.str", "object object friend foo 42"),
+        Evaluation.successOrIgnore("Foo().FriendFoo.ObjectFriendFoo().str", "object friend foo 42", true)
+      )
+    )
+  }
+
+  test("Should access the right nested module") {
+    implicit val debuggee = nested
+    check(
+      Breakpoint(12),
+      DebugStepAssert.inParallel(
+        Evaluation.success("nested1.InnerNested.y", 84),
+        Evaluation.success("nested2.InnerNested.y", 43),
+        Evaluation.success("Nested(0).InnerNested.y", 42),
+        Evaluation.success("Nested(100).InnerNested.y", 142),
+        Evaluation.success("Nested(42).InnerNested.y", 84),
+        Evaluation.success("Nested(84).InnerNested.y", 126),
+        Evaluation.failed("Nested.InnerNested.y")
+      )
+    )
+  }
+
+  test("Should evaluate a module, but not a class") {
+    implicit val debuggee = cls
+    check(
+      Breakpoint(6),
+      DebugStepAssert.inParallel(
+        Evaluation.success("foo.getClass") { res => assert(res.startsWith("Class (Foo)@")) },
+        Evaluation.success("Foo") { res => assert(res.startsWith("Foo$@")) },
+        Evaluation.failed("NoObject")
+      )
     )
   }
 }

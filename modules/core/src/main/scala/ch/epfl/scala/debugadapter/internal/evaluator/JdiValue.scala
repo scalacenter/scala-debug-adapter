@@ -1,7 +1,6 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi._
-import scala.util.Failure
 
 private[internal] class JdiValue(val value: Value, val thread: ThreadReference) {
   def asObject: JdiObject = JdiObject(value, thread)
@@ -33,49 +32,49 @@ private[internal] class JdiValue(val value: Value, val thread: ThreadReference) 
   def toDouble: Safe[Double] =
     value match {
       case value: PrimitiveValue => Safe(value.doubleValue())
-      case _ => Safe(Failure(new Exception("Cannot convert to double")))
+      case _ => Safe.failed("Cannot convert to double")
     }
 
   def toFloat: Safe[Float] =
     value match {
       case value: PrimitiveValue => Safe(value.floatValue())
-      case _ => Safe(Failure(new Exception("Cannot convert to float")))
+      case _ => Safe.failed("Cannot convert to float")
     }
 
   def toLong: Safe[Long] =
     value match {
       case value: PrimitiveValue => Safe(value.longValue())
-      case _ => Safe(Failure(new Exception("Cannot convert to long")))
+      case _ => Safe.failed("Cannot convert to long")
     }
 
   def toInt: Safe[Int] =
     value match {
       case value: PrimitiveValue => Safe(value.intValue())
-      case _ => Safe(Failure(new Exception("Cannot convert to int")))
+      case _ => Safe.failed("Cannot convert to int")
     }
 
   def toShort: Safe[Short] =
     value match {
       case value: PrimitiveValue => Safe(value.shortValue())
-      case _ => Safe(Failure(new Exception("Cannot convert to short")))
+      case _ => Safe.failed("Cannot convert to short")
     }
 
   def toChar: Safe[Char] =
     value match {
       case value: PrimitiveValue => Safe(value.charValue())
-      case _ => Safe(Failure(new Exception("Cannot convert to char")))
+      case _ => Safe.failed("Cannot convert to char")
     }
 
   def toByte: Safe[Byte] =
     value match {
       case value: PrimitiveValue => Safe(value.byteValue())
-      case _ => Safe(Failure(new Exception("Cannot convert to byte")))
+      case _ => Safe.failed("Cannot convert to byte")
     }
 
   def toBoolean: Safe[Boolean] =
     value match {
       case value: PrimitiveValue => Safe(value.booleanValue())
-      case _ => Safe(Failure(new Exception("Cannot convert to boolean")))
+      case _ => Safe.failed("Cannot convert to boolean")
     }
 }
 
