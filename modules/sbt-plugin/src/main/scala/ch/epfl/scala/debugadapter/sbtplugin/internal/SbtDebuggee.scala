@@ -35,7 +35,7 @@ private[debugadapter] final class MainClassDebuggee(
     s"${getClass.getSimpleName}(${target.uri}, $mainClass)"
 
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] =
-    DebuggeeProcess.start(forkOptions, classPath, mainClass, args, listener, logger.underlying)
+    DebuggeeProcess.start(forkOptions, classPath, mainClass, args, listener, logger)
 }
 
 private[debugadapter] final class TestSuitesDebuggee(
