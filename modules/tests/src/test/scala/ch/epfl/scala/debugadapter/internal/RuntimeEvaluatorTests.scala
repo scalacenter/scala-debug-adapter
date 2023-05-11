@@ -54,7 +54,6 @@ object RuntimeEvaluatorEnvironments {
        |    val x = f1.InnerFoo.hello
        |    f1.foo
        |    val f2 = Foo_v2("hello ")
-       |    Foo_v2.hello
        |    val list = List(0)
        |    println("ok")
        |  }
@@ -96,9 +95,12 @@ object RuntimeEvaluatorEnvironments {
        |  def main(args: Array[String]): Unit = {
        |    val foo = Foo()
        |    val inner = Inner(42)
+       |    inner.helloInner
        |    val friendFoo = foo.FriendFoo(foo)
-       |    println("the end")
+       |    friendFoo.greet
        |  }
+       |
+       |  def upperMain = "upper main"
        |
        |  case class Inner(x: Int) {
        |    val y = x + 1
@@ -111,6 +113,7 @@ object RuntimeEvaluatorEnvironments {
        |}
        |
        |case class Foo() {
+       |  def upperMethod = "upper"
        |  case class FriendFoo(f1: Foo) {
        |    val y = 42
        |    def greet = "Friend"
@@ -147,7 +150,11 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
 
   test("should retrieve the value of a local variable from jdi --- scala") {
     implicit val debuggee = localVar
-    check(Breakpoint(6), Evaluation.success("name", "world"), Evaluation.failed("unknown"))
+    check(
+      Breakpoint(6),
+      Evaluation.success("name", "world"),
+      Evaluation.failed("unknown")
+    )
 
   }
 
@@ -171,9 +178,9 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should compute a method call on the current class --- scala") {
     implicit val debuggee = method
     check(
-      Breakpoint(28),
+      Breakpoint(27),
       Evaluation.success("bar1", 42),
-      Breakpoint(11),
+      Breakpoint(10),
       Evaluation.success("foo", "hello foo")
     )
   }
@@ -181,7 +188,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should compute a method call on an instance of a class --- scala") {
     implicit val debuggee = method
     check(
-      Breakpoint(11),
+      Breakpoint(10),
       DebugStepAssert.inParallel(
         Evaluation.success("f1.foo", "hello foo"),
         Evaluation.success("f1.bar(\"hello \", 42)", "hello 42"),
@@ -198,7 +205,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should compute an unary method --- scala") {
     implicit val debuggee = method
     check(
-      Breakpoint(11),
+      Breakpoint(10),
       Evaluation.success("+f1", "hello unary")
     )
   }
@@ -206,7 +213,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should fail if the method doest not exists or arguments aren't correct (in count & types) --- scala") {
     implicit val debuggee = method
     check(
-      Breakpoint(11),
+      Breakpoint(10),
       DebugStepAssert.inParallel(
         Evaluation.failed("f1.bar(\"hello \", 42, 42)"),
         Evaluation.failed("f1.bar(\"hello \")"),
@@ -218,7 +225,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should compute an implicit .apply() call --- scala") {
     implicit val debuggee = method
     check(
-      Breakpoint(11),
+      Breakpoint(10),
       DebugStepAssert.inParallel(
         Evaluation.success("f1.foo_v2(\"hello \").bar(42)", "hello 42"),
         Evaluation.success("Foo_v1().toString()", "Foo_v1()"),
@@ -231,7 +238,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should find the right inner type among the same-name inner types --- scala") {
     implicit val debuggee = method
     check(
-      Breakpoint(11),
+      Breakpoint(10),
       DebugStepAssert.inParallel(
         Evaluation.success("InnerFoo(41).hello(1)", "hello inner foo 42"),
         Evaluation.success("InnerFoo.hello", "hello main inner foo")
@@ -242,7 +249,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should be able to unbox arguments --- scala") {
     implicit val debuggee = method
     check(
-      Breakpoint(11),
+      Breakpoint(10),
       DebugStepAssert.inParallel(
         Evaluation.success("inner(new Integer(42)).x", 42),
         Evaluation.failed("inner(new Boolean(true)).x")
@@ -253,7 +260,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should compute a static method call --- scala") {
     implicit val debuggee = method
     check(
-      Breakpoint(11),
+      Breakpoint(10),
       Evaluation.success("Foo_v1.hello", "hello foo"),
       Evaluation.success("Foo_v2.hello", "hello foo"),
       Evaluation.success("InnerFoo.hello", "hello main inner foo")
@@ -265,7 +272,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   ) {
     implicit val debuggee = method
     check(
-      Breakpoint(11),
+      Breakpoint(10),
       Evaluation.success("bar(\"hello \", 42)", "hello 42"),
       Evaluation.failed("bar(List(1, 2, 3))")
     )
@@ -274,7 +281,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should get the value of a field in a nested type --- scala") {
     implicit val debuggee = nested
     check(
-      Breakpoint(8),
+      Breakpoint(9),
       DebugStepAssert.inParallel(
         Evaluation.success("Inner.z", 42),
         Evaluation.success("inner.y", 43),
@@ -288,7 +295,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should compute a method call on a nested type --- scala") {
     implicit val debuggee = nested
     check(
-      Breakpoint(8),
+      Breakpoint(9),
       DebugStepAssert.inParallel(
         Evaluation.success("Inner.helloInner", "hello inner"),
         Evaluation.success("inner.helloInner", "hello inner 42"),
@@ -299,10 +306,20 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
+  // test("Should access to wrapping class methods") {
+  //   implicit val debuggee = nested
+  //   check(
+  //     Breakpoint(16),
+  //     Evaluation.successOrIgnore("upperMain", "upper main", true),
+  //     Breakpoint(28),
+  //     Evaluation.successOrIgnore("upperMethod", "upper", true)
+  //   )
+  // }
+
   test("Should not access inner / nested types of a class") {
     implicit val debuggee = method
     check(
-      Breakpoint(11),
+      Breakpoint(10),
       Evaluation.failed("Foo_v1.InnerFoo(41).hello(1)"),
       Evaluation.failed("Foo_v1.InnerFoo.hello")
     )
@@ -322,7 +339,7 @@ abstract class RuntimeEvaluatorFallbackTests(val scalaVersion: ScalaVersion) ext
   test("Should fallback to compiler when overloads are present --- scala") {
     implicit val debuggee = method
     check(
-      Breakpoint(11),
+      Breakpoint(10),
       DebugStepAssert.inParallel(
         Evaluation.success("bar(\"hello \", 42)", "hello 42"),
         Evaluation.success("bar(42, 42)", 84)

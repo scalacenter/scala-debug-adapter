@@ -6,6 +6,7 @@ import scala.meta.{Type => _, _}
 import scala.meta.parsers.*
 import scala.meta.trees.*
 import MatchingMethods.*
+import Helpers.*
 import RuntimeEvaluatorBooleanPatterns.*
 import scala.util.Try
 import scala.util.Failure
@@ -20,22 +21,17 @@ case class RuntimeEvaluator(
 ) {
   private lazy val vm = frame.current().virtualMachine()
   private val thisTree = Validation.fromOption(frame.thisObject.map(ThisTree(_)))
+  private val unitTree = Valid(LiteralTree(MatchingMethods.fromLitToValue(frame, Lit.Unit())))
 
-  private def parse(expression: String): Validation[Stat] = {
-    expression match {
-      case InvalidBegins() | InvalidTokens() =>
-        Recoverable("Cannot define types or use pattern matching / implicits at runtime")
-      case _: String =>
-        expression.parse[Stat] match {
-          case err: Parsed.Error => Unrecoverable(err.details)
-          case Parsed.Success(tree) => Valid(tree)
-          case _: Parsed.Success[?] =>
-            Unrecoverable(new Exception("Parsed expression is not a statement"))
-        }
+  private def parse(expression: String): Validation[Stat] =
+    expression.parse[Stat] match {
+      case err: Parsed.Error => Unrecoverable(err.details)
+      case Parsed.Success(tree) => Valid(tree)
+      case _: Parsed.Success[?] =>
+        Unrecoverable(new Exception("Parsed expression is not a statement"))
     }
-  }
 
-  def validate(expression: String): Validation[RuntimeValidationTree] = {
+  @inline def validate(expression: String): Validation[RuntimeValidationTree] = {
     parse(expression).flatMap { tree =>
       val validated = RuntimeValidation.validate(tree)
       validated match {
@@ -45,7 +41,8 @@ case class RuntimeEvaluator(
     }
   }
 
-  def evaluate(expression: RuntimeValidationTree): Safe[JdiValue] = RuntimeEvaluation.evaluate(expression)
+  @inline def evaluate(expression: RuntimeValidationTree): Safe[JdiValue] =
+    RuntimeEvaluation.evaluate(expression).map(_.derefIfRef)
 
   /* -------------------------------------------------------------------------- */
 
@@ -149,7 +146,7 @@ case class RuntimeEvaluator(
     )(f: ReferenceType => Validation[RuntimeEvaluationTree]) =
       tree match {
         case ReferenceTree(ref) => f(ref)
-        case _: Invalid => staticCallError
+        case _: Invalid => Unrecoverable("Calling from static context, 'this' unavailable")
         case t => illegalAccess(t, "ReferenceType")
       }
 
@@ -163,7 +160,7 @@ case class RuntimeEvaluator(
       extractElementIfReference(of) { ref =>
         for {
           field <- Validation(ref.fieldByName(name))
-          _ = loadClassOnNeed(field)
+          _ = loadClassOnNeed(field, frame)
         } yield field match {
           case Module(module) => ModuleTree(module, of.toOption)
           case field => toStaticIfNeeded(field, of.get)
@@ -177,7 +174,6 @@ case class RuntimeEvaluator(
       extractElementIfReference(of) { ref =>
         for {
           method <- methodsByNameAndArgs(ref, name, List.empty, frame)
-          _ = loadClassOnNeed(method)
         } yield toStaticIfNeeded(method, List.empty, of.get)
       }
 
@@ -189,10 +185,10 @@ case class RuntimeEvaluator(
         val typeName = of.map(_.`type`.name())
         val moduleName = if (name.endsWith("$")) name else name + "$"
         val clsName = name.stripSuffix("$")
-        searchAllClassesFor(moduleName, typeName)
+        searchAllClassesFor(moduleName, typeName, frame)
           .map(ModuleTree(_, of))
           .orElse {
-            searchAllClassesFor(clsName, typeName)
+            searchAllClassesFor(clsName, typeName, frame)
               .map(ClassTree(_))
           }
       }
@@ -210,7 +206,7 @@ case class RuntimeEvaluator(
     private def validateName(
         value: Term.Name
     ): Validation[RuntimeValidationTree] = {
-      val name = value.value
+      val name = NameTransformer.encode(value.value)
       varTreeByName(name)
         .orElse(fieldTreeByName(thisTree, name))
         .orElse(zeroArgMethodTreeByName(thisTree, name))
@@ -231,11 +227,11 @@ case class RuntimeEvaluator(
     @inline private def validatePrimitiveMethod(
         name: String,
         lhs: Validation[RuntimeValidationTree],
-        rhs: Validation[RuntimeValidationTree]
+        rhs: Option[Validation[RuntimeValidationTree]]
     ): Validation[RuntimeEvaluationTree] =
       for {
         left <- lhs
-        right <- rhs
+        right <- rhs.getOrElse(unitTree)
         op <- Validation.fromOption(RuntimePrimitiveOp(left, right, name))
       } yield PrimitiveMethodTree(left, right, op)
 
@@ -265,6 +261,14 @@ case class RuntimeEvaluator(
           } yield apply
       }
 
+    // private def findInOuter(
+    //     ref: ReferenceType,
+    //     name: String,
+    //     args: Seq[RuntimeValidationTree]
+    // ): Validation[MethodTree] =
+    //     Option(ref.fieldByName("$outer"))
+    //   }
+
     // TODO: should look into upper classes as well
     private def findMethod(
         tree: RuntimeValidationTree,
@@ -286,17 +290,13 @@ case class RuntimeEvaluator(
         case name: Term.Name => PreparedCall(thisTree, name.value)
       }
 
-      // TODO: refactor this (potentially overridden method)
-      if (preparedCall.name == "unary_!")
-        validatePrimitiveMethod("!", preparedCall.qual, preparedCall.qual)
-      else if (call.argClause.size == 1 && RuntimePrimitiveOp.allOperations.contains(preparedCall.name))
-        validatePrimitiveMethod(preparedCall.name, preparedCall.qual, validate(call.argClause.head))
+      if (call.argClause.size <= 1 && RuntimePrimitiveOp.allOperations.contains(preparedCall.name))
+        validatePrimitiveMethod(preparedCall.name, preparedCall.qual, call.argClause.headOption.map(validate))
       else
         for {
           args <- call.argClause.map(validate(_)).traverse
           qual <- preparedCall.qual
           methodTree <- findMethod(qual, preparedCall.name, args)
-          _ = loadClassOnNeed(methodTree.method)
         } yield methodTree
     }
 
@@ -325,76 +325,9 @@ case class RuntimeEvaluator(
 
       for {
         args <- argClauses.flatMap(_.map(validate(_))).traverse
-        cls <- searchAllClassesFor(name, None)
+        cls <- searchAllClassesFor(name, None, frame)
         method <- methodsByNameAndArgs(cls, "<init>", args.map(_.`type`), frame, encode = false)
       } yield NewInstanceTree(method, args)
-    }
-
-    /* -------------------------------------------------------------------------- */
-    /*                                   Helpers                                  */
-    /* -------------------------------------------------------------------------- */
-    @inline private def staticCallError = Recoverable("Calling from static context, 'this' unavailable")
-    @inline private def illegalAccess(x: Any, typeName: String) = Unrecoverable {
-      new ClassCastException(s"Cannot cast $x to $typeName")
-    }
-
-    @inline private def toStaticIfNeeded(field: Field, on: RuntimeValidationTree): FieldTree = on match {
-      case cls: ClassTree => StaticFieldTree(field, cls.`type`)
-      case eval: RuntimeEvaluationTree => InstanceFieldTree(field, eval)
-    }
-
-    @inline private def toStaticIfNeeded(
-        method: Method,
-        args: Seq[RuntimeValidationTree],
-        on: RuntimeValidationTree
-    ): MethodTree = on match {
-      case cls: ClassTree => StaticMethodTree(method, args, cls.`type`)
-      case eval: RuntimeEvaluationTree => InstanceMethodTree(method, args, eval)
-    }
-
-    @inline private def loadClass(name: String): Safe[JdiClass] = frame.classLoader().flatMap(_.loadClass(name))
-    // TODO: better name
-    private def checkClass(tpe: => Type)(name: String) = Try(tpe) match {
-      case Failure(_: ClassNotLoadedException) => loadClass(name).getResult.map(_.cls)
-      case Success(value: ClassType) if !value.isPrepared => loadClass(name).getResult.map(_.cls)
-      case result => result
-    }
-
-    private def loadClassOnNeed(tc: TypeComponent): Try[Type] = tc match {
-      case f: Field => checkClass(f.`type`())(f.typeName())
-      case m: Method => checkClass(m.returnType())(m.returnTypeName())
-    }
-
-    private def searchAllClassesFor(name: String, in: Option[String]): Validation[ClassType] = {
-      def fullName = in match {
-        case Some(value) if value == name => name // name duplication when implicit apply call
-        case Some(value) if value.endsWith("$") => value + name
-        case Some(value) => value + "$" + name
-        case None => name
-      }
-
-      def nameEndMatch(cls: String) =
-        (name.endsWith("$"), cls.endsWith("$")) match {
-          case (true, true) | (false, false) =>
-            cls.split('.').last.split('$').last == name.stripSuffix("$")
-          case (true, false) | (false, true) => false
-        }
-
-      def candidates =
-        vm.allClasses()
-          .asScalaSeq
-          .filter { cls => cls.name() == name || nameEndMatch(cls.name()) }
-
-      def finalCandidates =
-        candidates.size match {
-          case 0 => loadClass(fullName).map(_.cls).getResult.toSeq
-          case 1 => candidates
-          case _ => candidates.filter(_.name() == fullName)
-        }
-
-      finalCandidates
-        .toValidation(s"Cannot find module/class $fullName")
-        .map { cls => checkClass(cls)(cls.name()).get.asInstanceOf[ClassType] }
     }
   }
 }
@@ -414,7 +347,8 @@ private object MatchingMethods {
       case Lit.Long(value) => vm.mirrorOf(value)
       case Lit.Short(value) => vm.mirrorOf(value)
       case Lit.String(value) => vm.mirrorOf(value)
-      case _ => throw new Exception(s"Unsupported literal: $literal")
+      case Lit.Unit() => vm.mirrorOfVoid()
+      case _ => throw new IllegalArgumentException(s"Unsupported literal: $literal")
     }
 
     JdiValue(value, frame.thread)
@@ -426,6 +360,22 @@ private object MatchingMethods {
   @inline private def argsMatch(method: Method, args: Seq[Type], frame: JdiFrame): Boolean =
     method.argumentTypeNames().size() == args.size && sameTypes(method, args, frame)
 
+  /**
+    * Look for a method with the given name and arguments types, on the given reference type
+    * 
+    * Encode the method name by default, but can be disabled for methods that are not Scala methods (such as Java <init> methods)
+    * 
+    * If multiple methods are found, a [[ValidationMonad.Unrecoverable]] is returned
+    * 
+    * Also, if the method return type is not loaded or prepared, it will be loaded and prepared
+    * 
+    * @param ref the reference type on which to look for the method
+    * @param funName the name of the method
+    * @param args the arguments types of the method
+    * @param frame the current frame
+    * @param encode whether to encode the method name or not
+    * @return the method, wrapped in a [[ValidationMonad]], with its return type loaded and prepared
+    */
   def methodsByNameAndArgs(
       ref: ReferenceType,
       funName: String,
@@ -439,6 +389,7 @@ private object MatchingMethods {
       .filter(method => !method.isPrivate && argsMatch(method, args, frame))
       .toSeq
       .toValidation(s"Cannot find methods $funName with args types $args")
+      .map(loadClassOnNeed(_, frame))
 
   /* -------------------------------------------------------------------------- */
   /*                                Type checker                                */
@@ -472,4 +423,82 @@ private object MatchingMethods {
     method.argumentTypes().asScalaSeq.zip(args).forall { case (expected, got) =>
       sameType(got, expected, frame)
     }
+}
+
+/* --------------------------------- Helpers -------------------------------- */
+
+private object Helpers {
+  @inline def illegalAccess(x: Any, typeName: String) = Unrecoverable {
+    new ClassCastException(s"Cannot cast $x to $typeName")
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /*                  Transformation to static or instance tree                 */
+  /* -------------------------------------------------------------------------- */
+  @inline def toStaticIfNeeded(field: Field, on: RuntimeValidationTree): FieldTree = on match {
+    case cls: ClassTree => StaticFieldTree(field, cls.`type`)
+    case eval: RuntimeEvaluationTree => InstanceFieldTree(field, eval)
+  }
+
+  @inline def toStaticIfNeeded(
+      method: Method,
+      args: Seq[RuntimeValidationTree],
+      on: RuntimeValidationTree
+  ): MethodTree = on match {
+    case cls: ClassTree => StaticMethodTree(method, args, cls.`type`)
+    case eval: RuntimeEvaluationTree => InstanceMethodTree(method, args, eval)
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /*                                Class helpers                               */
+  /* -------------------------------------------------------------------------- */
+  @inline def loadClass(name: String, frame: JdiFrame): Safe[JdiClass] =
+    frame.classLoader().flatMap(_.loadClass(name))
+
+  def checkClass(tpe: => Type)(name: String, frame: JdiFrame) = Try(tpe) match {
+    case Failure(_: ClassNotLoadedException) => loadClass(name, frame).getResult.map(_.cls)
+    case Success(value: ClassType) if !value.isPrepared => loadClass(name, frame).getResult.map(_.cls)
+    case result => result
+  }
+
+  def loadClassOnNeed[T <: TypeComponent](tc: T, frame: JdiFrame): T = {
+    checkClass(tc.`type`)(tc.typeName, frame)
+    tc
+  }
+
+  def searchAllClassesFor(name: String, in: Option[String], frame: JdiFrame): Validation[ClassType] = {
+    def fullName = in match {
+      case Some(value) if value == name => name // name duplication when implicit apply call
+      case Some(value) if value.endsWith("$") => value + name
+      case Some(value) => value + "$" + name
+      case None => name
+    }
+
+    def nameEndMatch(cls: String) =
+      (name.endsWith("$"), cls.endsWith("$")) match {
+        case (true, true) | (false, false) =>
+          cls.split('.').last.split('$').last == name.stripSuffix("$")
+        case (true, false) | (false, true) => false
+      }
+
+    def candidates =
+      frame
+        .current()
+        .virtualMachine
+        .allClasses()
+        .asScalaSeq
+        .filter { cls => cls.name() == name || nameEndMatch(cls.name()) }
+
+    def finalCandidates =
+      candidates.size match {
+        case 0 => loadClass(fullName, frame).map(_.cls).getResult.toSeq
+        case 1 => candidates
+        case _ => candidates.filter(_.name() == fullName)
+      }
+
+    finalCandidates
+      .toValidation(s"Cannot find module/class $fullName")
+      .map { cls => checkClass(cls)(cls.name(), frame).get.asInstanceOf[ClassType] }
+  }
+
 }

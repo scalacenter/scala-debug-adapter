@@ -5,6 +5,8 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Failure
 import scala.util.Success
 
+import com.sun.jdi.{Type, Method, Field, TypeComponent}
+
 package object evaluator {
   implicit class SafeSeq[A](seq: Seq[Safe[A]]) {
     def traverse: Safe[Seq[A]] = {
@@ -56,5 +58,16 @@ package object evaluator {
 
   implicit class JavaListToScala[A](list: java.util.List[A]) {
     @inline def asScalaSeq: Seq[A] = list.asScala.toSeq
+  }
+
+  implicit class TypeComponentExtension(tc: TypeComponent) {
+    def `type`: Type = tc match {
+      case f: Field => f.`type`()
+      case m: Method => m.returnType()
+    }
+    def typeName: String = tc match {
+      case f: Field => f.typeName()
+      case m: Method => m.returnTypeName()
+    }
   }
 }

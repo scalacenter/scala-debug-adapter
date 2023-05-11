@@ -19,11 +19,10 @@ private[internal] class JdiClassLoader(
     for {
       classNameValue <- mirrorOf(className)
       classClass <- loadClassClass
-      trueMirror <- mirrorOf(true)
       classObject <- classClass.invokeStatic(
         "forName",
         "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;",
-        Seq(classNameValue, trueMirror, this)
+        Seq(classNameValue, mirrorOf(true), this)
       )
     } yield classObject.asClass
 
@@ -33,39 +32,41 @@ private[internal] class JdiClassLoader(
   @inline def mirrorOf(str: String): Safe[JdiString] =
     Safe(thread.virtualMachine.mirrorOf(str)).map(new JdiString(_, thread))
 
-  @inline def mirrorOf(boolean: Boolean): Safe[JdiValue] =
-    Safe(thread.virtualMachine.mirrorOf(boolean)).map(JdiValue(_, thread))
+  @inline def mirrorOf(boolean: Boolean): JdiValue =
+    JdiValue(thread.virtualMachine.mirrorOf(boolean), thread)
 
-  @inline def mirrorOf(byte: Byte): Safe[JdiValue] =
-    Safe(thread.virtualMachine.mirrorOf(byte)).map(JdiValue(_, thread))
+  @inline def mirrorOf(byte: Byte): JdiValue =
+    JdiValue(thread.virtualMachine.mirrorOf(byte), thread)
 
-  @inline def mirrorOf(char: Char): Safe[JdiValue] =
-    Safe(thread.virtualMachine.mirrorOf(char)).map(JdiValue(_, thread))
+  @inline def mirrorOf(char: Char): JdiValue =
+    JdiValue(thread.virtualMachine.mirrorOf(char), thread)
 
-  @inline def mirrorOf(double: Double): Safe[JdiValue] =
-    Safe(thread.virtualMachine.mirrorOf(double)).map(JdiValue(_, thread))
+  @inline def mirrorOf(double: Double): JdiValue =
+    JdiValue(thread.virtualMachine.mirrorOf(double), thread)
 
-  @inline def mirrorOf(float: Float): Safe[JdiValue] =
-    Safe(thread.virtualMachine.mirrorOf(float)).map(JdiValue(_, thread))
+  @inline def mirrorOf(float: Float): JdiValue =
+    JdiValue(thread.virtualMachine.mirrorOf(float), thread)
 
-  @inline def mirrorOf(int: Int): Safe[JdiValue] =
-    Safe(thread.virtualMachine.mirrorOf(int)).map(JdiValue(_, thread))
+  @inline def mirrorOf(int: Int): JdiValue =
+    JdiValue(thread.virtualMachine.mirrorOf(int), thread)
 
-  @inline def mirrorOf(long: Long): Safe[JdiValue] =
-    Safe(thread.virtualMachine.mirrorOf(long)).map(JdiValue(_, thread))
+  @inline def mirrorOf(long: Long): JdiValue =
+    JdiValue(thread.virtualMachine.mirrorOf(long), thread)
 
-  @inline def mirrorOf(short: Short): Safe[JdiValue] =
-    Safe(thread.virtualMachine.mirrorOf(short)).map(JdiValue(_, thread))
+  @inline def mirrorOf(short: Short): JdiValue =
+    JdiValue(thread.virtualMachine.mirrorOf(short), thread)
 
-  def mirrorOfAnyVal(value: AnyVal): Safe[JdiValue] = value match {
-    case d: Double => mirrorOf(d)
-    case f: Float => mirrorOf(f)
-    case l: Long => mirrorOf(l)
-    case i: Int => mirrorOf(i)
-    case s: Short => mirrorOf(s)
-    case c: Char => mirrorOf(c)
-    case b: Byte => mirrorOf(b)
-    case b: Boolean => mirrorOf(b)
+  def mirrorOfAnyVal(value: AnyVal): Safe[JdiValue] = Safe {
+    value match {
+      case d: Double => mirrorOf(d)
+      case f: Float => mirrorOf(f)
+      case l: Long => mirrorOf(l)
+      case i: Int => mirrorOf(i)
+      case s: Short => mirrorOf(s)
+      case c: Char => mirrorOf(c)
+      case b: Byte => mirrorOf(b)
+      case b: Boolean => mirrorOf(b)
+    }
   }
 
   def boxIfPrimitive(value: JdiValue): Safe[JdiValue] =
@@ -77,7 +78,8 @@ private[internal] class JdiClassLoader(
       case value: IntegerValue => box(value.value)
       case value: LongValue => box(value.value)
       case value: ShortValue => box(value.value)
-      case value => Safe(JdiValue(value, thread))
+      case value: ByteValue => box(value.value)
+      case _ => Safe(value)
     }
 
   def box(value: AnyVal): Safe[JdiObject] =
@@ -102,9 +104,8 @@ private[internal] class JdiClassLoader(
     for {
       arrayTypeClass <- loadClass(arrayType)
       arrayClass <- loadClass("java.lang.reflect.Array")
-      size <- mirrorOf(values.size)
       array <- arrayClass
-        .invokeStatic("newInstance", "(Ljava/lang/Class;I)Ljava/lang/Object;", Seq(arrayTypeClass, size))
+        .invokeStatic("newInstance", "(Ljava/lang/Class;I)Ljava/lang/Object;", Seq(arrayTypeClass, mirrorOf(values.size)))
         .map(_.asArray)
     } yield {
       array.setValues(values)

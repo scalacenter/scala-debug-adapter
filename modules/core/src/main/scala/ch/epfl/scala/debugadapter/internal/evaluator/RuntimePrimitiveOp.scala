@@ -11,7 +11,7 @@ sealed trait RuntimePrimitiveOp {
 object RuntimePrimitiveOp {
   val numericOperations = Set("+", "-", "*", "/", "%", "<", ">", "<=", ">=")
   val objectOperations = Set("==", "!=")
-  val booleanOperations = Set("&&", "||", "!")
+  val booleanOperations = Set("&&", "||", "unary_!")
   val allOperations = numericOperations ++ objectOperations ++ booleanOperations
 
   val allowedReferenceTypes = Set(
@@ -35,7 +35,7 @@ object RuntimePrimitiveOp {
       case (_, _: ReferenceType, _) if !allowedReferenceTypes.contains(rhs.`type`.name()) => None
       case (_, _, "&&") => Some(And)
       case (_, _, "||") => Some(Or)
-      case (_, _, "!") => Some(Not)
+      case (_, _, "unary_!") => Some(Not)
       case (_, _, "+") => Some(Plus)
       case (_, _, "-") => Some(Minus)
       case (_, _, "*") => Some(Times)
@@ -181,24 +181,25 @@ case object GreaterOrEqual extends NumericOp
 sealed trait BooleanOp extends RuntimePrimitiveOp {
   def typeWith(lhs: Type, rhs: Type): BooleanType =
     lhs.asInstanceOf[BooleanType]
-  override def evaluate(
-      lhs: JdiValue,
-      rhs: JdiValue,
-      loader: JdiClassLoader
-  ): Safe[JdiValue] =
+}
+case object And extends BooleanOp {
+  override def evaluate(lhs: JdiValue, rhs: JdiValue, loader: JdiClassLoader) =
     for {
       l <- lhs.toBoolean
       r <- rhs.toBoolean
-      result <- this match {
-        case And => loader.mirrorOf(l && r)
-        case Or => loader.mirrorOf(l || r)
-        case Not => loader.mirrorOf(!l)
-      }
-    } yield result
+    } yield loader.mirrorOf(l && r)
 }
-case object And extends BooleanOp
-case object Or extends BooleanOp
-case object Not extends BooleanOp
+case object Or extends BooleanOp {
+  override def evaluate(lhs: JdiValue, rhs: JdiValue, loader: JdiClassLoader) =
+    for {
+      l <- lhs.toBoolean
+      r <- rhs.toBoolean
+    } yield loader.mirrorOf(l || r)
+}
+case object Not extends BooleanOp {
+  override def evaluate(lhs: JdiValue, rhs: JdiValue, loader: JdiClassLoader) =
+    lhs.toBoolean.map(v => loader.mirrorOf(!v))
+}
 
 sealed trait ObjectOp extends RuntimePrimitiveOp {
   override def typeWith(lhs: Type, rhs: Type): PrimitiveType =
@@ -208,9 +209,11 @@ sealed trait ObjectOp extends RuntimePrimitiveOp {
       lhs: JdiValue,
       rhs: JdiValue,
       loader: JdiClassLoader
-  ): Safe[JdiValue] = this match {
-    case Eq => loader.mirrorOf(lhs.value == rhs.value)
-    case Neq => loader.mirrorOf(!(lhs.value == rhs.value))
+  ): Safe[JdiValue] = Safe {
+    this match {
+      case Eq => loader.mirrorOf(lhs.value == rhs.value)
+      case Neq => loader.mirrorOf(!(lhs.value == rhs.value))
+    }
   }
 }
 case object Eq extends ObjectOp

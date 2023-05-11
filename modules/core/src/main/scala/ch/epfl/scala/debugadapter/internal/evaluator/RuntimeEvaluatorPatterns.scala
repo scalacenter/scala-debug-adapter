@@ -7,16 +7,6 @@ import com.sun.jdi.{ClassType, Field, ReferenceType, Type}
 import scala.jdk.CollectionConverters.*
 
 private[internal] object RuntimeEvaluatorBooleanPatterns {
-  object InvalidBegins {
-    val tokens = Seq("case class", "class", "trait", "object", "inline", "implicit")
-    @inline def unapply(arg: String): Boolean = tokens.exists(arg.startsWith)
-  }
-
-  object InvalidTokens {
-    val tokens = Seq("implicitly", "match {")
-    @inline def unapply(arg: String): Boolean = tokens.exists(arg.contains)
-  }
-
   object ColonEndingInfix {
     @inline def unapply(stat: Term.ApplyInfix): Option[Term.ApplyInfix] =
       stat match {
@@ -68,8 +58,8 @@ private[internal] object RuntimeEvaluatorBooleanPatterns {
   }
 
   object MethodCall {
-    @inline def unapply(tree: RuntimeValidationTree): Option[RuntimeValidationTree] =
-      if (tree.hasMethodCall) Some(tree) else None
+    @inline def unapply(tree: Valid[RuntimeValidationTree]): Option[RuntimeValidationTree] =
+      tree.toOption.filter(_.hasMethodCall)
   }
 
   object ReferenceTree {
