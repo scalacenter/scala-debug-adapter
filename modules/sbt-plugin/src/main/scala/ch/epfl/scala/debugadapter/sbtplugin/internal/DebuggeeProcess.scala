@@ -41,7 +41,7 @@ private object DebuggeeProcess {
       mainClass: String,
       arguments: Seq[String],
       listener: DebuggeeListener,
-      logger: sbt.Logger
+      logger: LoggerAdapter
   )(implicit ec: ExecutionContext): DebuggeeProcess = {
     val javaHome = forkOptions.javaHome.getOrElse(new File(System.getProperty("java.home")))
     val javaBin = (javaHome / "bin" / "java").getAbsolutePath
