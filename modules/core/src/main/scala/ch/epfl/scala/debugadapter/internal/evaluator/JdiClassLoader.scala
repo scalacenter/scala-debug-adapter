@@ -26,34 +26,31 @@ private[internal] class JdiClassLoader(
       )
     } yield classObject.asClass
 
-  @inline private def loadThenGetType(className: String): Safe[ClassType] =
-    loadClass(className).map(_.cls)
-
-  @inline def mirrorOf(str: String): Safe[JdiString] =
+  def mirrorOf(str: String): Safe[JdiString] =
     Safe(thread.virtualMachine.mirrorOf(str)).map(new JdiString(_, thread))
 
-  @inline def mirrorOf(boolean: Boolean): JdiValue =
+  def mirrorOf(boolean: Boolean): JdiValue =
     JdiValue(thread.virtualMachine.mirrorOf(boolean), thread)
 
-  @inline def mirrorOf(byte: Byte): JdiValue =
+  def mirrorOf(byte: Byte): JdiValue =
     JdiValue(thread.virtualMachine.mirrorOf(byte), thread)
 
-  @inline def mirrorOf(char: Char): JdiValue =
+  def mirrorOf(char: Char): JdiValue =
     JdiValue(thread.virtualMachine.mirrorOf(char), thread)
 
-  @inline def mirrorOf(double: Double): JdiValue =
+  def mirrorOf(double: Double): JdiValue =
     JdiValue(thread.virtualMachine.mirrorOf(double), thread)
 
-  @inline def mirrorOf(float: Float): JdiValue =
+  def mirrorOf(float: Float): JdiValue =
     JdiValue(thread.virtualMachine.mirrorOf(float), thread)
 
-  @inline def mirrorOf(int: Int): JdiValue =
+  def mirrorOf(int: Int): JdiValue =
     JdiValue(thread.virtualMachine.mirrorOf(int), thread)
 
-  @inline def mirrorOf(long: Long): JdiValue =
+  def mirrorOf(long: Long): JdiValue =
     JdiValue(thread.virtualMachine.mirrorOf(long), thread)
 
-  @inline def mirrorOf(short: Short): JdiValue =
+  def mirrorOf(short: Short): JdiValue =
     JdiValue(thread.virtualMachine.mirrorOf(short), thread)
 
   def mirrorOfAnyVal(value: AnyVal): Safe[JdiValue] = Safe {

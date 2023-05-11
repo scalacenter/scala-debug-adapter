@@ -39,10 +39,10 @@ final case class JdiFrame(thread: ThreadReference, depth: Int) {
   def variablesAndValues(): Seq[(LocalVariable, JdiValue)] =
     variables().map(v => v -> JdiValue(current().getValue(v), thread))
 
-  @inline def variableByName(name: String): Option[LocalVariable] =
+  def variableByName(name: String): Option[LocalVariable] =
     variables().find(_.name == name)
 
-  @inline def variableValue(variable: LocalVariable): JdiValue =
+  def variableValue(variable: LocalVariable): JdiValue =
     JdiValue(current().getValue(variable), thread)
 
   def setVariable(variable: LocalVariable, value: JdiValue): Unit =

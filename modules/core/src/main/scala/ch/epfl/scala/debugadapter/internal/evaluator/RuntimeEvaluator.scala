@@ -31,7 +31,7 @@ case class RuntimeEvaluator(
         Unrecoverable(new Exception("Parsed expression is not a statement"))
     }
 
-  @inline def validate(expression: String): Validation[RuntimeValidationTree] = {
+  def validate(expression: String): Validation[RuntimeValidationTree] = {
     parse(expression).flatMap { tree =>
       val validated = RuntimeValidation.validate(tree)
       validated match {
@@ -41,7 +41,7 @@ case class RuntimeEvaluator(
     }
   }
 
-  @inline def evaluate(expression: RuntimeValidationTree): Safe[JdiValue] =
+  def evaluate(expression: RuntimeValidationTree): Safe[JdiValue] =
     RuntimeEvaluation.evaluate(expression).map(_.derefIfRef)
 
   /* -------------------------------------------------------------------------- */
@@ -65,26 +65,26 @@ case class RuntimeEvaluator(
     /* -------------------------------------------------------------------------- */
     /*                              Field evaluation                              */
     /* -------------------------------------------------------------------------- */
-    @inline private def evaluateField(tree: InstanceFieldTree): Safe[JdiValue] =
+    private def evaluateField(tree: InstanceFieldTree): Safe[JdiValue] =
       evaluate(tree.qual).map { value =>
         JdiValue(value.asObject.reference.getValue(tree.field), frame.thread)
       }
 
-    @inline private def evaluateStaticField(tree: StaticFieldTree): Safe[JdiValue] = Safe {
+    private def evaluateStaticField(tree: StaticFieldTree): Safe[JdiValue] = Safe {
       JdiValue(tree.on.getValue(tree.field), frame.thread)
     }
 
     /* -------------------------------------------------------------------------- */
     /*                              Method evaluation                             */
     /* -------------------------------------------------------------------------- */
-    @inline private def invokeStaticMethod(tree: StaticMethodTree): Safe[JdiValue] =
+    private def invokeStaticMethod(tree: StaticMethodTree): Safe[JdiValue] =
       for {
         args <- tree.args.map(evaluate).traverse
         argsBoxedIfNeeded <- JdiObject.boxUnboxOnNeed(tree.method.argumentTypes(), args, frame)
         result <- JdiClass(tree.on, frame.thread).invokeStatic(tree.method, argsBoxedIfNeeded)
       } yield result
 
-    @inline private def invokePrimitiveMethod(
+    private def invokePrimitiveMethod(
         tree: PrimitiveMethodTree
     ): Safe[JdiValue] =
       for {
@@ -94,7 +94,7 @@ case class RuntimeEvaluator(
         result <- tree.op.evaluate(lhs, rhs, loader)
       } yield result
 
-    @inline private def invokeMethod(tree: InstanceMethodTree): Safe[JdiValue] =
+    private def invokeMethod(tree: InstanceMethodTree): Safe[JdiValue] =
       for {
         qualValue <- evaluate(tree.qual)
         argsValues <- tree.args.map(evaluate).traverse
@@ -105,13 +105,13 @@ case class RuntimeEvaluator(
     /* -------------------------------------------------------------------------- */
     /*                              Module evaluation                             */
     /* -------------------------------------------------------------------------- */
-    @inline private def evaluateModule(tree: ModuleTree): Safe[JdiObject] =
+    private def evaluateModule(tree: ModuleTree): Safe[JdiObject] =
       Safe(JdiObject(tree.`type`.instances(1).get(0), frame.thread))
 
     /* -------------------------------------------------------------------------- */
     /*                                Instantiation                               */
     /* -------------------------------------------------------------------------- */
-    @inline private def instantiate(tree: NewInstanceTree): Safe[JdiObject] =
+    private def instantiate(tree: NewInstanceTree): Safe[JdiObject] =
       for {
         args <- tree.args.map(evaluate).traverse
         boxedUnboxedArgs <- JdiObject.boxUnboxOnNeed(tree.method.argumentTypes(), args, frame)
@@ -141,7 +141,7 @@ case class RuntimeEvaluator(
     /* -------------------------------------------------------------------------- */
     /*                               Name validation                              */
     /* -------------------------------------------------------------------------- */
-    @inline private def extractElementIfReference(
+    private def extractElementIfReference(
         tree: Validation[RuntimeValidationTree]
     )(f: ReferenceType => Validation[RuntimeEvaluationTree]) =
       tree match {
@@ -150,10 +150,10 @@ case class RuntimeEvaluator(
         case t => illegalAccess(t, "ReferenceType")
       }
 
-    @inline private def varTreeByName(name: String): Validation[RuntimeEvaluationTree] =
+    private def varTreeByName(name: String): Validation[RuntimeEvaluationTree] =
       Validation.fromOption(frame.variableByName(name)).map(LocalVarTree(_))
 
-    @inline private def fieldTreeByName(
+    private def fieldTreeByName(
         of: Validation[RuntimeValidationTree],
         name: String
     ): Validation[RuntimeEvaluationTree] =
@@ -167,7 +167,7 @@ case class RuntimeEvaluator(
         }
       }
 
-    @inline private def zeroArgMethodTreeByName(
+    private def zeroArgMethodTreeByName(
         of: Validation[RuntimeValidationTree],
         name: String
     ): Validation[RuntimeEvaluationTree] =
@@ -216,7 +216,7 @@ case class RuntimeEvaluator(
     /* -------------------------------------------------------------------------- */
     /*                              Apply validation                              */
     /* -------------------------------------------------------------------------- */
-    @inline private def extractCall(apply: Stat): Call =
+    private def extractCall(apply: Stat): Call =
       apply match {
         case apply: Term.Apply => Call(apply.fun, apply.argClause)
         case ColonEndingInfix(apply) => Call(Term.Select(apply.argClause.head, apply.op), List(apply.lhs))
@@ -224,7 +224,7 @@ case class RuntimeEvaluator(
         case apply: Term.ApplyUnary => Call(Term.Select(apply.arg, Term.Name("unary_" + apply.op)), List.empty)
       }
 
-    @inline private def validatePrimitiveMethod(
+    private def validatePrimitiveMethod(
         name: String,
         lhs: Validation[RuntimeValidationTree],
         rhs: Option[Validation[RuntimeValidationTree]]
@@ -235,7 +235,7 @@ case class RuntimeEvaluator(
         op <- Validation.fromOption(RuntimePrimitiveOp(left, right, name))
       } yield PrimitiveMethodTree(left, right, op)
 
-    @inline private def validateApplyCall(
+    private def validateApplyCall(
         moduleName: String,
         on: RuntimeValidationTree,
         args: Seq[RuntimeValidationTree]
@@ -357,7 +357,7 @@ private object MatchingMethods {
   /* -------------------------------------------------------------------------- */
   /*                                Method lookup                               */
   /* -------------------------------------------------------------------------- */
-  @inline private def argsMatch(method: Method, args: Seq[Type], frame: JdiFrame): Boolean =
+  private def argsMatch(method: Method, args: Seq[Type], frame: JdiFrame): Boolean =
     method.argumentTypeNames().size() == args.size && sameTypes(method, args, frame)
 
   /**
@@ -419,7 +419,7 @@ private object MatchingMethods {
     }
   }
 
-  @inline def sameTypes(method: Method, args: Seq[Type], frame: JdiFrame): Boolean =
+  def sameTypes(method: Method, args: Seq[Type], frame: JdiFrame): Boolean =
     method.argumentTypes().asScalaSeq.zip(args).forall { case (expected, got) =>
       sameType(got, expected, frame)
     }
@@ -428,19 +428,19 @@ private object MatchingMethods {
 /* --------------------------------- Helpers -------------------------------- */
 
 private object Helpers {
-  @inline def illegalAccess(x: Any, typeName: String) = Unrecoverable {
+  def illegalAccess(x: Any, typeName: String) = Unrecoverable {
     new ClassCastException(s"Cannot cast $x to $typeName")
   }
 
   /* -------------------------------------------------------------------------- */
   /*                  Transformation to static or instance tree                 */
   /* -------------------------------------------------------------------------- */
-  @inline def toStaticIfNeeded(field: Field, on: RuntimeValidationTree): FieldTree = on match {
+  def toStaticIfNeeded(field: Field, on: RuntimeValidationTree): FieldTree = on match {
     case cls: ClassTree => StaticFieldTree(field, cls.`type`)
     case eval: RuntimeEvaluationTree => InstanceFieldTree(field, eval)
   }
 
-  @inline def toStaticIfNeeded(
+  def toStaticIfNeeded(
       method: Method,
       args: Seq[RuntimeValidationTree],
       on: RuntimeValidationTree
@@ -452,7 +452,7 @@ private object Helpers {
   /* -------------------------------------------------------------------------- */
   /*                                Class helpers                               */
   /* -------------------------------------------------------------------------- */
-  @inline def loadClass(name: String, frame: JdiFrame): Safe[JdiClass] =
+  def loadClass(name: String, frame: JdiFrame): Safe[JdiClass] =
     frame.classLoader().flatMap(_.loadClass(name))
 
   def checkClass(tpe: => Type)(name: String, frame: JdiFrame) = Try(tpe) match {

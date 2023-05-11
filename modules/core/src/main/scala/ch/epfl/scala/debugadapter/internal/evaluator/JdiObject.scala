@@ -73,7 +73,7 @@ private[internal] object JdiObject {
       .traverse
   }
 
-  @inline def boxUnboxOnNeed(
+  def boxUnboxOnNeed(
       expected: java.util.List[Type],
       received: Seq[JdiValue],
       frame: JdiFrame

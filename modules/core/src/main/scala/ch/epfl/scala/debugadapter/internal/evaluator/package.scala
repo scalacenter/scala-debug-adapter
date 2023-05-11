@@ -53,11 +53,11 @@ package object evaluator {
         case _ => Unrecoverable(s"$message: multiple values found")
       }
 
-    @inline def asJavaList = seq.asJava
+    def asJavaList = seq.asJava
   }
 
   implicit class JavaListToScala[A](list: java.util.List[A]) {
-    @inline def asScalaSeq: Seq[A] = list.asScala.toSeq
+    def asScalaSeq: Seq[A] = list.asScala.toSeq
   }
 
   implicit class TypeComponentExtension(tc: TypeComponent) {
