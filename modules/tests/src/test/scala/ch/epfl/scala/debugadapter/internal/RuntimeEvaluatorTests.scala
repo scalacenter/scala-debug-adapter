@@ -4,7 +4,6 @@ import ch.epfl.scala.debugadapter.testfmk.*
 import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.DebugConfig
 
-// TODO: test if it falls back to compiler when runtime validation fails, but not when parsing / evaluation fails
 object RuntimeEvaluatorEnvironments {
   val localVarTestSource =
     """|package example

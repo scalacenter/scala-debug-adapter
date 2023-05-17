@@ -3,9 +3,9 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import scala.meta.Term
 import scala.meta.Defn
 import scala.meta.Mod
-import com.sun.jdi.{ClassType, Field, ReferenceType, Type}
+import com.sun.jdi._
 
-private[internal] object RuntimeEvaluatorExtractors {
+protected[internal] object RuntimeEvaluatorExtractors {
   object ColonEndingInfix {
     def unapply(stat: Term.ApplyInfix): Option[Term.ApplyInfix] =
       stat match {
@@ -96,4 +96,67 @@ private[internal] object RuntimeEvaluatorExtractors {
       case _ => None
     }
   }
+
+  object PrimitiveTest {
+    object IsIntegral {
+      def unapply(x: Type): Boolean = x match {
+        case _: ByteType | _: ShortType | _: CharType | _: IntegerType | _: LongType => true
+        case _ =>
+          if (AllowedReferences.integrals.contains(x.name)) true
+          else false
+      }
+    }
+    object IsFractional {
+      def unapply(x: Type): Boolean = x match {
+        case _: FloatType | _: DoubleType => true
+        case _ =>
+          if (AllowedReferences.fractionals.contains(x.name)) true
+          else false
+      }
+    }
+    object IsNumeric {
+      def unapply(x: Type): Boolean = x match {
+        case IsIntegral() | IsFractional() => true
+        case _ =>
+          if (AllowedReferences.numerics.contains(x.name)) true
+          else false
+      }
+    }
+    object NotNumeric { def unapply(x: Type): Boolean = !IsNumeric.unapply(x) }
+    object IsBoolean {
+      def unapply(x: Type): Boolean = x match {
+        case _: BooleanType => true
+        case _ =>
+          if (AllowedReferences.booleans.contains(x.name)) true
+          else false
+      }
+    }
+    object IsPrimitive {
+      def unapply(x: Type): Boolean = x match {
+        case IsNumeric() | IsBoolean() => true
+        case _ => false
+      }
+    }
+    object NotPrimitive { def unapply(x: Type): Boolean = !IsPrimitive.unapply(x) }
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                          Allowed types reference                           */
+/* -------------------------------------------------------------------------- */
+private object AllowedReferences {
+  val integrals = Set(
+    "java.lang.Integer",
+    "java.lang.Long",
+    "java.lang.Short",
+    "java.lang.Byte"
+  )
+  val extendedIntegrals = integrals + "java.lang.Character"
+  val fractionals = Set(
+    "java.lang.Float",
+    "java.lang.Double"
+  )
+  val numerics = extendedIntegrals ++ fractionals
+  val booleans = Set("java.lang.Boolean")
+  val allReferences = numerics ++ booleans
 }

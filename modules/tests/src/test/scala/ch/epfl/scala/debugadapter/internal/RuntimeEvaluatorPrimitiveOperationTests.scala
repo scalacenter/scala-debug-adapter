@@ -353,4 +353,23 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
       )
     )
   }
+
+  test("Should accept unary operators on primitive types") {
+    implicit val debuggee = localVar
+    check(
+      Breakpoint(6),
+      DebugStepAssert.inParallel(
+        Evaluation.success("+1 + 1", 2),
+        Evaluation.success("+1L", 1L),
+        Evaluation.success("+1f", 1.0f),
+        Evaluation.success("+1.0", 1.0),
+        Evaluation.success("-1", -1),
+        Evaluation.success("-1L", -1L),
+        Evaluation.success("-1f", -1.0f),
+        Evaluation.success("-1.0", -1.0),
+        Evaluation.success("~1", -2),
+        Evaluation.success("~1L", -2L)
+      )
+    )
+  }
 }

@@ -1,33 +1,78 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi._
+import RuntimeEvaluatorExtractors.PrimitiveTest.*
 
 sealed trait RuntimeBinaryOp {
   def evaluate(lhs: JdiValue, rhs: JdiValue, loader: JdiClassLoader): Safe[JdiValue]
-  def typeCheck(lhs: Type, rhs: Type): PrimitiveType
+  def typeCheck(lhs: Type, rhs: Type): Type
 }
 
 //TODO: supports + - ~
 sealed trait RuntimeUnaryOp {
   def evaluate(rhs: JdiValue, loader: JdiClassLoader): Safe[JdiValue]
-  def typeCheck(lhs: Type): PrimitiveType
+  def typeCheck(lhs: Type): Type
 }
 
-object RuntimeBinaryOp {
-  val allowedNumericTypes = Set(
-    "java.lang.Number",
-    "java.lang.Integer",
-    "java.lang.Long",
-    "java.lang.Float",
-    "java.lang.Double",
-    "java.lang.Short",
-    "java.lang.Byte",
-    "java.lang.Character"
-  )
-  val allowedBooleanTypes = Set("java.lang.Boolean")
-  val allowedReferenceTypes = allowedNumericTypes ++ allowedBooleanTypes
+sealed trait NumericUnaryOp extends RuntimeUnaryOp {
+  override def typeCheck(lhs: Type): Type = lhs match {
+    case IsNumeric() => lhs
+    case _ => throw new IllegalArgumentException(s"Unexpected type $lhs")
+  }
+}
 
-  // TODO: type check in the operator
+case object Plus extends NumericOp
+case object Minus extends NumericOp
+case object Times extends NumericOp
+case object Div extends NumericOp
+case object Modulo extends NumericOp
+case object Less extends NumericOp
+case object LessOrEqual extends NumericOp
+case object Greater extends NumericOp
+case object GreaterOrEqual extends NumericOp
+
+case object UnaryPlus extends NumericUnaryOp {
+  override def evaluate(rhs: JdiValue, loader: JdiClassLoader): Safe[JdiValue] = Safe(rhs)
+}
+case object UnaryMinus extends NumericUnaryOp {
+  override def evaluate(rhs: JdiValue, loader: JdiClassLoader): Safe[JdiValue] =
+    for {
+      unboxed <- rhs.unboxIfPrimitive
+      result <- unboxed match {
+        case double: DoubleValue => Safe(loader.mirrorOf(-double.doubleValue()))
+        case float: FloatValue => Safe(loader.mirrorOf(-float.floatValue()))
+        case long: LongValue => Safe(loader.mirrorOf(-long.longValue()))
+        case int: IntegerValue => Safe(loader.mirrorOf(-int.intValue()))
+        case short: ShortValue => Safe(loader.mirrorOf(-short.shortValue()))
+        case byte: ByteValue => Safe(loader.mirrorOf(-byte.byteValue()))
+        case _ => Safe.failed(s"Unexpected type ${unboxed.value.`type`}")
+      }
+    } yield result
+
+}
+case object UnaryBitwiseNot extends RuntimeUnaryOp {
+  override def typeCheck(lhs: Type): Type = lhs match {
+    case IsIntegral() => lhs
+    case _ => throw new IllegalArgumentException(s"Unexpected type $lhs")
+  }
+
+  override def evaluate(rhs: JdiValue, loader: JdiClassLoader): Safe[JdiValue] =
+    for {
+      unboxed <- rhs.unboxIfPrimitive
+      result <- unboxed.value match {
+        case long: LongValue => Safe(loader.mirrorOf(~long.longValue()))
+        case int: IntegerValue => Safe(loader.mirrorOf(~int.intValue()))
+        case short: ShortValue => Safe(loader.mirrorOf(~short.shortValue()))
+        case byte: ByteValue => Safe(loader.mirrorOf(~byte.byteValue()))
+        case _ => Safe.failed(s"Unexpected type ${unboxed.value.`type`}")
+      }
+    } yield result
+}
+
+/* -------------------------------------------------------------------------- */
+/*                         Primitive binary operations                        */
+/* -------------------------------------------------------------------------- */
+object RuntimeBinaryOp {
   def apply(
       lhs: RuntimeEvaluationTree,
       rhs: RuntimeEvaluationTree,
@@ -36,17 +81,21 @@ object RuntimeBinaryOp {
     (lhs.`type`, rhs.`type`, op) match {
       case (_, _, "==") => Valid(Eq)
       case (_, _, "!=") => Valid(Neq)
-      case (_: ReferenceType, _, _) if !allowedReferenceTypes.contains(lhs.`type`.name()) =>
+      case (NotPrimitive(), _, _) | (_, NotPrimitive(), _) =>
+        println("\u001b[31mnot primitive\u001b[0m")
         Recoverable("Primitive operations don't support reference types")
-      case (_, _: ReferenceType, _) if !allowedReferenceTypes.contains(rhs.`type`.name()) =>
-        Recoverable("Primitive operations don't support reference types")
-      case (_, _, "&&") => And(lhs.`type`, rhs.`type`)
-      case (_, _, "||") => Or(lhs.`type`, rhs.`type`)
-      case (_: ReferenceType, _, _) if allowedBooleanTypes.contains(lhs.`type`.name()) =>
-        Recoverable("Numeric operations don't support boolean types")
-      case (_, _: ReferenceType, _) if allowedBooleanTypes.contains(rhs.`type`.name()) =>
-        Recoverable("Numeric operations don't support boolean types")
-      case (_: BooleanType, _, _) | (_, _: BooleanType, _) =>
+      case (left, right, "&&") =>
+        (left, right) match {
+          case (IsBoolean(), IsBoolean()) => Valid(And)
+          case _ => Recoverable("Boolean operations don't support non-boolean types")
+        }
+      case (left, right, "||") =>
+        (left, right) match {
+          case (IsBoolean(), IsBoolean()) => Valid(Or)
+          case _ => Recoverable("Boolean operations don't support non-boolean types")
+        }
+      case (NotNumeric(), _, _) | (_, NotNumeric(), _) =>
+        println("\u001b[31mnot numeric\u001b[0m")
         Recoverable("Numeric operations don't support boolean types")
       case (_, _, "+") => Valid(Plus)
       case (_, _, "-") => Valid(Minus)
@@ -61,50 +110,18 @@ object RuntimeBinaryOp {
     }
   }
 
-  def fromValidations(
-      lhs: Validation[RuntimeTree],
-      rhs: Validation[Seq[RuntimeEvaluationTree]],
+  def apply(
+      lhs: RuntimeTree,
+      rhs: Seq[RuntimeEvaluationTree],
       op: String
-  ): Validation[RuntimeBinaryOp] = {
+  ): Validation[RuntimeBinaryOp] =
     (lhs, rhs) match {
-      case (Valid(left: RuntimeEvaluationTree), Valid(Seq(right))) => apply(left, right, op)
-      case _ => Recoverable("Not a primitive binary operation")
-    }
-  }
-
-  def getBinaryOpTree(
-      lhs: Validation[RuntimeTree],
-      rhs: Validation[Seq[RuntimeEvaluationTree]],
-      op: String
-  ): Validation[PrimitiveBinaryOpTree] =
-    (lhs, rhs) match {
-      case (Valid(left: RuntimeEvaluationTree), Valid(Seq(right))) =>
-        fromValidations(lhs, rhs, op).map(PrimitiveBinaryOpTree(left, right, _))
+      case (left: RuntimeEvaluationTree, Seq(right)) => apply(left, right, op)
       case _ => Recoverable("Not a primitive binary operation")
     }
 }
 
-object RuntimeUnaryOp {
-  val booleanOperation = Set("unary_!")
-  val allowedReferenceTypes = Set("java.lang.Boolean")
-
-  def apply(rhs: RuntimeEvaluationTree, op: String): Validation[RuntimeUnaryOp] = {
-    op match {
-      case "unary_!" if allowedReferenceTypes.contains(rhs.`type`.name) => Valid(Not)
-      case "unary_!" if rhs.`type`.isInstanceOf[BooleanType] => Valid(Not)
-      case _ => Recoverable("Not a primitive unary operation")
-    }
-  }
-
-  def getUnaryOpTree(
-      rhs: Validation[RuntimeTree],
-      op: String
-  ): Validation[PrimitiveUnaryOpTree] = rhs match {
-    case Valid(rt: RuntimeEvaluationTree) => apply(rt, op).map(PrimitiveUnaryOpTree(rt, _))
-    case _ => Recoverable("Not a primitive unary operation")
-  }
-}
-
+/* --------------------------- Numeric operations --------------------------- */
 sealed trait NumericOp extends RuntimeBinaryOp {
   override def typeCheck(lhs: Type, rhs: Type): PrimitiveType =
     (lhs, rhs) match {
@@ -223,55 +240,25 @@ sealed trait NumericOp extends RuntimeBinaryOp {
   }
 }
 
-case object Plus extends NumericOp
-case object Minus extends NumericOp
-case object Times extends NumericOp
-case object Div extends NumericOp
-case object Modulo extends NumericOp
-case object Less extends NumericOp
-case object LessOrEqual extends NumericOp
-case object Greater extends NumericOp
-case object GreaterOrEqual extends NumericOp
-
+/* --------------------------- Boolean operations --------------------------- */
 sealed trait BooleanOp extends RuntimeBinaryOp {
   override def typeCheck(lhs: Type, rhs: Type): PrimitiveType =
     lhs.virtualMachine().mirrorOf(true).`type`().asInstanceOf[BooleanType]
-  def apply(lhs: Type, rhs: Type): Validation[BooleanOp] =
-    (lhs, rhs) match {
-      case (b: BooleanType, _: BooleanType) => Valid(this)
-      case (b: BooleanType, ref: ReferenceType) if RuntimeBinaryOp.allowedBooleanTypes.contains(ref.name()) =>
-        Valid(this)
-      case (ref: ReferenceType, b: BooleanType) if RuntimeBinaryOp.allowedBooleanTypes.contains(ref.name()) =>
-        Valid(this)
-      case (ref1: ReferenceType, ref2: ReferenceType) =>
-        if (
-          RuntimeBinaryOp.allowedBooleanTypes
-            .contains(ref1.name()) && RuntimeBinaryOp.allowedBooleanTypes.contains(ref2.name())
-        )
-          Valid(this)
-        else Recoverable("Not a boolean primitive operation")
+
+  override def evaluate(lhs: JdiValue, rhs: JdiValue, loader: JdiClassLoader): Safe[JdiValue] =
+    for {
+      l <- lhs.toBoolean
+      r <- rhs.toBoolean
+    } yield this match {
+      case And => loader.mirrorOf(l && r)
+      case Or => loader.mirrorOf(l || r)
     }
 }
-case object And extends BooleanOp {
-  override def evaluate(lhs: JdiValue, rhs: JdiValue, loader: JdiClassLoader) =
-    for {
-      l <- lhs.toBoolean
-      r <- rhs.toBoolean
-    } yield loader.mirrorOf(l && r)
-}
-case object Or extends BooleanOp {
-  override def evaluate(lhs: JdiValue, rhs: JdiValue, loader: JdiClassLoader) =
-    for {
-      l <- lhs.toBoolean
-      r <- rhs.toBoolean
-    } yield loader.mirrorOf(l || r)
-}
-case object Not extends RuntimeUnaryOp {
-  override def evaluate(rhs: JdiValue, loader: JdiClassLoader) =
-    rhs.toBoolean.map(v => loader.mirrorOf(!v))
-  override def typeCheck(rhs: Type) = rhs.virtualMachine().mirrorOf(true).`type`().asInstanceOf[BooleanType]
-}
 
+case object And extends BooleanOp
+case object Or extends BooleanOp
+
+/* --------------------------- Object operations --------------------------- */
 sealed trait ObjectOp extends RuntimeBinaryOp {
   override def typeCheck(lhs: Type, rhs: Type): PrimitiveType =
     lhs.virtualMachine().mirrorOf(true).`type`().asInstanceOf[PrimitiveType]
@@ -292,3 +279,30 @@ sealed trait ObjectOp extends RuntimeBinaryOp {
 }
 case object Eq extends ObjectOp
 case object Neq extends ObjectOp
+
+/* -------------------------------------------------------------------------- */
+/*                         Primitive unary operations                         */
+/* -------------------------------------------------------------------------- */
+case object Not extends RuntimeUnaryOp {
+  override def evaluate(rhs: JdiValue, loader: JdiClassLoader) =
+    rhs.toBoolean.map(v => loader.mirrorOf(!v))
+  override def typeCheck(rhs: Type) = rhs.virtualMachine().mirrorOf(true).`type`().asInstanceOf[BooleanType]
+}
+
+object RuntimeUnaryOp {
+  def apply(rhs: RuntimeEvaluationTree, op: String): Validation[RuntimeUnaryOp] = {
+    (rhs.`type`, op) match {
+      case (IsNumeric(), "unary_+") => Valid(UnaryPlus)
+      case (IsNumeric(), "unary_-") => Valid(UnaryMinus)
+      case (IsIntegral(), "unary_~") => Valid(UnaryBitwiseNot)
+      case (IsBoolean(), "unary_!") => Valid(Not)
+      case _ => Recoverable("Not a primitive unary operation")
+    }
+  }
+
+  def apply(rhs: RuntimeTree, op: String): Validation[RuntimeUnaryOp] =
+    rhs match {
+      case ret: RuntimeEvaluationTree => apply(ret, op)
+      case _ => Recoverable("Not a primitive unary operation")
+    }
+}

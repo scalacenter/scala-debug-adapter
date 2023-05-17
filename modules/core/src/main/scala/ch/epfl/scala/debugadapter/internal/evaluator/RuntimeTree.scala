@@ -50,7 +50,6 @@ object LiteralTree {
   }
 }
 
-// TODO: will not work when caching expression since the frame will be different
 case class LocalVarTree(
     name: String,
     `type`: Type
@@ -102,7 +101,7 @@ case class PrimitiveBinaryOpTree(
     rhs: RuntimeEvaluationTree,
     op: RuntimeBinaryOp
 ) extends RuntimeEvaluationTree {
-  override lazy val `type`: PrimitiveType = op.typeCheck(lhs.`type`, rhs.`type`)
+  override lazy val `type` = op.typeCheck(lhs.`type`, rhs.`type`)
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|PrimitiveMethodTree(
@@ -117,7 +116,7 @@ case class PrimitiveUnaryOpTree(
     rhs: RuntimeEvaluationTree,
     op: RuntimeUnaryOp
 ) extends RuntimeEvaluationTree {
-  override lazy val `type`: PrimitiveType = op.typeCheck(rhs.`type`)
+  override lazy val `type` = op.typeCheck(rhs.`type`)
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|PrimitiveMethodTree(

@@ -138,7 +138,7 @@ case class RuntimeEvaluator(
           for {
             ofValue <- qual
             loader <- frame.classLoader()
-            initMethodName = getLastInnerType(tree.`type`.name()).get // TODO: remove the .get
+            initMethodName <- Safe(getLastInnerType(tree.`type`.name()).get)
             instance <- ofValue.asObject.invoke(initMethodName, Seq.empty)
           } yield instance
         case _ => Safe(Failure(new Exception("Can't evaluate or initialize module")))
@@ -163,17 +163,16 @@ case class RuntimeEvaluator(
   /* -------------------------------------------------------------------------- */
 
   private object RuntimeValidation {
-    def validate(expression: Stat): Validation[RuntimeEvaluationTree] =
-      expression match {
-        case value: Term.Name => validateName(value, thisTree)
-        case _: Term.This => thisTree
-        case sup: Term.Super => Recoverable("Super not (yet) supported at runtime")
-        case _: Term.Apply | _: Term.ApplyInfix | _: Term.ApplyUnary => validateMethod(extractCall(expression))
-        case select: Term.Select => validateSelect(select)
-        case lit: Lit => validateLiteral(lit)
-        case instance: Term.New => validateNew(instance)
-        case _ => Recoverable("Expression not supported at runtime")
-      }
+    def validate(expression: Stat): Validation[RuntimeEvaluationTree] = expression match {
+      case value: Term.Name => validateName(value, thisTree)
+      case _: Term.This => thisTree
+      case sup: Term.Super => Recoverable("Super not (yet) supported at runtime")
+      case _: Term.Apply | _: Term.ApplyInfix | _: Term.ApplyUnary => validateMethod(extractCall(expression))
+      case select: Term.Select => validateSelect(select)
+      case lit: Lit => validateLiteral(lit)
+      case instance: Term.New => validateNew(instance)
+      case _ => Recoverable("Expression not supported at runtime")
+    }
 
     /**
      * Validates an expression, with access to class lookup. Its result must be contained in an [[EvaluationTree]]
@@ -408,18 +407,25 @@ case class RuntimeEvaluator(
       }
 
       val lhs = preparedCall.qual
-      val argsClause = call.argClause.map(validate).traverse
-
-      RuntimeUnaryOp
-        .getUnaryOpTree(lhs, preparedCall.name)
-        .orElse { RuntimeBinaryOp.getBinaryOpTree(lhs, argsClause, preparedCall.name) }
-        .orElse {
-          for {
-            args <- argsClause
-            qual <- lhs
-            methodTree <- findMethod(qual, preparedCall.name, args)
-          } yield methodTree
+      def unary(l: RuntimeTree, name: String) =
+        l match {
+          case ret: RuntimeEvaluationTree => RuntimeUnaryOp(ret, name).map(PrimitiveUnaryOpTree(ret, _))
+          case _ => Recoverable(s"Primitive operation operand must be evaluable")
         }
+      def binary(l: RuntimeTree, args: Seq[RuntimeEvaluationTree], name: String) =
+        (l, args) match {
+          case (ret: RuntimeEvaluationTree, Seq(right)) =>
+            RuntimeBinaryOp(ret, right, name).map(PrimitiveBinaryOpTree(ret, right, _))
+          case _ => Recoverable(s"Primitive operation operand must be evaluable")
+        }
+
+      for {
+        lhs <- lhs
+        args <- call.argClause.map(validate).traverse
+        methodTree <- unary(lhs, preparedCall.name)
+          .orElse(binary(lhs, args, preparedCall.name))
+          .orElse(findMethod(lhs, preparedCall.name, args))
+      } yield methodTree
     }
 
     /* -------------------------------------------------------------------------- */
@@ -470,8 +476,6 @@ case class RuntimeEvaluator(
 /* -------------------------------------------------------------------------- */
 
 private object MatchingMethods {
-  // TODO: don't returns a JdiValue
-
   def fromLitToValue(literal: Lit, classLoader: JdiClassLoader): (Safe[Any], Type) = {
     val tpe = classLoader
       .mirrorOfLiteral(literal.value)
@@ -575,7 +579,7 @@ private object Helpers {
   def ifReference(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
     tree match {
       case ReferenceTree(ref) => Valid(ref)
-      case _: Invalid => Unrecoverable("Invalid reference")
+      case Invalid(e) => Unrecoverable(s"Invalid reference: $e")
       case t => illegalAccess(t, "ReferenceType")
     }
 
