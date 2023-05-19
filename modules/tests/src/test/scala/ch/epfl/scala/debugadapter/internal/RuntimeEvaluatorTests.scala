@@ -68,7 +68,10 @@ object RuntimeEvaluatorEnvironments {
        |  object InnerFoo { def hello: String = "hello main inner foo" }
        |}
        |
-       |trait FooTrait { def bar1: Int = 42 }
+       |trait FooTrait { 
+       |  val x = 3  
+       |  def bar1: Int = 42
+       |}
        |
        |case class Foo_v1() extends FooTrait {
        |  def foo: String = "hello foo"
@@ -76,7 +79,13 @@ object RuntimeEvaluatorEnvironments {
        |  def foo_v2_apply = Foo_v2("hello ")
        |  def bar(str: String, int: Int): String = str + int
        |  case class InnerFoo(x: Int) { def hello(x1: Int) = s"hello inner foo ${x + x1}" }
-       |  object InnerFoo { val hello: String = "hello inner foo" }
+       |  object InnerFoo {
+       |    val keepOuter = foo_v2
+       |    val fooTrait = x
+       |    val hello: String = "hello inner foo"
+       |  }
+       |  class InnerFooClass { val hello: String = "hello inner foo class" }
+       |  object InnerFooObject { val hello: String = "hello inner foo object" }
        |  def unary_+ : String = "hello unary"
        |}
        |
@@ -98,19 +107,25 @@ object RuntimeEvaluatorEnvironments {
        |    val inner = Inner(42)
        |    inner.helloInner
        |    val friendFoo = foo.FriendFoo(foo)
-       |    friendFoo.greet;
+       |    friendFoo.greet; inner.InnerInner().str; inner.InnerInner.str
        |    val nested1 = Nested(42);
        |    val nested2 = Nested(1);
        |    println("ok")
        |  }
        |
-       |  def upperMain = "upper main"
+       |  def upperMain1 = "upper main 1"
+       |  def upperMain2 = "upper main 2"
+       |  def upperMain3 = "upper main 3"
        |
        |  case class Inner(x: Int) {
        |    val y = x + 1
        |    def helloInner = s"hello inner $x"
-       |    case class InnerInner() { val str = s"inner inner $y" }
-       |    object InnerInner { val str = s"inner inner $x" }
+       |    case class InnerInner() { 
+       |      val str = s"inner inner $y"
+       |    }
+       |    object InnerInner {
+       |      val str = s"inner inner $x"
+       |    }
        |  }
        |  object Inner { 
        |    val z = 42
@@ -121,7 +136,6 @@ object RuntimeEvaluatorEnvironments {
        |}
        |
        |case class Foo() {
-       |  def upperMethod = "upper"
        |  case class FriendFoo(f1: Foo) {
        |    val y = 42
        |    def greet = "Friend"
@@ -159,9 +173,46 @@ object RuntimeEvaluatorEnvironments {
        |""".stripMargin
 }
 
-class Scala212RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`2.12`)
-class Scala213RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`2.13`)
-class Scala31RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`3.1+`)
+class Scala212RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`2.12`) {
+  test("Should access to wrapping 'object' methods") {
+    implicit val debuggee = nested
+    check(
+      Breakpoint(21),
+      Evaluation.success("upperMain1", "upper main 1"),
+      Breakpoint(23),
+      Evaluation.success("upperMain2", "upper main 2"),
+      Breakpoint(26),
+      Evaluation.success("upperMain3", "upper main 3")
+    )
+  }
+}
+class Scala213RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`2.13`) {
+  test("Should access to wrapping 'object' methods") {
+    implicit val debuggee = nested
+    check(
+      Breakpoint(21),
+      Evaluation.success("upperMain1", "upper main 1"),
+      Breakpoint(23),
+      Evaluation.success("upperMain2", "upper main 2"),
+      Breakpoint(26),
+      Evaluation.success("upperMain3", "upper main 3")
+    )
+  }
+}
+class Scala31RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`3.1+`) {
+  test("Should access to wrapping 'object' methods") {
+    implicit val debuggee = nested
+    check(
+      Breakpoint(21),
+      Evaluation.success("upperMain1", "upper main 1"),
+      Breakpoint(26),
+      Evaluation.success("upperMain2", "upper main 2"),
+      Breakpoint(26),
+      Evaluation.success("upperMain3", "upper main 3")
+    )
+  }
+}
+// The commented tests fails because with Scala 3, it skips the class and goes directly to the object :/
 
 class Scala212RuntimeEvaluatorFallbackTests extends RuntimeEvaluatorFallbackTests(ScalaVersion.`2.12`)
 class Scala213RuntimeEvaluatorFallbackTests extends RuntimeEvaluatorFallbackTests(ScalaVersion.`2.13`)
@@ -208,7 +259,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should compute a method call on the current class --- scala") {
     implicit val debuggee = method
     check(
-      Breakpoint(27),
+      Breakpoint(38),
       Evaluation.success("bar1", 42),
       Breakpoint(10),
       Evaluation.success("foo", "hello foo")
@@ -316,6 +367,19 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
+  test("Should find outer methods, fields, class & modules") {
+    implicit val debuggee = method
+    check(
+      Breakpoint(38),
+      DebugStepAssert.inParallel(
+        Evaluation.success("foo_v2(\"hello \").bar(42)", "hello 42"),
+        Evaluation.success("x", 3),
+        Evaluation.successOrIgnore("(new InnerFooClass).hello", "hello inner foo class", true),
+        Evaluation.success("InnerFooObject.hello", "hello inner foo object")
+      )
+    )
+  }
+
   test("Should get the value of a field in a nested type --- scala") {
     implicit val debuggee = nested
     check(
@@ -344,16 +408,6 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       )
     )
   }
-
-  // test("Should access to wrapping class methods") {
-  //   implicit val debuggee = nested
-  //   check(
-  //     Breakpoint(16),
-  //     Evaluation.successOrIgnore("upperMain", "upper main", true),
-  //     Breakpoint(28),
-  //     Evaluation.successOrIgnore("upperMethod", "upper", true)
-  //   )
-  // }
 
   test("Should not access inner / nested types of a non-static class") {
     implicit val debuggee = nested

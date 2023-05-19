@@ -8,7 +8,6 @@ sealed trait RuntimeBinaryOp {
   def typeCheck(lhs: Type, rhs: Type): Type
 }
 
-//TODO: supports + - ~
 sealed trait RuntimeUnaryOp {
   def evaluate(rhs: JdiValue, loader: JdiClassLoader): Safe[JdiValue]
   def typeCheck(lhs: Type): Type
@@ -82,20 +81,12 @@ object RuntimeBinaryOp {
       case (_, _, "==") => Valid(Eq)
       case (_, _, "!=") => Valid(Neq)
       case (NotPrimitive(), _, _) | (_, NotPrimitive(), _) =>
-        println("\u001b[31mnot primitive\u001b[0m")
         Recoverable("Primitive operations don't support reference types")
-      case (left, right, "&&") =>
-        (left, right) match {
-          case (IsBoolean(), IsBoolean()) => Valid(And)
-          case _ => Recoverable("Boolean operations don't support non-boolean types")
-        }
-      case (left, right, "||") =>
-        (left, right) match {
-          case (IsBoolean(), IsBoolean()) => Valid(Or)
-          case _ => Recoverable("Boolean operations don't support non-boolean types")
-        }
+      case (IsBoolean(), IsBoolean(), "&&") => Valid(And)
+      case (IsBoolean(), IsBoolean(), "||") => Valid(Or)
+      case (_, _, "&&") | (_, _, "||") =>
+        Recoverable("Boolean operations don't support numeric types")
       case (NotNumeric(), _, _) | (_, NotNumeric(), _) =>
-        println("\u001b[31mnot numeric\u001b[0m")
         Recoverable("Numeric operations don't support boolean types")
       case (_, _, "+") => Valid(Plus)
       case (_, _, "-") => Valid(Minus)

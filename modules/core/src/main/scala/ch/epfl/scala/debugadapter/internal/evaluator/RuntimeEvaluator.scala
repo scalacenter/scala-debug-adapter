@@ -54,12 +54,13 @@ case class RuntimeEvaluator(
         case primitive: PrimitiveUnaryOpTree => invokePrimitive(primitive)
         case module: ModuleTree => evaluateModule(module, module.of.map(evaluate))
         case literal: LiteralTree => evaluateLiteral(literal)
-        case ThisTree(obj) => Safe.successful(JdiValue(obj.instances(1).get(0), frame.thread))
+        case ThisTree(obj) => Safe(JdiValue(obj.instances(1).get(0), frame.thread))
         case field: InstanceFieldTree => evaluateField(field)
         case staticField: StaticFieldTree => evaluateStaticField(staticField)
         case instance: NewInstanceTree => instantiate(instance)
         case method: InstanceMethodTree => invoke(method)
         case staticMethod: StaticMethodTree => invokeStatic(staticMethod)
+        case outer: OuterTree => evaluateOuter(outer)
       }
 
     /* -------------------------------------------------------------------------- */
@@ -71,6 +72,20 @@ case class RuntimeEvaluator(
         value <- tree.value
         result <- loader.mirrorOfLiteral(value)
       } yield result
+
+    /* -------------------------------------------------------------------------- */
+    /*                              Outer evaluation                              */
+    /* -------------------------------------------------------------------------- */
+    private def evaluateOuter(tree: OuterTree): Safe[JdiValue] =
+      evaluate(tree.inner).flatMap { innerValue =>
+        tree match {
+          case OuterModuleTree(_, module) =>
+            evaluateModule(module, Some(Safe(innerValue)))
+          case _: OuterClassTree =>
+            Safe(innerValue.asObject.getField("$outer"))
+        }
+
+      }
 
     /* -------------------------------------------------------------------------- */
     /*                              Field evaluation                              */
@@ -235,9 +250,9 @@ case class RuntimeEvaluator(
         for {
           field <- Validation(ref.fieldByName(name))
           _ = loadClassOnNeed(field, frame)
-          finalField <- field match {
+          finalField <- field.`type` match {
             case Module(module) => ModuleTree(module, of.toOption)
-            case field => Valid(toStaticIfNeeded(field, of.get))
+            case _ => Valid(toStaticIfNeeded(field, of.get))
           }
         } yield finalField
       }
@@ -271,9 +286,7 @@ case class RuntimeEvaluator(
     private def validateModule(name: String, of: Option[RuntimeTree]): Validation[ModuleTree] = {
       val moduleName = if (name.endsWith("$")) name else name + "$"
       searchAllClassesFor(moduleName, of.map(_.`type`.name()), frame).flatMap { cls =>
-        val isInClass = frame
-          .classLoader()
-          .flatMap(_.loadClass(removeLastInnerTypeFromFQCN(cls.name())))
+        val isInClass = loadClass(removeLastInnerTypeFromFQCN(cls.name()), frame)
           .withFilterNot { _.cls.methodsByName(moduleName.stripSuffix("$")).isEmpty() }
 
         // TODO: understand why I can't merge n°1 and n°3
@@ -304,9 +317,6 @@ case class RuntimeEvaluator(
           }
         }
 
-    private def validateModuleOrClass(name: String, of: Option[RuntimeTree]): Validation[TypeTree] =
-      validateModule(name, of).orElse(validateClass(name, of))
-
     private def validateName(
         value: Term.Name,
         of: Validation[RuntimeTree]
@@ -315,7 +325,12 @@ case class RuntimeEvaluator(
       varTreeByName(name)
         .orElse(fieldTreeByName(of, name))
         .orElse(zeroArgMethodTreeByName(of, name))
-        .recoverWith(validateModule(name, thisTree.toOption))
+        .recoverWith(validateModule(name, of.toOption))
+        .recoverWith {
+          of
+            .flatMap(findOuter(_, frame))
+            .flatMap(outer => validateName(value, Valid(outer)))
+        }
     }
 
     /* -------------------------------------------------------------------------- */
@@ -327,7 +342,7 @@ case class RuntimeEvaluator(
         args: Seq[RuntimeEvaluationTree]
     ): Validation[MethodTree] =
       for {
-        module <- validateModuleOrClass(moduleName, Some(on))
+        module <- validateModule(moduleName, Some(on)).orElse(validateClass(moduleName, Some(on)))
         applyCall <- methodsByNameAndArgs(module.`type`, "apply", args.map(_.`type`), frame)
       } yield toStaticIfNeeded(applyCall, args, module)
 
@@ -356,15 +371,6 @@ case class RuntimeEvaluator(
           } yield apply
       }
 
-    // private def findInOuter(
-    //     ref: ReferenceType,
-    //     name: String,
-    //     args: Seq[RuntimeValidationTree]
-    // ): Validation[MethodTree] =
-    //     Option(ref.fieldByName("$outer"))
-    //   }
-
-    // TODO: should look into upper classes as well
     /**
      * Returns a [[MethodTree]] representing the method called.
      *
@@ -388,6 +394,7 @@ case class RuntimeEvaluator(
             .map(toStaticIfNeeded(_, args, tree))
             .orElse(validateApplyCall(name, tree, args))
             .orElse(validateImplicitApplyCall(ref, tree, name, args))
+            .orElse(findOuter(tree, frame).flatMap(findMethod(_, name, args)))
         case t => illegalAccess(t, "ReferenceType")
       }
 
@@ -573,13 +580,36 @@ private object Helpers {
   }
 
   /* -------------------------------------------------------------------------- */
+  /*                              Looking for $outer                             */
+  /* -------------------------------------------------------------------------- */
+  def findOuter(tree: RuntimeTree, frame: JdiFrame): Validation[OuterTree] = {
+    def outerLookup(ref: ReferenceType) = Validation(ref.fieldByName("$outer")).map(_.`type`()).orElse {
+      loadClass(removeLastInnerTypeFromFQCN(ref.name()) + "$", frame) match {
+        case Safe(Success(Module(mod: ClassType))) => Valid(mod)
+        case _ => Recoverable(s"Cannot find $$outer for $ref")
+      }
+    }
+
+    for {
+      ref <- ifReference(tree)
+      outer <- outerLookup(ref)
+      outerTree <- OuterTree(tree, outer)
+    } yield outerTree
+  }
+
+  /* -------------------------------------------------------------------------- */
   /*                               Useful patterns                              */
   /* -------------------------------------------------------------------------- */
   /* Extract reference if there is */
   def ifReference(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
     tree match {
-      case ReferenceTree(ref) => Valid(ref)
       case Invalid(e) => Unrecoverable(s"Invalid reference: $e")
+      case _ => ifReference(tree.get)
+    }
+
+  def ifReference(tree: RuntimeTree): Validation[ReferenceType] =
+    tree match {
+      case ReferenceTree(ref) => Valid(ref)
       case t => illegalAccess(t, "ReferenceType")
     }
 

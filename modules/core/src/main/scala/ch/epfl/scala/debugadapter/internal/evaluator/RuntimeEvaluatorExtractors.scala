@@ -29,15 +29,12 @@ protected[internal] object RuntimeEvaluatorExtractors {
         case _ => None
       }
 
-    def unapply(field: Field): Option[ClassType] = unapply(field.`type`)
+    def unapply(cls: JdiClass): Option[ClassType] = unapply(cls.cls)
 
-    def unapply(tree: RuntimeTree): Option[ClassType] =
-      tree match {
-        case mt: ModuleTree => Some(mt.`type`)
-        case _: LiteralTree | _: LocalVarTree | _: NewInstanceTree | _: ClassTree | _: PrimitiveBinaryOpTree |
-            _: PrimitiveUnaryOpTree =>
-          None
-        case _: FieldTree | _: ThisTree | _: MethodTree => unapply(tree.`type`)
+    def unapply(tree: RuntimeTree): Option[ModuleTree] =
+      tree.`type` match {
+        case Module(cls) => Some(ModuleTree(cls, None))
+        case _ => None
       }
   }
 
@@ -54,6 +51,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
         case pbt: PrimitiveBinaryOpTree => Some(pbt)
         case put: PrimitiveUnaryOpTree => Some(put)
         case nit: NewInstanceTree => Some(nit)
+        case outer: OuterTree => Some(outer) // TODO: check
       }
 
     def unapply(tree: Option[RuntimeTree]): Option[RuntimeEvaluationTree] =
@@ -62,17 +60,18 @@ protected[internal] object RuntimeEvaluatorExtractors {
   }
 
   object MethodCall {
-    def unapply(tree: Validation[RuntimeTree]): Option[RuntimeTree] =
-      tree.toOption.filter {
-        _ match {
-          case mt: ModuleTree => mt.of.map(t => unapply(Valid(t))).isDefined
-          case ft: InstanceFieldTree => unapply(Valid(ft.qual)).isDefined
-          case _: MethodTree | _: NewInstanceTree => true
-          case _: LiteralTree | _: LocalVarTree | _: ThisTree | _: StaticFieldTree | _: ClassTree |
-              _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree =>
-            false
-        }
+    def unapply(tree: RuntimeTree): Option[RuntimeTree] =
+      tree match {
+        case mt: ModuleTree => mt.of.flatMap(t => unapply(t))
+        case ft: InstanceFieldTree => unapply(ft.qual)
+        case ot: OuterTree => unapply(ot.inner)
+        case _: MethodTree | _: NewInstanceTree => Some(tree)
+        case _: LiteralTree | _: LocalVarTree | _: ThisTree | _: StaticFieldTree | _: ClassTree |
+            _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree =>
+          None
       }
+    def unapply(tree: Validation[RuntimeTree]): Option[RuntimeTree] =
+      tree.toOption.filter { unapply(_).isDefined }
   }
 
   object ReferenceTree {

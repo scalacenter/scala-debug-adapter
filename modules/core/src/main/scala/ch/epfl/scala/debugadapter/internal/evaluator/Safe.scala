@@ -83,7 +83,7 @@ object Safe {
     }
   }
 
-  def unapply(safe: Safe[_]): Option[Try[_]] = Some(safe.result)
+  def unapply[A](safe: Safe[A]): Option[Try[A]] = Some(safe.result)
 
   def join[A, B](safeA: Safe[A], safeB: Safe[B]): Safe[(A, B)] = {
     safeA.flatMap(a => safeB.map(b => (a, b)))
