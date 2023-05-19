@@ -52,7 +52,7 @@ case class RuntimeEvaluator(
         case LocalVarTree(varName, _) => Safe.successful(frame.variableByName(varName).map(frame.variableValue).get)
         case primitive: PrimitiveBinaryOpTree => invokePrimitive(primitive)
         case primitive: PrimitiveUnaryOpTree => invokePrimitive(primitive)
-        case module: ModuleTree => evaluateModule(module, module.of.map(evaluate))
+        case module: ModuleTree => evaluateModule(module)
         case literal: LiteralTree => evaluateLiteral(literal)
         case ThisTree(obj) => Safe(JdiValue(obj.instances(1).get(0), frame.thread))
         case field: InstanceFieldTree => evaluateField(field)
@@ -77,14 +77,10 @@ case class RuntimeEvaluator(
     /*                              Outer evaluation                              */
     /* -------------------------------------------------------------------------- */
     private def evaluateOuter(tree: OuterTree): Safe[JdiValue] =
-      evaluate(tree.inner).flatMap { innerValue =>
-        tree match {
-          case OuterModuleTree(_, module) =>
-            evaluateModule(module, Some(Safe(innerValue)))
-          case _: OuterClassTree =>
-            Safe(innerValue.asObject.getField("$outer"))
-        }
-
+      tree match {
+        case OuterModuleTree(module) => evaluateModule(module)
+        case outerClass: OuterClassTree =>
+          evaluate(outerClass.inner).map(_.asObject.getField("$outer"))
       }
 
     /* -------------------------------------------------------------------------- */
@@ -145,20 +141,20 @@ case class RuntimeEvaluator(
      * @param of the potential parent of the module
      * @return an instance of the module in a Safe
      */
-    private def evaluateModule(tree: ModuleTree, of: Option[Safe[JdiValue]]): Safe[JdiValue] = {
-      val module = Safe(JdiObject(tree.`type`.instances(1).get(0), frame.thread))
-      (module, of) match {
-        case (Safe(Success(_)), _) => module
-        case (Safe(Failure(e: ArrayIndexOutOfBoundsException)), Some(qual)) =>
+    private def evaluateModule(tree: ModuleTree): Safe[JdiValue] =
+      tree.of match {
+        case None | Some(Module(_)) => Safe(JdiObject(tree.`type`.instances(1).get(0), frame.thread))
+        case Some(of) =>
           for {
-            ofValue <- qual
+            ofValue <- evaluate(of)
             loader <- frame.classLoader()
             initMethodName <- Safe(getLastInnerType(tree.`type`.name()).get)
-            instance <- ofValue.asObject.invoke(initMethodName, Seq.empty)
+            instance <- ofValue.value.`type` match {
+              case tree.`type` => Safe(ofValue)
+              case _ => ofValue.asObject.invoke(initMethodName, Seq.empty)
+            }
           } yield instance
-        case _ => Safe(Failure(new Exception("Can't evaluate or initialize module")))
       }
-    }
 
     /* -------------------------------------------------------------------------- */
     /*                                Instantiation                               */
@@ -277,7 +273,7 @@ case class RuntimeEvaluator(
     /**
      * Returns a [[ModuleTree]], if name is a (nested) module
      *
-     * If name is in the companion class, returns an [[Invalid]] to avoid static access to instance members
+     * Should the module be a nested module, then the qualifier must be an instance of the outer module (to avoid accessing a field from a static context)
      *
      * @param name
      * @param of an option representing the qualifier of the module. It helps resolving name conflicts by selecting the most suitable one
@@ -286,14 +282,9 @@ case class RuntimeEvaluator(
     private def validateModule(name: String, of: Option[RuntimeTree]): Validation[ModuleTree] = {
       val moduleName = if (name.endsWith("$")) name else name + "$"
       searchAllClassesFor(moduleName, of.map(_.`type`.name()), frame).flatMap { cls =>
-        val isInClass = loadClass(removeLastInnerTypeFromFQCN(cls.name()), frame)
-          .withFilterNot { _.cls.methodsByName(moduleName.stripSuffix("$")).isEmpty() }
-
-        // TODO: understand why I can't merge n°1 and n°3
-        (isInClass, cls, of) match {
-          case (Safe(Success(_)), _, Instance(instance)) => ModuleTree(cls, Some(instance))
-          case (_, Module(module), _) => ModuleTree(module, of)
-          case (_, _, Instance(instance)) => ModuleTree(cls, Some(instance))
+        (cls, of) match {
+          case (Module(module), _) => ModuleTree(module, None)
+          case (_, Instance(instance)) => ModuleTree(cls, Some(instance))
           case _ => Recoverable(s"Cannot access module $cls")
         }
       }
@@ -390,9 +381,11 @@ case class RuntimeEvaluator(
     ): Validation[MethodTree] =
       tree.`type` match {
         case ref: ReferenceType =>
-          methodsByNameAndArgs(ref, name, args.map(_.`type`), frame)
-            .map(toStaticIfNeeded(_, args, tree))
-            .orElse(validateApplyCall(name, tree, args))
+          validateApplyCall(name, tree, args)
+            .orElse {
+              methodsByNameAndArgs(ref, name, args.map(_.`type`), frame)
+                .map(toStaticIfNeeded(_, args, tree))
+            }
             .orElse(validateImplicitApplyCall(ref, tree, name, args))
             .orElse(findOuter(tree, frame).flatMap(findMethod(_, name, args)))
         case t => illegalAccess(t, "ReferenceType")

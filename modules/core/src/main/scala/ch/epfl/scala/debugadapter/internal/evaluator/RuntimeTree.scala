@@ -15,6 +15,10 @@ sealed trait RuntimeTree {
 sealed trait RuntimeValidationTree extends RuntimeTree
 sealed trait RuntimeEvaluationTree extends RuntimeTree
 
+sealed trait TypeTree extends RuntimeTree {
+  override def `type`: ClassType
+}
+
 sealed trait MethodTree extends RuntimeEvaluationTree {
   def method: Method
 }
@@ -23,9 +27,7 @@ sealed trait FieldTree extends RuntimeEvaluationTree {
   def field: Field
 }
 
-sealed trait OuterTree extends RuntimeEvaluationTree {
-  def inner: RuntimeEvaluationTree
-}
+sealed trait OuterTree extends RuntimeEvaluationTree
 
 /* -------------------------------------------------------------------------- */
 /*                                Simple trees                                */
@@ -134,8 +136,8 @@ case class InstanceMethodTree(
   override lazy val `type` = method.returnType()
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
-    s"""|MethodTree(
-        |${indent}m= $method,
+    s"""|InstanceMethodTree(
+        |${indent}m= $method -> ${method.returnType()},
         |${indent}args= ${args.map(_.prettyPrint(depth + 1)).mkString(",\n" + indent)},
         |${indent}qual= ${qual.prettyPrint(depth + 1)}
         |${indent.dropRight(1)})""".stripMargin
@@ -179,26 +181,26 @@ case class OuterClassTree(
     val indent = "\t" * (depth + 1)
     s"""|OuterClassTree(
         |${indent}of= ${inner.prettyPrint(depth + 1)}
+        |${indent}type= ${`type`}
         |${indent.dropRight(1)})""".stripMargin
   }
 }
 
 case class OuterModuleTree(
-    inner: RuntimeEvaluationTree,
     module: ModuleTree
 ) extends OuterTree {
   override def `type`: ClassType = module.`type`
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|OuterModuleTree(
-        |${indent}of= ${inner.prettyPrint(depth + 1)}
+        |${indent}module= ${module.prettyPrint(depth + 1)}
         |${indent.dropRight(1)})""".stripMargin
   }
 }
 
 object OuterTree {
   def apply(of: RuntimeTree, tpe: Type): Validation[OuterTree] = (of, tpe) match {
-    case (tree: RuntimeEvaluationTree, Module(module)) => Valid(new OuterModuleTree(tree, ModuleTree(module, None)))
+    case (tree: RuntimeEvaluationTree, Module(module)) => Valid(new OuterModuleTree(ModuleTree(module, None)))
     case (tree: RuntimeEvaluationTree, ct: ClassType) => Valid(new OuterClassTree(tree, ct))
     case _ => Recoverable("No valid outer can be found")
   }
@@ -213,12 +215,13 @@ case class ThisTree(
 case class ModuleTree(
     `type`: ClassType,
     of: Option[RuntimeEvaluationTree]
-) extends RuntimeEvaluationTree {
+) extends RuntimeEvaluationTree
+    with TypeTree {
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|ModuleTree(
         |${indent}mod= ${`type`}
-        |${indent}of= $of
+        |${indent}of= ${of.map(_.prettyPrint(depth + 1)).getOrElse("None")}
         |${indent.dropRight(1)})""".stripMargin
   }
 }
@@ -238,7 +241,8 @@ object ModuleTree {
 
 case class ClassTree(
     `type`: ClassType
-) extends RuntimeValidationTree {
+) extends RuntimeValidationTree
+    with TypeTree {
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|ClassTree(

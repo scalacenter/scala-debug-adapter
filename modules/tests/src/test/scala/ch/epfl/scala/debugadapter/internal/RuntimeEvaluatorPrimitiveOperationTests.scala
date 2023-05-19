@@ -37,8 +37,7 @@ object RuntimeEvaluatorPrimitiveEnvironment {
        |""".stripMargin
 }
 
-class Scala31RuntimeEvaluatorPrimitiveOperationTests
-    extends RuntimeEvaluatorPrimitiveOperationTests(ScalaVersion.`3.1+`)
+class ScalaRuntimeEvaluatorPrimitiveOperationTests extends RuntimeEvaluatorPrimitiveOperationTests(ScalaVersion.`3.1+`)
 
 abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
   lazy val localVar =

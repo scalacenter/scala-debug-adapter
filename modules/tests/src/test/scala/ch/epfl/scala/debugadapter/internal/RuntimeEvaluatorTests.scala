@@ -418,6 +418,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
+  // TODO: patch to make the last test work
   test(
     "Should access to multiple layers of nested types. However when the nested class take no parameters there is a conflict with its companion object"
   ) {
@@ -431,11 +432,11 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("Main.Inner.DoubleInner(84).str", "double inner 84"),
         Evaluation.success("Main.Inner.DoubleInner.str", "double inner"),
         Evaluation.success("Main.Inner(42).InnerInner.str", "inner inner 42"),
-        Evaluation.successOrIgnore("Main.Inner(41).InnerInner().str", "inner inner 42", true),
+        Evaluation.success("Main.Inner(41).InnerInner().str", "inner inner 42"),
         Evaluation.success("Foo().FriendFoo(Foo()).InnerFriendFoo.str", "object inner friend foo 42"),
-        Evaluation.successOrIgnore("Foo().FriendFoo(Foo()).InnerFriendFoo().str", "inner friend foo 42", true),
-        Evaluation.success("Foo().FriendFoo.ObjectFriendFoo.str", "object object friend foo 42"),
-        Evaluation.successOrIgnore("Foo().FriendFoo.ObjectFriendFoo().str", "object friend foo 42", true)
+        Evaluation.success("Foo().FriendFoo(Foo()).InnerFriendFoo().str", "inner friend foo 42"),
+        Evaluation.success("Foo().FriendFoo.ObjectFriendFoo().str", "object friend foo 42"),
+        Evaluation.success("Foo().FriendFoo.ObjectFriendFoo.str", "object object friend foo 42")
       )
     )
   }
