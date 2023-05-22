@@ -10,9 +10,11 @@ sealed abstract class Validation[+A] {
   def isInvalid: Boolean = !isValid
   def isEmpty: Boolean = isInvalid
 
-  def filter(p: A => Boolean): Validation[A] =
+  def filter(p: A => Boolean, fatal: Boolean = false): Validation[A] =
     if (isValid && p(get)) this
+    else if (fatal) Unrecoverable(s"Predicate does not hold for $get")
     else Recoverable(s"Predicate does not hold for $get")
+  def filterNot(p: A => Boolean, fatal: Boolean = false): Validation[A] = filter(!p(_), fatal)
 
   def map[B](f: A => B): Validation[B]
   def flatMap[B](f: A => Validation[B]): Validation[B]
