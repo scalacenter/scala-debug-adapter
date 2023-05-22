@@ -9,7 +9,7 @@ import ch.epfl.scala.debugadapter.JavaRuntime
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.ManagedEntry
 import ch.epfl.scala.debugadapter.UnmanagedEntry
-import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeEvaluator
+import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeEvaluation
 import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeExpression
 import ch.epfl.scala.debugadapter.internal.evaluator.CompiledExpression
 import ch.epfl.scala.debugadapter.internal.evaluator.JdiFrame
@@ -162,7 +162,7 @@ private[internal] class EvaluationProvider(
 
   private def prepare(expression: String, frame: JdiFrame): Try[PreparedExpression] =
     if (mode.allowRuntimeEvaluation)
-      RuntimeEvaluator(frame, logger).validate(expression) match {
+      RuntimeEvaluation(frame, logger).validate(expression) match {
         case MethodCall(tree) if mode.allowScalaEvaluation => compilePrepare(expression, frame)
         case Recoverable(_) => compilePrepare(expression, frame)
         case Valid(tree) => Success(RuntimeExpression(tree))
@@ -173,7 +173,7 @@ private[internal] class EvaluationProvider(
   private def evaluate(expression: PreparedExpression, frame: JdiFrame): Try[Value] = {
     expression match {
       case logMessage: PlainLogMessage => messageLogger.log(logMessage, frame)
-      case RuntimeExpression(tree) => RuntimeEvaluator(frame, logger).evaluate(tree).getResult.map(_.value)
+      case RuntimeExpression(tree) => RuntimeEvaluation(frame, logger).evaluate(tree).getResult.map(_.value)
       case expression: CompiledExpression =>
         val fqcn = frame.current().location.declaringType.name
         for {
