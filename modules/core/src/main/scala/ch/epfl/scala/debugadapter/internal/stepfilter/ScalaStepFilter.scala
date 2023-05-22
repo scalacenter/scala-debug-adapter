@@ -88,8 +88,9 @@ abstract class ScalaStepFilter(scalaVersion: ScalaVersion) extends StepFilter {
   private def isAnonClass(tpe: ReferenceType): Boolean =
     tpe.name.contains("$anon$")
 
+  /** is local class or local object */
   private def isLocalClass(tpe: ReferenceType): Boolean =
-    tpe.name.matches(".+\\$\\d+")
+    tpe.name.matches(".+\\$\\d+\\$?")
 
   private def isNestedClass(tpe: ReferenceType): Boolean =
     tpe.name.matches(".+\\$\\.+")

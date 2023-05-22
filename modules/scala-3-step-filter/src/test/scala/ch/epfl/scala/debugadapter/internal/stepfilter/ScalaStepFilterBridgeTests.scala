@@ -70,9 +70,34 @@ abstract class ScalaStepFilterBridgeTests(scalaVersion: ScalaVersion) extends Fu
     assert(findM("example.F$").isEmpty)
     assert(findM("example.Main$G").isDefined)
     assert(findM("example.Main$H").isEmpty)
-    assert(findM("example.Main$$anon$1").isEmpty)
+    intercept[Exception](findM("example.Main$$anon$1"))
     // TODO fix: we could find it by traversing the tree of `Main`
-    assert(findM("example.Main$$anon$2").isEmpty)
+    intercept[Exception](findM("example.Main$$anon$2"))
+  }
+
+  test("local classes or local objects") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]) = {
+         |    class A {
+         |      def m(): Unit = {
+         |        println("A.m")
+         |      }
+         |    }
+         |    object B {
+         |      def m(): Unit = {
+         |        println("B.m")
+         |      }
+         |    }
+         |  }
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val stepFilter = getStepFilter(debuggee)
+    intercept[Exception](stepFilter.findSymbol(FakeJdiMethod("example.Main$A$1", "m")()("void")))
+    intercept[Exception](stepFilter.findSymbol(FakeJdiMethod("example.Main$B$2$", "m")()("void")))
   }
 
   test("getters and setters") {
@@ -268,7 +293,7 @@ abstract class ScalaStepFilterBridgeTests(scalaVersion: ScalaVersion) extends Fu
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val stepFilter = getStepFilter(debuggee)
-    val anonymousfun = FakeJdiMethod("Main$", "$anonfun$1")("x" -> "int")("int")
+    val anonymousfun = FakeJdiMethod("example.Main$", "$anonfun$1")("x" -> "int")("int")
     // TODO fix: it should find the symbol f by traversing the tree of object Main
     assert(stepFilter.findSymbol(anonymousfun).isEmpty)
   }
