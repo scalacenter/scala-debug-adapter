@@ -50,7 +50,7 @@ case class LiteralTree private (
 object LiteralTree {
   def apply(value: (Safe[Any], Type)): Validation[LiteralTree] = value._1 match {
     case Safe(Success(_: String)) | Safe(Success(IsAnyVal(_))) => Valid(new LiteralTree(value._1, value._2))
-    case _ => Unrecoverable(s"Unsupported literal type: ${value.getClass}")
+    case _ => Fatal(s"Unsupported literal type: ${value.getClass}")
   }
 }
 

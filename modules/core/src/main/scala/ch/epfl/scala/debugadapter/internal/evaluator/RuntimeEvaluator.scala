@@ -20,19 +20,14 @@ class RuntimeEvaluation private (
 ) {
   private def parse(expression: String): Validation[Stat] =
     expression.parse[Stat] match {
-      case err: Parsed.Error => Unrecoverable(err.details)
+      case err: Parsed.Error => Fatal(err.details)
       case Parsed.Success(tree) => Valid(tree)
       case _: Parsed.Success[?] =>
-        Unrecoverable(new Exception("Parsed expression is not a statement"))
+        Fatal(new Exception("Parsed expression is not a statement"))
     }
 
   def validate(expression: String): Validation[RuntimeEvaluationTree] =
-    parse(expression).flatMap {
-      validator.validate(_) match {
-        case Unrecoverable(e) => Recoverable(s"Can't validate at runtime, recovering with compiler: $e")
-        case validated => validated
-      }
-    }
+    parse(expression).flatMap(validator.validate)
 
   def evaluate(expression: RuntimeEvaluationTree): Safe[JdiValue] =
     evaluator.evaluate(expression).map(_.derefIfRef)
@@ -172,15 +167,18 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
         .map { ths => ThisTree(ths.reference.referenceType().asInstanceOf[ClassType]) }
     }
 
-  def validate(expression: Stat): Validation[RuntimeEvaluationTree] = expression match {
-    case value: Term.Name => validateName(value, thisTree)
-    case _: Term.This => thisTree
-    case sup: Term.Super => Recoverable("Super not (yet) supported at runtime")
-    case _: Term.Apply | _: Term.ApplyInfix | _: Term.ApplyUnary => validateMethod(extractCall(expression))
-    case select: Term.Select => validateSelect(select)
-    case lit: Lit => validateLiteral(lit)
-    case instance: Term.New => validateNew(instance)
-    case _ => Recoverable("Expression not supported at runtime")
+  def validate(expression: Stat): Validation[RuntimeEvaluationTree] = {
+    val validation = expression match {
+      case value: Term.Name => validateName(value, thisTree)
+      case _: Term.This => thisTree
+      case sup: Term.Super => Recoverable("Super not (yet) supported at runtime")
+      case _: Term.Apply | _: Term.ApplyInfix | _: Term.ApplyUnary => validateMethod(extractCall(expression))
+      case select: Term.Select => validateSelect(select)
+      case lit: Lit => validateLiteral(lit)
+      case instance: Term.New => validateNew(instance)
+      case _ => Recoverable("Expression not supported at runtime")
+    }
+    validation.filterNot(_.`type`.name() == "scala.Function0", runtimeFatal = true)
   }
 
   /**
@@ -221,7 +219,7 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
   private def validateLiteral(lit: Lit): Validation[LiteralTree] =
     frame.classLoader().map(loader => LiteralTree(fromLitToValue(lit, loader))).getResult match {
       case Success(value) => value
-      case Failure(e) => Unrecoverable(e)
+      case Failure(e) => Fatal(e)
     }
 
   /* -------------------------------------------------------------------------- */
@@ -304,7 +302,8 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
           case (cls, Some(_: RuntimeEvaluationTree) | None) => Valid(ClassTree(cls))
           case (cls, Some(_: ClassTree)) =>
             if (cls.isStatic()) Valid(ClassTree(cls))
-            else Unrecoverable(s"Cannot access non-static class ${cls.name()}")
+            else CompilerRecoverable(s"Cannot access non-static class ${cls.name()}")
+          // Should be fatal, but I think there are some cases untested where using Fatal would break the evaluator
         }
       }
       .orElse {
@@ -322,8 +321,8 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
     varTreeByName(name)
       .orElse(fieldTreeByName(of, name))
       .orElse(zeroArgMethodTreeByName(of, name))
-      .recoverWith(validateModule(name, of.toOption))
-      .recoverWith {
+      .orElse(validateModule(name, of.toOption))
+      .orElse {
         of
           .flatMap(findOuter(_, frame))
           .flatMap(outer => validateName(value, Valid(outer)))

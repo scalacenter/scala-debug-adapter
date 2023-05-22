@@ -42,7 +42,7 @@ package object evaluator {
       seq.size match {
         case 1 => Valid(seq.head)
         case 0 => Recoverable(message)
-        case _ => Unrecoverable(s"$message: multiple values found")
+        case _ => CompilerRecoverable(s"$message: multiple values found")
       }
 
     def asJavaList = seq.asJava

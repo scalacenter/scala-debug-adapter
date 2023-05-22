@@ -11,7 +11,7 @@ import scala.util.Failure
 import scala.util.Try
 
 private[evaluator] object Helpers {
-  def illegalAccess(x: Any, typeName: String) = Unrecoverable {
+  def illegalAccess(x: Any, typeName: String) = Fatal {
     new ClassCastException(s"Cannot cast $x to $typeName")
   }
 
@@ -128,7 +128,7 @@ private[evaluator] object Helpers {
   /* Extract reference if there is */
   def ifReference(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
     tree match {
-      case Invalid(e) => Unrecoverable(s"Invalid reference: $e")
+      case Invalid(e) => Recoverable(s"Invalid reference: $e")
       case _ => ifReference(tree.get)
     }
 

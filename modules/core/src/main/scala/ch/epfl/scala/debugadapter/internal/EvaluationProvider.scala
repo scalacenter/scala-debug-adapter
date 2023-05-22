@@ -20,9 +20,7 @@ import ch.epfl.scala.debugadapter.internal.evaluator.MethodInvocationFailed
 import ch.epfl.scala.debugadapter.internal.evaluator.PlainLogMessage
 import ch.epfl.scala.debugadapter.internal.evaluator.PreparedExpression
 import ch.epfl.scala.debugadapter.internal.evaluator.ScalaEvaluator
-import ch.epfl.scala.debugadapter.internal.evaluator.Recoverable
-import ch.epfl.scala.debugadapter.internal.evaluator.Valid
-import ch.epfl.scala.debugadapter.internal.evaluator.Unrecoverable
+import ch.epfl.scala.debugadapter.internal.evaluator.{Recoverable, Valid, CompilerRecoverable, Fatal}
 import evaluator.RuntimeEvaluatorExtractors.MethodCall
 import com.microsoft.java.debug.core.IEvaluatableBreakpoint
 import com.microsoft.java.debug.core.adapter.IDebugAdapterContext
@@ -38,6 +36,7 @@ import scala.util.Success
 import scala.util.Try
 
 import ScalaExtension.*
+import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeEvaluationTree
 private[internal] class EvaluationProvider(
     sourceLookUp: SourceLookUpProvider,
     messageLogger: MessageLogger,
@@ -163,10 +162,11 @@ private[internal] class EvaluationProvider(
   private def prepare(expression: String, frame: JdiFrame): Try[PreparedExpression] =
     if (mode.allowRuntimeEvaluation)
       RuntimeEvaluation(frame, logger).validate(expression) match {
-        case MethodCall(tree) if mode.allowScalaEvaluation => compilePrepare(expression, frame)
-        case Recoverable(_) => compilePrepare(expression, frame)
         case Valid(tree) => Success(RuntimeExpression(tree))
-        case Unrecoverable(e) => Failure(e)
+        case MethodCall(tree: RuntimeEvaluationTree) if mode.allowScalaEvaluation =>
+          compilePrepare(expression, frame).orElse(Success(RuntimeExpression(tree)))
+        case Fatal(e) => Failure(e)
+        case Recoverable(_) | CompilerRecoverable(_) => compilePrepare(expression, frame)
       }
     else compilePrepare(expression, frame)
 

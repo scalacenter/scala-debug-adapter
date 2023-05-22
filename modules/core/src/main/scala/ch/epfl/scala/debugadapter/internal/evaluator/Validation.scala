@@ -10,22 +10,21 @@ sealed abstract class Validation[+A] {
   def isInvalid: Boolean = !isValid
   def isEmpty: Boolean = isInvalid
 
-  def filter(p: A => Boolean, fatal: Boolean = false): Validation[A]
-  def filterNot(p: A => Boolean, fatal: Boolean = false): Validation[A] = filter(!p(_), fatal)
+  def filter(p: A => Boolean, runtimeFatal: Boolean = false): Validation[A]
+  def filterNot(p: A => Boolean, runtimeFatal: Boolean = false): Validation[A] = filter(!p(_), runtimeFatal)
 
   def map[B](f: A => B): Validation[B]
   def flatMap[B](f: A => Validation[B]): Validation[B]
   def flatten[B](implicit ev: A <:< Validation[B]): Validation[B] = this match {
     case Valid(value) => ev(this.get)
     case Recoverable(message) => Recoverable(message)
-    case Unrecoverable(e) => Unrecoverable(e)
+    case Fatal(e) => Fatal(e)
+    case CompilerRecoverable(message) => CompilerRecoverable(message)
   }
 
   def get: A
   def getOrElse[B >: A](f: => B): B
   def orElse[B >: A](f: => Validation[B]): Validation[B]
-
-  def recoverWith[B >: A](f: => Validation[B]): Validation[B]
 
   def toOption: Option[A]
   def toTry: Try[A]
@@ -42,10 +41,8 @@ final case class Valid[+A](value: A) extends Validation[A]() {
 
   override def filter(p: A => Boolean, fatal: Boolean): Validation[A] =
     if (p(value)) this
-    else if (fatal) Unrecoverable(s"Predicate does not hold for $value")
+    else if (fatal) CompilerRecoverable(s"Predicate does not hold for $value")
     else Recoverable(s"Predicate does not hold for $value")
-
-  override def recoverWith[B >: A](f: => Validation[B]): Validation[B] = this
 
   override def toOption: Option[A] = Some(value)
   override def toTry: Try[A] = Success(value)
@@ -60,8 +57,6 @@ sealed abstract class Invalid(val exception: Exception) extends Validation[Nothi
 
   override def filter(p: Nothing => Boolean, fatal: Boolean): Validation[Nothing] = this
 
-  override def recoverWith[B >: Nothing](f: => Validation[B]): Validation[B] = f
-
   override def toOption: Option[Nothing] = None
   override def toTry: Try[Nothing] = Failure(exception)
 }
@@ -70,9 +65,12 @@ final case class Recoverable(message: String) extends Invalid(new NoSuchElementE
   override def orElse[B >: Nothing](f: => Validation[B]): Validation[B] = f
 }
 
-final case class Unrecoverable(e: Exception) extends Invalid(e) {
+sealed abstract class Unrecoverable(e: Exception) extends Invalid(e) {
   override def orElse[B >: Nothing](f: => Validation[B]): Validation[B] = this
 }
+
+final case class Fatal(e: Exception) extends Unrecoverable(e)
+final case class CompilerRecoverable(e: Exception) extends Unrecoverable(e)
 
 object Validation {
   def apply[A](input: => A): Validation[A] = {
@@ -81,7 +79,7 @@ object Validation {
       if (value == null) Recoverable("Found null value, expected non-null value")
       else Valid(value)
     } catch {
-      case t: Throwable => Unrecoverable(new Exception(t))
+      case t: Throwable => Fatal(new Exception(t))
     }
   }
 
@@ -95,7 +93,7 @@ object Validation {
   def fromTry[A](value: => scala.util.Try[A]): Validation[A] = {
     value match {
       case scala.util.Success(value) => Valid(value)
-      case scala.util.Failure(t) => Unrecoverable(new Exception(t))
+      case scala.util.Failure(t) => Fatal(new Exception(t))
     }
   }
 
@@ -109,7 +107,16 @@ object Recoverable {
   def apply(t: Throwable): Recoverable = Recoverable(t.getMessage())
 }
 
-object Unrecoverable {
-  def apply(t: Throwable): Unrecoverable = Unrecoverable(new Exception(t))
-  def apply(str: String): Unrecoverable = Unrecoverable(new Exception(str))
+object Fatal {
+  def apply(t: Throwable): Unrecoverable = new Fatal(new Exception(t))
+  def apply(str: String): Unrecoverable = new Fatal(new Exception(str))
+}
+
+object CompilerRecoverable {
+  def apply(t: Throwable): Unrecoverable = CompilerRecoverable(
+    new Exception(s"Can't validate at runtime, recovering with compiler: $t")
+  )
+  def apply(str: String): Unrecoverable = CompilerRecoverable(
+    new Exception(s"Can't validate at runtime, recovering with compiler: $str")
+  )
 }

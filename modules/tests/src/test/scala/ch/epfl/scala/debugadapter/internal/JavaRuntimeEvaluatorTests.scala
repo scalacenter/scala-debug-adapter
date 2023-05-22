@@ -238,12 +238,12 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     implicit val debuggee = nested
     check(
       Breakpoint(11),
-      // DebugStepAssert.inParallel(
-      Evaluation.success("StaticInner.staticMethod()", "i am static static_inner"),
-      Evaluation.failed("Main.Inner.staticMethod()"),
-      Evaluation.success("Main.StaticInner.staticMethod()", "i am static static_inner"),
-      Evaluation.success("Foo.StaticFriendFoo.staticMethod()", "i am static static_friend_foo")
-      // )
+      DebugStepAssert.inParallel(
+        Evaluation.success("StaticInner.staticMethod()", "i am static static_inner"),
+        Evaluation.failed("Main.Inner.staticMethod()"),
+        Evaluation.success("Main.StaticInner.staticMethod()", "i am static static_inner"),
+        Evaluation.success("Foo.StaticFriendFoo.staticMethod()", "i am static static_friend_foo")
+      )
     )
   }
 }
