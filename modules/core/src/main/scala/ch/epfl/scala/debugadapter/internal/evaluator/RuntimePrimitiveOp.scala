@@ -114,22 +114,49 @@ object RuntimeBinaryOp {
 
 /* --------------------------- Numeric operations --------------------------- */
 sealed trait NumericOp extends RuntimeBinaryOp {
-  override def typeCheck(lhs: Type, rhs: Type): PrimitiveType =
+  private def primitiveTypeCheck(lhs: Type, rhs: Type): Option[PrimitiveType] =
     (lhs, rhs) match {
-      case (d: DoubleType, _) => d
-      case (_, d: DoubleType) => d
-      case (f: FloatType, _) => f
-      case (_, f: FloatType) => f
-      case (l: LongType, _) => l
-      case (_, l: LongType) => l
-      case (i: IntegerType, _) => i
-      case (_, i: IntegerType) => i
-      case (s: ShortType, _) => s
-      case (_, s: ShortType) => s
-      case (b: ByteType, _) => b
-      case (_, b: ByteType) => b
-      case (c: CharType, _) => c
-      case (_, c: CharType) => c
+      case (d: DoubleType, _) => Some(d)
+      case (_, d: DoubleType) => Some(d)
+      case (f: FloatType, _) => Some(f)
+      case (_, f: FloatType) => Some(f)
+      case (l: LongType, _) => Some(l)
+      case (_, l: LongType) => Some(l)
+      case (i: IntegerType, _) => Some(i)
+      case (_, i: IntegerType) => Some(i)
+      case (s: ShortType, _) => Some(s)
+      case (_, s: ShortType) => Some(s)
+      case (b: ByteType, _) => Some(b)
+      case (_, b: ByteType) => Some(b)
+      case (c: CharType, _) => Some(c)
+      case (_, c: CharType) => Some(c)
+      case _ => None
+    }
+
+  private def referenceTypeCheck(lhs: Type, rhs: Type): Option[Type] = {
+    (lhs.name(), rhs.name()) match {
+      case ("java.lang.Double", _) => Some(lhs)
+      case (_, "java.lang.Double") => Some(rhs)
+      case ("java.lang.Float", _) => Some(lhs)
+      case (_, "java.lang.Float") => Some(rhs)
+      case ("java.lang.Long", _) => Some(lhs)
+      case (_, "java.lang.Long") => Some(rhs)
+      case ("java.lang.Integer", _) => Some(lhs)
+      case (_, "java.lang.Integer") => Some(rhs)
+      case ("java.lang.Short", _) => Some(lhs)
+      case (_, "java.lang.Short") => Some(rhs)
+      case ("java.lang.Byte", _) => Some(lhs)
+      case (_, "java.lang.Byte") => Some(rhs)
+      case ("java.lang.Character", _) => Some(lhs)
+      case (_, "java.lang.Character") => Some(rhs)
+      case _ => None
+    }
+  }
+
+  override def typeCheck(lhs: Type, rhs: Type): Type =
+    primitiveTypeCheck(lhs, rhs).orElse(referenceTypeCheck(lhs, rhs)) match {
+      case Some(t) => t
+      case None => throw new IllegalArgumentException(s"Unexpected types $lhs and $rhs")
     }
 
   private def computeFractional[T <: AnyVal](x: T, y: T, clsLoader: JdiClassLoader)(implicit

@@ -189,15 +189,12 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
    * @param expression
    * @return a [[ValidationTree]] of the expression
    */
-  private def validateWithClass(expression: Stat): Validation[RuntimeTree] = {
-    val res = expression match {
+  private def validateWithClass(expression: Stat): Validation[RuntimeTree] =
+    expression match {
       case value: Term.Name => validateName(value, thisTree).orElse(validateClass(value.value, thisTree.toOption))
       case select: Term.Select => validateInnerSelect(select)
       case _ => validate(expression)
     }
-    println(s"validation of ${expression} WITH CLASS: ${res}")
-    res
-  }
 
   /**
    * Returns a ValidationTree of the [[Term.Select]] nested in another [[Term.Select]]. Provides access to [[ClassTree]], so it mustn't be used directly and must be wrapped in an [[EvaluationTree]]
@@ -308,6 +305,12 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
           case (cls, Some(_: ClassTree)) =>
             if (cls.isStatic()) Valid(ClassTree(cls))
             else Unrecoverable(s"Cannot access non-static class ${cls.name()}")
+        }
+      }
+      .orElse {
+        of match {
+          case None => Recoverable(s"Cannot find class $name")
+          case Some(value) => findOuter(value, frame).flatMap(outer => validateClass(name, Some(outer)))
         }
       }
 

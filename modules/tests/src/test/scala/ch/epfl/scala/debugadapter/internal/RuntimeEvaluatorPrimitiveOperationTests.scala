@@ -14,7 +14,7 @@ object RuntimeEvaluatorPrimitiveEnvironment {
        |
        |object Main {
        |  def main(args: Array[String]): Unit = {
-       |    val name = "world"
+       |    val name = "world"; new java.lang.Long(42L)
        |    println(name)
        |    val foo1 = Foo(1)
        |    val foo2 = Foo(2)
@@ -40,14 +40,14 @@ object RuntimeEvaluatorPrimitiveEnvironment {
 class ScalaRuntimeEvaluatorPrimitiveOperationTests extends RuntimeEvaluatorPrimitiveOperationTests(ScalaVersion.`3.1+`)
 
 abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
-  lazy val localVar =
+  lazy val primitiveOps =
     TestingDebuggee.mainClass(RuntimeEvaluatorPrimitiveEnvironment.primitiveSource, "example.Main", scalaVersion)
 
   protected override def defaultConfig: DebugConfig =
     super.defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly)
 
   test("Should compute primitive method calls on doubles") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -71,7 +71,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute primitive method calls on floats") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -95,7 +95,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute primitive method calls on longs") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -118,7 +118,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute primitive method calls on ints") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -141,7 +141,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute primitive method calls on shorts") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -164,7 +164,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute primitive method calls on bytes") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -177,7 +177,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute primitive method calls on chars") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -199,7 +199,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute primitive method calls on booleans") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -222,7 +222,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should take accounts of order of priorities") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -244,7 +244,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute mixed operands type primitive numeric operations") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -273,7 +273,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should compute a mix of literal primitive values and computed primitive values") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -290,7 +290,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should unbox types supporting primitive operations") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -313,7 +313,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should decide whether 2 instances are equals or not") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(11),
       DebugStepAssert.inParallel(
@@ -338,7 +338,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should refuse bad types primitive operations") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
@@ -354,7 +354,7 @@ abstract class RuntimeEvaluatorPrimitiveOperationTests(val scalaVersion: ScalaVe
   }
 
   test("Should accept unary operators on primitive types") {
-    implicit val debuggee = localVar
+    implicit val debuggee = primitiveOps
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
