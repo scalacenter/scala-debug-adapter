@@ -1,19 +1,22 @@
 package ch.epfl.scala.debugadapter.internal.stepfilter
 
-import tastyquery.Contexts.Context
+import ch.epfl.scala.debugadapter.internal.jdi
 import tastyquery.Contexts
+import tastyquery.Contexts.Context
+import tastyquery.Flags
+import tastyquery.Names.*
+import tastyquery.Signatures.*
+import tastyquery.Symbols.*
+import tastyquery.Types.*
 import tastyquery.jdk.ClasspathLoaders
 import tastyquery.jdk.ClasspathLoaders.FileKind
-import tastyquery.Names.*
-import tastyquery.Symbols.*
-import java.util.function.Consumer
+
 import java.nio.file.Path
-import ch.epfl.scala.debugadapter.internal.jdi
-import tastyquery.Flags
-import scala.util.matching.Regex
+import java.util.function.Consumer
+import scala.util.Failure
+import scala.util.Success
 import scala.util.Try
-import tastyquery.Types.*
-import tastyquery.Signatures.*
+import scala.util.matching.Regex
 
 class ScalaStepFilterBridge(
     classpaths: Array[Path],
@@ -25,26 +28,30 @@ class ScalaStepFilterBridge(
 
   private def warn(msg: String): Unit = warnLogger.accept(msg)
 
-  private def throwOrWarn(msg: String): Unit =
-    if (testMode) throw new Exception(msg)
-    else warn(msg)
+  private def throwOrWarn(exception: Throwable): Unit =
+    if (testMode) throw exception
+    else exception.getMessage
 
   def skipMethod(obj: Any): Boolean =
-    findSymbol(obj).forall(skip)
+    findSymbolImpl(obj) match
+      case Failure(exception) => throwOrWarn(exception); false
+      case Success(Some(symbol)) => skip(symbol)
+      case Success(None) => true
 
   private[stepfilter] def findSymbol(obj: Any): Option[TermSymbol] =
+    findSymbolImpl(obj).get
+
+  private def findSymbolImpl(obj: Any): Try[Option[TermSymbol]] =
     val method = jdi.Method(obj)
-    val isExtensionMethod = method.name.endsWith("$extension")
     val fqcn = method.declaringType.name
-    findDeclaringType(fqcn, isExtensionMethod) match
+    findDeclaringType(fqcn, method.isExtensionMethod) match
       case None =>
-        throwOrWarn(s"Cannot find Scala symbol of $fqcn")
-        None
+        Failure(Exception(s"Cannot find Scala symbol of $fqcn"))
       case Some(declaringType) =>
         val matchingSymbols =
           declaringType.declarations
             .collect { case sym: TermSymbol if sym.isTerm => sym }
-            .filter(matchSymbol(method, _, isExtensionMethod))
+            .filter(matchSymbol(method, _))
 
         if matchingSymbols.size > 1 then
           val builder = new java.lang.StringBuilder
@@ -52,9 +59,9 @@ class ScalaStepFilterBridge(
             s"Found ${matchingSymbols.size} matching symbols for $method:"
           )
           matchingSymbols.foreach(sym => builder.append(s"\n$sym"))
-          throwOrWarn(builder.toString)
+          Failure(Exception(builder.toString))
 
-        matchingSymbols.headOption
+        Success(matchingSymbols.headOption)
 
   private[stepfilter] def extractScalaTerms(
       fqcn: String,
@@ -94,34 +101,25 @@ class ScalaStepFilterBridge(
           case _ => None
       }
 
-  private def matchSymbol(method: jdi.Method, symbol: TermSymbol, isExtensionMethod: Boolean): Boolean =
-    matchTargetName(method, symbol, isExtensionMethod) &&
-      matchSignature(method, symbol, isExtensionMethod)
+  private def matchSymbol(method: jdi.Method, symbol: TermSymbol): Boolean =
+    matchTargetName(method, symbol) && matchSignature(method, symbol)
 
-  def matchTargetName(
-      method: jdi.Method,
-      symbol: TermSymbol,
-      isExtensionMethod: Boolean
-  ): Boolean =
+  def matchTargetName(method: jdi.Method, symbol: TermSymbol): Boolean =
     val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
     // if an inner accesses a private method, the backend makes the method public
     // and prefixes its name with the full class name.
     // Example: method foo in class example.Inner becomes example$Inner$$foo
     val expectedName = method.name.stripPrefix(javaPrefix)
     val encodedScalaName = NameTransformer.encode(symbol.targetName.toString)
-    if isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
+    if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
     else encodedScalaName == expectedName
 
-  def matchSignature(
-      method: jdi.Method,
-      symbol: TermSymbol,
-      isExtensionMethod: Boolean
-  ): Boolean =
+  def matchSignature(method: jdi.Method, symbol: TermSymbol): Boolean =
     try {
       symbol.signedName match
         case SignedName(_, sig, _) =>
           val javaArgs = method.arguments.headOption.map(_.name) match
-            case Some("$this") if isExtensionMethod => method.arguments.tail
+            case Some("$this") if method.isExtensionMethod => method.arguments.tail
             case _ => method.arguments
           matchArguments(sig.paramsSig, javaArgs) &&
           method.returnType.forall(matchType(sig.resSig, _))

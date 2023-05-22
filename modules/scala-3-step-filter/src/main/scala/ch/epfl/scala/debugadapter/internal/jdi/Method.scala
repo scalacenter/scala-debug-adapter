@@ -19,4 +19,7 @@ class Method(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method"):
       case e: InvocationTargetException if e.getCause.getClass.getName == "com.sun.jdi.ClassNotLoadedException" =>
         None
 
+  def isExtensionMethod: Boolean =
+    name.endsWith("$extension")
+
   override def toString: String = invokeMethod("toString")

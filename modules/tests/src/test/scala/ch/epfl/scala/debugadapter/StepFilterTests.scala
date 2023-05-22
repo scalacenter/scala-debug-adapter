@@ -137,6 +137,37 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
     )
   }
 
+  test("step into local class or local object") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]) = {
+         |    class A {
+         |      def m(): Unit = {
+         |        println("A.m")
+         |      }
+         |    }
+         |    object B {
+         |      def m(): Unit = {
+         |        println("B.m")
+         |      }
+         |    }
+         |    val a = new A
+         |    a.m()
+         |    B.m()
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(16),
+      StepIn.line(7),
+      // object B becomes a lazy ref at runtime, to avoid all the steps, it just breaks in B.m()
+      Breakpoint(12)
+    )
+  }
+
   test("should not step into getters") {
     val source =
       """|package example
