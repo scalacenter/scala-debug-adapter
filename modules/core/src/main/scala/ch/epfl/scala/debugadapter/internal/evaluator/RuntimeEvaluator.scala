@@ -135,25 +135,16 @@ class RuntimeEvaluator(frame: JdiFrame, logger: Logger) {
   /* -------------------------------------------------------------------------- */
   /*                              Module evaluation                             */
   /* -------------------------------------------------------------------------- */
-  /**
-   * Returns the instance of the module. A call to the accessor method initialize it if needed.
-   *
-   * Returns a [[Safe[Failure[_]]]] if there are no instances and accessor method can't be found
-   *
-   * @param tree the module to evaluate
-   * @param of the potential parent of the module
-   * @return an instance of the module in a Safe
-   */
   private def evaluateModule(tree: ModuleTree): Safe[JdiValue] =
-    tree.of match {
-      case None | Some(Module(_)) => Safe(JdiObject(tree.`type`.instances(1).get(0), frame.thread))
-      case Some(of) =>
+    tree match {
+      case TopLevelModuleTree(mod) => Safe(JdiObject(mod.instances(1).get(0), frame.thread))
+      case NestedModuleTree(mod, of) =>
         for {
           ofValue <- evaluate(of)
           loader <- frame.classLoader()
           initMethodName <- Safe(getLastInnerType(tree.`type`.name()).get)
           instance <- ofValue.value.`type` match {
-            case tree.`type` => Safe(ofValue)
+            case module if module == mod => Safe(ofValue)
             case _ => ofValue.asObject.invoke(initMethodName, Seq.empty)
           }
         } yield instance
@@ -198,12 +189,15 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
    * @param expression
    * @return a [[ValidationTree]] of the expression
    */
-  private def validateWithClass(expression: Stat): Validation[RuntimeTree] =
-    expression match {
-      case value: Term.Name => validateName(value, thisTree).orElse(validateClass(value.value, None))
+  private def validateWithClass(expression: Stat): Validation[RuntimeTree] = {
+    val res = expression match {
+      case value: Term.Name => validateName(value, thisTree).orElse(validateClass(value.value, thisTree.toOption))
       case select: Term.Select => validateInnerSelect(select)
       case _ => validate(expression)
     }
+    println(s"validation of ${expression} WITH CLASS: ${res}")
+    res
+  }
 
   /**
    * Returns a ValidationTree of the [[Term.Select]] nested in another [[Term.Select]]. Provides access to [[ClassTree]], so it mustn't be used directly and must be wrapped in an [[EvaluationTree]]
@@ -211,7 +205,9 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
    * @param select
    * @return a [[ValidationTree]] of the qualifier
    */
-  private def validateInnerSelect(select: Term.Select): Validation[RuntimeTree] =
+  private def validateInnerSelect(select: Term.Select): Validation[RuntimeTree] = {
+    def getNestedSelectedTerm(of: RuntimeTree, name: String) =
+      getSelectedTerm(of, name).orElse(validateClass(name, Some(of)))
     select.qual match {
       case s: Term.Select =>
         validateInnerSelect(s)
@@ -220,6 +216,7 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
       case _ =>
         validateWithClass(select.qual).flatMap(getNestedSelectedTerm(_, select.name.value))
     }
+  }
 
   /* -------------------------------------------------------------------------- */
   /*                             Literal validation                             */
@@ -253,11 +250,10 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
       for {
         field <- Validation(ref.fieldByName(name))
         _ = loadClassOnNeed(field, frame)
-        finalField <- field.`type` match {
-          case Module(module) => ModuleTree(module, of.toOption)
-          case _ => Valid(toStaticIfNeeded(field, of.get))
-        }
-      } yield finalField
+      } yield field.`type` match {
+        case Module(module) => TopLevelModuleTree(module)
+        case _ => toStaticIfNeeded(field, of.get)
+      }
     }
 
   /**
@@ -290,8 +286,8 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
     val moduleName = if (name.endsWith("$")) name else name + "$"
     searchAllClassesFor(moduleName, of.map(_.`type`.name()), frame).flatMap { cls =>
       (cls, of) match {
-        case (Module(module), _) => ModuleTree(module, None)
-        case (_, Instance(instance)) => ModuleTree(cls, Some(instance))
+        case (Module(module), _) => Valid(TopLevelModuleTree(module))
+        case (_, Instance(instance)) => Valid(NestedModuleTree(cls, instance))
         case _ => Recoverable(s"Cannot access module $cls")
       }
     }
@@ -443,26 +439,10 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
     fieldTreeByName(Valid(of), name)
       .orElse(zeroArgMethodTreeByName(Valid(of), name))
       .orElse(validateModule(name, Some(of)))
-
-  /**
-   * Returns a [[RuntimeValidationTree]], representing any kind of term. Allows to access to inner classes
-   *
-   * This method is only valid in the context of chained select and its result must be contained in a [[RuntimeEvaluationTree]] for it cannot be evaluated standalone
-   *
-   * @param of
-   * @param name
-   * @return a [[RuntimeValidationTree]] representing the term
-   */
-  private def getNestedSelectedTerm(of: RuntimeTree, name: String) = {
-    getSelectedTerm(of, name).orElse(validateClass(name, Some(of)))
-  }
+      .orElse(findOuter(of, frame).flatMap(getSelectedTerm(_, name)))
 
   private def validateSelect(select: Term.Select): Validation[RuntimeEvaluationTree] =
-    select.qual match {
-      case s: Term.Select =>
-        validateWithClass(s).flatMap(getSelectedTerm(_, select.name.value))
-      case _ => validateWithClass(select.qual).flatMap(getSelectedTerm(_, select.name.value))
-    }
+    validateWithClass(select.qual).flatMap(getSelectedTerm(_, select.name.value))
 
   /* -------------------------------------------------------------------------- */
   /*                               New validation                               */
@@ -473,7 +453,8 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
 
     for {
       args <- argClauses.flatMap(_.map(validate(_))).traverse
-      cls <- searchAllClassesFor(name, None, frame)
+      outerFqcn = thisTree.toOption.map(_.`type`.name())
+      cls <- searchAllClassesFor(name, outerFqcn, frame)
       method <- methodsByNameAndArgs(cls, "<init>", args.map(_.`type`), frame, encode = false)
     } yield NewInstanceTree(method, args)
   }

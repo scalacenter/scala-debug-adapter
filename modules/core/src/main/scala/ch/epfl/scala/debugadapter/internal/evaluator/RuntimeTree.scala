@@ -19,6 +19,8 @@ sealed trait TypeTree extends RuntimeTree {
   override def `type`: ClassType
 }
 
+sealed trait ModuleTree extends RuntimeEvaluationTree with TypeTree
+
 sealed trait MethodTree extends RuntimeEvaluationTree {
   def method: Method
 }
@@ -200,7 +202,7 @@ case class OuterModuleTree(
 
 object OuterTree {
   def apply(of: RuntimeTree, tpe: Type): Validation[OuterTree] = (of, tpe) match {
-    case (tree: RuntimeEvaluationTree, Module(module)) => Valid(new OuterModuleTree(ModuleTree(module, None)))
+    case (tree: RuntimeEvaluationTree, Module(module)) => Valid(new OuterModuleTree(TopLevelModuleTree(module)))
     case (tree: RuntimeEvaluationTree, ct: ClassType) => Valid(new OuterClassTree(tree, ct))
     case _ => Recoverable("No valid outer can be found")
   }
@@ -212,30 +214,27 @@ case class ThisTree(
   override def prettyPrint(depth: Int): String = s"ThisTree(${`type`})"
 }
 
-case class ModuleTree(
-    `type`: ClassType,
-    of: Option[RuntimeEvaluationTree]
-) extends RuntimeEvaluationTree
-    with TypeTree {
+case class TopLevelModuleTree(
+    `type`: ClassType
+) extends ModuleTree {
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
-    s"""|ModuleTree(
+    s"""|TopLevelModuleTree(
         |${indent}mod= ${`type`}
-        |${indent}of= ${of.map(_.prettyPrint(depth + 1)).getOrElse("None")}
         |${indent.dropRight(1)})""".stripMargin
   }
 }
-
-object ModuleTree {
-  def apply(`type`: ClassType, of: Option[RuntimeTree]): Validation[ModuleTree] = of match {
-    case Some(tree: RuntimeEvaluationTree) => Valid(ModuleTree(`type`, Some(tree)))
-    case Some(_: RuntimeValidationTree) => Recoverable("The parent of a module must be evaluable")
-    case None => Valid(ModuleTree(`type`, None))
-  }
-
-  def apply(`type`: ClassType, of: Option[RuntimeEvaluationTree]): ModuleTree = of match {
-    case Some(value) if `type`.name().startsWith(value.`type`.name()) => new ModuleTree(`type`, Some(value))
-    case _ => new ModuleTree(`type`, of)
+case class NestedModuleTree(
+    module: ClassType,
+    of: RuntimeEvaluationTree
+) extends ModuleTree {
+  override def `type`: ClassType = module
+  override def prettyPrint(depth: Int): String = {
+    val indent = "\t" * (depth + 1)
+    s"""|NestedModuleTree(
+        |${indent}mod= ${module}
+        |${indent}of= ${of.prettyPrint(depth + 1)}
+        |${indent.dropRight(1)})""".stripMargin
   }
 }
 

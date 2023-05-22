@@ -108,8 +108,9 @@ private[evaluator] object Helpers {
   /* -------------------------------------------------------------------------- */
   def findOuter(tree: RuntimeTree, frame: JdiFrame): Validation[OuterTree] = {
     def outerLookup(ref: ReferenceType) = Validation(ref.fieldByName("$outer")).map(_.`type`()).orElse {
-      loadClass(removeLastInnerTypeFromFQCN(ref.name()) + "$", frame) match {
-        case Safe(Success(Module(mod: ClassType))) => Valid(mod)
+      removeLastInnerTypeFromFQCN(ref.name())
+        .map(name => loadClass(name + "$", frame)) match {
+        case Some(Safe(Success(Module(mod: ClassType)))) => Valid(mod)
         case _ => Recoverable(s"Cannot find $$outer for $ref")
       }
     }
@@ -157,11 +158,11 @@ private[evaluator] object Helpers {
     }
   }
 
-  def removeLastInnerTypeFromFQCN(className: String): String = {
+  def removeLastInnerTypeFromFQCN(className: String): Option[String] = {
     val pattern = """(.+)\$[\w]+\${0,1}$""".r
     className match {
-      case pattern(baseName) => baseName
-      case _ => className
+      case pattern(baseName) => Some(baseName)
+      case _ => None
     }
   }
 
@@ -188,14 +189,14 @@ private[evaluator] object Helpers {
   def loadClass(name: String, frame: JdiFrame): Safe[JdiClass] =
     frame.classLoader().flatMap(_.loadClass(name))
 
-  def checkClass(tpe: => Type)(name: String, frame: JdiFrame) = Try(tpe) match {
+  def checkClassStatus(tpe: => Type)(name: String, frame: JdiFrame) = Try(tpe) match {
     case Failure(_: ClassNotLoadedException) => loadClass(name, frame).getResult.map(_.cls)
     case Success(value: ClassType) if !value.isPrepared => loadClass(name, frame).getResult.map(_.cls)
     case result => result
   }
 
   def loadClassOnNeed[T <: TypeComponent](tc: T, frame: JdiFrame): T = {
-    checkClass(tc.`type`)(tc.typeName, frame)
+    checkClassStatus(tc.`type`)(tc.typeName, frame)
     tc
   }
 
@@ -239,7 +240,6 @@ private[evaluator] object Helpers {
 
     finalCandidates
       .toValidation(s"Cannot find module/class $name, has it been loaded ?")
-      .map { cls => checkClass(cls)(cls.name(), frame).get.asInstanceOf[ClassType] }
+      .map { cls => checkClassStatus(cls)(cls.name(), frame).get.asInstanceOf[ClassType] }
   }
-
 }

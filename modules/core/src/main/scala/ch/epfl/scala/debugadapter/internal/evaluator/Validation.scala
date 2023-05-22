@@ -101,6 +101,10 @@ object Invalid {
   def unapply(invalid: Invalid): Option[Exception] = Some(invalid.exception)
 }
 
+object Recoverable {
+  def apply(t: Throwable): Recoverable = Recoverable(t.getMessage())
+}
+
 object Unrecoverable {
   def apply(t: Throwable): Unrecoverable = Unrecoverable(new Exception(t))
   def apply(str: String): Unrecoverable = Unrecoverable(new Exception(str))
