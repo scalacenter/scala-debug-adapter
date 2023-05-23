@@ -162,9 +162,9 @@ private[internal] class EvaluationProvider(
   private def prepare(expression: String, frame: JdiFrame): Try[PreparedExpression] =
     if (mode.allowRuntimeEvaluation)
       RuntimeEvaluation(frame, logger).validate(expression) match {
-        case Valid(tree) => Success(RuntimeExpression(tree))
         case MethodCall(tree: RuntimeEvaluationTree) if mode.allowScalaEvaluation =>
           compilePrepare(expression, frame).orElse(Success(RuntimeExpression(tree)))
+        case Valid(tree) => Success(RuntimeExpression(tree))
         case Fatal(e) => Failure(e)
         case Recoverable(_) | CompilerRecoverable(_) => compilePrepare(expression, frame)
       }

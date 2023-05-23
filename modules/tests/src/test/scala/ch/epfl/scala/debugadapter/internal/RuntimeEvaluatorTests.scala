@@ -5,6 +5,22 @@ import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.DebugConfig
 
 object RuntimeEvaluatorEnvironments {
+  val byNameFunction0 =
+    """|package example
+       |
+       |object Main {
+       |  def main(args: Array[String]): Unit = {
+       |    m1(true)
+       |    m2(() => false)
+       |  }
+       |
+       |  def m1(x: => Boolean): Boolean =
+       |    x
+       |
+       |  def m2(x: () => Boolean): Boolean =
+       |    x()
+       |}
+       |""".stripMargin
   val localVarTestSource =
     """|package example
        |
@@ -53,7 +69,7 @@ object RuntimeEvaluatorEnvironments {
        |    val x = f1.InnerFoo.hello
        |    f1.foo
        |    val f2 = Foo_v2("hello ")
-       |    val list = List(0); new NoObjectFoo()
+       |    val list = List(0)
        |    println("ok")
        |  }
        |
@@ -212,11 +228,6 @@ class Scala31RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`3
     )
   }
 }
-// The commented tests fails because with Scala 3, it skips the class and goes directly to the object :/
-
-class Scala212RuntimeEvaluatorFallbackTests extends RuntimeEvaluatorFallbackTests(ScalaVersion.`2.12`)
-class Scala213RuntimeEvaluatorFallbackTests extends RuntimeEvaluatorFallbackTests(ScalaVersion.`2.13`)
-class Scala31RuntimeEvaluatorFallbackTests extends RuntimeEvaluatorFallbackTests(ScalaVersion.`3.1+`)
 
 abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
   lazy val localVar =
@@ -228,6 +239,12 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
 
   protected override def defaultConfig: DebugConfig =
     super.defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly)
+
+  test("Should not compute by-name param or Function0 expression") {
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.byNameFunction0, "example.Main", scalaVersion)
+    check(Breakpoint(10), Evaluation.failed("x"), Breakpoint(13), Evaluation.failed("x"))
+  }
 
   test("should retrieve the value of a local variable from jdi --- scala") {
     implicit val debuggee = localVar
@@ -252,6 +269,17 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("f1.foo1", "hello there"),
         Evaluation.success("f1.superfoo", "hello super"),
         Evaluation.success("Foo.foofoo", "foofoo")
+      )
+    )
+  }
+
+  test("Should resolve non-generic overloads --- scala") {
+    implicit val debuggee = method
+    check(
+      Breakpoint(10),
+      DebugStepAssert.inParallel(
+        Evaluation.success("bar(\"hello \", 42)", "hello 42"),
+        Evaluation.success("bar(42, 42)", 84)
       )
     )
   }
@@ -464,28 +492,6 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("foo.getClass") { res => assert(res.startsWith("Class (Foo)@")) },
         Evaluation.success("Foo") { res => assert(res.startsWith("Foo$@")) },
         Evaluation.failed("NoObject")
-      )
-    )
-  }
-}
-
-abstract class RuntimeEvaluatorFallbackTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
-  lazy val localVar =
-    TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.localVarTestSource, "example.Main", scalaVersion)
-  lazy val field = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.fieldSource, "example.Main", scalaVersion)
-  lazy val method = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.methodSource, "example.Main", scalaVersion)
-  lazy val nested = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.nested, "example.Main", scalaVersion)
-
-  protected override def defaultConfig: DebugConfig =
-    super.defaultConfig.copy(evaluationMode = DebugConfig.ScalaEvaluationOnly)
-
-  test("Should fallback to compiler when overloads are present --- scala") {
-    implicit val debuggee = method
-    check(
-      Breakpoint(10),
-      DebugStepAssert.inParallel(
-        Evaluation.success("bar(\"hello \", 42)", "hello 42"),
-        Evaluation.success("bar(42, 42)", 84)
       )
     )
   }

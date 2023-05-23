@@ -10,18 +10,20 @@ object MixedEvaluationTestsSource {
        |
        |object Main {
        |  def main(args: Array[String]): Unit = {
-       |    m1(true)
-       |    m2(() => false)
+       |    implicit val x: Int = 42
+       |    val foo = Foo()
+       |    println(foo.wrongEval)
        |  }
+       |}
        |
-       |  def m1(x: => Boolean): Boolean =
-       |    x
+       |trait SuperFoo {
+       |  def wrongEval: Boolean = true
+       |}
        |
-       |  def m2(x: () => Boolean): Boolean =
-       |    x()
+       |case class Foo() extends SuperFoo {
+       |  def wrongEval(implicit x: Int): Boolean = false
        |}
        |""".stripMargin
-
 }
 
 class Scala212MixedEvaluationTests extends MixedEvaluationTests(ScalaVersion.`2.12`)
@@ -32,14 +34,19 @@ abstract class MixedEvaluationTests(val scalaVersion: ScalaVersion) extends Debu
   lazy val localVar =
     TestingDebuggee.mainClass(MixedEvaluationTestsSource.source, "example.Main", scalaVersion)
 
-  protected override def defaultConfig: DebugConfig =
-    super.defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly)
-
-  test("Should not compute by-name param or Function0 expression") {
-    implicit val debuggee: TestingDebuggee =
-      TestingDebuggee.mainClass(MixedEvaluationTestsSource.source, "example.Main", scalaVersion)
-    // the evaluator refuses to bypass the compiler because it does not know
-    // if x is a Function0 or a by-name param
-    check(Breakpoint(10), Evaluation.failed("x"), Breakpoint(13), Evaluation.failed("x"))
+  test(
+    "Should produce wrong output at runtime when overloads require compiler to be resolved, but should succeed with a mixed evaluation (fallback to compiler)".only
+  ) {
+    implicit val debuggee = localVar
+    check(defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly))(
+      Breakpoint(7),
+      Evaluation.success("foo.wrongEval", true),
+      Evaluation.success("foo.wrongEval(42)", false)
+    )
+    check(defaultConfig.copy(evaluationMode = DebugConfig.MixedEvaluation))(
+      Breakpoint(7),
+      Evaluation.success("foo.wrongEval", false)
+    )
   }
+
 }
