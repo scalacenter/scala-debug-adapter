@@ -61,7 +61,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
         case pbt: PrimitiveBinaryOpTree => Some(pbt)
         case put: PrimitiveUnaryOpTree => Some(put)
         case nit: NewInstanceTree => Some(nit)
-        case outer: OuterTree => Some(outer) // TODO: check
+        case outer: OuterTree => Some(outer)
       }
 
     def unapply(tree: Option[RuntimeTree]): Option[RuntimeEvaluationTree] =

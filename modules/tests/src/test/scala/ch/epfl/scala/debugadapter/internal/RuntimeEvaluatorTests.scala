@@ -418,7 +418,6 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  // TODO: patch to make the last test work
   test(
     "Should access to multiple layers of nested types. However when the nested class take no parameters there is a conflict with its companion object"
   ) {
