@@ -127,7 +127,7 @@ private[internal] class EvaluationProvider(
         m.scalaVersion match {
           case None => s"Unsupported evaluation in Java classpath entry: ${entry.name}"
           case Some(sv) =>
-            s"""|Missing scala-expression-compiler_{$sv} with version ${BuildInfo.version}.
+            s"""|Missing scala-expression-compiler_$sv with version ${BuildInfo.version}.
                 |You can open an issue at https://github.com/scalacenter/scala-debug-adapter.""".stripMargin
         }
       case _: JavaRuntime => s"Unsupported evaluation in JDK: ${entry.name}"

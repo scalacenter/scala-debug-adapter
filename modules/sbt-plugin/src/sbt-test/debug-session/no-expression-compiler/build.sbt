@@ -12,5 +12,5 @@ checkDebugSession := {
   val source = (Compile / sources).value.head.toPath
 
   implicit val ctx = TestingContext(source, scalaVersion.value)
-  DebugTest.check(uri)(Breakpoint(4), Evaluation.failed("1 + 1", "Missing scala-expression-compiler"))
+  DebugTest.check(uri)(Breakpoint(4), Evaluation.failed("s\"${1 + 1}\"", "Missing scala-expression-compiler"))
 }
