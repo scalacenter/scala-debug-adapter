@@ -170,7 +170,7 @@ private[internal] class EvaluationProvider(
       }
     else compilePrepare(expression, frame)
 
-  private def evaluate(expression: PreparedExpression, frame: JdiFrame): Try[Value] = {
+  private def evaluate(expression: PreparedExpression, frame: JdiFrame): Try[Value] = evaluationBlock {
     expression match {
       case logMessage: PlainLogMessage => messageLogger.log(logMessage, frame)
       case RuntimeExpression(tree) => RuntimeEvaluation(frame, logger).evaluate(tree).getResult.map(_.value)
@@ -178,7 +178,7 @@ private[internal] class EvaluationProvider(
         val fqcn = frame.current().location.declaringType.name
         for {
           evaluator <- getScalaEvaluator(fqcn)
-          compiledExpression <- evaluationBlock { evaluator.evaluate(expression, frame) }
+          compiledExpression <- evaluator.evaluate(expression, frame)
         } yield compiledExpression
     }
   }

@@ -7,6 +7,7 @@ import ch.epfl.scala.debugadapter.testfmk.Breakpoint
 import ch.epfl.scala.debugadapter.testfmk.DebugStepAssert
 import ch.epfl.scala.debugadapter.testfmk.Evaluation
 import ch.epfl.scala.debugadapter.DebugConfig
+import ch.epfl.scala.debugadapter.testfmk.ObjectRef
 
 object JavaRuntimeEvaluatorEnvironments {
   val localVarTestSource =
@@ -18,6 +19,8 @@ object JavaRuntimeEvaluatorEnvironments {
        |    int j = 1;
        |    int k = 2;
        |    int l = 3;
+       |    Main main = new Main();
+       |    int x = 1+1;
        |  }
        |}
        |""".stripMargin
@@ -147,11 +150,12 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
   test("should retrieve the value of a local variable from jdi --- java") {
     implicit val debuggee = localVar
     check(
-      Breakpoint(8),
+      Breakpoint(10),
       DebugStepAssert.inParallel(
         Evaluation.success("i", 0),
         Evaluation.success("j", 1),
-        Evaluation.success("k", 2)
+        Evaluation.success("k", 2),
+        Evaluation.success("main", ObjectRef("Main"))
       )
     )
   }
