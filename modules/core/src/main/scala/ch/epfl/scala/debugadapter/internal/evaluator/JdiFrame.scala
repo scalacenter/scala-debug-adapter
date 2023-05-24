@@ -4,6 +4,9 @@ import com.sun.jdi.ClassLoaderReference
 import com.sun.jdi.LocalVariable
 import com.sun.jdi.StackFrame
 import com.sun.jdi.ThreadReference
+import com.sun.jdi.ReferenceType
+import com.sun.jdi.PrimitiveType
+import com.sun.jdi.{BooleanType, ByteType, CharType, DoubleType, FloatType, IntegerType, LongType, ShortType}
 
 import scala.jdk.CollectionConverters.*
 
@@ -21,23 +24,42 @@ final case class JdiFrame(thread: ThreadReference, depth: Int) {
 
     Safe {
       val classLoader = getClassLoaderRecursively(depth)
-        .getOrElse(throw new Exception("Cannot find any classloader in the stack trace"))
+        .getOrElse(throw new Exception("Cannot find any class loader in the stack trace"))
       JdiClassLoader(classLoader, thread)
     }
   }
 
   // this object can be null
-  def thisObject(): Option[JdiObject] =
+  lazy val thisObject: Option[JdiObject] =
     Option(current().thisObject).map(JdiObject(_, thread))
 
   def variables(): Seq[LocalVariable] =
     current().visibleVariables.asScala.toSeq
 
-  def variablesAndValues(): Seq[(LocalVariable, JdiValue)] = {
-    val frame = current()
-    variables().map(v => v -> JdiValue(frame.getValue(v), thread))
-  }
+  def variablesAndValues(): Seq[(LocalVariable, JdiValue)] =
+    variables().map(v => v -> JdiValue(current().getValue(v), thread))
+
+  def variableByName(name: String): Option[LocalVariable] =
+    variables().find(_.name == name)
+
+  def variableValue(variable: LocalVariable): JdiValue =
+    JdiValue(current().getValue(variable), thread)
 
   def setVariable(variable: LocalVariable, value: JdiValue): Unit =
     current().setValue(variable, value.value)
+
+  def getPrimitiveBoxedClass(pt: PrimitiveType): ReferenceType = {
+    val vm = current().virtualMachine()
+    def cls(name: String) = vm.classesByName(name).get(0)
+    pt match {
+      case _: BooleanType => cls("java.lang.Boolean")
+      case _: ByteType => cls("java.lang.Byte")
+      case _: CharType => cls("java.lang.Character")
+      case _: DoubleType => cls("java.lang.Double")
+      case _: FloatType => cls("java.lang.Float")
+      case _: IntegerType => cls("java.lang.Integer")
+      case _: LongType => cls("java.lang.Long")
+      case _: ShortType => cls("java.lang.Short")
+    }
+  }
 }

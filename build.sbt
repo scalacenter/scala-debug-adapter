@@ -80,7 +80,8 @@ lazy val core = projectMatrix
       Dependencies.scalaReflect(scalaVersion.value),
       Dependencies.asm,
       Dependencies.asmUtil,
-      Dependencies.sbtTestAgent
+      Dependencies.sbtTestAgent,
+      Dependencies.scalaMeta
     ),
     libraryDependencies += onScalaVersion(
       scala212 = Dependencies.scalaCollectionCompat,

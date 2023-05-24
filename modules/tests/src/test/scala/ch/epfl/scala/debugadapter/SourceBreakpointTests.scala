@@ -2,8 +2,55 @@ package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testfmk.*
 
-class Scala213SourceBreakpointTests extends SourceBreakpointTests(ScalaVersion.`2.13`)
-class Scala3SourceBreakpointTests extends SourceBreakpointTests(ScalaVersion.`3.1+`)
+class Scala213SourceBreakpointTests extends SourceBreakpointTests(ScalaVersion.`2.13`) {
+  val scalaVersion = ScalaVersion.`2.13`
+  test("evaluate breakpoint in lambda --- force runtime evaluation") {
+    val source =
+      """|package example
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    List(new java.lang.Integer(1), new java.lang.Integer(2), new java.lang.Integer(3)).map { i => 
+         |      val msg = i + 2
+         |      println(msg)
+         |    }
+         |    println("Hello, World!")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly))(
+      Breakpoint(6, "i == 2"),
+      Evaluation.success("msg", 4),
+      Breakpoint(8)
+    )
+  }
+}
+class Scala3SourceBreakpointTests extends SourceBreakpointTests(ScalaVersion.`3.1+`) {
+  val scalaVersion = ScalaVersion.`3.1+`
+  test("evaluate breakpoint in lambda --- force runtime evaluation") {
+    val source =
+      """|package example
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    List(new java.lang.Integer(1), new java.lang.Integer(2), new java.lang.Integer(3)).map { i => 
+         |      val msg = i + 2
+         |      println(msg)
+         |      println(s"$msg bis")
+         |    }
+         |    println("Hello, World!")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly))(
+      Breakpoint(5, "i == 2"),
+      Breakpoint(6, "i == 2"),
+      Evaluation.success("i + 2", 4)
+    )
+  }
+}
 
 abstract class SourceBreakpointTests(scalaVersion: ScalaVersion) extends DebugTestSuite {
   test("evaluate simple breakpoint") {

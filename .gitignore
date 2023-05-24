@@ -5,3 +5,5 @@ target/
 .vscode/
 .metals/
 **/metals.sbt
+*.worksheet.sc
+*.plantuml

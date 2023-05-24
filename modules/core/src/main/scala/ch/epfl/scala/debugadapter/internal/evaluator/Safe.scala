@@ -40,6 +40,8 @@ class Safe[+A] private (
     new Safe(result.withFilter(p).map(identity), dispose)
   }
 
+  def withFilterNot(p: A => Boolean): Safe[A] = withFilter(!p(_))
+
   def recover[B >: A](f: PartialFunction[Throwable, B]): Safe[B] = {
     new Safe(result.recover(f), dispose)
   }
@@ -81,7 +83,21 @@ object Safe {
     }
   }
 
+  def unapply[A](safe: Safe[A]): Option[Try[A]] = Some(safe.result)
+
   def join[A, B](safeA: Safe[A], safeB: Safe[B]): Safe[(A, B)] = {
     safeA.flatMap(a => safeB.map(b => (a, b)))
+  }
+
+  def failed(exception: Throwable): Safe[Nothing] = {
+    new Safe(Failure(exception), () => ())
+  }
+
+  def successful[A](a: A): Safe[A] = {
+    new Safe(Success(a), () => ())
+  }
+
+  def failed(message: String): Safe[Nothing] = {
+    failed(new Exception(message))
   }
 }

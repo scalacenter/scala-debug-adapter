@@ -138,8 +138,11 @@ object Evaluation {
     )
   }
 
-  private def assertFailed(response: Either[String, String]): Unit =
+  private def assertFailed(response: Either[String, String]): Unit = {
+    if (response.isLeft) println(s"\u001b[32mExpected failure\u001b[0m")
+    else println(s"\u001b[31mUnexpected success, got ${response}\u001b[0m")
     assert(response.isLeft)
+  }
 
   private def assertFailed(assertion: String => Unit)(response: Either[String, String]): Unit = {
     assert(response.isLeft)
@@ -156,7 +159,7 @@ object Evaluation {
   private def assertIgnore(
       expected: String
   )(response: Either[String, String])(implicit ctx: TestingContext): Unit = {
-    println(s"TODO fix in ${ctx.scalaVersion}: expected $expected")
+    println(s"\u001b[33mTODO fix in ${ctx.scalaVersion}: expected ${expected}\u001b[0m")
   }
 
   private def assertSuccess(assertion: String => Unit)(response: Either[String, String]): Unit = {
@@ -168,6 +171,7 @@ object Evaluation {
   private def assertSuccess(
       expectedResult: Any
   )(response: Either[String, String])(implicit ctx: TestingContext, location: Location): Unit = {
+    if (clue(response).isLeft) println(s"\u001b[31mExpected success, got ${response}\u001b[0m")
     assert(clue(response).isRight)
     val result = response.toOption.get
     expectedResult match {
