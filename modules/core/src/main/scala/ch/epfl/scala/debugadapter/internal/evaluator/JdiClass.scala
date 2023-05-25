@@ -6,7 +6,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.control.NonFatal
 
 private[internal] class JdiClass(
-    cls: ClassType,
+    val cls: ClassType,
     thread: ThreadReference
 ) extends JdiObject(cls.classObject, thread) {
 
@@ -15,16 +15,16 @@ private[internal] class JdiClass(
   override def classLoader: JdiClassLoader = JdiClassLoader(cls.classLoader, thread)
 
   def newInstance(args: Seq[JdiValue]): Safe[JdiObject] = {
-    val ctr = cls.methodsByName("<init>").asScala.head
+    val ctr = cls.methodsByName("<init>").get(0)
     newInstance(ctr, args)
   }
 
   def newInstance(signature: String, args: Seq[JdiValue]): Safe[JdiObject] = {
-    val ctr = cls.methodsByName("<init>", signature).asScala.head
+    val ctr = cls.methodsByName("<init>", signature).get(0)
     newInstance(ctr, args)
   }
 
-  private def newInstance(ctr: Method, args: Seq[JdiValue]): Safe[JdiObject] =
+  def newInstance(ctr: Method, args: Seq[JdiValue]): Safe[JdiObject] =
     for {
       _ <- prepareMethod(ctr)
       instance <- Safe(cls.newInstance(thread, ctr, args.map(_.value).asJava, ObjectReference.INVOKE_SINGLE_THREADED))
@@ -52,16 +52,16 @@ private[internal] class JdiClass(
     Safe(cls.getValue(cls.fieldByName(fieldName))).map(JdiValue(_, thread))
 
   def invokeStatic(methodName: String, args: Seq[JdiValue]): Safe[JdiValue] = {
-    val method = cls.methodsByName(methodName).asScala.head
+    val method = cls.methodsByName(methodName).get(0)
     invokeStatic(method, args)
   }
 
   def invokeStatic(methodName: String, signature: String, args: Seq[JdiValue]): Safe[JdiValue] = {
-    val method = cls.methodsByName(methodName, signature).asScala.head
+    val method = cls.methodsByName(methodName, signature).get(0)
     invokeStatic(method, args)
   }
 
-  private def invokeStatic(method: Method, args: Seq[JdiValue]): Safe[JdiValue] =
+  def invokeStatic(method: Method, args: Seq[JdiValue]): Safe[JdiValue] =
     Safe(cls.invokeMethod(thread, method, args.map(_.value).asJava, ObjectReference.INVOKE_SINGLE_THREADED))
       .map(JdiValue(_, thread))
       .recoverWith(wrapInvocationException(thread))

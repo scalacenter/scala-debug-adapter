@@ -28,6 +28,54 @@ private[internal] class JdiValue(val value: Value, val thread: ThreadReference) 
         asObject.getField("elem")
       case _ => this
     }
+
+  def toDouble: Safe[Double] =
+    value match {
+      case value: PrimitiveValue => Safe(value.doubleValue())
+      case _ => Safe.failed("Cannot convert to double")
+    }
+
+  def toFloat: Safe[Float] =
+    value match {
+      case value: PrimitiveValue => Safe(value.floatValue())
+      case _ => Safe.failed("Cannot convert to float")
+    }
+
+  def toLong: Safe[Long] =
+    value match {
+      case value: PrimitiveValue => Safe(value.longValue())
+      case _ => Safe.failed("Cannot convert to long")
+    }
+
+  def toInt: Safe[Int] =
+    value match {
+      case value: PrimitiveValue => Safe(value.intValue())
+      case _ => Safe.failed("Cannot convert to int")
+    }
+
+  def toShort: Safe[Short] =
+    value match {
+      case value: PrimitiveValue => Safe(value.shortValue())
+      case _ => Safe.failed("Cannot convert to short")
+    }
+
+  def toChar: Safe[Char] =
+    value match {
+      case value: PrimitiveValue => Safe(value.charValue())
+      case _ => Safe.failed("Cannot convert to char")
+    }
+
+  def toByte: Safe[Byte] =
+    value match {
+      case value: PrimitiveValue => Safe(value.byteValue())
+      case _ => Safe.failed("Cannot convert to byte")
+    }
+
+  def toBoolean: Safe[Boolean] =
+    value match {
+      case value: PrimitiveValue => Safe(value.booleanValue())
+      case _ => Safe.failed("Cannot convert to boolean")
+    }
 }
 
 object JdiValue {
