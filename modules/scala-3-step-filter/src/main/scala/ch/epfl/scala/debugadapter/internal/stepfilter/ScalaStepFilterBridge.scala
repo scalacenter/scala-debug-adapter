@@ -17,6 +17,11 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 import scala.util.matching.Regex
+import tastyquery.Types.*
+import tastyquery.Signatures.*
+import java.util.Optional
+import scala.jdk.OptionConverters.*
+import java.lang.reflect.Method
 
 class ScalaStepFilterBridge(
     classpaths: Array[Path],
@@ -32,6 +37,118 @@ class ScalaStepFilterBridge(
     if (testMode) throw exception
     else exception.getMessage
 
+  def formatType(t: Type): String = {
+    t match {
+
+      case t: MethodType => {
+        val isreturnType = t.resultType match
+          case _: MethodType => false
+          case _: PolyType => false
+          case _ => true
+
+        t.paramTypes
+          .zip(t.paramNames)
+          .map((x, y) => y.toString() + ": " + formatType(x))
+          .mkString("(", ", ", ")")
+          + (if (isreturnType) ": " else "") + formatType(t.resultType)
+
+      }
+      case t: TypeRef => {
+        val optionalPrefix = t.prefix match
+          case prefix: TypeRef => formatType(prefix) + "."
+          case prefix: TermParamRef => formatType(prefix) + "."
+          case prefix: SuperType => "super."
+          case _ => ""
+        optionalPrefix + t.name.toString()
+
+      }
+
+      case t: AppliedType =>
+        val a = formatType(t.tycon)
+
+        if (isFunction(t.tycon)) {
+
+          (if (t.args.size != 2) "(" else "") + t.args.init
+            .map(y => formatType(y))
+            .mkString(",") + (if (t.args.size != 2) ")" else "") + " => " + formatType(t.args.last)
+        } else if (isAndOrOr(t.tycon)) {
+
+          t.args.map(t => formatType(t)).reduce((x, y) => x + a + y)
+
+        } else
+          a + "[" + t.args
+            .map(y => formatType(y))
+            .reduce((x, y) => x + "," + y) + "]"
+
+      case k: PolyType => {
+
+        "[" + k.paramNames.map(t => t.toString).mkString(", ") + "]" + formatType(
+          k.resultType
+        )
+
+      }
+      case t: OrType =>
+        formatType(t.first) + "|" + formatType(t.second)
+      case t: AndType =>
+        formatType(t.first) + "&" + formatType(t.second)
+      case t: ThisType => formatType(t.tref)
+      case t: TermRefinement => formatType(t.parent) + " { ... }"
+      case t: AnnotatedType => formatType(t.typ)
+      case t: TypeParamRef => t.toString
+      case t: TermRef => formatType(t.underlying)
+      case t: ConstantType => t.value.value.toString()
+      case t: ByNameType => "=> " + formatType(t.resultType)
+      case t: TermParamRef => t.paramName.toString()
+      case t: TypeRefinement => formatType(t.parent) + " { ... }"
+      case _: WildcardTypeBounds => "?"
+      case t: RecType => formatType(t.parent)
+      case t: TypeLambda =>
+        "[" + t.paramNames.map(t => t.toString).reduce((x, y) => x + "," + y) + "]" + " =>> " + formatType(
+          t.resultType
+        )
+
+    }
+  }
+  def formatSymbol(sym: Symbol): String =
+    sym.owner match
+      case owner: TermOrTypeSymbol => s"${formatSymbol(owner)}.${sym.name}"
+      case owner: PackageSymbol => s"${sym.name}"
+
+  def isFunction(tpe: Type): Boolean =
+    tpe match
+      case ref: TypeRef => {
+        ref.prefix match
+          case t: PackageRef =>
+            (ref.name.toString.startsWith("Function") & t.fullyQualifiedName.toString().equals("scala"))
+
+          case _ => { false }
+      }
+      case _ => false
+  def isAndOrOr(tpe: Type): Boolean =
+    tpe match
+      case ref: TypeRef => {
+        ref.prefix match
+          case t: PackageRef =>
+            (ref.name.toString == "|" || ref.name.toString == "&") &&
+            t.fullyQualifiedName.toString == "scala"
+
+          case _ => { false }
+      }
+      case _ => false
+
+  def formatMethodSig(obj: Any): Optional[String] =
+    val method = jdi.Method(obj)
+    findSymbol(obj).map { t =>
+      val notMethodType = t.declaredType match {
+        case _: MethodType => false
+        case _: PolyType => false
+        case _ => true
+      }
+      val optionalString = if (notMethodType) ": " else ""
+
+    s"${formatSymbol(t)}${optionalString}${formatType(t.declaredType)}"
+
+    }.asJava
   def skipMethod(obj: Any): Boolean =
     findSymbolImpl(obj) match
       case Failure(exception) => throwOrWarn(exception); false
@@ -46,6 +163,7 @@ class ScalaStepFilterBridge(
     val fqcn = method.declaringType.name
     findDeclaringType(fqcn, method.isExtensionMethod) match
       case None =>
+        println(s"${method.declaringType.name}.${method.name}")
         Failure(Exception(s"Cannot find Scala symbol of $fqcn"))
       case Some(declaringType) =>
         val matchingSymbols =

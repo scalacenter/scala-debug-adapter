@@ -7,13 +7,22 @@ import com.microsoft.java.debug.core.adapter.{StepFilterProvider => JavaStepFilt
 import com.microsoft.java.debug.core.protocol.Requests.StepFilters
 import com.sun.jdi.Location
 import com.sun.jdi.Method
+import java.util.Optional
 
 class StepFilterProvider(
     stepFilters: Seq[StepFilter],
+    scalaStepFilter: ScalaStepFilter,
     logger: Logger,
     testMode: Boolean
 ) extends JavaStepFilterProvider() {
 
+  override def formatMethodSig(method: Method): Optional[String] = {
+    scalaStepFilter.format(method) match {
+      case None => Optional.empty()
+      case Some(s) => Optional.of(s)
+
+    }
+  }
   override def shouldSkipOver(method: Method, filters: StepFilters): Boolean = {
     try {
       val skipOver = super.shouldSkipOver(method, filters) || stepFilters.exists(_.shouldSkipOver(method))
@@ -50,10 +59,11 @@ object StepFilterProvider {
       logger: Logger,
       testMode: Boolean
   ): StepFilterProvider = {
-    val scalaStepFilter = ScalaStepFilter(debuggee, tools, logger, testMode)
+    val scalaStepFilter: ScalaStepFilter = ScalaStepFilter(debuggee, tools, logger, testMode)
     val runtimeStepFilter = RuntimeStepFilter(debuggee.scalaVersion)
     new StepFilterProvider(
       Seq(ClassLoadingStepFilter, runtimeStepFilter, scalaStepFilter),
+      scalaStepFilter,
       logger,
       testMode
     )

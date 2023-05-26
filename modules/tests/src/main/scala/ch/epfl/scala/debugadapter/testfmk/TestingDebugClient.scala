@@ -119,7 +119,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
 
   def stackTrace(
       threadId: Long,
-      timeout: Duration = 1.second
+      timeout: Duration = 8.seconds
   ): StackTraceResponseBody = {
     val args = new StackTraceArguments()
     args.threadId = threadId

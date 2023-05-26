@@ -15,6 +15,6 @@ checkDebugSession := {
 
   DebugTest.check(uri)(
     Breakpoint(source, 5),
-    StepIn.method("PrintStream.println(String)")
+    StepIn.method("PrintStream.println(String): void")
   )
 }

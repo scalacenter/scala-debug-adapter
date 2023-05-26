@@ -11,11 +11,11 @@ final case class SingleStepAssert[T](step: DebugStep[T], assertion: T => Unit) e
 final case class ParallelStepsAsserts[T](steps: Seq[SingleStepAssert[T]]) extends DebugStepAssert
 
 sealed trait DebugStep[+T]
-final case class Breakpoint(sourceFile: Path, line: Int, condition: Option[String]) extends DebugStep[StackFrame]
+final case class Breakpoint(sourceFile: Path, line: Int, condition: Option[String]) extends DebugStep[List[StackFrame]]
 final case class Logpoint(sourceFile: Path, line: Int, logMessage: String) extends DebugStep[String]
-final case class StepIn() extends DebugStep[StackFrame]
-final case class StepOut() extends DebugStep[StackFrame]
-final case class StepOver() extends DebugStep[StackFrame]
+final case class StepIn() extends DebugStep[List[StackFrame]]
+final case class StepOut() extends DebugStep[List[StackFrame]]
+final case class StepOver() extends DebugStep[List[StackFrame]]
 final case class Evaluation(expression: String) extends DebugStep[Either[String, String]]
 final case class Outputed() extends DebugStep[String]
 final case class NoStep() extends DebugStep[Nothing]
@@ -26,27 +26,46 @@ object DebugStepAssert {
   def inParallel(steps: SingleStepAssert[Either[String, String]]*): ParallelStepsAsserts[Either[String, String]] =
     ParallelStepsAsserts(steps)
 
-  def assertOnFrame(expectedSource: Path, expectedLine: Int)(frame: StackFrame)(implicit location: Location): Unit = {
-    assertEquals(frame.source.path, expectedSource.toString)
-    assertEquals(frame.line, expectedLine)
+  def assertOnFrame(expectedSource: Path, expectedLine: Int, expectedStackTrace: Option[List[String]])(
+      frames: List[StackFrame]
+  )(implicit location: Location): Unit = {
+    assertEquals(frames.head.source.path, expectedSource.toString)
+    assertEquals(frames.head.line, expectedLine)
+    expectedStackTrace match {
+      case None => {}
+      case Some(expectedStackTrace) => {
+        assertEquals(expectedStackTrace, frames.map(frame => frame.name))
+
+      }
+
+    }
+
   }
 
-  def assertOnFrame(expectedName: String)(frame: StackFrame): Unit =
-    assertEquals(frame.name, expectedName)
+  def assertOnFrame(expectedName: String)(frames: List[StackFrame])(implicit loc: Location): Unit =
+    assertEquals(frames.head.name, expectedName)
 }
 
 object Breakpoint {
-  def apply(line: Int)(implicit ctx: TestingContext): SingleStepAssert[StackFrame] =
-    Breakpoint(ctx.mainSource, line)
-
-  def apply(sourceFile: Path, line: Int): SingleStepAssert[StackFrame] = {
-    val breakpoint = Breakpoint(sourceFile, line, None)
-    SingleStepAssert(breakpoint, assertOnFrame(sourceFile, line))
+  def apply(line: Int)(implicit ctx: TestingContext): SingleStepAssert[List[StackFrame]] = {
+    val breakpoint = Breakpoint(ctx.mainSource, line, None)
+    SingleStepAssert(breakpoint, assertOnFrame(ctx.mainSource, line, None))
   }
 
-  def apply(line: Int, condition: String)(implicit ctx: TestingContext): SingleStepAssert[StackFrame] = {
+  def apply(sourceFile: Path, line: Int): SingleStepAssert[List[StackFrame]] = {
+    val breakpoint = Breakpoint(sourceFile, line, None)
+    SingleStepAssert(breakpoint, assertOnFrame(sourceFile, line, None))
+  }
+  def apply(line: Int, expectedStackTrace: List[String])(implicit
+      ctx: TestingContext
+  ): SingleStepAssert[List[StackFrame]] = {
+    val breakpoint = Breakpoint(ctx.mainSource, line, None)
+    SingleStepAssert(breakpoint, assertOnFrame(ctx.mainSource, line, Some(expectedStackTrace)))
+  }
+
+  def apply(line: Int, condition: String)(implicit ctx: TestingContext): SingleStepAssert[List[StackFrame]] = {
     val breakpoint = Breakpoint(ctx.mainSource, line, Some(condition))
-    SingleStepAssert(breakpoint, assertOnFrame(ctx.mainSource, line))
+    SingleStepAssert(breakpoint, assertOnFrame(ctx.mainSource, line, None))
   }
 }
 
@@ -61,26 +80,26 @@ object Logpoint {
 }
 
 object StepIn {
-  def line(line: Int)(implicit ctx: TestingContext, location: Location): SingleStepAssert[StackFrame] =
-    SingleStepAssert(StepIn(), assertOnFrame(ctx.mainSource, line))
+  def line(line: Int)(implicit ctx: TestingContext, location: Location): SingleStepAssert[List[StackFrame]] =
+    SingleStepAssert(StepIn(), assertOnFrame(ctx.mainSource, line, None))
 
-  def method(methodName: String): SingleStepAssert[StackFrame] =
+  def method(methodName: String)(implicit loc: Location): SingleStepAssert[List[StackFrame]] =
     SingleStepAssert(StepIn(), assertOnFrame(methodName))
 }
 
 object StepOut {
-  def line(line: Int)(implicit ctx: TestingContext): SingleStepAssert[StackFrame] =
-    SingleStepAssert(StepOut(), assertOnFrame(ctx.mainSource, line))
+  def line(line: Int)(implicit ctx: TestingContext): SingleStepAssert[List[StackFrame]] =
+    SingleStepAssert(StepOut(), assertOnFrame(ctx.mainSource, line, None))
 
-  def method(methodName: String): SingleStepAssert[StackFrame] =
+  def method(methodName: String): SingleStepAssert[List[StackFrame]] =
     SingleStepAssert(StepOut(), assertOnFrame(methodName))
 }
 
 object StepOver {
-  def line(line: Int)(implicit ctx: TestingContext): SingleStepAssert[StackFrame] =
-    SingleStepAssert(StepOver(), assertOnFrame(ctx.mainSource, line))
+  def line(line: Int)(implicit ctx: TestingContext): SingleStepAssert[List[StackFrame]] =
+    SingleStepAssert(StepOver(), assertOnFrame(ctx.mainSource, line, None))
 
-  def method(methodName: String): SingleStepAssert[StackFrame] =
+  def method(methodName: String): SingleStepAssert[List[StackFrame]] =
     SingleStepAssert(StepOver(), assertOnFrame(methodName))
 }
 
