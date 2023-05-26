@@ -65,12 +65,12 @@ final case class Recoverable(message: String) extends Invalid(new NoSuchElementE
   override def orElse[B >: Nothing](f: => Validation[B]): Validation[B] = f
 }
 
-sealed abstract class Unrecoverable(e: Exception) extends Invalid(e) {
+sealed abstract class Unrecoverable(override val exception: Exception) extends Invalid(exception) {
   override def orElse[B >: Nothing](f: => Validation[B]): Validation[B] = this
 }
 
-final case class Fatal(e: Exception) extends Unrecoverable(e)
-final case class CompilerRecoverable(e: Exception) extends Unrecoverable(e)
+final case class Fatal(override val exception: Exception) extends Unrecoverable(exception)
+final case class CompilerRecoverable(override val exception: Exception) extends Unrecoverable(exception)
 
 object Validation {
   def apply[A](input: => A): Validation[A] = {

@@ -20,7 +20,7 @@ import ch.epfl.scala.debugadapter.internal.evaluator.MethodInvocationFailed
 import ch.epfl.scala.debugadapter.internal.evaluator.PlainLogMessage
 import ch.epfl.scala.debugadapter.internal.evaluator.PreparedExpression
 import ch.epfl.scala.debugadapter.internal.evaluator.ScalaEvaluator
-import ch.epfl.scala.debugadapter.internal.evaluator.{Recoverable, Valid, CompilerRecoverable, Fatal}
+import ch.epfl.scala.debugadapter.internal.evaluator.{Invalid, Fatal, Valid}
 import evaluator.RuntimeEvaluatorExtractors.MethodCall
 import com.microsoft.java.debug.core.IEvaluatableBreakpoint
 import com.microsoft.java.debug.core.adapter.IDebugAdapterContext
@@ -166,7 +166,7 @@ private[internal] class EvaluationProvider(
           compilePrepare(expression, frame).orElse(Success(RuntimeExpression(tree)))
         case Valid(tree) => Success(RuntimeExpression(tree))
         case Fatal(e) => Failure(e)
-        case Recoverable(_) | CompilerRecoverable(_) => compilePrepare(expression, frame)
+        case _: Invalid => compilePrepare(expression, frame)
       }
     else compilePrepare(expression, frame)
 

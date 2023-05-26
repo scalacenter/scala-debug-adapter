@@ -279,10 +279,22 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
    */
   private def validateModule(name: String, of: Option[RuntimeTree]): Validation[ModuleTree] = {
     val moduleName = if (name.endsWith("$")) name else name + "$"
-    searchAllClassesFor(moduleName, of.map(_.`type`.name()), frame).flatMap { cls =>
-      (cls, of) match {
-        case (Module(module), _) => Valid(TopLevelModuleTree(module))
-        case (_, Instance(instance)) => Valid(NestedModuleTree(cls, instance))
+    val ofName = of.map(_.`type`.name())
+    searchAllClassesFor(moduleName, ofName, frame).flatMap { cls =>
+      val isInClass = ofName
+        .filter(_.endsWith("$"))
+        .map(n => loadClass(n.stripSuffix("$"), frame))
+        .map {
+          _.withFilterNot {
+            _.cls.methodsByName(moduleName.stripSuffix("$")).isEmpty()
+          }.getResult
+        }
+
+      (isInClass, cls, of) match {
+        case (Some(Success(cls: JdiClass)), _, _) =>
+          Fatal(s"Cannot access module ${name} from ${of.map(_.`type`.name())}")
+        case (_, Module(module), _) => Valid(TopLevelModuleTree(module))
+        case (_, _, Some(instance: RuntimeEvaluationTree)) => Valid(NestedModuleTree(cls, instance))
         case _ => Recoverable(s"Cannot access module $cls")
       }
     }
