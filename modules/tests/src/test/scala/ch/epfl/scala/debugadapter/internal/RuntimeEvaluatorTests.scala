@@ -410,9 +410,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test(
-    "Should access to multiple layers of nested types"
-  ) {
+  test("Should access to multiple layers of nested types") {
     implicit val debuggee = nested
     check(
       Breakpoint(10),

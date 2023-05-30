@@ -100,7 +100,7 @@ case class StaticFieldTree(
 /* -------------------------------------------------------------------------- */
 /*                                Method trees                                */
 /* -------------------------------------------------------------------------- */
-case class PrimitiveBinaryOpTree(
+case class PrimitiveBinaryOpTree private (
     lhs: RuntimeEvaluationTree,
     rhs: RuntimeEvaluationTree,
     op: RuntimeBinaryOp
@@ -116,7 +116,16 @@ case class PrimitiveBinaryOpTree(
   }
 }
 
-case class PrimitiveUnaryOpTree(
+object PrimitiveBinaryOpTree {
+  def apply(lhs: RuntimeTree, args: Seq[RuntimeEvaluationTree], name: String): Validation[PrimitiveBinaryOpTree] =
+    (lhs, args) match {
+      case (ret: RuntimeEvaluationTree, Seq(right)) =>
+        RuntimeBinaryOp(ret, right, name).map(PrimitiveBinaryOpTree(ret, right, _))
+      case _ => Recoverable(s"Primitive operation operand must be evaluable")
+    }
+}
+
+case class PrimitiveUnaryOpTree private (
     rhs: RuntimeEvaluationTree,
     op: RuntimeUnaryOp
 ) extends RuntimeEvaluationTree {
@@ -127,6 +136,12 @@ case class PrimitiveUnaryOpTree(
         |${indent}rhs= ${rhs.prettyPrint(depth + 1)},
         |${indent}op= $op
         |${indent.dropRight(1)})""".stripMargin
+  }
+}
+object PrimitiveUnaryOpTree {
+  def apply(rhs: RuntimeTree, name: String): Validation[PrimitiveUnaryOpTree] = rhs match {
+    case ret: RuntimeEvaluationTree => RuntimeUnaryOp(ret, name).map(PrimitiveUnaryOpTree(ret, _))
+    case _ => Recoverable(s"Primitive operation operand must be evaluable")
   }
 }
 
