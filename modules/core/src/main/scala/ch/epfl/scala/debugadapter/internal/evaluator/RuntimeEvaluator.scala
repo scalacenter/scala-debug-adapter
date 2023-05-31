@@ -292,7 +292,7 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
 
       (isInCompanionClass, moduleCls, of) match {
         case (Some(Success(cls: JdiClass)), _, _) =>
-          Fatal(s"Cannot access module ${name} from ${ofName}")
+          CompilerRecoverable(s"Cannot access module ${name} from ${ofName}")
         case (_, Module(module), _) => Valid(TopLevelModuleTree(moduleCls))
         case (_, _, Some(instance: RuntimeEvaluationTree)) =>
           if (moduleCls.name().startsWith(instance.`type`.name()))
@@ -312,13 +312,13 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
    */
   private def validateClass(name: String, of: Option[RuntimeTree]): Validation[ClassTree] =
     searchAllClassesFor(name.stripSuffix("$"), of.map(_.`type`.name()), frame)
-      .flatMap {
-        (_, of) match {
-          case (cls, Some(_: RuntimeEvaluationTree) | None) => Valid(ClassTree(cls))
-          case (cls, Some(_: ClassTree)) =>
+      .flatMap { cls =>
+        of match {
+          case Some(_: RuntimeEvaluationTree) | None => Valid(ClassTree(cls))
+          case Some(_: ClassTree) =>
             if (cls.isStatic()) Valid(ClassTree(cls))
             else CompilerRecoverable(s"Cannot access non-static class ${cls.name()}")
-          // Should be fatal, but I think there are some cases untested where using Fatal would break the evaluator
+          // Should be fatal, but I think in some cases using Fatal would break the evaluator (because of missing informations at runtime)
         }
       }
       .orElse {
