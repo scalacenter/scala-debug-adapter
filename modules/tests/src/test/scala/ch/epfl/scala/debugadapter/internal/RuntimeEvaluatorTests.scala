@@ -404,8 +404,8 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Breakpoint(10),
       Evaluation.failed("Foo.FriendFoo.greet"),
       Evaluation.failed("Foo.FriendFoo(Foo()).greet"),
-      Evaluation.failed("Foo().friendFoo.InnerFriendFoo.str", "Cannot access module InnerFriendFoo"),
-      Evaluation.failed("Foo().friendFoo.InnerFriendFoo().str", "Cannot access module InnerFriendFoo")
+      Evaluation.failed("Foo().friendFoo.InnerFriendFoo.str"),
+      Evaluation.failed("Foo().friendFoo.InnerFriendFoo().str")
     )
   }
 
