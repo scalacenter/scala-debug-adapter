@@ -9,6 +9,7 @@ import scala.meta.Stat
 import scala.meta.Term
 import scala.util.Failure
 import scala.util.Try
+import ch.epfl.scala.debugadapter.internal.evaluator.Call
 
 private[evaluator] object Helpers {
   def illegalAccess(x: Any, typeName: String) = Fatal {
@@ -104,7 +105,7 @@ private[evaluator] object Helpers {
     }
 
   /* -------------------------------------------------------------------------- */
-  /*                              Looking for $outer                             */
+  /*                             Looking for $outer                             */
   /* -------------------------------------------------------------------------- */
   def findOuter(tree: RuntimeTree, frame: JdiFrame): Validation[OuterTree] = {
     def outerLookup(ref: ReferenceType) = Validation(ref.fieldByName("$outer")).map(_.`type`()).orElse {
@@ -171,16 +172,16 @@ private[evaluator] object Helpers {
   /* -------------------------------------------------------------------------- */
   def toStaticIfNeeded(field: Field, on: RuntimeTree): FieldTree = on match {
     case cls: ClassTree => StaticFieldTree(field, cls.`type`)
-    case eval: RuntimeEvaluationTree => InstanceFieldTree(field, eval)
+    case eval: RuntimeEvaluableTree => InstanceFieldTree(field, eval)
   }
 
   def toStaticIfNeeded(
       method: Method,
-      args: Seq[RuntimeEvaluationTree],
+      args: Seq[RuntimeEvaluableTree],
       on: RuntimeTree
   ): MethodTree = on match {
     case cls: ClassTree => StaticMethodTree(method, args, cls.`type`)
-    case eval: RuntimeEvaluationTree => InstanceMethodTree(method, args, eval)
+    case eval: RuntimeEvaluableTree => InstanceMethodTree(method, args, eval)
   }
 
   /* -------------------------------------------------------------------------- */

@@ -16,10 +16,20 @@ object DebugConfig {
     testMode = false,
     evaluationMode = DebugConfig.MixedEvaluation
   )
+  sealed trait PreEvaluationMode {
+    def allowPreEvaluation: Boolean
+  }
 
   sealed trait EvaluationMode {
     def allowScalaEvaluation: Boolean = false
     def allowRuntimeEvaluation: Boolean = false
+  }
+
+  case object AllowPreEvaluation extends PreEvaluationMode {
+    override def allowPreEvaluation: Boolean = true
+  }
+  case object NoPreEvaluation extends PreEvaluationMode {
+    override def allowPreEvaluation: Boolean = false
   }
 
   case object ScalaEvaluationOnly extends EvaluationMode {
