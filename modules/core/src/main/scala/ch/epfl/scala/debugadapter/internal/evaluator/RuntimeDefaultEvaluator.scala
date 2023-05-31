@@ -3,7 +3,7 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import ch.epfl.scala.debugadapter.Logger
 import Helpers.*
 
-case class RuntimeDefaultEvaluator(frame: JdiFrame, logger: Logger) extends RuntimeEvaluator {
+class RuntimeDefaultEvaluator(val frame: JdiFrame, val logger: Logger) extends RuntimeEvaluator {
   def evaluate(stat: RuntimeEvaluableTree): Safe[JdiValue] =
     eval(stat).map(_.derefIfRef)
 
@@ -96,16 +96,8 @@ case class RuntimeDefaultEvaluator(frame: JdiFrame, logger: Logger) extends Runt
   def evaluateModule(tree: ModuleTree): Safe[JdiValue] =
     tree match {
       case TopLevelModuleTree(mod) => Safe(JdiObject(mod.instances(1).get(0), frame.thread))
-      case NestedModuleTree(mod, of) =>
-        for {
-          ofValue <- eval(of)
-          loader <- frame.classLoader()
-          initMethodName <- Safe(getLastInnerType(tree.`type`.name()).get)
-          instance <- ofValue.value.`type` match {
-            case module if module == mod => Safe(ofValue)
-            case _ => ofValue.asObject.invoke(initMethodName, Seq.empty)
-          }
-        } yield instance
+      case NestedModuleTree(mod, of) => initializeModule(mod, eval(of))
+      // TODO: change the $of attribute to be a Method validated by the validator to avoid crashes at evaluation time
     }
 
   /* -------------------------------------------------------------------------- */

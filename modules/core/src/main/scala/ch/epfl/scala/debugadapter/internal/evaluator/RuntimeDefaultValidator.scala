@@ -13,7 +13,7 @@ import scala.util.Success
 case class Call(fun: Term, argClause: Term.ArgClause)
 case class PreparedCall(qual: Validation[RuntimeTree], name: String)
 
-case class RuntimeDefaultValidator(frame: JdiFrame, logger: Logger) extends RuntimeValidator {
+class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends RuntimeValidator {
   val thisTree =
     Validation.fromOption {
       frame.thisObject
@@ -102,7 +102,7 @@ case class RuntimeDefaultValidator(frame: JdiFrame, logger: Logger) extends Runt
       .flatMap { methodsByNameAndArgs(_, name, List.empty, frame) }
       .map(toStaticIfNeeded(_, List.empty, of.get))
 
-  def validateModule(name: String, of: Option[RuntimeTree]): Validation[ModuleTree] = {
+  def validateModule(name: String, of: Option[RuntimeTree]): Validation[RuntimeEvaluableTree] = {
     val moduleName = if (name.endsWith("$")) name else name + "$"
     val ofName = of.map(_.`type`.name())
     searchAllClassesFor(moduleName, ofName, frame).flatMap { moduleCls =>
@@ -172,7 +172,7 @@ case class RuntimeDefaultValidator(frame: JdiFrame, logger: Logger) extends Runt
   ): Validation[MethodTree] =
     for {
       module <- validateModule(moduleName, Some(on)).orElse(validateClass(moduleName, Some(on)))
-      applyCall <- methodsByNameAndArgs(module.`type`, "apply", args.map(_.`type`), frame)
+      applyCall <- ifReference(module).flatMap(methodsByNameAndArgs(_, "apply", args.map(_.`type`), frame))
     } yield toStaticIfNeeded(applyCall, args, module)
 
   def validateImplicitApplyCall(

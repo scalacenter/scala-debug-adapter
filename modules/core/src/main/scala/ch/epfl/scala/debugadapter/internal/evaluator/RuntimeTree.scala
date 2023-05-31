@@ -280,3 +280,7 @@ case class PreEvaluatedTree(
         |${indent.dropRight(1)})""".stripMargin
   }
 }
+
+object PreEvaluatedTree {
+  def apply(value: (Safe[JdiValue], Type)) = new PreEvaluatedTree(value._1, value._2)
+}

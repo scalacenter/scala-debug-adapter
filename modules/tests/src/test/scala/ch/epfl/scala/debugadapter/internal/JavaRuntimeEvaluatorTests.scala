@@ -175,7 +175,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
         Evaluation.success("superfoo.foofoo", "superfoofoo"),
         Evaluation.success("Foo.foofoo", "foofoo"),
         Evaluation.success("SuperFoo.foofoo", "superfoofoo"),
-        Evaluation.success("hiddenFoo.foofoo", "superfoofoo"),
+        Evaluation.success("hiddenFoo.foofoo", "superfoofoo"), //TODO: fails because of bad type specialization
         Evaluation.failed("coucou"),
         Evaluation.failed("lapin"),
         Evaluation.failed("love")

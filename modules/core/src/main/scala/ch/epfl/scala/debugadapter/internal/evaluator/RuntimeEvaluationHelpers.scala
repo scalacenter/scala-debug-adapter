@@ -9,7 +9,6 @@ import scala.meta.Stat
 import scala.meta.Term
 import scala.util.Failure
 import scala.util.Try
-import ch.epfl.scala.debugadapter.internal.evaluator.Call
 
 private[evaluator] object Helpers {
   def illegalAccess(x: Any, typeName: String) = Fatal {
@@ -121,6 +120,17 @@ private[evaluator] object Helpers {
       outer <- outerLookup(ref)
       outerTree <- OuterTree(tree, outer)
     } yield outerTree
+  }
+
+  def initializeModule(modCls: ClassType, evaluated: Safe[JdiValue]): Safe[JdiValue] = {
+    for {
+      ofValue <- evaluated
+      initMethodName <- Safe(getLastInnerType(modCls.name()).get)
+      instance <- ofValue.value.`type` match {
+        case module if module == modCls => Safe(ofValue)
+        case _ => ofValue.asObject.invoke(initMethodName, Seq.empty)
+      }
+    } yield instance
   }
 
   /* -------------------------------------------------------------------------- */

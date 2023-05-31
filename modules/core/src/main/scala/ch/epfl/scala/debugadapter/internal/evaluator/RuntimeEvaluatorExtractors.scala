@@ -47,7 +47,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
         case OuterModuleTree(module) => unapply(module)
         case _: MethodTree | _: NewInstanceTree => Some(tree)
         case _: LiteralTree | _: LocalVarTree | _: ThisTree | _: StaticFieldTree | _: ClassTree |
-            _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree | _: TopLevelModuleTree =>
+            _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree | _: TopLevelModuleTree | _: PreEvaluatedTree =>
           None
       }
     def unapply(tree: Validation[RuntimeTree]): Option[RuntimeTree] =
