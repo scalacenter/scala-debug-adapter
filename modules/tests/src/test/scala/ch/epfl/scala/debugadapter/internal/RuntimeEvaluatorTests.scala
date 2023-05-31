@@ -164,7 +164,6 @@ object RuntimeEvaluatorEnvironments {
        |    def greet = "Friendly"
        |    case class ObjectFriendFoo() { val str = s"object friend foo $z"}
        |    object ObjectFriendFoo { val str = s"object object friend foo $z"}
-       |
        |  }
        |  def friendFoo = FriendFoo
        |}

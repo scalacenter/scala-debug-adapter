@@ -280,7 +280,7 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
   private def validateModule(name: String, of: Option[RuntimeTree]): Validation[ModuleTree] = {
     val moduleName = if (name.endsWith("$")) name else name + "$"
     val ofName = of.map(_.`type`.name())
-    searchAllClassesFor(moduleName, ofName, frame).flatMap { module =>
+    searchAllClassesFor(moduleName, ofName, frame).flatMap { moduleCls =>
       val isInCompanionClass = ofName
         .filter(_.endsWith("$"))
         .map(n => loadClass(n.stripSuffix("$"), frame))
@@ -290,15 +290,15 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
           }.getResult
         }
 
-      (isInCompanionClass, module, of) match {
+      (isInCompanionClass, moduleCls, of) match {
         case (Some(Success(cls: JdiClass)), _, _) =>
-          Fatal(s"Cannot access module ${name} from ${of.map(_.`type`.name())}")
-        case (_, Module(module), _) => Valid(TopLevelModuleTree(module))
+          Fatal(s"Cannot access module ${name} from ${ofName}")
+        case (_, Module(module), _) => Valid(TopLevelModuleTree(moduleCls))
         case (_, _, Some(instance: RuntimeEvaluationTree)) =>
-          if (module.name().startsWith(instance.`type`.name()))
-            Valid(NestedModuleTree(module, instance))
-          else Recoverable(s"Cannot access module $module from ${instance.`type`.name()}")
-        case _ => Recoverable(s"Cannot access module $module")
+          if (moduleCls.name().startsWith(instance.`type`.name()))
+            Valid(NestedModuleTree(moduleCls, instance))
+          else Recoverable(s"Cannot access module $moduleCls from ${instance.`type`.name()}")
+        case _ => Recoverable(s"Cannot access module $moduleCls")
       }
     }
   }
