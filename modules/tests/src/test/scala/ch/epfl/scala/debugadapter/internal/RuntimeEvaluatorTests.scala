@@ -165,6 +165,7 @@ object RuntimeEvaluatorEnvironments {
        |    case class ObjectFriendFoo() { val str = s"object friend foo $z"}
        |    object ObjectFriendFoo { val str = s"object object friend foo $z"}
        |  }
+       |  def friendFoo = FriendFoo
        |}
        |
        |case class Nested(x: Int) {
@@ -402,13 +403,13 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     check(
       Breakpoint(10),
       Evaluation.failed("Foo.FriendFoo.greet"),
-      Evaluation.failed("Foo.FriendFoo(Foo()).greet")
+      Evaluation.failed("Foo.FriendFoo(Foo()).greet"),
+      Evaluation.failed("Foo().friendFoo.InnerFriendFoo.str"),
+      Evaluation.failed("Foo().friendFoo.InnerFriendFoo().str")
     )
   }
 
-  test(
-    "Should access to multiple layers of nested types. However when the nested class take no parameters there is a conflict with its companion object"
-  ) {
+  test("Should access to multiple layers of nested types") {
     implicit val debuggee = nested
     check(
       Breakpoint(10),

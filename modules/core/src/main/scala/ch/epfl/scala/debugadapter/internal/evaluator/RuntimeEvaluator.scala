@@ -279,11 +279,26 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
    */
   private def validateModule(name: String, of: Option[RuntimeTree]): Validation[ModuleTree] = {
     val moduleName = if (name.endsWith("$")) name else name + "$"
-    searchAllClassesFor(moduleName, of.map(_.`type`.name()), frame).flatMap { cls =>
-      (cls, of) match {
-        case (Module(module), _) => Valid(TopLevelModuleTree(module))
-        case (_, Instance(instance)) => Valid(NestedModuleTree(cls, instance))
-        case _ => Recoverable(s"Cannot access module $cls")
+    val ofName = of.map(_.`type`.name())
+    searchAllClassesFor(moduleName, ofName, frame).flatMap { moduleCls =>
+      val isInCompanionClass = ofName
+        .filter(_.endsWith("$"))
+        .map(n => loadClass(n.stripSuffix("$"), frame))
+        .map {
+          _.withFilterNot {
+            _.cls.methodsByName(moduleName.stripSuffix("$")).isEmpty()
+          }.getResult
+        }
+
+      (isInCompanionClass, moduleCls, of) match {
+        case (Some(Success(cls: JdiClass)), _, _) =>
+          CompilerRecoverable(s"Cannot access module ${name} from ${ofName}")
+        case (_, Module(module), _) => Valid(TopLevelModuleTree(moduleCls))
+        case (_, _, Some(instance: RuntimeEvaluationTree)) =>
+          if (moduleCls.name().startsWith(instance.`type`.name()))
+            Valid(NestedModuleTree(moduleCls, instance))
+          else Recoverable(s"Cannot access module $moduleCls from ${instance.`type`.name()}")
+        case _ => Recoverable(s"Cannot access module $moduleCls")
       }
     }
   }
@@ -298,12 +313,12 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
   private def validateClass(name: String, of: Option[RuntimeTree]): Validation[ClassTree] =
     searchAllClassesFor(name.stripSuffix("$"), of.map(_.`type`.name()), frame)
       .flatMap { cls =>
-        (cls, of) match {
-          case (cls, Some(_: RuntimeEvaluationTree) | None) => Valid(ClassTree(cls))
-          case (cls, Some(_: ClassTree)) =>
+        of match {
+          case Some(_: RuntimeEvaluationTree) | None => Valid(ClassTree(cls))
+          case Some(_: ClassTree) =>
             if (cls.isStatic()) Valid(ClassTree(cls))
             else CompilerRecoverable(s"Cannot access non-static class ${cls.name()}")
-          // Should be fatal, but I think there are some cases untested where using Fatal would break the evaluator
+          // Should be fatal, but I think in some cases using Fatal would break the evaluator (because of missing informations at runtime)
         }
       }
       .orElse {
@@ -411,25 +426,13 @@ class RuntimeValidator(frame: JdiFrame, logger: Logger) {
       case name: Term.Name => PreparedCall(thisTree, name.value)
     }
 
-    val lhs = preparedCall.qual
-    def unary(l: RuntimeTree, name: String) =
-      l match {
-        case ret: RuntimeEvaluationTree => RuntimeUnaryOp(ret, name).map(PrimitiveUnaryOpTree(ret, _))
-        case _ => Recoverable(s"Primitive operation operand must be evaluable")
-      }
-    def binary(l: RuntimeTree, args: Seq[RuntimeEvaluationTree], name: String) =
-      (l, args) match {
-        case (ret: RuntimeEvaluationTree, Seq(right)) =>
-          RuntimeBinaryOp(ret, right, name).map(PrimitiveBinaryOpTree(ret, right, _))
-        case _ => Recoverable(s"Primitive operation operand must be evaluable")
-      }
-
     for {
-      lhs <- lhs
+      lhs <- preparedCall.qual
       args <- call.argClause.map(validate).traverse
-      methodTree <- unary(lhs, preparedCall.name)
-        .orElse(binary(lhs, args, preparedCall.name))
-        .orElse(findMethod(lhs, preparedCall.name, args))
+      methodTree <-
+        PrimitiveUnaryOpTree(lhs, preparedCall.name)
+          .orElse { PrimitiveBinaryOpTree(lhs, args, preparedCall.name) }
+          .orElse { findMethod(lhs, preparedCall.name, args) }
     } yield methodTree
   }
 

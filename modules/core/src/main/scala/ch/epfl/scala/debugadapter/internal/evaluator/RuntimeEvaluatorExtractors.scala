@@ -38,37 +38,6 @@ protected[internal] object RuntimeEvaluatorExtractors {
       }
   }
 
-  object Instance {
-
-    /**
-     * Allows nested modules resolution, e.g.:
-     * {{{
-     *  case class Foo() {
-     *   case class FriendFoo() {
-     *    val x = ???
-     *   }
-     * }
-     * Foo().FriendFoo().x
-     * }}}
-     */
-    def unapply(tree: RuntimeTree): Option[RuntimeEvaluationTree] =
-      tree match {
-        case _: ClassTree | _: ModuleTree | _: ThisTree => None
-        case ft: FieldTree => Some(ft)
-        case mt: MethodTree => Some(mt)
-        case lit: LiteralTree => Some(lit)
-        case lv: LocalVarTree => Some(lv)
-        case pbt: PrimitiveBinaryOpTree => Some(pbt)
-        case put: PrimitiveUnaryOpTree => Some(put)
-        case nit: NewInstanceTree => Some(nit)
-        case outer: OuterTree => Some(outer)
-      }
-
-    def unapply(tree: Option[RuntimeTree]): Option[RuntimeEvaluationTree] =
-      if (tree.isEmpty) None
-      else unapply(tree.get)
-  }
-
   object MethodCall {
     def unapply(tree: RuntimeTree): Option[RuntimeTree] =
       tree match {
