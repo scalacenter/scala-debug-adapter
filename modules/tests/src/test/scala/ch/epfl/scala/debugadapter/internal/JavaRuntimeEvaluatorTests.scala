@@ -123,7 +123,7 @@ object JavaRuntimeEvaluatorEnvironments {
        |    public int add(int x, int y) { return x + y; }
        |
        |    public String nonStaticMethod() { return "i am non static friend_foo"; }
-       |    public static String staticMethod() { return "i am static friend_foo"; }
+       |    public static final String staticMethod() { return "i am static friend_foo"; }
        |  }
        |  static class StaticFriendFoo {
        |    public static int z = 168;

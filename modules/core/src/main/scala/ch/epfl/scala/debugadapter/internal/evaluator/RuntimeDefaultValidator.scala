@@ -14,12 +14,6 @@ case class Call(fun: Term, argClause: Term.ArgClause)
 case class PreparedCall(qual: Validation[RuntimeTree], name: String)
 
 class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends RuntimeValidator {
-  val thisTree =
-    Validation.fromOption {
-      frame.thisObject
-        .map { ths => ThisTree(ths.reference.referenceType().asInstanceOf[ClassType]) }
-    }
-
   protected def parse(expression: String): Validation[Stat] =
     expression.parse[Stat] match {
       case err: Parsed.Error => Fatal(err.details)
@@ -70,6 +64,15 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
     frame.classLoader().map(loader => LiteralTree(fromLitToValue(lit, loader))).getResult match {
       case Success(value) => value
       case Failure(e) => Fatal(e)
+    }
+
+  /* -------------------------------------------------------------------------- */
+  /*                               This validation                              */
+  /* -------------------------------------------------------------------------- */
+  lazy val thisTree: Validation[RuntimeEvaluableTree] =
+    Validation.fromOption {
+      frame.thisObject
+        .map { ths => ThisTree(ths.reference.referenceType().asInstanceOf[ClassType]) }
     }
 
   /* -------------------------------------------------------------------------- */
