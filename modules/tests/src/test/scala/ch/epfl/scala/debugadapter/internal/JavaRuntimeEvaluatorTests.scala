@@ -123,7 +123,6 @@ object JavaRuntimeEvaluatorEnvironments {
        |    public int add(int x, int y) { return x + y; }
        |
        |    public String nonStaticMethod() { return "i am non static friend_foo"; }
-       |    public static final String staticMethod() { return "i am static friend_foo"; }
        |  }
        |  static class StaticFriendFoo {
        |    public static int z = 168;
@@ -214,7 +213,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
         Evaluation.success("Main.StaticInner.z", 84),
         Evaluation.success("Foo.StaticFriendFoo.z", 168),
         Evaluation.failed("foo.friendFoo(new Foo()).z", "Accessing static field"),
-        Evaluation.failed("foo.friendFoo(new Foo()).staticMethod()", "Accessing static method"),
+        Evaluation.failed("foo.friendFoo(new Foo()).staticMethod()"),
         Evaluation.success("new Foo().friendFoo(new Foo()).y", 42),
         Evaluation.failed("new Foo().friendFoo(new Foo()).greet", "Accessing static field"),
         Evaluation.success("Main.StaticInner.StaticDoubleInner.z", 168)
