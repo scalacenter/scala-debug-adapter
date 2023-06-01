@@ -31,6 +31,24 @@ private[evaluator] object Helpers {
   private def argsMatch(method: Method, args: Seq[Type], frame: JdiFrame): Boolean =
     method.argumentTypeNames().size() == args.size && areAssignableFrom(method, args, frame)
 
+  private def typeDistance(of: Type, from: Type): Int = {
+    (of, from) match {
+      case (_: PrimitiveType, _) => 0
+      case (_, _: PrimitiveType) => 0
+      case (ref1: ReferenceType, ref2: ReferenceType) =>
+        if (ref1 == ref2) 0
+        else ref1.compareTo(ref2)
+    }
+  }
+
+  private def computeTypeDistance(of: Method, from: Seq[Type]): Int = {
+    of.argumentTypes()
+      .asScalaSeq
+      .zip(from)
+      .map { case (got, expected) => typeDistance(got, expected) }
+      .sum
+  }
+
   /**
    * Look for a method with the given name and arguments types, on the given reference type
    *
@@ -60,9 +78,26 @@ private[evaluator] object Helpers {
       .filter { method => !method.isPrivate && argsMatch(method, args, frame) }
       .toSeq
 
-    val finalCandidates = candidates.size match {
+    val withoutBridges = candidates.size match {
       case 0 | 1 => candidates
       case _ => candidates.filterNot(_.isBridge())
+    }
+
+    val finalCandidates = withoutBridges.size match {
+      case 0 | 1 => withoutBridges
+      case _ =>
+        withoutBridges
+          .map { m => (m, computeTypeDistance(m, args)) }
+          .foldLeft(List[(Method, Int)]()) { (a, b) =>
+            a match {
+              case Nil => List(b)
+              case head :: tail =>
+                if (head._2 < b._2) a
+                else if (head._2 > b._2) List(b)
+                else b :: a
+            }
+          }
+          .map(_._1)
     }
 
     finalCandidates

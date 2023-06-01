@@ -114,6 +114,42 @@ object RuntimeEvaluatorEnvironments {
        |class NoObjectFoo { def foo: String = "hello foo" }
        |""".stripMargin
 
+  val hierarchyOverload =
+    """|package example
+       |
+       |trait CoolTrait
+       |trait SubCoolTrait extends CoolTrait
+       |class Foo
+       |class Bar extends Foo with CoolTrait
+       |class Baz extends Foo with SubCoolTrait
+       |class SubBar extends Bar
+       |class SubCool extends SubCoolTrait
+       |
+       |object Main {
+       |  def main(args: Array[String]): Unit = {
+       |    val foo = new Foo()
+       |    val bar = new Bar()
+       |    val baz = new Baz()
+       |    val subBar = new SubBar()
+       |    val subCool = new SubCool()
+       |    println("ok")
+       |  }
+       |  
+       |  def test(foo: Foo, bar: Bar, baz: Baz): String = "foo, bar, baz"
+       |  def test(foo: Foo, bar: Bar): String = "foo, bar"
+       |  def test(foo: Foo, baz: Baz): String = "foo, baz"
+       |  def test(bar: Bar, baz: Baz): String = "bar, baz"
+       |  def test(foo: Foo): String = "foo"
+       |  def test(bar: Bar): String = "bar"
+       |  def test(baz: Baz): String = "baz"
+       |  def test(foo: Foo, bar: SubBar): String = "foo, subbar"
+       |  def test(bar: Bar, baz: SubBar): String = "bar, subbar"
+       |  def test(foo: Foo, subCool: SubCoolTrait): String = "foo, subcool"
+       |  def test(bar: Bar, subCool: SubCoolTrait): String = "bar, subcool"
+       |  def test(baz: Baz, subCool: SubCoolTrait): String = "baz, subcool"
+       |}
+    """.stripMargin
+
   val nested =
     """|package example
        |
@@ -195,6 +231,8 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.localVarTestSource, "example.Main", scalaVersion)
   lazy val field = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.fieldSource, "example.Main", scalaVersion)
   lazy val method = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.methodSource, "example.Main", scalaVersion)
+  lazy val overloads =
+    TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.hierarchyOverload, "example.Main", scalaVersion)
   lazy val nested = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.nested, "example.Main", scalaVersion)
   lazy val cls = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.cls, "example.Main", scalaVersion)
 
@@ -296,6 +334,27 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.failed("f1.bar(\"hello \", 42, 42)"),
         Evaluation.failed("f1.bar(\"hello \")"),
         Evaluation.failed("f1.bar(42, 42)")
+      )
+    )
+  }
+
+  test("Should compute non generic hierarchy overload") {
+    implicit val debuggee = overloads
+    check(
+      Breakpoint(18),
+      DebugStepAssert.inParallel(
+        Evaluation.success("test(foo, bar, baz)", "foo, bar, baz"),
+        Evaluation.success("test(foo, bar)", "foo, bar"),
+        Evaluation.success("test(foo, baz)", "foo, baz"),
+        Evaluation.success("test(bar, baz)", "bar, baz"),
+        Evaluation.success("test(foo)", "foo"),
+        Evaluation.success("test(bar)", "bar"),
+        Evaluation.success("test(baz)", "baz"),
+        Evaluation.successOrIgnore("test(foo, subBar)", "foo, subbar", true),
+        Evaluation.successOrIgnore("test(bar, subBar)", "bar, subbar", true),
+        Evaluation.success("test(foo, subCool)", "foo, subcool"),
+        Evaluation.success("test(bar, subCool)", "bar, subcool"),
+        Evaluation.success("test(baz, subCool)", "baz, subcool")
       )
     )
   }
