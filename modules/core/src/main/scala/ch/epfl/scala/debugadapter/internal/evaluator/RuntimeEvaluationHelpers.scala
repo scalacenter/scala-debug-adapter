@@ -41,12 +41,15 @@ private[evaluator] object Helpers {
     }
   }
 
-  private def computeTypeDistance(of: Method, from: Seq[Type]): Int = {
-    of.argumentTypes()
+  private def computeTypesDistance(of: Method, from: Seq[Type]): Option[Int] = {
+    val distances: Seq[Int] = of
+      .argumentTypes()
       .asScalaSeq
       .zip(from)
       .map { case (got, expected) => typeDistance(got, expected) }
-      .sum
+
+    if (distances.forall(_ >= 0)) Some(distances.sum)
+    else None
   }
 
   /**
@@ -87,7 +90,8 @@ private[evaluator] object Helpers {
       case 0 | 1 => withoutBridges
       case _ =>
         withoutBridges
-          .map { m => (m, computeTypeDistance(m, args)) }
+          .map { case m => (m, computeTypesDistance(m, args)) }
+          .collect { case (m, Some(distance)) => (m, distance) }
           .foldLeft(List[(Method, Int)]()) { (a, b) =>
             a match {
               case Nil => List(b)

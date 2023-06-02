@@ -350,8 +350,8 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("test(foo)", "foo"),
         Evaluation.success("test(bar)", "bar"),
         Evaluation.success("test(baz)", "baz"),
-        Evaluation.successOrIgnore("test(foo, subBar)", "foo, subbar", true),
-        Evaluation.successOrIgnore("test(bar, subBar)", "bar, subbar", true),
+        Evaluation.success("test(foo, subBar)", "foo, subbar"),
+        Evaluation.success("test(bar, subBar)", "bar, subbar"),
         Evaluation.success("test(foo, subCool)", "foo, subcool"),
         Evaluation.success("test(bar, subCool)", "bar, subcool"),
         Evaluation.success("test(baz, subCool)", "baz, subcool")
