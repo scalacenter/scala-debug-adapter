@@ -31,9 +31,9 @@ protected[internal] object RuntimeEvaluatorExtractors {
 
     def unapply(cls: JdiClass): Option[ClassType] = unapply(cls.cls)
 
-    def unapply(tree: RuntimeTree): Option[ModuleTree] =
+    def unapply(tree: RuntimeTree): Option[RuntimeEvaluableTree] =
       tree.`type` match {
-        case Module(cls) => Some(TopLevelModuleTree(cls))
+        case Module(_) => Some(tree.asInstanceOf[RuntimeEvaluableTree])
         case _ => None
       }
   }

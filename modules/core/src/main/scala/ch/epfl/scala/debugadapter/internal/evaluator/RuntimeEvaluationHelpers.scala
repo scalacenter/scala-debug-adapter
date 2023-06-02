@@ -19,7 +19,7 @@ private[evaluator] object Helpers {
     val tpe = classLoader
       .mirrorOfLiteral(literal.value)
       .map(_.value.`type`)
-      .getResult
+      .extract
       .get
 
     (Safe(literal.value), tpe)
@@ -211,8 +211,8 @@ private[evaluator] object Helpers {
     frame.classLoader().flatMap(_.loadClass(name))
 
   def checkClassStatus(tpe: => Type)(name: String, frame: JdiFrame) = Try(tpe) match {
-    case Failure(_: ClassNotLoadedException) => loadClass(name, frame).getResult.map(_.cls)
-    case Success(value: ClassType) if !value.isPrepared => loadClass(name, frame).getResult.map(_.cls)
+    case Failure(_: ClassNotLoadedException) => loadClass(name, frame).extract(_.cls)
+    case Success(value: ClassType) if !value.isPrepared => loadClass(name, frame).extract(_.cls)
     case result => result
   }
 
@@ -251,9 +251,9 @@ private[evaluator] object Helpers {
             .map(_.reference.referenceType.name)
             .map(_.split('.').init.mkString(".") + "." + name)
             .getOrElse("")
-          loadClass(fullName, frame).getResult
-            .orElse { loadClass(topLevelClassName, frame).getResult }
-            .map(_.cls)
+          loadClass(fullName, frame)
+            .orElse { loadClass(topLevelClassName, frame) }
+            .extract(_.cls)
             .toSeq
         case 1 => candidates
         case _ => candidates.filter(_.name() == fullName)

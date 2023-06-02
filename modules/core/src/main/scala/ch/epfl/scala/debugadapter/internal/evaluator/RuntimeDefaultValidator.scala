@@ -40,28 +40,17 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
   protected def validateWithClass(expression: Stat): Validation[RuntimeTree] =
     expression match {
       case value: Term.Name => validateName(value, thisTree).orElse(validateClass(value.value, thisTree.toOption))
-      case select: Term.Select => validateInnerSelect(select)
+      case Term.Select(qual, name) =>
+        validateWithClass(qual)
+          .flatMap { q => getSelectedTerm(q, name.value).orElse(validateClass(name.value, Some(q))) }
       case _ => validate(expression)
     }
-
-  protected def validateInnerSelect(select: Term.Select): Validation[RuntimeTree] = {
-    def getNestedSelectedTerm(of: RuntimeTree, name: String) =
-      getSelectedTerm(of, name).orElse(validateClass(name, Some(of)))
-    select.qual match {
-      case s: Term.Select =>
-        validateInnerSelect(s)
-          .flatMap(getNestedSelectedTerm(_, s.name.value))
-          .flatMap(getNestedSelectedTerm(_, select.name.value))
-      case _ =>
-        validateWithClass(select.qual).flatMap(getNestedSelectedTerm(_, select.name.value))
-    }
-  }
 
   /* -------------------------------------------------------------------------- */
   /*                             Literal validation                             */
   /* -------------------------------------------------------------------------- */
   def validateLiteral(lit: Lit): Validation[LiteralTree] =
-    frame.classLoader().map(loader => LiteralTree(fromLitToValue(lit, loader))).getResult match {
+    frame.classLoader().map(loader => LiteralTree(fromLitToValue(lit, loader))).extract match {
       case Success(value) => value
       case Failure(e) => Fatal(e)
     }
@@ -114,7 +103,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
         .map {
           _.withFilterNot {
             _.cls.methodsByName(moduleName.stripSuffix("$")).isEmpty()
-          }.getResult
+          }.extract
         }
 
       (isInCompanionClass, moduleCls, of) match {

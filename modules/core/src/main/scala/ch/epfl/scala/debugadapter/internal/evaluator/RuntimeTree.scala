@@ -229,6 +229,11 @@ case class ThisTree(
   override def prettyPrint(depth: Int): String = s"ThisTree(${`type`})"
 }
 
+object ThisTree {
+  def apply(ths: Option[JdiObject]): Validation[ThisTree] =
+    Validation.fromOption(ths).map(ths => ThisTree(ths.reference.referenceType()))
+}
+
 case class TopLevelModuleTree(
     `type`: ClassType
 ) extends ModuleTree {

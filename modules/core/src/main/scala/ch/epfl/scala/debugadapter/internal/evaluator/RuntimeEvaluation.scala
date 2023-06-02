@@ -33,54 +33,26 @@ trait RuntimeValidator {
   def frame: JdiFrame
   def logger: Logger
 
-  /**
-   * Validates an expression taken as a String.
-   *
-   * Parse, then recursively validates its sub-expressions
-   *
-   * @param expression
-   * @return
-   */
   def validate(expression: String): Validation[RuntimeEvaluableTree]
 
-  /**
-   * Validates an expression received as an AST. Recursively validates its sub-expressions
-   *
-   * @param expression
-   * @return a [[Valid[RuntimeEvaluableTree]]] if the expression is correct, an [[Invalid]] otherwise
-   */
   def validate(expression: Stat): Validation[RuntimeEvaluableTree]
 
   /**
-   * Validates an expression, with access to class lookup. Its result must be contained in an [[EvaluationTree]]
+   * Validates an expression, with access to class lookup.
+   *
+   * Because it might return a [[ClassTree]], its result might not be evaluable and must be contained in an [[EvaluationTree]]
    *
    * @param expression
    * @return a [[ValidationTree]] of the expression
    */
   protected def validateWithClass(expression: Stat): Validation[RuntimeTree]
 
-  /**
-   * Returns a ValidationTree of a [[Term.Select]] nested in another [[Term.Select]]. Provides access to [[ClassTree]], so it mustn't be used directly and must be wrapped in a [[RuntimeEvaluableTree]]
-   *
-   * @param select
-   * @return a [[ValidationTree]] of the qualifier
-   */
-  protected def validateInnerSelect(select: Term.Select): Validation[RuntimeTree]
-
-  /**
-   * @param lit
-   * @return a [[Valid[LiteralTree]]] if the literal is valid, [[Fatal]] otherwise
-   */
   def validateLiteral(lit: Lit): Validation[LiteralTree]
 
-  /**
-   * @param name
-   * @return a [[Valid[LocalVarTree]]] if name is a local variable, [[Invalid]] otherwise
-   */
   def localVarTreeByName(name: String): Validation[RuntimeEvaluableTree]
 
   /**
-   * Returns a [[FieldTree]] if name is a field, or a [[ModuleTree]] if it is a module (in Scala 3 we can access inner modules by a field)
+   * Returns a [[FieldTree]] if the name is a field, or a [[ModuleTree]] if it is a module (in Scala 3 we can access modules nested in modules by a field)
    *
    * It must load the field type if it isn't already loaded.
    *
@@ -88,12 +60,12 @@ trait RuntimeValidator {
    *
    * @param of
    * @param name
-   * @return a [[RuntimeEvaluationTree]] representing the field or module
+   * @return a [[RuntimeEvaluableTree]] representing the field or module
    */
   def fieldTreeByName(of: Validation[RuntimeTree], name: String): Validation[RuntimeEvaluableTree]
 
   /**
-   * Returns a [[MethodTree]] if name is a 0-arg method. Load the method return type on need.
+   * Returns a [[MethodTree]] if the name is a 0-arg method.
    *
    * It must load the method return type if it isn't already loaded.
    *
@@ -109,7 +81,7 @@ trait RuntimeValidator {
   ): Validation[RuntimeEvaluableTree]
 
   /**
-   * Returns a [[ModuleTree]], if name is a (nested) module
+   * Returns a [[ModuleTree]], if the name is a (nested) module
    *
    * If it is a nested, then a check is performed to ensure that the module is not accessed from a static context (e.g. when $of is a [[ClassTree]])
    *
@@ -131,7 +103,7 @@ trait RuntimeValidator {
   def validateName(value: Term.Name, of: Validation[RuntimeTree]): Validation[RuntimeEvaluableTree]
 
   /**
-   * Find the apply method on the given module, and validate the arguments
+   * Find the apply method on the given module, with the given arguments
    *
    * @param moduleName
    * @param on qualifier of the module, might help resolving name conflicts
@@ -147,8 +119,7 @@ trait RuntimeValidator {
   /**
    * "Unwrap" the apply method hidden by a 0-arg method returning the module
    *
-   * @param ref the reference type to which the 0-arg method belongs
-   * @param on the tree on which is called the 0-arg method
+   * @param on the tree on which the 0-arg method is called
    * @param name the name of the 0-arg method
    * @param args the argument of the apply method
    * @return
@@ -177,7 +148,7 @@ trait RuntimeValidator {
 
   /**
    * @param call the standardize call
-   * @return Returns a [[PrimitiveBinaryOpTree]] or [[PrimitiveUnaryOpTree]] if the method is primitive. Otherwise, returns a [[MethodTree]] representing the call
+   * @return a [[PrimitiveBinaryOpTree]] or [[PrimitiveUnaryOpTree]] if the method is primitive. Otherwise, returns a [[MethodTree]] representing the call
    */
   def validateMethod(call: Call): Validation[RuntimeEvaluableTree]
 
