@@ -19,7 +19,7 @@ private[evaluator] object Helpers {
     val tpe = classLoader
       .mirrorOfLiteral(literal.value)
       .map(_.value.`type`)
-      .extract
+      .getResult
       .get
 
     (Safe(literal.value), tpe)
