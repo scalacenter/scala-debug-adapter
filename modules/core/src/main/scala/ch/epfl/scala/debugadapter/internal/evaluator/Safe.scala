@@ -20,6 +20,9 @@ class Safe[+A] private (
     private val result: Try[A],
     private val dispose: () => Unit
 ) {
+  def extract[B](f: A => B): Try[B] = result.map(f)
+  def extract: Try[A] = result
+
   def map[B](f: A => B): Safe[B] = new Safe(result.map(f), dispose)
 
   def flatMap[B](f: A => Safe[B]): Safe[B] = {
@@ -30,6 +33,12 @@ class Safe[+A] private (
         new Safe(b.result, () => { dispose(); b.dispose() })
     }
   }
+
+  def orElse[B >: A](alternative: => Safe[B]): Safe[B] =
+    result match {
+      case Failure(_) => alternative
+      case _ => this
+    }
 
   def getResult: Try[A] = {
     dispose()

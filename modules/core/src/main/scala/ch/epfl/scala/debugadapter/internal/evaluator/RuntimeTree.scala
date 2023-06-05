@@ -13,23 +13,23 @@ sealed trait RuntimeTree {
   def prettyPrint(depth: Int): String
 }
 sealed trait RuntimeValidationTree extends RuntimeTree
-sealed trait RuntimeEvaluationTree extends RuntimeTree
+sealed trait RuntimeEvaluableTree extends RuntimeTree
 
 sealed trait TypeTree extends RuntimeTree {
   override def `type`: ClassType
 }
 
-sealed trait ModuleTree extends RuntimeEvaluationTree with TypeTree
+sealed trait ModuleTree extends RuntimeEvaluableTree with TypeTree
 
-sealed trait MethodTree extends RuntimeEvaluationTree {
+sealed trait MethodTree extends RuntimeEvaluableTree {
   def method: Method
 }
 
-sealed trait FieldTree extends RuntimeEvaluationTree {
+sealed trait FieldTree extends RuntimeEvaluableTree {
   def field: Field
 }
 
-sealed trait OuterTree extends RuntimeEvaluationTree
+sealed trait OuterTree extends RuntimeEvaluableTree
 
 /* -------------------------------------------------------------------------- */
 /*                                Simple trees                                */
@@ -37,7 +37,7 @@ sealed trait OuterTree extends RuntimeEvaluationTree
 case class LiteralTree private (
     value: Safe[Any],
     `type`: Type
-) extends RuntimeEvaluationTree {
+) extends RuntimeEvaluableTree {
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|LiteralTree(
@@ -57,7 +57,7 @@ object LiteralTree {
 case class LocalVarTree(
     name: String,
     `type`: Type
-) extends RuntimeEvaluationTree {
+) extends RuntimeEvaluableTree {
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|LocalVarTree(
@@ -72,7 +72,7 @@ case class LocalVarTree(
 /* -------------------------------------------------------------------------- */
 case class InstanceFieldTree(
     field: Field,
-    qual: RuntimeEvaluationTree
+    qual: RuntimeEvaluableTree
 ) extends FieldTree {
   override lazy val `type` = field.`type`()
   override def prettyPrint(depth: Int): String = {
@@ -101,10 +101,10 @@ case class StaticFieldTree(
 /*                                Method trees                                */
 /* -------------------------------------------------------------------------- */
 case class PrimitiveBinaryOpTree private (
-    lhs: RuntimeEvaluationTree,
-    rhs: RuntimeEvaluationTree,
+    lhs: RuntimeEvaluableTree,
+    rhs: RuntimeEvaluableTree,
     op: RuntimeBinaryOp
-) extends RuntimeEvaluationTree {
+) extends RuntimeEvaluableTree {
   override lazy val `type` = op.typeCheck(lhs.`type`, rhs.`type`)
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
@@ -117,18 +117,18 @@ case class PrimitiveBinaryOpTree private (
 }
 
 object PrimitiveBinaryOpTree {
-  def apply(lhs: RuntimeTree, args: Seq[RuntimeEvaluationTree], name: String): Validation[PrimitiveBinaryOpTree] =
+  def apply(lhs: RuntimeTree, args: Seq[RuntimeEvaluableTree], name: String): Validation[PrimitiveBinaryOpTree] =
     (lhs, args) match {
-      case (ret: RuntimeEvaluationTree, Seq(right)) =>
+      case (ret: RuntimeEvaluableTree, Seq(right)) =>
         RuntimeBinaryOp(ret, right, name).map(PrimitiveBinaryOpTree(ret, right, _))
       case _ => Recoverable(s"Primitive operation operand must be evaluable")
     }
 }
 
 case class PrimitiveUnaryOpTree private (
-    rhs: RuntimeEvaluationTree,
+    rhs: RuntimeEvaluableTree,
     op: RuntimeUnaryOp
-) extends RuntimeEvaluationTree {
+) extends RuntimeEvaluableTree {
   override lazy val `type` = op.typeCheck(rhs.`type`)
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
@@ -140,15 +140,15 @@ case class PrimitiveUnaryOpTree private (
 }
 object PrimitiveUnaryOpTree {
   def apply(rhs: RuntimeTree, name: String): Validation[PrimitiveUnaryOpTree] = rhs match {
-    case ret: RuntimeEvaluationTree => RuntimeUnaryOp(ret, name).map(PrimitiveUnaryOpTree(ret, _))
+    case ret: RuntimeEvaluableTree => RuntimeUnaryOp(ret, name).map(PrimitiveUnaryOpTree(ret, _))
     case _ => Recoverable(s"Primitive operation operand must be evaluable")
   }
 }
 
 case class InstanceMethodTree(
     method: Method,
-    args: Seq[RuntimeEvaluationTree],
-    qual: RuntimeEvaluationTree
+    args: Seq[RuntimeEvaluableTree],
+    qual: RuntimeEvaluableTree
 ) extends MethodTree {
   override lazy val `type` = method.returnType()
   override def prettyPrint(depth: Int): String = {
@@ -162,7 +162,7 @@ case class InstanceMethodTree(
 }
 case class StaticMethodTree(
     method: Method,
-    args: Seq[RuntimeEvaluationTree],
+    args: Seq[RuntimeEvaluableTree],
     on: ClassType
 ) extends MethodTree {
   override lazy val `type` = method.returnType()
@@ -179,7 +179,7 @@ case class StaticMethodTree(
 /* -------------------------------------------------------------------------- */
 /*                                 Class trees                                */
 /* -------------------------------------------------------------------------- */
-case class NewInstanceTree(method: Method, args: Seq[RuntimeEvaluationTree]) extends RuntimeEvaluationTree {
+case class NewInstanceTree(method: Method, args: Seq[RuntimeEvaluableTree]) extends RuntimeEvaluableTree {
   override lazy val `type`: ClassType = method.declaringType().asInstanceOf[ClassType]
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
@@ -191,7 +191,7 @@ case class NewInstanceTree(method: Method, args: Seq[RuntimeEvaluationTree]) ext
 }
 
 case class OuterClassTree(
-    inner: RuntimeEvaluationTree,
+    inner: RuntimeEvaluableTree,
     `type`: ClassType
 ) extends OuterTree {
   override def prettyPrint(depth: Int): String = {
@@ -217,16 +217,21 @@ case class OuterModuleTree(
 
 object OuterTree {
   def apply(of: RuntimeTree, tpe: Type): Validation[OuterTree] = (of, tpe) match {
-    case (tree: RuntimeEvaluationTree, Module(module)) => Valid(new OuterModuleTree(TopLevelModuleTree(module)))
-    case (tree: RuntimeEvaluationTree, ct: ClassType) => Valid(new OuterClassTree(tree, ct))
+    case (tree: RuntimeEvaluableTree, Module(module)) => Valid(new OuterModuleTree(TopLevelModuleTree(module)))
+    case (tree: RuntimeEvaluableTree, ct: ClassType) => Valid(new OuterClassTree(tree, ct))
     case _ => Recoverable("No valid outer can be found")
   }
 }
 
 case class ThisTree(
     `type`: ReferenceType
-) extends RuntimeEvaluationTree {
+) extends RuntimeEvaluableTree {
   override def prettyPrint(depth: Int): String = s"ThisTree(${`type`})"
+}
+
+object ThisTree {
+  def apply(ths: Option[JdiObject]): Validation[ThisTree] =
+    Validation.fromOption(ths).map(ths => ThisTree(ths.reference.referenceType()))
 }
 
 case class TopLevelModuleTree(
@@ -241,7 +246,7 @@ case class TopLevelModuleTree(
 }
 case class NestedModuleTree(
     module: ClassType,
-    of: RuntimeEvaluationTree
+    of: RuntimeEvaluableTree
 ) extends ModuleTree {
   override def `type`: ClassType = module
   override def prettyPrint(depth: Int): String = {
@@ -263,4 +268,24 @@ case class ClassTree(
         |${indent}t= ${`type`},
         |${indent.dropRight(1)})""".stripMargin
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                             Pre-evaluated trees                            */
+/* -------------------------------------------------------------------------- */
+case class PreEvaluatedTree(
+    value: Safe[JdiValue],
+    `type`: Type
+) extends RuntimeEvaluableTree {
+  override def prettyPrint(depth: Int): String = {
+    val indent = "\t" * (depth + 1)
+    s"""|PreEvaluatedTree(
+        |${indent}v= $value,
+        |${indent}t= ${`type`}
+        |${indent.dropRight(1)})""".stripMargin
+  }
+}
+
+object PreEvaluatedTree {
+  def apply(value: (Safe[JdiValue], Type)) = new PreEvaluatedTree(value._1, value._2)
 }

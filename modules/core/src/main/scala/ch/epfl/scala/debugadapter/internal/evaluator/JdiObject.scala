@@ -1,7 +1,6 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi.*
-import ch.epfl.scala.debugadapter.internal.evaluator.JavaListToScala
 
 import scala.jdk.CollectionConverters.*
 

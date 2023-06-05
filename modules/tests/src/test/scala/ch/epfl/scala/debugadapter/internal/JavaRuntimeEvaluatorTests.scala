@@ -165,17 +165,13 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     check(
       Breakpoint(13),
       DebugStepAssert.inParallel(
-        Evaluation.success("main.coucou", "coucou"),
         Evaluation.success("main.lapin", "lapin"),
         Evaluation.success("main.love", "love"),
-        Evaluation.success("foo.foofoo", "foofoo"),
         Evaluation.success("foo.lapinou", "lapinou"),
         Evaluation.success("foo.superbar", true),
         Evaluation.success("foo.superfoo", "hello super"),
-        Evaluation.success("superfoo.foofoo", "superfoofoo"),
         Evaluation.success("Foo.foofoo", "foofoo"),
         Evaluation.success("SuperFoo.foofoo", "superfoofoo"),
-        Evaluation.success("hiddenFoo.foofoo", "superfoofoo"),
         Evaluation.failed("coucou"),
         Evaluation.failed("lapin"),
         Evaluation.failed("love")
@@ -188,7 +184,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     check(
       Breakpoint(17),
       DebugStepAssert.inParallel(
-        Evaluation.success("coucou", "coucou"),
+        Evaluation.failed("coucou", "Accessing static field"),
         Evaluation.success("lapin", "lapin"),
         Evaluation.success("love", "love")
       )
@@ -212,19 +208,32 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     check(
       Breakpoint(11),
       DebugStepAssert.inParallel(
-        Evaluation.success("inner.x", 42),
-        Evaluation.success("inner.y", 43),
-        Evaluation.success("inner.z", 42),
         Evaluation.success("inner.helloInner()", "hello inner 42"),
-        Evaluation.success("inner.helloInner", "hello inner"),
+        Evaluation.failed("inner.helloInner", "Accessing static field"),
         Evaluation.success("Main.StaticInner.z", 84),
         Evaluation.success("Foo.StaticFriendFoo.z", 168),
-        Evaluation.success("foo.friendFoo(new Foo()).z", 43),
+        Evaluation.failed("foo.friendFoo(new Foo()).z", "Accessing static field"),
+        Evaluation.failed("foo.friendFoo(new Foo()).staticMethod()"),
         Evaluation.success("new Foo().friendFoo(new Foo()).y", 42),
-        Evaluation.success("new Foo().friendFoo(new Foo()).greet", "Friendly"),
+        Evaluation.failed("new Foo().friendFoo(new Foo()).greet", "Accessing static field"),
         Evaluation.success("Main.StaticInner.StaticDoubleInner.z", 168)
       )
     )
+  }
+
+  test("Should not call static members from instance") {
+    implicit val debuggee = fieldMethod
+    check(
+      Breakpoint(13),
+      DebugStepAssert.inParallel(
+        Evaluation.failed("main.coucou", "Accessing static field"),
+        Evaluation.failed("hiddenFoo.foofoo", "Accessing static field"),
+        Evaluation.failed("foo.foofoo", "Accessing static field"),
+        Evaluation.failed("superfoo.foofoo", "Accessing static field"),
+        Evaluation.failed("main.staticMethod()", "Accessing static method")
+      )
+    )
+
   }
 
   test("Should call a method on an instance of a nested type --- java") {

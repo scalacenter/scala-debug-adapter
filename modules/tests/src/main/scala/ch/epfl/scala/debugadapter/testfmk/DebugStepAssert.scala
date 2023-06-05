@@ -164,12 +164,16 @@ object Evaluation {
   }
 
   private def assertFailed(assertion: String => Unit)(response: Either[String, String]): Unit = {
+    if (response.isLeft) println(s"\u001b[32mExpected failure\u001b[0m")
+    else println(s"\u001b[31mUnexpected success, got ${response}\u001b[0m")
     assert(response.isLeft)
     val error = response.left.toOption.get
     assertion(error)
   }
 
   private def assertFailed(expectedError: String)(response: Either[String, String]): Unit = {
+    if (response.isLeft) println(s"\u001b[32mExpected failure\u001b[0m")
+    else println(s"\u001b[31mUnexpected success, got ${response}\u001b[0m")
     assert(clue(response).isLeft)
     val error = response.left.toOption.get
     assert(clue(error).contains(clue(expectedError)))

@@ -104,7 +104,7 @@ private[evaluator] object Helpers {
     }
 
   /* -------------------------------------------------------------------------- */
-  /*                              Looking for $outer                             */
+  /*                             Looking for $outer                             */
   /* -------------------------------------------------------------------------- */
   def findOuter(tree: RuntimeTree, frame: JdiFrame): Validation[OuterTree] = {
     def outerLookup(ref: ReferenceType) = Validation(ref.fieldByName("$outer")).map(_.`type`()).orElse {
@@ -122,14 +122,25 @@ private[evaluator] object Helpers {
     } yield outerTree
   }
 
+  def initializeModule(modCls: ClassType, evaluated: Safe[JdiValue]): Safe[JdiValue] = {
+    for {
+      ofValue <- evaluated
+      initMethodName <- Safe(getLastInnerType(modCls.name()).get)
+      instance <- ofValue.value.`type` match {
+        case module if module == modCls => Safe(ofValue)
+        case _ => ofValue.asObject.invoke(initMethodName, Seq.empty)
+      }
+    } yield instance
+  }
+
   /* -------------------------------------------------------------------------- */
   /*                               Useful patterns                              */
   /* -------------------------------------------------------------------------- */
   /* Extract reference if there is */
   def ifReference(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
     tree match {
-      case Invalid(e) => Recoverable(s"Invalid reference: $e")
-      case _ => ifReference(tree.get)
+      case Valid(tree) => ifReference(tree)
+      case e: Invalid => Recoverable(s"Invalid reference: $e")
     }
 
   def ifReference(tree: RuntimeTree): Validation[ReferenceType] =
@@ -169,18 +180,28 @@ private[evaluator] object Helpers {
   /* -------------------------------------------------------------------------- */
   /*                  Transformation to static or instance tree                 */
   /* -------------------------------------------------------------------------- */
-  def toStaticIfNeeded(field: Field, on: RuntimeTree): FieldTree = on match {
-    case cls: ClassTree => StaticFieldTree(field, cls.`type`)
-    case eval: RuntimeEvaluationTree => InstanceFieldTree(field, eval)
-  }
+  def toStaticIfNeeded(field: Field, on: RuntimeTree): Validation[RuntimeEvaluableTree] =
+    (field.`type`, on) match {
+      case (Module(module), _) => Valid(TopLevelModuleTree(module))
+      case (_, cls: ClassTree) => Valid(StaticFieldTree(field, cls.`type`))
+      case (_, Module(mod)) => Valid(InstanceFieldTree(field, mod))
+      case (_, eval: RuntimeEvaluableTree) =>
+        if (field.isStatic())
+          Fatal(s"Accessing static field $field from instance ${eval.`type`} can lead to unexpected behavior")
+        else Valid(InstanceFieldTree(field, eval))
+    }
 
   def toStaticIfNeeded(
       method: Method,
-      args: Seq[RuntimeEvaluationTree],
+      args: Seq[RuntimeEvaluableTree],
       on: RuntimeTree
-  ): MethodTree = on match {
-    case cls: ClassTree => StaticMethodTree(method, args, cls.`type`)
-    case eval: RuntimeEvaluationTree => InstanceMethodTree(method, args, eval)
+  ): Validation[MethodTree] = on match {
+    case cls: ClassTree => Valid(StaticMethodTree(method, args, cls.`type`))
+    case Module(mod) => Valid(InstanceMethodTree(method, args, mod))
+    case eval: RuntimeEvaluableTree =>
+      if (method.isStatic())
+        Fatal(s"Accessing static method $method from instance ${eval.`type`} can lead to unexpected behavior")
+      else Valid(InstanceMethodTree(method, args, eval))
   }
 
   /* -------------------------------------------------------------------------- */
@@ -190,8 +211,8 @@ private[evaluator] object Helpers {
     frame.classLoader().flatMap(_.loadClass(name))
 
   def checkClassStatus(tpe: => Type)(name: String, frame: JdiFrame) = Try(tpe) match {
-    case Failure(_: ClassNotLoadedException) => loadClass(name, frame).getResult.map(_.cls)
-    case Success(value: ClassType) if !value.isPrepared => loadClass(name, frame).getResult.map(_.cls)
+    case Failure(_: ClassNotLoadedException) => loadClass(name, frame).extract(_.cls)
+    case Success(value: ClassType) if !value.isPrepared => loadClass(name, frame).extract(_.cls)
     case result => result
   }
 
@@ -230,9 +251,9 @@ private[evaluator] object Helpers {
             .map(_.reference.referenceType.name)
             .map(_.split('.').init.mkString(".") + "." + name)
             .getOrElse("")
-          loadClass(fullName, frame).getResult
-            .orElse { loadClass(topLevelClassName, frame).getResult }
-            .map(_.cls)
+          loadClass(fullName, frame)
+            .orElse { loadClass(topLevelClassName, frame) }
+            .extract(_.cls)
             .toSeq
         case 1 => candidates
         case _ => candidates.filter(_.name() == fullName)
