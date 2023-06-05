@@ -21,7 +21,7 @@ class Safe[+A] private (
     private val dispose: () => Unit
 ) {
   def extract[B](f: A => B): Try[B] = result.map(f)
-  def extract: Try[A] = extract(identity)
+  def extract: Try[A] = result
 
   def map[B](f: A => B): Safe[B] = new Safe(result.map(f), dispose)
 
