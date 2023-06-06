@@ -135,18 +135,21 @@ object RuntimeEvaluatorEnvironments {
        |    println("ok")
        |  }
        |  
-       |  def test(foo: Foo, bar: Bar, baz: Baz): String = "foo, bar, baz"
-       |  def test(foo: Foo, bar: Bar): String = "foo, bar"
-       |  def test(foo: Foo, baz: Baz): String = "foo, baz"
-       |  def test(bar: Bar, baz: Baz): String = "bar, baz"
        |  def test(foo: Foo): String = "foo"
        |  def test(bar: Bar): String = "bar"
        |  def test(baz: Baz): String = "baz"
-       |  def test(foo: Foo, bar: SubBar): String = "foo, subbar"
-       |  def test(bar: Bar, baz: SubBar): String = "bar, subbar"
+       |
+       |  def test(foo: Foo, subBar: SubBar): String = "foo, subbar"
+       |  def test(bar: Bar, foo: Foo): String = "bar, foo"
+       |
+       |  def test(bar: Bar, baz: Baz): String = "bar, baz"
+       |
        |  def test(foo: Foo, subCool: SubCoolTrait): String = "foo, subcool"
        |  def test(bar: Bar, subCool: SubCoolTrait): String = "bar, subcool"
        |  def test(baz: Baz, subCool: SubCoolTrait): String = "baz, subcool"
+       |
+       |  def test(foo: Foo, bar: Bar, baz: Baz): String = "foo, bar, baz"
+       |  def test(bar: Bar, baz: Baz, subBar: SubBar): String = "bar, baz, subbar"
        |}
     """.stripMargin
 
@@ -343,18 +346,17 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     check(
       Breakpoint(18),
       DebugStepAssert.inParallel(
-        Evaluation.success("test(foo, bar, baz)", "foo, bar, baz"),
-        Evaluation.success("test(foo, bar)", "foo, bar"),
-        Evaluation.success("test(foo, baz)", "foo, baz"),
-        Evaluation.success("test(bar, baz)", "bar, baz"),
         Evaluation.success("test(foo)", "foo"),
         Evaluation.success("test(bar)", "bar"),
         Evaluation.success("test(baz)", "baz"),
+        Evaluation.failed("test(bar, subBar)"),
+        Evaluation.success("test(bar, baz)", "bar, baz"),
         Evaluation.success("test(foo, subBar)", "foo, subbar"),
-        Evaluation.success("test(bar, subBar)", "bar, subbar"),
         Evaluation.success("test(foo, subCool)", "foo, subcool"),
         Evaluation.success("test(bar, subCool)", "bar, subcool"),
-        Evaluation.success("test(baz, subCool)", "baz, subcool")
+        Evaluation.success("test(baz, subCool)", "baz, subcool"),
+        Evaluation.success("test(foo, bar, baz)", "foo, bar, baz"),
+        Evaluation.success("test(bar, baz, subBar)", "bar, baz, subbar")
       )
     )
   }

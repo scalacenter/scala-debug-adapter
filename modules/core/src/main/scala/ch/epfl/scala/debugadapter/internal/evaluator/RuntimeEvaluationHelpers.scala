@@ -28,29 +28,66 @@ private[evaluator] object Helpers {
   /* -------------------------------------------------------------------------- */
   /*                                Method lookup                               */
   /* -------------------------------------------------------------------------- */
-  private def argsMatch(method: Method, args: Seq[Type], frame: JdiFrame): Boolean =
-    method.argumentTypeNames().size() == args.size && areAssignableFrom(method, args, frame)
+  private implicit class RichMethod(m: Method) {
+    private def refTypeDistance(from: ReferenceType, to: ReferenceType) = {
+      def loop(from: ReferenceType, acc: Int): Option[Int] = {
+        val fromSuperClass = Option(from.asInstanceOf[ClassType].superclass())
+        lazy val fromInterfaces: Seq[InterfaceType] =
+          from.asInstanceOf[ClassType].interfaces().asScalaSeq
 
-  private def typeDistance(of: Type, from: Type): Int = {
-    (of, from) match {
-      case (_: PrimitiveType, _) => 0
-      case (_, _: PrimitiveType) => 0
-      case (ref1: ReferenceType, ref2: ReferenceType) =>
-        if (ref1 == ref2) 0
-        else ref1.compareTo(ref2)
+        fromSuperClass
+          .flatMap { spr =>
+            if (spr.name() == to.name()) Some(acc + 1)
+            else loop(spr, acc + 1)
+          }
+          .orElse {
+            fromInterfaces
+              .find { itf =>
+                if (itf.name() == to.name()) true
+                else loop(itf, acc + 1).isDefined
+              }
+              .map(_ => acc + 1)
+          }
+      }
+      loop(from, 0)
+    }
+
+    def moreSpecificThan(m2: Method): Boolean = {
+      println(s"\u001b[31mComparing ${m} and ${m2}\u001b[0m")
+      m.argumentTypes()
+        .asScalaSeq
+        .zip(m2.argumentTypes().asScalaSeq)
+        .forall {
+          case (t1, t2) if t1.name == t2.name => true
+          case (_: PrimitiveType, _) => true
+          case (_, _: PrimitiveType) => true
+          case (r1: ReferenceType, r2: ReferenceType) => refTypeDistance(r1, r2).isDefined
+        }
     }
   }
 
-  private def computeTypesDistance(of: Method, from: Seq[Type]): Option[Int] = {
-    val distances: Seq[Int] = of
-      .argumentTypes()
-      .asScalaSeq
-      .zip(from)
-      .map { case (got, expected) => typeDistance(got, expected) }
+  private def argsMatch(method: Method, args: Seq[Type], frame: JdiFrame): Boolean =
+    method.argumentTypeNames().size() == args.size && areAssignableFrom(method, args, frame)
 
-    if (distances.forall(_ >= 0)) Some(distances.sum)
-    else None
-  }
+  /**
+   * @see <a href="https://docs.oracle.com/javase/specs/jls/se20/html/jls-15.html#jls-15.12.2.5">JLS#15.12.2.5. Choosing the most specific method</a>
+   *
+   * @param methods the list of compatible methods to compare
+   * @return a sequence containing the most precise methods
+   */
+  private def extractMostPreciseMethod(methods: Seq[Method]): Seq[Method] =
+    methods
+      .foldLeft[List[Method]](List()) { (m1, m2) =>
+        m1 match {
+          case Nil => List(m2)
+          case list =>
+            list.flatMap { m =>
+              if (m.moreSpecificThan(m2)) List(m)
+              else if (m2.moreSpecificThan(m)) List(m2)
+              else List(m, m2)
+            }.distinct
+        }
+      }
 
   /**
    * Look for a method with the given name and arguments types, on the given reference type
@@ -88,20 +125,7 @@ private[evaluator] object Helpers {
 
     val finalCandidates = withoutBridges.size match {
       case 0 | 1 => withoutBridges
-      case _ =>
-        withoutBridges
-          .map { case m => (m, computeTypesDistance(m, args)) }
-          .collect { case (m, Some(distance)) => (m, distance) }
-          .foldLeft(List[(Method, Int)]()) { (a, b) =>
-            a match {
-              case Nil => List(b)
-              case head :: tail =>
-                if (head._2 < b._2) a
-                else if (head._2 > b._2) List(b)
-                else b :: a
-            }
-          }
-          .map(_._1)
+      case _ => extractMostPreciseMethod(withoutBridges)
     }
 
     finalCandidates
@@ -138,9 +162,11 @@ private[evaluator] object Helpers {
   }
 
   def areAssignableFrom(method: Method, args: Seq[Type], frame: JdiFrame): Boolean =
-    method.argumentTypes().asScalaSeq.zip(args).forall { case (expected, got) =>
-      isAssignableFrom(got, expected, frame)
-    }
+    if (method.arguments().size() != args.size) false
+    else
+      method.argumentTypes().asScalaSeq.zip(args).forall { case (expected, got) =>
+        isAssignableFrom(got, expected, frame)
+      }
 
   /* -------------------------------------------------------------------------- */
   /*                             Looking for $outer                             */
