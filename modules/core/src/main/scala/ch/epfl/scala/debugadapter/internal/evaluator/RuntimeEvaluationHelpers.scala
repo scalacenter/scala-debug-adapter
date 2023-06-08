@@ -162,11 +162,15 @@ private[evaluator] object Helpers {
   }
 
   def areAssignableFrom(method: Method, args: Seq[Type], frame: JdiFrame): Boolean =
-    if (method.arguments().size() != args.size) false
+    if (method.argumentTypes().size() != args.size) false
     else
-      method.argumentTypes().asScalaSeq.zip(args).forall { case (expected, got) =>
-        isAssignableFrom(got, expected, frame)
-      }
+      method
+        .argumentTypes()
+        .asScalaSeq
+        .zip(args)
+        .forall { case (expected, got) =>
+          isAssignableFrom(got, expected, frame)
+        }
 
   /* -------------------------------------------------------------------------- */
   /*                             Looking for $outer                             */
