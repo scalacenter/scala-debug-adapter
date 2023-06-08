@@ -10,7 +10,7 @@ import scala.meta.Term
 import scala.util.Failure
 import scala.util.Try
 
-private[evaluator] object Helpers {
+private[evaluator] object RuntimeEvaluationHelpers {
   def illegalAccess(x: Any, typeName: String) = Fatal {
     new ClassCastException(s"Cannot cast $x to $typeName")
   }
@@ -28,25 +28,26 @@ private[evaluator] object Helpers {
   /* -------------------------------------------------------------------------- */
   /*                                Method lookup                               */
   /* -------------------------------------------------------------------------- */
+  private def getSuperTypes(tpe: ReferenceType): List[ReferenceType] = tpe match {
+    case cls: ClassType =>
+      val sup = cls.superclass()
+      val supItf = cls.interfaces().asScalaList
+      if (sup != null) sup :: supItf
+      else supItf
+    case itf: InterfaceType => itf.superinterfaces().asScalaList
+    case arr: ArrayType => List()
+  }
+
   def refTypeDistance(from: ReferenceType, to: String) = {
     def loop(from: ReferenceType, acc: Int): Option[Int] = {
-      val fromSuperClass = Option(from.asInstanceOf[ClassType].superclass())
-      lazy val fromInterfaces: Seq[InterfaceType] =
-        from.asInstanceOf[ClassType].interfaces().asScalaSeq
+      val superTypes = getSuperTypes(from)
 
-      fromSuperClass
-        .flatMap { spr =>
-          if (spr.name() == to) Some(acc + 1)
-          else loop(spr, acc + 1)
+      superTypes
+        .find { spr =>
+          if (spr.name() == to) true
+          else loop(spr, acc + 1).isDefined
         }
-        .orElse {
-          fromInterfaces
-            .find { itf =>
-              if (itf.name() == to) true
-              else loop(itf, acc + 1).isDefined
-            }
-            .map(_ => acc + 1)
-        }
+        .map(_ => acc + 1)
     }
     loop(from, 0)
   }
@@ -126,7 +127,7 @@ private[evaluator] object Helpers {
     }
 
     finalCandidates
-      .toValidation(s"Cannot find methods $funName with args types $args on $ref")
+      .toValidation(s"Cannot find a proper method $funName with args types $args on $ref")
       .map(loadClassOnNeed(_, frame))
   }
 

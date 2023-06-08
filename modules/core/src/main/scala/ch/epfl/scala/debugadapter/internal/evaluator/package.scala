@@ -49,6 +49,7 @@ package object evaluator {
   }
 
   implicit class JavaListToScala[A](list: java.util.List[A]) {
+    def asScalaList: List[A] = list.asScala.toList
     def asScalaSeq: Seq[A] = list.asScala.toSeq
   }
 

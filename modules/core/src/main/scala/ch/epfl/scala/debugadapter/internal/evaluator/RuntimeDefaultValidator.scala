@@ -5,7 +5,7 @@ import com.sun.jdi._
 import scala.meta.{Type => _, _}
 import scala.meta.trees.*
 import scala.meta.parsers.*
-import Helpers.*
+import RuntimeEvaluationHelpers.*
 import RuntimeEvaluatorExtractors.*
 import scala.util.Failure
 import scala.util.Success

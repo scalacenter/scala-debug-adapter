@@ -1,7 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import ch.epfl.scala.debugadapter.Logger
-import Helpers.*
+import RuntimeEvaluationHelpers.*
 
 class RuntimeDefaultEvaluator(val frame: JdiFrame, val logger: Logger) extends RuntimeEvaluator {
   def evaluate(stat: RuntimeEvaluableTree): Safe[JdiValue] =
