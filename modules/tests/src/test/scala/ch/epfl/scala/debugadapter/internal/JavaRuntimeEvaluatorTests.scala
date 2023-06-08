@@ -323,7 +323,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should pre evaluate method and resolve most precise method --- java".only) {
+  test("Should pre evaluate method and resolve most precise method --- java") {
     implicit val debuggee = preEvaluation
     check(
       Breakpoint(8),
