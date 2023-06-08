@@ -28,42 +28,39 @@ private[evaluator] object Helpers {
   /* -------------------------------------------------------------------------- */
   /*                                Method lookup                               */
   /* -------------------------------------------------------------------------- */
-  private implicit class RichMethod(m: Method) {
-    private def refTypeDistance(from: ReferenceType, to: ReferenceType) = {
-      def loop(from: ReferenceType, acc: Int): Option[Int] = {
-        val fromSuperClass = Option(from.asInstanceOf[ClassType].superclass())
-        lazy val fromInterfaces: Seq[InterfaceType] =
-          from.asInstanceOf[ClassType].interfaces().asScalaSeq
+  def refTypeDistance(from: ReferenceType, to: String) = {
+    def loop(from: ReferenceType, acc: Int): Option[Int] = {
+      val fromSuperClass = Option(from.asInstanceOf[ClassType].superclass())
+      lazy val fromInterfaces: Seq[InterfaceType] =
+        from.asInstanceOf[ClassType].interfaces().asScalaSeq
 
-        fromSuperClass
-          .flatMap { spr =>
-            if (spr.name() == to.name()) Some(acc + 1)
-            else loop(spr, acc + 1)
-          }
-          .orElse {
-            fromInterfaces
-              .find { itf =>
-                if (itf.name() == to.name()) true
-                else loop(itf, acc + 1).isDefined
-              }
-              .map(_ => acc + 1)
-          }
-      }
-      loop(from, 0)
-    }
-
-    def moreSpecificThan(m2: Method): Boolean = {
-      println(s"\u001b[31mComparing ${m} and ${m2}\u001b[0m")
-      m.argumentTypes()
-        .asScalaSeq
-        .zip(m2.argumentTypes().asScalaSeq)
-        .forall {
-          case (t1, t2) if t1.name == t2.name => true
-          case (_: PrimitiveType, _) => true
-          case (_, _: PrimitiveType) => true
-          case (r1: ReferenceType, r2: ReferenceType) => refTypeDistance(r1, r2).isDefined
+      fromSuperClass
+        .flatMap { spr =>
+          if (spr.name() == to) Some(acc + 1)
+          else loop(spr, acc + 1)
+        }
+        .orElse {
+          fromInterfaces
+            .find { itf =>
+              if (itf.name() == to) true
+              else loop(itf, acc + 1).isDefined
+            }
+            .map(_ => acc + 1)
         }
     }
+    loop(from, 0)
+  }
+
+  def moreSpecificThan(m1: Method, m2: Method): Boolean = {
+    m1.argumentTypes()
+      .asScalaSeq
+      .zip(m2.argumentTypes().asScalaSeq)
+      .forall {
+        case (t1, t2) if t1.name == t2.name => true
+        case (_: PrimitiveType, _) => true
+        case (_, _: PrimitiveType) => true
+        case (r1: ReferenceType, r2: ReferenceType) => refTypeDistance(r1, r2.name()).isDefined
+      }
   }
 
   private def argsMatch(method: Method, args: Seq[Type], frame: JdiFrame): Boolean =
@@ -82,8 +79,8 @@ private[evaluator] object Helpers {
           case Nil => List(m2)
           case list =>
             list.flatMap { m =>
-              if (m.moreSpecificThan(m2)) List(m)
-              else if (m2.moreSpecificThan(m)) List(m2)
+              if (moreSpecificThan(m, m2)) List(m)
+              else if (moreSpecificThan(m2, m)) List(m2)
               else List(m, m2)
             }.distinct
         }
