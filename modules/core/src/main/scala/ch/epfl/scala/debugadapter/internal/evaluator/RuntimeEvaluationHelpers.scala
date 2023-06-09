@@ -41,7 +41,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
       }
   }
 
-  private def argsMatch(method: Method, args: Seq[Type], frame: JdiFrame, boxing: Boolean): Boolean =
+  private def argsMatch(method: Method, args: Seq[Type], boxing: Boolean): Boolean =
     method.argumentTypeNames().size() == args.size && areAssignableFrom(method, args, boxing)
 
   /**
@@ -90,11 +90,11 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
       if (encode) NameTransformer.encode(funName) else funName
     }.asScalaList
 
-    val candidatesWithoutBoxing = candidates.filter { argsMatch(_, args, frame, boxing = false) }
+    val candidatesWithoutBoxing = candidates.filter { argsMatch(_, args, boxing = false) }
 
     val candidatesWithBoxing = candidatesWithoutBoxing.size match {
-      case 0 | 1 => candidatesWithoutBoxing
-      case _ => candidates.filter { argsMatch(_, args, frame, boxing = true) }
+      case 0 => candidates.filter { argsMatch(_, args, boxing = true) }
+      case _ => candidatesWithoutBoxing
     }
 
     val withoutBridges = candidatesWithBoxing.size match {

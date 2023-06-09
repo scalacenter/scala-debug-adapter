@@ -172,7 +172,9 @@ private[internal] class EvaluationProvider(
           compilePrepare(expression, frame).orElse(Success(RuntimeExpression(tree)))
         case Valid(tree) => Success(RuntimeExpression(tree))
         case Fatal(e) => Failure(e)
-        case _: Invalid => compilePrepare(expression, frame)
+        case inv: Invalid =>
+          println(s"\u001b[31mInvalid expression: ${inv.exception}\u001b[0m")
+          compilePrepare(expression, frame)
       }
     else compilePrepare(expression, frame)
 

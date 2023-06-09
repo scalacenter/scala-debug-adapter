@@ -533,7 +533,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should resolve overloads in 2 steps when boxing is available".only) {
+  test("Should resolve overloads in 2 steps when boxing is available") {
     implicit val debuggee = boxingOverloads
     check(
       Breakpoint(5),
