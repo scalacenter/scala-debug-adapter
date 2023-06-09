@@ -10,7 +10,7 @@ import scala.meta.Term
 import scala.util.Failure
 import scala.util.Try
 
-private[evaluator] object RuntimeEvaluationHelpers {
+private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
   def illegalAccess(x: Any, typeName: String) = Fatal {
     new ClassCastException(s"Cannot cast $x to $typeName")
   }
@@ -28,29 +28,6 @@ private[evaluator] object RuntimeEvaluationHelpers {
   /* -------------------------------------------------------------------------- */
   /*                                Method lookup                               */
   /* -------------------------------------------------------------------------- */
-  private def getSuperTypes(tpe: ReferenceType): List[ReferenceType] = tpe match {
-    case cls: ClassType =>
-      val sup = cls.superclass()
-      val supItf = cls.interfaces().asScalaList
-      if (sup != null) sup :: supItf
-      else supItf
-    case itf: InterfaceType => itf.superinterfaces().asScalaList
-    case arr: ArrayType => List()
-  }
-
-  def refTypeDistance(from: ReferenceType, to: String) = {
-    def loop(from: ReferenceType, acc: Int): Option[Int] = {
-      val superTypes = getSuperTypes(from)
-
-      superTypes
-        .find { spr =>
-          if (spr.name() == to) true
-          else loop(spr, acc + 1).isDefined
-        }
-        .map(_ => acc + 1)
-    }
-    loop(from, 0)
-  }
 
   def moreSpecificThan(m1: Method, m2: Method): Boolean = {
     m1.argumentTypes()
@@ -60,12 +37,12 @@ private[evaluator] object RuntimeEvaluationHelpers {
         case (t1, t2) if t1.name == t2.name => true
         case (_: PrimitiveType, _) => true
         case (_, _: PrimitiveType) => true
-        case (r1: ReferenceType, r2: ReferenceType) => refTypeDistance(r1, r2.name()).isDefined
+        case (r1: ReferenceType, r2: ReferenceType) => isAssignableFrom(r1, r2)
       }
   }
 
-  private def argsMatch(method: Method, args: Seq[Type], frame: JdiFrame): Boolean =
-    method.argumentTypeNames().size() == args.size && areAssignableFrom(method, args, frame)
+  private def argsMatch(method: Method, args: Seq[Type]): Boolean =
+    method.argumentTypeNames().size() == args.size && areAssignableFrom(method, args)
 
   /**
    * @see <a href="https://docs.oracle.com/javase/specs/jls/se20/html/jls-15.html#jls-15.12.2.5">JLS#15.12.2.5. Choosing the most specific method</a>
@@ -107,13 +84,12 @@ private[evaluator] object RuntimeEvaluationHelpers {
       ref: ReferenceType,
       funName: String,
       args: Seq[Type],
-      frame: JdiFrame,
       encode: Boolean = true
   ): Validation[Method] = {
     val candidates: Seq[Method] = ref
       .methodsByName { if (encode) NameTransformer.encode(funName) else funName }
       .asScalaSeq
-      .filter { method => !method.isPrivate && argsMatch(method, args, frame) }
+      .filter { method => !method.isPrivate && argsMatch(method, args) }
       .toSeq
 
     val withoutBridges = candidates.size match {
@@ -128,13 +104,13 @@ private[evaluator] object RuntimeEvaluationHelpers {
 
     finalCandidates
       .toValidation(s"Cannot find a proper method $funName with args types $args on $ref")
-      .map(loadClassOnNeed(_, frame))
+      .map(loadClassOnNeed(_))
   }
 
   /* -------------------------------------------------------------------------- */
   /*                                Type checker                                */
   /* -------------------------------------------------------------------------- */
-  def isAssignableFrom(got: Type, expected: Type, frame: JdiFrame): Boolean = {
+  def isAssignableFrom(got: Type, expected: Type): Boolean = {
     def referenceTypesMatch(got: ReferenceType, expected: ReferenceType) = {
       val assignableFrom = expected.classObject().referenceType().methodsByName("isAssignableFrom").get(0)
       val params = Seq(got.classObject()).asJavaList
@@ -145,21 +121,21 @@ private[evaluator] object RuntimeEvaluationHelpers {
     }
 
     (got, expected) match {
-      case (g: ArrayType, at: ArrayType) => isAssignableFrom(g.componentType, at.componentType, frame)
+      case (g: ArrayType, at: ArrayType) => isAssignableFrom(g.componentType, at.componentType)
       case (g: PrimitiveType, pt: PrimitiveType) => got.equals(pt)
       case (g: ReferenceType, ref: ReferenceType) => referenceTypesMatch(g, ref)
       case (_: VoidType, _: VoidType) => true
 
       case (g: ClassType, pt: PrimitiveType) =>
-        isAssignableFrom(g, frame.getPrimitiveBoxedClass(pt), frame)
+        isAssignableFrom(g, frame.getPrimitiveBoxedClass(pt))
       case (g: PrimitiveType, ct: ReferenceType) =>
-        isAssignableFrom(frame.getPrimitiveBoxedClass(g), ct, frame)
+        isAssignableFrom(frame.getPrimitiveBoxedClass(g), ct)
 
       case _ => false
     }
   }
 
-  def areAssignableFrom(method: Method, args: Seq[Type], frame: JdiFrame): Boolean =
+  def areAssignableFrom(method: Method, args: Seq[Type]): Boolean =
     if (method.argumentTypes().size() != args.size) false
     else
       method
@@ -167,16 +143,16 @@ private[evaluator] object RuntimeEvaluationHelpers {
         .asScalaSeq
         .zip(args)
         .forall { case (expected, got) =>
-          isAssignableFrom(got, expected, frame)
+          isAssignableFrom(got, expected)
         }
 
   /* -------------------------------------------------------------------------- */
   /*                             Looking for $outer                             */
   /* -------------------------------------------------------------------------- */
-  def findOuter(tree: RuntimeTree, frame: JdiFrame): Validation[OuterTree] = {
+  def findOuter(tree: RuntimeTree): Validation[OuterTree] = {
     def outerLookup(ref: ReferenceType) = Validation(ref.fieldByName("$outer")).map(_.`type`()).orElse {
       removeLastInnerTypeFromFQCN(ref.name())
-        .map(name => loadClass(name + "$", frame)) match {
+        .map(name => loadClass(name + "$")) match {
         case Some(Safe(Success(Module(mod: ClassType)))) => Valid(mod)
         case _ => Recoverable(s"Cannot find $$outer for $ref")
       }
@@ -274,21 +250,21 @@ private[evaluator] object RuntimeEvaluationHelpers {
   /* -------------------------------------------------------------------------- */
   /*                                Class helpers                               */
   /* -------------------------------------------------------------------------- */
-  def loadClass(name: String, frame: JdiFrame): Safe[JdiClass] =
+  def loadClass(name: String): Safe[JdiClass] =
     frame.classLoader().flatMap(_.loadClass(name))
 
-  def checkClassStatus(tpe: => Type)(name: String, frame: JdiFrame) = Try(tpe) match {
-    case Failure(_: ClassNotLoadedException) => loadClass(name, frame).extract(_.cls)
-    case Success(value: ClassType) if !value.isPrepared => loadClass(name, frame).extract(_.cls)
+  def checkClassStatus(tpe: => Type)(name: String) = Try(tpe) match {
+    case Failure(_: ClassNotLoadedException) => loadClass(name).extract(_.cls)
+    case Success(value: ClassType) if !value.isPrepared => loadClass(name).extract(_.cls)
     case result => result
   }
 
-  def loadClassOnNeed[T <: TypeComponent](tc: T, frame: JdiFrame): T = {
-    checkClassStatus(tc.`type`)(tc.typeName, frame)
+  def loadClassOnNeed[T <: TypeComponent](tc: T): T = {
+    checkClassStatus(tc.`type`)(tc.typeName)
     tc
   }
 
-  def searchAllClassesFor(name: String, in: Option[String], frame: JdiFrame): Validation[ClassType] = {
+  def searchAllClassesFor(name: String, in: Option[String]): Validation[ClassType] = {
     def fullName = in match {
       case Some(value) if value == name => name // name duplication when implicit apply call
       case Some(value) if value.endsWith("$") => value + name
@@ -318,8 +294,8 @@ private[evaluator] object RuntimeEvaluationHelpers {
             .map(_.reference.referenceType.name)
             .map(_.split('.').init.mkString(".") + "." + name)
             .getOrElse("")
-          loadClass(fullName, frame)
-            .orElse { loadClass(topLevelClassName, frame) }
+          loadClass(fullName)
+            .orElse { loadClass(topLevelClassName) }
             .extract(_.cls)
             .toSeq
         case 1 => candidates
@@ -328,6 +304,6 @@ private[evaluator] object RuntimeEvaluationHelpers {
 
     finalCandidates
       .toValidation(s"Cannot find module/class $name, has it been loaded ?")
-      .map { cls => checkClassStatus(cls)(cls.name(), frame).get.asInstanceOf[ClassType] }
+      .map { cls => checkClassStatus(cls)(cls.name()).get.asInstanceOf[ClassType] }
   }
 }

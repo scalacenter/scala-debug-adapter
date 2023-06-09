@@ -59,8 +59,8 @@ private[internal] class EvaluationProvider(
 
   override def evaluate(expression: String, thread: ThreadReference, depth: Int): CompletableFuture[Value] = {
     val frame = JdiFrame(thread, depth)
-    val evaluator = new RuntimeDefaultEvaluator(frame, logger)
-    val validator = new RuntimePreEvaluationValidator(frame, logger, evaluator)
+    val evaluator = RuntimeDefaultEvaluator(frame, logger)
+    val validator = RuntimePreEvaluationValidator(frame, logger, evaluator)
     val evaluation = for {
       preparedExpression <- prepare(expression, frame, validator)
       evaluation <- evaluate(preparedExpression, frame)
@@ -85,7 +85,7 @@ private[internal] class EvaluationProvider(
       if (breakpoint.getCompiledExpression(locationCode) != null) {
         breakpoint.getCompiledExpression(locationCode).asInstanceOf[Try[PreparedExpression]]
       } else if (breakpoint.containsConditionalExpression) {
-        prepare(breakpoint.getCondition, frame, new RuntimeDefaultValidator(frame, logger))
+        prepare(breakpoint.getCondition, frame, RuntimeDefaultValidator(frame, logger))
       } else if (breakpoint.containsLogpointExpression) {
         prepareLogMessage(breakpoint.getLogMessage, frame)
       } else {
@@ -147,7 +147,7 @@ private[internal] class EvaluationProvider(
     } else {
       val tripleQuote = "\"\"\""
       val expression = s"""println(s$tripleQuote$message$tripleQuote)"""
-      prepare(expression, frame, new RuntimeDefaultValidator(frame, logger))
+      prepare(expression, frame, RuntimeDefaultValidator(frame, logger))
     }
   }
 
@@ -180,7 +180,7 @@ private[internal] class EvaluationProvider(
     expression match {
       case logMessage: PlainLogMessage => messageLogger.log(logMessage, frame)
       case RuntimeExpression(tree) =>
-        new RuntimeDefaultEvaluator(frame, logger).evaluate(tree).getResult.map(_.value)
+        RuntimeDefaultEvaluator(frame, logger).evaluate(tree).getResult.map(_.value)
       case expression: CompiledExpression =>
         val fqcn = frame.current().location.declaringType.name
         for {

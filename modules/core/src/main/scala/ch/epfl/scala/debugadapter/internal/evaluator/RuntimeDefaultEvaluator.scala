@@ -1,9 +1,9 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import ch.epfl.scala.debugadapter.Logger
-import RuntimeEvaluationHelpers.*
 
 class RuntimeDefaultEvaluator(val frame: JdiFrame, val logger: Logger) extends RuntimeEvaluator {
+  val helper = new RuntimeEvaluationHelpers(frame)
   def evaluate(stat: RuntimeEvaluableTree): Safe[JdiValue] =
     eval(stat).map(_.derefIfRef)
 
@@ -96,7 +96,7 @@ class RuntimeDefaultEvaluator(val frame: JdiFrame, val logger: Logger) extends R
   def evaluateModule(tree: ModuleTree): Safe[JdiValue] =
     tree match {
       case TopLevelModuleTree(mod) => Safe(JdiObject(mod.instances(1).get(0), frame.thread))
-      case NestedModuleTree(mod, of) => initializeModule(mod, eval(of))
+      case NestedModuleTree(mod, of) => helper.initializeModule(mod, eval(of))
       // TODO: change the $of attribute to be a Method validated by the validator to avoid crashes at evaluation time
     }
 
@@ -110,4 +110,9 @@ class RuntimeDefaultEvaluator(val frame: JdiFrame, val logger: Logger) extends R
       boxedUnboxedArgs <- loader.boxUnboxOnNeed(tree.method.argumentTypes(), args)
       instance <- JdiClass(tree.`type`, frame.thread).newInstance(tree.method, boxedUnboxedArgs)
     } yield instance
+}
+
+object RuntimeDefaultEvaluator {
+  def apply(frame: JdiFrame, logger: Logger): RuntimeDefaultEvaluator =
+    new RuntimeDefaultEvaluator(frame, logger)
 }
