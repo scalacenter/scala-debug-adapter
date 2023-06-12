@@ -179,12 +179,12 @@ case class StaticMethodTree(
 /* -------------------------------------------------------------------------- */
 /*                                 Class trees                                */
 /* -------------------------------------------------------------------------- */
-case class NewInstanceTree(method: Method, args: Seq[RuntimeEvaluableTree]) extends RuntimeEvaluableTree {
-  override lazy val `type`: ClassType = method.declaringType().asInstanceOf[ClassType]
+case class NewInstanceTree(mt: MethodTree, args: Seq[RuntimeEvaluableTree]) extends RuntimeEvaluableTree {
+  override lazy val `type`: ClassType = mt.method.declaringType().asInstanceOf[ClassType]
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|NewInstanceTree(
-        |${indent}m= $method,
+        |${indent}m= $mt,
         |${indent}args= ${args.map(_.prettyPrint(depth + 1)).mkString(",\n" + indent)}
         |${indent.dropRight(1)})""".stripMargin
   }

@@ -80,7 +80,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
    * @param encode whether to encode the method name or not
    * @return the method, wrapped in a [[Validation]], with its return type loaded and prepared
    */
-  def methodsByNameAndArgs(
+  private def methodsByNameAndArgs(
       ref: ReferenceType,
       funName: String,
       args: Seq[Type],
@@ -109,7 +109,18 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
 
     finalCandidates
       .toValidation(s"Cannot find a proper method $funName with args types $args on $ref")
-      .map(loadClassOnNeed(_))
+      .map { loadClassOnNeed }
+  }
+
+  def methodTreeByNameAndArgs(
+      tree: RuntimeTree,
+      funName: String,
+      args: Seq[RuntimeEvaluableTree],
+      encode: Boolean = true
+  ): Validation[MethodTree] = tree match {
+    case ReferenceTree(ref) =>
+      methodsByNameAndArgs(ref, funName, args.map(_.`type`), encode).flatMap(toStaticIfNeeded(_, args, tree))
+    case _ => Fatal(new IllegalArgumentException(s"Cannot find method $funName on $tree"))
   }
 
   /* -------------------------------------------------------------------------- */
@@ -157,16 +168,17 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
   /*                             Looking for $outer                             */
   /* -------------------------------------------------------------------------- */
   def findOuter(tree: RuntimeTree): Validation[OuterTree] = {
-    def outerLookup(ref: ReferenceType) = Validation(ref.fieldByName("$outer")).map(_.`type`()).orElse {
-      removeLastInnerTypeFromFQCN(ref.name())
-        .map(name => loadClass(name + "$")) match {
-        case Some(Safe(Success(Module(mod: ClassType)))) => Valid(mod)
-        case _ => Recoverable(s"Cannot find $$outer for $ref")
+    def outerLookup(ref: ReferenceType) =
+      Validation(ref.fieldByName("$outer")).map(_.`type`()).orElse {
+        removeLastInnerTypeFromFQCN(ref.name())
+          .map(name => loadClass(name + "$")) match {
+          case Some(Safe(Success(Module(mod)))) => Valid(mod)
+          case _ => Recoverable(s"Cannot find $$outer for $ref")
+        }
       }
-    }
 
     for {
-      ref <- ifReference(tree)
+      ref <- extractReferenceType(tree)
       outer <- outerLookup(ref)
       outerTree <- OuterTree(tree, outer)
     } yield outerTree
@@ -187,16 +199,19 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
   /*                               Useful patterns                              */
   /* -------------------------------------------------------------------------- */
   /* Extract reference if there is */
-  def ifReference(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
-    tree match {
-      case Valid(tree) => ifReference(tree)
-      case e: Invalid => Recoverable(s"Invalid reference: $e")
-    }
-
-  def ifReference(tree: RuntimeTree): Validation[ReferenceType] =
+  def extractReferenceType(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
+    tree.flatMap(extractReferenceType)
+  def extractReferenceType(tree: RuntimeTree): Validation[ReferenceType] =
     tree match {
       case ReferenceTree(ref) => Valid(ref)
       case t => illegalAccess(t, "ReferenceType")
+    }
+
+  def extractArray(tree: Validation[RuntimeTree]): Validation[ArrayType] = tree.flatMap(extractArrayType)
+  def extractArrayType(tree: RuntimeTree): Validation[ArrayType] =
+    tree match {
+      case ArrayTree(arr) => Valid(arr)
+      case t => illegalAccess(t, "ArrayType")
     }
 
   /* Standardize method calls */
@@ -271,7 +286,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     tc
   }
 
-  def searchAllClassesFor(name: String, in: Option[String]): Validation[ClassType] = {
+  def searchAllClassesFor(name: String, in: Option[String]): Validation[ClassTree] = {
     def fullName = in match {
       case Some(value) if value == name => name // name duplication when implicit apply call
       case Some(value) if value.endsWith("$") => value + name
@@ -311,6 +326,6 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
 
     finalCandidates
       .toValidation(s"Cannot find module/class $name, has it been loaded ?")
-      .map { cls => checkClassStatus(cls)(cls.name()).get.asInstanceOf[ClassType] }
+      .map { cls => ClassTree(checkClassStatus(cls)(cls.name()).get.asInstanceOf[ClassType]) }
   }
 }

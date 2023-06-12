@@ -107,8 +107,8 @@ class RuntimeDefaultEvaluator(val frame: JdiFrame, val logger: Logger) extends R
     for {
       args <- tree.args.map(eval).traverse
       loader <- frame.classLoader()
-      boxedUnboxedArgs <- loader.boxUnboxOnNeed(tree.method.argumentTypes(), args)
-      instance <- JdiClass(tree.`type`, frame.thread).newInstance(tree.method, boxedUnboxedArgs)
+      boxedUnboxedArgs <- loader.boxUnboxOnNeed(tree.mt.method.argumentTypes(), args)
+      instance <- JdiClass(tree.`type`, frame.thread).newInstance(tree.mt.method, boxedUnboxedArgs)
     } yield instance
 }
 

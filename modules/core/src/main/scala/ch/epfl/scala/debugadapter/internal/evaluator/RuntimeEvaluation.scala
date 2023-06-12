@@ -103,15 +103,13 @@ trait RuntimeValidator {
   def validateName(value: Term.Name, of: Validation[RuntimeTree]): Validation[RuntimeEvaluableTree]
 
   /**
-   * Find the apply method on the given module, with the given arguments
+   * Find the apply method with the given arguments
    *
-   * @param moduleName
-   * @param on qualifier of the module, might help resolving name conflicts
+   * @param on
    * @param args
    * @return
    */
-  def validateApplyCall(
-      moduleName: String,
+  def validateApply(
       on: RuntimeTree,
       args: Seq[RuntimeEvaluableTree]
   ): Validation[MethodTree]
@@ -124,9 +122,9 @@ trait RuntimeValidator {
    * @param args the argument of the apply method
    * @return
    */
-  def validateImplicitApplyCall(
+  def validateIndirectApply(
       on: RuntimeTree,
-      name: String,
+      name: Term.Name,
       args: Seq[RuntimeEvaluableTree]
   ): Validation[MethodTree]
 
@@ -142,7 +140,7 @@ trait RuntimeValidator {
    */
   def findMethod(
       tree: RuntimeTree,
-      name: String,
+      name: Term.Name,
       args: Seq[RuntimeEvaluableTree]
   ): Validation[MethodTree]
 

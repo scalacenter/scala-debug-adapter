@@ -62,10 +62,20 @@ protected[internal] object RuntimeEvaluatorExtractors {
       }
     }
 
-    def unapply(tree: Validation[RuntimeTree]): Validation[ReferenceType] = {
-      if (tree.isInvalid) Recoverable("An invalid tree cannot be a reference type")
-      else unapply(tree.get)
+    def unapply(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
+      tree.flatMap(unapply)
+  }
+
+  object ArrayTree {
+    def unapply(tree: RuntimeTree): Validation[ArrayType] = {
+      tree.`type` match {
+        case arr: ArrayType => Valid(arr)
+        case _ => Recoverable(s"$tree is not an array type")
+      }
     }
+
+    def unapply(tree: Validation[RuntimeTree]): Validation[ArrayType] =
+      tree.flatMap(unapply)
   }
 
   object IsAnyVal {

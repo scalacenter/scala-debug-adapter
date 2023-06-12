@@ -240,6 +240,17 @@ object RuntimeEvaluatorEnvironments {
        |  def test(i: java.lang.Integer): String = "boxed int"
        |}
        |""".stripMargin
+
+  val arraysSource =
+    """|package example
+       |
+       |object Main {
+       |  def main(args: Array[String]): Unit = {
+       |    val arr = Array(1, 2, 3)
+       |    println("ok")
+       |  }
+       |}
+       |""".stripMargin
 }
 
 abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
@@ -253,6 +264,8 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   lazy val cls = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.cls, "example.Main", scalaVersion)
   lazy val boxingOverloads =
     TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.boxingOverloads, "example.Main", scalaVersion)
+  lazy val arrays =
+    TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.arraysSource, "example.Main", scalaVersion)
 
   protected override def defaultConfig: DebugConfig =
     super.defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly)
@@ -384,8 +397,21 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("f1.foo_v2(\"hello \").bar(42)", "hello 42"),
         Evaluation.success("Foo_v1().toString()", "Foo_v1()"),
         Evaluation.success("f1.foo_v2_apply.bar(42)", "hello 42"),
-        Evaluation.success("inner(42).x", 42)
+        Evaluation.success("inner(42).x", 42),
+        Evaluation.success("list(0).toString()", "0"),
+        Evaluation.failed("list(1)")
       )
+    )
+  }
+
+  test("Should work on arrays") {
+    implicit val debuggee = arrays
+    check(
+      Breakpoint(6),
+      Evaluation.success("arr(0).toString()", 1),
+      Evaluation.success("arr(1).toString()", 2),
+      Evaluation.success("arr(2).toString()", 3),
+      Evaluation.failed("arr(3)")
     )
   }
 

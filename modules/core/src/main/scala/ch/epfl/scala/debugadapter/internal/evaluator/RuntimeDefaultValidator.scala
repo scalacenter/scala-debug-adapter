@@ -10,7 +10,7 @@ import scala.util.Failure
 import scala.util.Success
 
 case class Call(fun: Term, argClause: Term.ArgClause)
-case class PreparedCall(qual: Validation[RuntimeTree], name: String)
+case class PreparedCall(qual: Validation[RuntimeTree], name: Term.Name)
 
 class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends RuntimeValidator {
   val helper = new RuntimeEvaluationHelpers(frame)
@@ -79,21 +79,18 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       of: Validation[RuntimeTree],
       name: String
   ): Validation[RuntimeEvaluableTree] =
-    ifReference(of).flatMap { ref =>
-      for {
-        field <- Validation(ref.fieldByName(name))
-        _ = loadClassOnNeed(field)
-        fieldTree <- toStaticIfNeeded(field, of.get)
-      } yield fieldTree
-    }
+    for {
+      ref <- extractReferenceType(of)
+      field <- Validation(ref.fieldByName(name))
+      _ = loadClassOnNeed(field)
+      fieldTree <- toStaticIfNeeded(field, of.get)
+    } yield fieldTree
 
   def zeroArgMethodTreeByName(
       of: Validation[RuntimeTree],
       name: String
   ): Validation[RuntimeEvaluableTree] =
-    ifReference(of)
-      .flatMap { methodsByNameAndArgs(_, name, List.empty) }
-      .flatMap(toStaticIfNeeded(_, List.empty, of.get))
+    of.flatMap(methodTreeByNameAndArgs(_, name, List.empty))
 
   def validateModule(name: String, of: Option[RuntimeTree]): Validation[RuntimeEvaluableTree] = {
     val moduleName = if (name.endsWith("$")) name else name + "$"
@@ -108,13 +105,13 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
           }.extract
         }
 
-      (isInCompanionClass, moduleCls, of) match {
+      (isInCompanionClass, moduleCls.`type`, of) match {
         case (Some(Success(cls: JdiClass)), _, _) =>
           CompilerRecoverable(s"Cannot access module ${name} from ${ofName}")
-        case (_, Module(module), _) => Valid(TopLevelModuleTree(moduleCls))
-        case (_, _, Some(instance: RuntimeEvaluableTree)) =>
-          if (moduleCls.name().startsWith(instance.`type`.name()))
-            Valid(NestedModuleTree(moduleCls, instance))
+        case (_, Module(module), _) => Valid(TopLevelModuleTree(module))
+        case (_, cls, Some(instance: RuntimeEvaluableTree)) =>
+          if (cls.name().startsWith(instance.`type`.name()))
+            Valid(NestedModuleTree(cls, instance))
           else Recoverable(s"Cannot access module $moduleCls from ${instance.`type`.name()}")
         case _ => Recoverable(s"Cannot access module $moduleCls")
       }
@@ -125,10 +122,10 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
     searchAllClassesFor(name.stripSuffix("$"), of.map(_.`type`.name()))
       .flatMap { cls =>
         of match {
-          case Some(_: RuntimeEvaluableTree) | None => Valid(ClassTree(cls))
-          case Some(_: ClassTree) =>
-            if (cls.isStatic()) Valid(ClassTree(cls))
-            else CompilerRecoverable(s"Cannot access non-static class ${cls.name()}")
+          case Some(_: RuntimeEvaluableTree) | None => Valid(cls)
+          case Some(ct: ClassTree) =>
+            if (ct.`type`.isStatic()) Valid(ct)
+            else CompilerRecoverable(s"Cannot access non-static class ${ct.`type`.name()}")
           // TODO: check if this could not be Fatal
         }
       }
@@ -145,9 +142,9 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
   ): Validation[RuntimeEvaluableTree] = {
     val name = NameTransformer.encode(value.value)
     localVarTreeByName(name)
-      .orElse(fieldTreeByName(of, name))
-      .orElse(zeroArgMethodTreeByName(of, name))
-      .orElse(validateModule(name, of.toOption))
+      .orElse { fieldTreeByName(of, name) }
+      .orElse { zeroArgMethodTreeByName(of, name) }
+      .orElse { validateModule(name, of.toOption) }
       .orElse {
         of
           .flatMap(findOuter(_))
@@ -158,62 +155,48 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
   /* -------------------------------------------------------------------------- */
   /*                              Apply validation                              */
   /* -------------------------------------------------------------------------- */
-  def validateApplyCall(
-      moduleName: String,
+  def validateArrayApply(on: RuntimeTree, args: Seq[RuntimeEvaluableTree]): Validation[MethodTree] =
+    methodTreeByNameAndArgs(on, "apply", args)
+
+  def validateApply(
       on: RuntimeTree,
+      args: Seq[RuntimeEvaluableTree]
+  ): Validation[MethodTree] =
+    methodTreeByNameAndArgs(on, "apply", args)
+
+  def validateIndirectApply(
+      on: RuntimeTree,
+      name: Term.Name,
       args: Seq[RuntimeEvaluableTree]
   ): Validation[MethodTree] =
     for {
-      module <- validateModule(moduleName, Some(on)).orElse(validateClass(moduleName, Some(on)))
-      applyCall <- ifReference(module).flatMap(methodsByNameAndArgs(_, "apply", args.map(_.`type`)))
-      methodTree <- toStaticIfNeeded(applyCall, args, module)
-    } yield methodTree
-
-  def validateImplicitApplyCall(
-      on: RuntimeTree,
-      name: String,
-      args: Seq[RuntimeEvaluableTree]
-  ): Validation[MethodTree] =
-    ifReference(on).flatMap { ref =>
-      on match {
-        case _: RuntimeValidationTree => Recoverable("Cannot apply instance method on a ValidationTree")
-        case eval: RuntimeEvaluableTree =>
-          for {
-            method <- methodsByNameAndArgs(ref, name, List.empty)
-            methodTree = InstanceMethodTree(method, Seq.empty, eval)
-            apply <- validateApplyCall(method.returnTypeName(), methodTree, args)
-          } yield apply
-      }
-    }
+      qualTree <- validateName(name, Valid(on)).orElse(validateClass(name.value, Some(on)))
+      apply <- validateApply(qualTree, args)
+    } yield apply
 
   def findMethod(
       tree: RuntimeTree,
-      name: String,
+      name: Term.Name,
       args: Seq[RuntimeEvaluableTree]
   ): Validation[MethodTree] =
-    ifReference(tree).flatMap { ref =>
-      validateApplyCall(name, tree, args)
-        .orElse {
-          methodsByNameAndArgs(ref, name, args.map(_.`type`))
-            .flatMap(toStaticIfNeeded(_, args, tree))
-        }
-        .orElse(validateImplicitApplyCall(tree, name, args))
-        .orElse(findOuter(tree).flatMap(findMethod(_, name, args)))
-    }
+    methodTreeByNameAndArgs(tree, name.value, args)
+      .orElse { validateIndirectApply(tree, name, args) }
+      .orElse { validateApply(tree, args) }
+      .orElse { findOuter(tree).flatMap(findMethod(_, name, args)) }
 
   def validateMethod(call: Call): Validation[RuntimeEvaluableTree] = {
     lazy val preparedCall = call.fun match {
       case select: Term.Select =>
-        PreparedCall(validateWithClass(select.qual), select.name.value)
-      case name: Term.Name => PreparedCall(thisTree, name.value)
+        PreparedCall(validateWithClass(select.qual), select.name)
+      case name: Term.Name => PreparedCall(thisTree, name)
     }
 
     for {
       args <- call.argClause.map(validate).traverse
       lhs <- preparedCall.qual
       methodTree <-
-        PrimitiveUnaryOpTree(lhs, preparedCall.name)
-          .orElse { PrimitiveBinaryOpTree(lhs, args, preparedCall.name) }
+        PrimitiveUnaryOpTree(lhs, preparedCall.name.value)
+          .orElse { PrimitiveBinaryOpTree(lhs, args, preparedCall.name.value) }
           .orElse { findMethod(lhs, preparedCall.name, args) }
     } yield methodTree
   }
@@ -241,7 +224,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       args <- argClauses.flatMap(_.map(validate(_))).traverse
       outerFqcn = thisTree.toOption.map(_.`type`.name())
       cls <- searchAllClassesFor(name, outerFqcn)
-      method <- methodsByNameAndArgs(cls, "<init>", args.map(_.`type`), encode = false)
+      method <- methodTreeByNameAndArgs(cls, "<init>", args, encode = false)
     } yield NewInstanceTree(method, args)
   }
 }
