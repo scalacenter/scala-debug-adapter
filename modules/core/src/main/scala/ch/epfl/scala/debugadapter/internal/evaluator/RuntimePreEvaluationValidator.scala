@@ -2,8 +2,11 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 
 import ch.epfl.scala.debugadapter.Logger
 
-class RuntimePreEvaluationValidator(frame: JdiFrame, logger: Logger, evaluator: RuntimeDefaultEvaluator)
-    extends RuntimeDefaultValidator(frame, logger) {
+class RuntimePreEvaluationValidator(
+    override val frame: JdiFrame,
+    override val logger: Logger,
+    evaluator: RuntimeEvaluator
+) extends RuntimeDefaultValidator(frame, logger) {
   private def preEvaluate(tree: RuntimeEvaluableTree): Validation[PreEvaluatedTree] = {
     val value = evaluator.evaluate(tree)
     var tpe = value.extract(_.value.`type`)
@@ -31,4 +34,9 @@ class RuntimePreEvaluationValidator(frame: JdiFrame, logger: Logger, evaluator: 
         preEvaluate(tree)
       case tree => Valid(tree)
     }
+}
+
+object RuntimePreEvaluationValidator {
+  def apply(frame: JdiFrame, logger: Logger, evaluator: RuntimeEvaluator): RuntimePreEvaluationValidator =
+    new RuntimePreEvaluationValidator(frame, logger, evaluator)
 }

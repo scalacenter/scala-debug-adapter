@@ -194,7 +194,7 @@ object Evaluation {
   private def assertSuccess(
       expectedResult: Any
   )(response: Either[String, String])(implicit ctx: TestingContext, location: Location): Unit = {
-    if (clue(response).isLeft) println(s"\u001b[31mExpected success, got ${response}\u001b[0m")
+    if (clue(response).isLeft) println(s"\u001b[31mExpected success, got ${response.left}\u001b[0m")
     assert(clue(response).isRight)
     val result = response.toOption.get
     expectedResult match {
