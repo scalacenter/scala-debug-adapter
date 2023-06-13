@@ -1,8 +1,6 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import scala.meta.Term
-import scala.meta.Defn
-import scala.meta.Mod
 import com.sun.jdi._
 
 protected[internal] object RuntimeEvaluatorExtractors {
@@ -11,14 +9,6 @@ protected[internal] object RuntimeEvaluatorExtractors {
       stat match {
         case Term.ApplyInfix.After_4_6_0(_, op, _, _) if (op.value.endsWith(":")) => Some(stat)
         case _ => None
-      }
-  }
-
-  object LazyDefine {
-    def unapply(stat: Defn.Val): Option[Defn.Val] =
-      stat match {
-        case Defn.Val(mods, _, _, _) if (mods.contains(Mod.Lazy)) => None
-        case _ => Some(stat)
       }
   }
 
@@ -32,10 +22,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
     def unapply(cls: JdiClass): Option[ClassType] = unapply(cls.cls)
 
     def unapply(tree: RuntimeTree): Option[RuntimeEvaluableTree] =
-      tree.`type` match {
-        case Module(_) => Some(tree.asInstanceOf[RuntimeEvaluableTree])
-        case _ => None
-      }
+      unapply(tree.`type`).map(_ => tree.asInstanceOf[RuntimeEvaluableTree])
   }
 
   object MethodCall {
@@ -46,9 +33,9 @@ protected[internal] object RuntimeEvaluatorExtractors {
         case oct: OuterClassTree => unapply(oct.inner)
         case OuterModuleTree(module) => unapply(module)
         case _: MethodTree | _: NewInstanceTree => Some(tree)
-        case _: LiteralTree | _: LocalVarTree | _: ThisTree | _: StaticFieldTree | _: ClassTree |
-            _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree | _: TopLevelModuleTree | _: PreEvaluatedTree =>
-          None
+        case _: LiteralTree | _: LocalVarTree | _: PreEvaluatedTree | _: ThisTree => None
+        case _: StaticFieldTree | _: ClassTree | _: TopLevelModuleTree => None
+        case _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree | _: ArrayAccessorTree => None
       }
     def unapply(tree: Validation[RuntimeTree]): Option[RuntimeTree] =
       tree.toOption.filter { unapply(_).isDefined }
@@ -63,18 +50,6 @@ protected[internal] object RuntimeEvaluatorExtractors {
     }
 
     def unapply(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
-      tree.flatMap(unapply)
-  }
-
-  object ArrayTree {
-    def unapply(tree: RuntimeTree): Validation[ArrayType] = {
-      tree.`type` match {
-        case arr: ArrayType => Valid(arr)
-        case _ => Recoverable(s"$tree is not an array type")
-      }
-    }
-
-    def unapply(tree: Validation[RuntimeTree]): Validation[ArrayType] =
       tree.flatMap(unapply)
   }
 

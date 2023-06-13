@@ -139,17 +139,17 @@ object RuntimeEvaluatorEnvironments {
        |  def test(bar: Bar): String = "bar"
        |  def test(baz: Baz): String = "baz"
        |
-       |  def test(foo: Foo, subBar: SubBar): String = "foo, subbar"
+       |  def test(foo: Foo, subBar: SubBar): String = "foo, subBar"
        |  def test(bar: Bar, foo: Foo): String = "bar, foo"
        |
        |  def test(bar: Bar, baz: Baz): String = "bar, baz"
        |
-       |  def test(foo: Foo, subCool: SubCoolTrait): String = "foo, subcool"
-       |  def test(bar: Bar, subCool: SubCoolTrait): String = "bar, subcool"
-       |  def test(baz: Baz, subCool: SubCoolTrait): String = "baz, subcool"
+       |  def test(foo: Foo, subCool: SubCoolTrait): String = "foo, subCool"
+       |  def test(bar: Bar, subCool: SubCoolTrait): String = "bar, subCool"
+       |  def test(baz: Baz, subCool: SubCoolTrait): String = "baz, subCool"
        |
        |  def test(foo: Foo, bar: Bar, baz: Baz): String = "foo, bar, baz"
-       |  def test(bar: Bar, baz: Baz, subBar: SubBar): String = "bar, baz, subbar"
+       |  def test(bar: Bar, baz: Baz, subBar: SubBar): String = "bar, baz, subBar"
        |}
     """.stripMargin
 
@@ -247,6 +247,9 @@ object RuntimeEvaluatorEnvironments {
        |object Main {
        |  def main(args: Array[String]): Unit = {
        |    val arr = Array(1, 2, 3)
+       |    val sh: Short = 2
+       |    val ch: Char = 2
+       |    val by: Byte = 2
        |    println("ok")
        |  }
        |}
@@ -379,12 +382,12 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("test(baz)", "baz"),
         Evaluation.failed("test(bar, subBar)"),
         Evaluation.success("test(bar, baz)", "bar, baz"),
-        Evaluation.success("test(foo, subBar)", "foo, subbar"),
-        Evaluation.success("test(foo, subCool)", "foo, subcool"),
-        Evaluation.success("test(bar, subCool)", "bar, subcool"),
-        Evaluation.success("test(baz, subCool)", "baz, subcool"),
+        Evaluation.success("test(foo, subBar)", "foo, subBar"),
+        Evaluation.success("test(foo, subCool)", "foo, subCool"),
+        Evaluation.success("test(bar, subCool)", "bar, subCool"),
+        Evaluation.success("test(baz, subCool)", "baz, subCool"),
         Evaluation.success("test(foo, bar, baz)", "foo, bar, baz"),
-        Evaluation.success("test(bar, baz, subBar)", "bar, baz, subbar")
+        Evaluation.success("test(bar, baz, subBar)", "bar, baz, subBar")
       )
     )
   }
@@ -407,10 +410,14 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should work on arrays") {
     implicit val debuggee = arrays
     check(
-      Breakpoint(6),
-      Evaluation.success("arr(0).toString()", 1),
-      Evaluation.success("arr(1).toString()", 2),
-      Evaluation.success("arr(2).toString()", 3),
+      Breakpoint(9),
+      Evaluation.success("arr(0)", 1),
+      Evaluation.success("arr(2)", 3),
+      Evaluation.success("arr(sh)", 3),
+      Evaluation.success("arr(ch)", 3),
+      Evaluation.success("arr(by)", 3),
+      Evaluation.success("arr(new Integer(2))", 3),
+      Evaluation.success("arr(new Character('\u0000'))", 1),
       Evaluation.failed("arr(3)")
     )
   }

@@ -90,16 +90,16 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
       if (encode) NameTransformer.encode(funName) else funName
     }.asScalaList
 
-    val candidatesWithoutBoxing = candidates.filter { argsMatch(_, args, boxing = false) }
+    val unboxedCandidates = candidates.filter { argsMatch(_, args, boxing = false) }
 
-    val candidatesWithBoxing = candidatesWithoutBoxing.size match {
+    val boxedCandidates = unboxedCandidates.size match {
       case 0 => candidates.filter { argsMatch(_, args, boxing = true) }
-      case _ => candidatesWithoutBoxing
+      case _ => unboxedCandidates
     }
 
-    val withoutBridges = candidatesWithBoxing.size match {
-      case 0 | 1 => candidatesWithBoxing
-      case _ => candidatesWithBoxing.filterNot(_.isBridge())
+    val withoutBridges = boxedCandidates.size match {
+      case 0 | 1 => boxedCandidates
+      case _ => boxedCandidates.filterNot(_.isBridge())
     }
 
     val finalCandidates = withoutBridges.size match {
@@ -184,34 +184,17 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     } yield outerTree
   }
 
-  def initializeModule(modCls: ClassType, evaluated: Safe[JdiValue]): Safe[JdiValue] = {
-    for {
-      ofValue <- evaluated
-      initMethodName <- Safe(getLastInnerType(modCls.name()).get)
-      instance <- ofValue.value.`type` match {
-        case module if module == modCls => Safe(ofValue)
-        case _ => ofValue.asObject.invoke(initMethodName, Seq.empty)
-      }
-    } yield instance
-  }
-
   /* -------------------------------------------------------------------------- */
   /*                               Useful patterns                              */
   /* -------------------------------------------------------------------------- */
   /* Extract reference if there is */
   def extractReferenceType(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
     tree.flatMap(extractReferenceType)
+
   def extractReferenceType(tree: RuntimeTree): Validation[ReferenceType] =
     tree match {
       case ReferenceTree(ref) => Valid(ref)
       case t => illegalAccess(t, "ReferenceType")
-    }
-
-  def extractArray(tree: Validation[RuntimeTree]): Validation[ArrayType] = tree.flatMap(extractArrayType)
-  def extractArrayType(tree: RuntimeTree): Validation[ArrayType] =
-    tree match {
-      case ArrayTree(arr) => Valid(arr)
-      case t => illegalAccess(t, "ArrayType")
     }
 
   /* Standardize method calls */
@@ -282,7 +265,15 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
   }
 
   def loadClassOnNeed[T <: TypeComponent](tc: T): T = {
-    checkClassStatus(tc.`type`)(tc.typeName)
+    def tpe = tc match {
+      case field: Field => field.`type`
+      case method: Method => method.returnType
+    }
+    val name = tc match {
+      case field: Field => field.typeName()
+      case method: Method => method.returnTypeName()
+    }
+    checkClassStatus(tpe)(name)
     tc
   }
 
@@ -327,5 +318,19 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     finalCandidates
       .toValidation(s"Cannot find module/class $name, has it been loaded ?")
       .map { cls => ClassTree(checkClassStatus(cls)(cls.name()).get.asInstanceOf[ClassType]) }
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /*                              Initialize module                             */
+  /* -------------------------------------------------------------------------- */
+  def initializeModule(modCls: ClassType, evaluated: Safe[JdiValue]): Safe[JdiValue] = {
+    for {
+      ofValue <- evaluated
+      initMethodName <- Safe(getLastInnerType(modCls.name()).get)
+      instance <- ofValue.value.`type` match {
+        case module if module == modCls => Safe(ofValue)
+        case _ => ofValue.asObject.invoke(initMethodName, Seq.empty)
+      }
+    } yield instance
   }
 }

@@ -112,7 +112,7 @@ trait RuntimeValidator {
   def validateApply(
       on: RuntimeTree,
       args: Seq[RuntimeEvaluableTree]
-  ): Validation[MethodTree]
+  ): Validation[RuntimeEvaluableTree]
 
   /**
    * "Unwrap" the apply method hidden by a 0-arg method returning the module
@@ -126,7 +126,7 @@ trait RuntimeValidator {
       on: RuntimeTree,
       name: Term.Name,
       args: Seq[RuntimeEvaluableTree]
-  ): Validation[MethodTree]
+  ): Validation[RuntimeEvaluableTree]
 
   /**
    * Returns a [[MethodTree]] representing the method which name and arguments type match the given ones
@@ -142,7 +142,7 @@ trait RuntimeValidator {
       tree: RuntimeTree,
       name: Term.Name,
       args: Seq[RuntimeEvaluableTree]
-  ): Validation[MethodTree]
+  ): Validation[RuntimeEvaluableTree]
 
   /**
    * @param call the standardize call

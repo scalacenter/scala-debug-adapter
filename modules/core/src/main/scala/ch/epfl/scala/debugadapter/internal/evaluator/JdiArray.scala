@@ -13,6 +13,8 @@ class JdiArray(arrayRef: ArrayReference, thread: ThreadReference) extends JdiObj
   def setValues(values: Seq[JdiValue]): Unit = arrayRef.setValues(values.map(_.value).asJava)
 
   def getValues: Seq[JdiValue] = arrayRef.getValues.asScala.toSeq.map(JdiValue(_, thread))
+
+  def getValue(i: Int): Safe[JdiValue] = Safe(JdiValue(arrayRef.getValue(i), thread))
 }
 
 object JdiArray {
