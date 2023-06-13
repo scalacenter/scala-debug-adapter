@@ -120,7 +120,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
   ): Validation[MethodTree] = tree match {
     case ReferenceTree(ref) =>
       methodsByNameAndArgs(ref, funName, args.map(_.`type`), encode).flatMap(toStaticIfNeeded(_, args, tree))
-    case _ => Fatal(new IllegalArgumentException(s"Cannot find method $funName on $tree"))
+    case _ => Recoverable(new IllegalArgumentException(s"Cannot find method $funName on $tree"))
   }
 
   /* -------------------------------------------------------------------------- */
