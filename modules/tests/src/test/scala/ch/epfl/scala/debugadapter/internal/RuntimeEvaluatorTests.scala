@@ -227,6 +227,19 @@ object RuntimeEvaluatorEnvironments {
        |
        |case class Foo(x: Int)
        |""".stripMargin
+
+  val boxingOverloads =
+    """|package example
+       |
+       |object Main {
+       |  def main(args: Array[String]): Unit = {
+       |    println("ok")
+       |  }
+       |  
+       |  def test(i: Int): String = "primitive int"
+       |  def test(i: java.lang.Integer): String = "boxed int"
+       |}
+       |""".stripMargin
 }
 
 abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
@@ -238,6 +251,8 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.hierarchyOverload, "example.Main", scalaVersion)
   lazy val nested = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.nested, "example.Main", scalaVersion)
   lazy val cls = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.cls, "example.Main", scalaVersion)
+  lazy val boxingOverloads =
+    TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.boxingOverloads, "example.Main", scalaVersion)
 
   protected override def defaultConfig: DebugConfig =
     super.defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly)
@@ -517,7 +532,20 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       )
     )
   }
+
+  test("Should resolve overloads in 2 steps when boxing is available") {
+    implicit val debuggee = boxingOverloads
+    check(
+      Breakpoint(5),
+      Evaluation.success("test(1)", "primitive int"),
+      Evaluation.success("test(new Integer(1))", "boxed int")
+    )
+  }
 }
+
+/* -------------------------------------------------------------------------- */
+/*                        Scala version specific tests                        */
+/* -------------------------------------------------------------------------- */
 
 class Scala212RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`2.12`) {
   test("Should access to wrapping 'object' methods") {

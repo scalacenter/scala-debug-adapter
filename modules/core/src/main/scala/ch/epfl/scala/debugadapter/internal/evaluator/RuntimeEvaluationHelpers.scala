@@ -41,8 +41,8 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
       }
   }
 
-  private def argsMatch(method: Method, args: Seq[Type]): Boolean =
-    method.argumentTypeNames().size() == args.size && areAssignableFrom(method, args)
+  private def argsMatch(method: Method, args: Seq[Type], boxing: Boolean): Boolean =
+    method.argumentTypeNames().size() == args.size && areAssignableFrom(method, args, boxing)
 
   /**
    * @see <a href="https://docs.oracle.com/javase/specs/jls/se20/html/jls-15.html#jls-15.12.2.5">JLS#15.12.2.5. Choosing the most specific method</a>
@@ -86,15 +86,20 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
       args: Seq[Type],
       encode: Boolean = true
   ): Validation[Method] = {
-    val candidates: Seq[Method] = ref
-      .methodsByName { if (encode) NameTransformer.encode(funName) else funName }
-      .asScalaSeq
-      .filter { method => !method.isPrivate && argsMatch(method, args) }
-      .toSeq
+    val candidates: List[Method] = ref.methodsByName {
+      if (encode) NameTransformer.encode(funName) else funName
+    }.asScalaList
 
-    val withoutBridges = candidates.size match {
-      case 0 | 1 => candidates
-      case _ => candidates.filterNot(_.isBridge())
+    val candidatesWithoutBoxing = candidates.filter { argsMatch(_, args, boxing = false) }
+
+    val candidatesWithBoxing = candidatesWithoutBoxing.size match {
+      case 0 => candidates.filter { argsMatch(_, args, boxing = true) }
+      case _ => candidatesWithoutBoxing
+    }
+
+    val withoutBridges = candidatesWithBoxing.size match {
+      case 0 | 1 => candidatesWithBoxing
+      case _ => candidatesWithBoxing.filterNot(_.isBridge())
     }
 
     val finalCandidates = withoutBridges.size match {
@@ -135,15 +140,17 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     }
   }
 
-  def areAssignableFrom(method: Method, args: Seq[Type]): Boolean =
+  def areAssignableFrom(method: Method, args: Seq[Type], boxing: Boolean): Boolean =
     if (method.argumentTypes().size() != args.size) false
     else
       method
         .argumentTypes()
         .asScalaSeq
         .zip(args)
-        .forall { case (expected, got) =>
-          isAssignableFrom(got, expected)
+        .forall {
+          case (_: PrimitiveType, _: ReferenceType) | (_: ReferenceType, _: PrimitiveType) if !boxing => false
+          case (expected, got) =>
+            isAssignableFrom(got, expected)
         }
 
   /* -------------------------------------------------------------------------- */
