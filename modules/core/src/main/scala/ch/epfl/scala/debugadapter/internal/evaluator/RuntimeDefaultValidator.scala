@@ -172,13 +172,20 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       apply <- validateApply(qualTree, args)
     } yield apply
 
+  /*
+   * validateIndirectApply MUST be called before methodTreeByNameAndArgs
+   * That's because at runtime, a inner module is accessible as a 0-arg method,
+   * and if its associated class has not attribute either, when calling the
+   * constructor of the class, methodTreeByNameAndArgs would return its companion
+   * object instead. Look at the test about multiple layers for an example
+   */
   def findMethod(
       tree: RuntimeTree,
       name: Term.Name,
       args: Seq[RuntimeEvaluableTree]
   ): Validation[RuntimeEvaluableTree] =
-    methodTreeByNameAndArgs(tree, name.value, args)
-      .orElse { validateIndirectApply(tree, name, args) }
+    validateIndirectApply(tree, name, args)
+      .orElse { methodTreeByNameAndArgs(tree, name.value, args) }
       .orElse { validateApply(tree, args) }
       .orElse { findOuter(tree).flatMap(findMethod(_, name, args)) }
 
