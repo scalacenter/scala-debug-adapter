@@ -16,6 +16,7 @@ import com.microsoft.java.debug.core.protocol.Types.SourceBreakpoint
 import ch.epfl.scala.debugadapter.DebugConfig
 import scala.concurrent.Future
 import scala.concurrent.Await
+import com.microsoft.java.debug.core.protocol.Types.Variable
 
 abstract class DebugTestSuite extends FunSuite with DebugTest {
   override def munitTimeout: Duration = 120.seconds
@@ -140,6 +141,15 @@ trait DebugTest {
       }
     }
 
+    def evaluateWatchExpression(watch: Watch, assertion: Array[Variable] => Unit): Unit = {
+      println(s"(watch)$$ ${watch.variable}")
+      val localScopeRef = client.scopes(topFrame.id).find(_.name == "Local").map(_.variablesReference)
+      val variable =
+        localScopeRef.flatMap(i => client.variables(i).find(_.name == watch.variable).map(_.variablesReference))
+      val body = variable.map(i => client.variables(i)).getOrElse(Array[Variable]())
+      assertion(body)
+    }
+
     def assertStop(assertion: List[StackFrame] => Unit): Unit = {
       val stopped = client.stopped()
       paused = true
@@ -185,6 +195,8 @@ trait DebugTest {
           )
         }
         Await.result(Future.sequence(evaluations), 64.seconds)
+      case SingleStepAssert(watch: Watch, assertion) =>
+        evaluateWatchExpression(watch, assertion)
     }
     continueIfPaused()
 
