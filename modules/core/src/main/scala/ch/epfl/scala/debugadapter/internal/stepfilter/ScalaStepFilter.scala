@@ -40,7 +40,7 @@ abstract class ScalaStepFilter(scalaVersion: ScalaVersion) extends StepFilter {
     val argumentTypes = method.argumentTypes.asScala.toList
       .map(t => t.name().split("\\.").last)
       .mkString(",")
-    val returnType = method.returnTypeName()
+    val returnType = method.returnTypeName().split("\\.").last
     s"$declaringType.$methodName(${if (argumentTypes.nonEmpty) argumentTypes else ""}): $returnType"
 
   }

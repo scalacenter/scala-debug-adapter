@@ -407,7 +407,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       check(
         Breakpoint(9),
         StepIn.line(4),
-        StepIn.method("String.toString()"),
+        StepIn.method("String.toString(): String"),
         StepIn.line(4),
         StepIn.line(9),
         StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object)"),
@@ -417,7 +417,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
         StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object)"),
         Breakpoint(11),
         StepIn.line(18),
-        StepIn.method("String.toString()"),
+        StepIn.method("String.toString(): String"),
         StepIn.line(18),
         StepIn.line(11),
         StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object)"),
@@ -500,7 +500,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       Breakpoint(10),
       StepIn.method(
         if (isScala3) "ScalaRunTime._toString(x: Product): String"
-        else "ScalaRunTime$._toString(Product): java.lang.String"
+        else "ScalaRunTime$._toString(Product): String"
       ),
       StepOut.line(10),
       Breakpoint(11),
@@ -518,7 +518,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       StepIn.line(15),
       StepIn.line(16),
       StepIn.line(17),
-      if (isScala2) StepIn.method("ScalaRunTime$.typedProductIterator(Product): scala.collection.Iterator")
+      if (isScala2) StepIn.method("ScalaRunTime$.typedProductIterator(Product): Iterator")
       else StepIn.method(if (isScala3) "Product.productIterator: Iterator[Any]" else "Product.productIterator()")
     )
   }
@@ -690,7 +690,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       Breakpoint(31),
       StepIn.line(17),
       Breakpoint(32),
-      StepIn.method("BoxesRunTime.boxToInteger(int): java.lang.Integer"),
+      StepIn.method("BoxesRunTime.boxToInteger(int): Integer"),
       StepOut.line(32),
       StepIn.line(18),
       Breakpoint(33),
@@ -1034,9 +1034,9 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       Breakpoint(5),
       StepIn.method("$less$greater.<init>(): void"),
       Breakpoint(6),
-      StepIn.method(if (isScala3) "<>.m: <>" else "$less$greater.m(): example.$less$greater"),
+      StepIn.method(if (isScala3) "<>.m: <>" else "$less$greater.m(): $less$greater"),
       Breakpoint(7),
-      StepIn.method(if (isScala3) "Main.&(x: <>): String" else "Main$.$amp($less$greater): java.lang.String")
+      StepIn.method(if (isScala3) "Main.&(x: <>): String" else "Main$.$amp($less$greater): String")
     )
   }
 
@@ -1092,13 +1092,13 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       Breakpoint(9),
       StepIn.method(if (isScala3) "LazyRef.initialized: Boolean" else "LazyRef.initialized(): boolean"),
       StepIn.method(
-        if (isScala3) "Main$.foo$lzyINIT1$1(LazyRef): java.lang.String"
-        else "Main$.foo$lzycompute$1(LazyRef): java.lang.String"
+        if (isScala3) "Main$.foo$lzyINIT1$1(LazyRef): String"
+        else "Main$.foo$lzycompute$1(LazyRef): String"
       ),
       StepOut.line(9),
       Breakpoint(10),
       StepIn.method(if (isScala3) "LazyRef.initialized: Boolean" else "LazyRef.initialized(): boolean"),
-      StepIn.method(if (isScala3) "LazyRef.value: T" else "LazyRef.value(): java.lang.Object"),
+      StepIn.method(if (isScala3) "LazyRef.value: T" else "LazyRef.value(): Object"),
       StepIn.line(10)
     )
   }
