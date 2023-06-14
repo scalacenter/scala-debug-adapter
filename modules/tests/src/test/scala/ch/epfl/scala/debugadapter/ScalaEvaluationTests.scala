@@ -2132,7 +2132,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("brace-less syntax: evaluate on method definition") {
+  test("brace-less syntax: on method definition") {
     val source =
       """|package example
          |class Foo:
@@ -2191,7 +2191,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("brace-less syntax: evaluate in default arguments") {
+  test("brace-less syntax: on default argument") {
     val source =
       """|package example
          |object Main:
@@ -2207,7 +2207,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     check(Breakpoint(7), Evaluation.success("x + 1", 4))
   }
 
-  test("brace-less syntax: evaluate nested method") {
+  test("brace-less syntax: nested method") {
     val source =
       """|package example
          |class Foo:
@@ -2238,7 +2238,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("brace-less syntax: evaluate tail-rec function") {
+  test("brace-less syntax: tail-rec function") {
     val source =
       """|package example
          |object Main:
@@ -2255,7 +2255,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     check(Breakpoint(6), Evaluation.success("f(x)", 2))
   }
 
-  test("evaluate inline def") {
+  test("inline def") {
     val source =
       """|package example
          |
@@ -2282,7 +2282,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("evaluate macro def") {
+  test("macro def") {
     val mainSource =
       """|package example
          |
@@ -2334,7 +2334,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("evaluate expression involving enums") {
+  test("enums") {
     val source =
       """|package example
          |
@@ -2381,7 +2381,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("evaluate instance of local class in method of value class") {
+  test("instance of local class in method of value class") {
     // only Scala 3 because:
     // "implementation restriction: nested class is not allowed in value class
     // This restriction is planned to be removed in subsequent releases."
@@ -2421,7 +2421,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("should use explicit nulls") {
+  test("support of -Yexplicit-nulls") {
     val source =
       """|package example
          |
