@@ -20,7 +20,7 @@ class RuntimeDefaultEvaluator(val frame: JdiFrame, val logger: Logger) extends R
       case staticField: StaticFieldTree => evaluateStaticField(staticField)
       case instance: NewInstanceTree => instantiate(instance)
       case method: InstanceMethodTree => invoke(method)
-      case array: ArrayAccessorTree => evaluateArrayElement(array)
+      case array: ArrayElemTree => evaluateArrayElement(array)
       case staticMethod: StaticMethodTree => invokeStatic(staticMethod)
       case outer: OuterTree => evaluateOuter(outer)
     }
@@ -106,21 +106,20 @@ class RuntimeDefaultEvaluator(val frame: JdiFrame, val logger: Logger) extends R
   /* -------------------------------------------------------------------------- */
   def instantiate(tree: NewInstanceTree): Safe[JdiObject] =
     for {
-      args <- tree.args.map(eval).traverse
+      args <- tree.init.args.map(eval).traverse
       loader <- frame.classLoader()
-      boxedUnboxedArgs <- loader.boxUnboxOnNeed(tree.mt.method.argumentTypes(), args)
-      instance <- JdiClass(tree.`type`, frame.thread).newInstance(tree.mt.method, boxedUnboxedArgs)
+      boxedUnboxedArgs <- loader.boxUnboxOnNeed(tree.init.method.argumentTypes(), args)
+      instance <- JdiClass(tree.`type`, frame.thread).newInstance(tree.init.method, boxedUnboxedArgs)
     } yield instance
 
   /* -------------------------------------------------------------------------- */
   /*                          Array accessor evaluation                         */
   /* -------------------------------------------------------------------------- */
-  def evaluateArrayElement(tree: ArrayAccessorTree): Safe[JdiValue] =
+  def evaluateArrayElement(tree: ArrayElemTree): Safe[JdiValue] =
     for {
       array <- eval(tree.array)
       index <- eval(tree.index).flatMap(_.unboxIfPrimitive).flatMap(_.toInt)
-      result <- array.asArray.getValue(index)
-    } yield result
+    } yield array.asArray.getValue(index)
 }
 
 object RuntimeDefaultEvaluator {

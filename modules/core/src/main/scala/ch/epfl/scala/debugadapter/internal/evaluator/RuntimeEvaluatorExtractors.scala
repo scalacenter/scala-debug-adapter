@@ -35,7 +35,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
         case _: MethodTree | _: NewInstanceTree => Some(tree)
         case _: LiteralTree | _: LocalVarTree | _: PreEvaluatedTree | _: ThisTree => None
         case _: StaticFieldTree | _: ClassTree | _: TopLevelModuleTree => None
-        case _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree | _: ArrayAccessorTree => None
+        case _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree | _: ArrayElemTree => None
       }
     def unapply(tree: Validation[RuntimeTree]): Option[RuntimeTree] =
       tree.toOption.filter { unapply(_).isDefined }

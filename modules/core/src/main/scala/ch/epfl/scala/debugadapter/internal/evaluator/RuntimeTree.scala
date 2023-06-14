@@ -23,6 +23,7 @@ sealed trait ModuleTree extends RuntimeEvaluableTree with TypeTree
 
 sealed trait MethodTree extends RuntimeEvaluableTree {
   def method: Method
+  def args: Seq[RuntimeEvaluableTree]
 }
 
 sealed trait FieldTree extends RuntimeEvaluableTree {
@@ -125,7 +126,7 @@ object PrimitiveBinaryOpTree {
     }
 }
 
-case class ArrayAccessorTree private (array: RuntimeEvaluableTree, index: RuntimeEvaluableTree, `type`: Type)
+case class ArrayElemTree private (array: RuntimeEvaluableTree, index: RuntimeEvaluableTree, `type`: Type)
     extends RuntimeEvaluableTree {
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
@@ -136,8 +137,8 @@ case class ArrayAccessorTree private (array: RuntimeEvaluableTree, index: Runtim
   }
 }
 
-object ArrayAccessorTree {
-  def apply(tree: RuntimeTree, funName: String, index: Seq[RuntimeEvaluableTree]): Validation[ArrayAccessorTree] = {
+object ArrayElemTree {
+  def apply(tree: RuntimeTree, funName: String, index: Seq[RuntimeEvaluableTree]): Validation[ArrayElemTree] = {
     val integerTypes = Seq("java.lang.Integer", "java.lang.Short", "java.lang.Byte", "java.lang.Character")
     if (funName != "apply") Recoverable("Not an array accessor")
     else if (index.size < 1 || index.size > 1) Recoverable("Array accessor must have one argument")
@@ -146,9 +147,9 @@ object ArrayAccessorTree {
         case (tree: RuntimeEvaluableTree, arr: ArrayType) =>
           index.head.`type` match {
             case idx @ (_: IntegerType | _: ShortType | _: ByteType | _: CharType) =>
-              Valid(new ArrayAccessorTree(tree, index.head, arr.componentType()))
+              Valid(new ArrayElemTree(tree, index.head, arr.componentType()))
             case ref: ReferenceType if integerTypes.contains(ref.name) =>
-              Valid(new ArrayAccessorTree(tree, index.head, arr.componentType()))
+              Valid(new ArrayElemTree(tree, index.head, arr.componentType()))
             case _ => Recoverable("Array index must be an integer")
           }
         case _ => Recoverable("Not an array accessor")
@@ -210,13 +211,12 @@ case class StaticMethodTree(
 /* -------------------------------------------------------------------------- */
 /*                                 Class trees                                */
 /* -------------------------------------------------------------------------- */
-case class NewInstanceTree(mt: MethodTree, args: Seq[RuntimeEvaluableTree]) extends RuntimeEvaluableTree {
-  override lazy val `type`: ClassType = mt.method.declaringType().asInstanceOf[ClassType]
+case class NewInstanceTree(init: MethodTree) extends RuntimeEvaluableTree {
+  override lazy val `type`: ClassType = init.method.declaringType().asInstanceOf[ClassType]
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|NewInstanceTree(
-        |${indent}m= $mt,
-        |${indent}args= ${args.map(_.prettyPrint(depth + 1)).mkString(",\n" + indent)}
+        |${indent}init= $init,
         |${indent.dropRight(1)})""".stripMargin
   }
 }
