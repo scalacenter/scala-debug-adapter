@@ -5,9 +5,9 @@ import ch.epfl.scala.debugadapter.Logger
 object NoopLogger extends Logger {
   override def debug(msg: => String): Unit = ()
   override def info(msg: => String): Unit = ()
-  override def warn(msg: => String): Unit = System.err.println(msg)
-  override def error(msg: => String): Unit = System.err.println(msg)
-  override def trace(t: => Throwable): Unit = t.printStackTrace()
+  override def warn(msg: => String): Unit = ()
+  override def error(msg: => String): Unit = ()
+  override def trace(t: => Throwable): Unit = ()
 }
 
 /**
