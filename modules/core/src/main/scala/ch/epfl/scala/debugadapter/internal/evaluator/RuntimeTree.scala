@@ -216,7 +216,7 @@ case class NewInstanceTree(init: MethodTree) extends RuntimeEvaluableTree {
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|NewInstanceTree(
-        |${indent}init= $init,
+        |${indent}init= ${init.prettyPrint(depth + 1)}
         |${indent.dropRight(1)})""".stripMargin
   }
 }

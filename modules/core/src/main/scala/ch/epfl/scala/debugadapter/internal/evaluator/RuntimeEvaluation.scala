@@ -98,50 +98,12 @@ trait RuntimeValidator {
    * @param of the potential parent of the class, can be another [[ClassTree]]
    * @return a [[ClassTree]] representing the class
    */
-  def validateClass(name: String, of: Option[RuntimeTree]): Validation[ClassTree]
+  def validateClass(name: String, of: Validation[RuntimeTree]): Validation[ClassTree]
 
-  def validateName(value: Term.Name, of: Validation[RuntimeTree]): Validation[RuntimeEvaluableTree]
-
-  /**
-   * Find the apply method with the given arguments
-   *
-   * @param on
-   * @param args
-   * @return
-   */
-  def validateApply(
-      on: RuntimeTree,
-      args: Seq[RuntimeEvaluableTree]
-  ): Validation[RuntimeEvaluableTree]
-
-  /**
-   * "Unwrap" the apply method hidden by a 0-arg method returning the module
-   *
-   * @param on the tree on which the 0-arg method is called
-   * @param name the name of the 0-arg method
-   * @param args the argument of the apply method
-   * @return
-   */
-  def validateIndirectApply(
-      on: RuntimeTree,
-      name: Term.Name,
-      args: Seq[RuntimeEvaluableTree]
-  ): Validation[RuntimeEvaluableTree]
-
-  /**
-   * Returns a [[MethodTree]] representing the method which name and arguments type match the given ones
-   *
-   * If none are found, look for apply calls (explicit or implicit)
-   *
-   * @param tree
-   * @param name
-   * @param args
-   * @return a [[MethodTree]] representing the method
-   */
-  def findMethod(
-      tree: RuntimeTree,
-      name: Term.Name,
-      args: Seq[RuntimeEvaluableTree]
+  def validateName(
+      value: String,
+      of: Validation[RuntimeTree],
+      methodFirst: Boolean = false
   ): Validation[RuntimeEvaluableTree]
 
   /**
@@ -149,8 +111,6 @@ trait RuntimeValidator {
    * @return a [[PrimitiveBinaryOpTree]] or [[PrimitiveUnaryOpTree]] if the method is primitive. Otherwise, returns a [[MethodTree]] representing the call
    */
   def validateMethod(call: Call): Validation[RuntimeEvaluableTree]
-
-  def getSelectedTerm(of: RuntimeTree, name: String): Validation[RuntimeEvaluableTree]
 
   def validateSelect(select: Term.Select): Validation[RuntimeEvaluableTree]
 
