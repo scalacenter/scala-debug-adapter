@@ -1,10 +1,13 @@
 package ch.epfl.scala.debugadapter.testfmk
 
-import java.nio.file.Path
 import com.microsoft.java.debug.core.protocol.Types.StackFrame
-import DebugStepAssert.*
 import munit.Assertions.*
 import munit.Location
+
+import java.nio.file.Path
+import scala.Console.*
+
+import DebugStepAssert.*
 
 sealed trait DebugStepAssert
 final case class SingleStepAssert[T](step: DebugStep[T], assertion: T => Unit) extends DebugStepAssert
@@ -139,24 +142,21 @@ object Evaluation {
   }
 
   private def assertFailed(response: Either[String, String]): Unit =
-    assert(response.isLeft)
+    assert(response.isLeft, clue = s"Expected error, got ${response.right.get}")
 
   private def assertFailed(assertion: String => Unit)(response: Either[String, String]): Unit = {
-    assert(response.isLeft)
+    assertFailed(response)
     val error = response.left.toOption.get
     assertion(error)
   }
 
-  private def assertFailed(expectedError: String)(response: Either[String, String]): Unit = {
-    assert(clue(response).isLeft)
-    val error = response.left.toOption.get
-    assert(clue(error).contains(clue(expectedError)))
-  }
+  private def assertFailed(expectedError: String)(response: Either[String, String]): Unit =
+    assertFailed(error => assert(clue(error).contains(clue(expectedError))))(response)
 
   private def assertIgnore(
       expected: String
   )(response: Either[String, String])(implicit ctx: TestingContext): Unit = {
-    println(s"TODO fix in ${ctx.scalaVersion}: expected $expected")
+    println(s"${YELLOW}TODO fix in ${ctx.scalaVersion}: expected $expected$RESET")
   }
 
   private def assertSuccess(assertion: String => Unit)(response: Either[String, String]): Unit = {
@@ -168,7 +168,7 @@ object Evaluation {
   private def assertSuccess(
       expectedResult: Any
   )(response: Either[String, String])(implicit ctx: TestingContext, location: Location): Unit = {
-    assert(clue(response).isRight)
+    assert(clue(response).isRight, clue = s"Expected success, got ${response.left}")
     val result = response.toOption.get
     expectedResult match {
       case ObjectRef(clsName) =>
