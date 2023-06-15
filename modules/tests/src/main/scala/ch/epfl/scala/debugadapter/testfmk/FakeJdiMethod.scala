@@ -78,13 +78,24 @@ final case class FakeJdiMethod(
 }
 
 object FakeJdiMethod {
-  def apply(declaringType: String, name: String)(arguments: (String, String)*)(
-      returnType: String = "void"
-  ): FakeJdiMethod =
-    FakeJdiMethod(
-      FakeJdiType(declaringType),
-      name,
-      arguments.map { case (name, typ) => FakeJdiLocalVariable(name, FakeJdiType(typ)): LocalVariable }.toList.asJava,
-      FakeJdiType(returnType)
-    )
+
+  def apply(declaringType: String, javaSig: String): FakeJdiMethod = {
+    val parts = javaSig.split(Array('(', ')', ',')).filter(_.nonEmpty)
+
+    def typeAndName(p: String): (String, String) = {
+      val parts = p.split(' ').filter(_.nonEmpty)
+      assert(parts.size == 2)
+      (parts(0), parts(1))
+    }
+
+    val (returnType, name) = typeAndName(parts(0))
+    val args = parts
+      .drop(1)
+      .map { p =>
+        val (tpe, name) = typeAndName(p)
+        FakeJdiLocalVariable(name, FakeJdiType(tpe)): LocalVariable
+      }
+    FakeJdiMethod(FakeJdiType(declaringType), name, args.toList.asJava, FakeJdiType(returnType))
+  }
+
 }

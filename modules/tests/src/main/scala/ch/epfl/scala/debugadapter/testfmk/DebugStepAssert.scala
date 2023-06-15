@@ -161,7 +161,7 @@ object Evaluation {
   }
 
   private def assertFailed(response: Either[String, String]): Unit =
-    assert(response.isLeft, clue = s"Expected error, got ${response.right.get}$RESET")
+    assert(response.isLeft, clue = s"Expected error, got ${response.right.toOption.get}$RESET")
 
   private def assertFailed(assertion: String => Unit)(response: Either[String, String]): Unit = {
     assertFailed(response)

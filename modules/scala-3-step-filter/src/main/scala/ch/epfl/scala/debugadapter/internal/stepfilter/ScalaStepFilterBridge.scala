@@ -33,108 +33,18 @@ class ScalaStepFilterBridge(
 
   private def warn(msg: String): Unit = warnLogger.accept(msg)
 
+  private def throwOrWarn(message: String): Unit =
+    throwOrWarn(new Exception(message))
+
   private def throwOrWarn(exception: Throwable): Unit =
-    if (testMode) throw exception
+    if testMode then throw exception
     else exception.getMessage
 
-  def formatType(t: Type): String = {
-    t match {
-
-      case t: MethodType => {
-        val isreturnType = t.resultType match
-          case _: MethodType => false
-          case _: PolyType => false
-          case _ => true
-
-        t.paramTypes
-          .zip(t.paramNames)
-          .map((x, y) => y.toString() + ": " + formatType(x))
-          .mkString("(", ", ", ")")
-          + (if (isreturnType) ": " else "") + formatType(t.resultType)
-
-      }
-      case t: TypeRef => {
-        val optionalPrefix = t.prefix match
-          case prefix: TypeRef => formatType(prefix) + "."
-          case prefix: TermParamRef => formatType(prefix) + "."
-          case prefix: SuperType => "super."
-          case _ => ""
-        optionalPrefix + t.name.toString()
-
-      }
-
-      case t: AppliedType =>
-        val a = formatType(t.tycon)
-
-        if (isFunction(t.tycon)) {
-
-          (if (t.args.size != 2) "(" else "") + t.args.init
-            .map(y => formatType(y))
-            .mkString(",") + (if (t.args.size != 2) ")" else "") + " => " + formatType(t.args.last)
-        } else if (isAndOrOr(t.tycon)) {
-
-          t.args.map(t => formatType(t)).reduce((x, y) => x + a + y)
-
-        } else
-          a + "[" + t.args
-            .map(y => formatType(y))
-            .reduce((x, y) => x + "," + y) + "]"
-
-      case k: PolyType => {
-
-        "[" + k.paramNames.map(t => t.toString).mkString(", ") + "]" + formatType(
-          k.resultType
-        )
-
-      }
-      case t: OrType =>
-        formatType(t.first) + "|" + formatType(t.second)
-      case t: AndType =>
-        formatType(t.first) + "&" + formatType(t.second)
-      case t: ThisType => formatType(t.tref)
-      case t: TermRefinement => formatType(t.parent) + " { ... }"
-      case t: AnnotatedType => formatType(t.typ)
-      case t: TypeParamRef => t.toString
-      case t: TermRef => formatType(t.underlying)
-      case t: ConstantType => t.value.value.toString()
-      case t: ByNameType => "=> " + formatType(t.resultType)
-      case t: TermParamRef => t.paramName.toString()
-      case t: TypeRefinement => formatType(t.parent) + " { ... }"
-      case _: WildcardTypeBounds => "?"
-      case t: RecType => formatType(t.parent)
-      case t: TypeLambda =>
-        "[" + t.paramNames.map(t => t.toString).reduce((x, y) => x + "," + y) + "]" + " =>> " + formatType(
-          t.resultType
-        )
-
-    }
-  }
-  def formatSymbol(sym: Symbol): String =
-    sym.owner match
-      case owner: TermOrTypeSymbol => s"${formatSymbol(owner)}.${sym.name}"
-      case owner: PackageSymbol => s"${sym.name}"
-
-  def isFunction(tpe: Type): Boolean =
-    tpe match
-      case ref: TypeRef => {
-        ref.prefix match
-          case t: PackageRef =>
-            (ref.name.toString.startsWith("Function") & t.fullyQualifiedName.toString().equals("scala"))
-
-          case _ => { false }
-      }
-      case _ => false
-  def isAndOrOr(tpe: Type): Boolean =
-    tpe match
-      case ref: TypeRef => {
-        ref.prefix match
-          case t: PackageRef =>
-            (ref.name.toString == "|" || ref.name.toString == "&") &&
-            t.fullyQualifiedName.toString == "scala"
-
-          case _ => { false }
-      }
-      case _ => false
+  def skipMethod(obj: Any): Boolean =
+    findSymbolImpl(obj) match
+      case Failure(exception) => throwOrWarn(exception); false
+      case Success(Some(symbol)) => skip(symbol)
+      case Success(None) => true
 
   def formatMethodSig(obj: Any): Optional[String] =
     val method = jdi.Method(obj)
@@ -145,15 +55,8 @@ class ScalaStepFilterBridge(
         case _ => true
       }
       val optionalString = if (notMethodType) ": " else ""
-
-    s"${formatSymbol(t)}${optionalString}${formatType(t.declaredType)}"
-
+      s"${formatSymbol(t)}${optionalString}${formatType(t.declaredType)}"
     }.asJava
-  def skipMethod(obj: Any): Boolean =
-    findSymbolImpl(obj) match
-      case Failure(exception) => throwOrWarn(exception); false
-      case Success(Some(symbol)) => skip(symbol)
-      case Success(None) => true
 
   private[stepfilter] def findSymbol(obj: Any): Option[TermSymbol] =
     findSymbolImpl(obj).get
@@ -163,7 +66,6 @@ class ScalaStepFilterBridge(
     val fqcn = method.declaringType.name
     findDeclaringType(fqcn, method.isExtensionMethod) match
       case None =>
-        println(s"${method.declaringType.name}.${method.name}")
         Failure(Exception(s"Cannot find Scala symbol of $fqcn"))
       case Some(declaringType) =>
         val matchingSymbols =
@@ -178,13 +80,116 @@ class ScalaStepFilterBridge(
           )
           matchingSymbols.foreach(sym => builder.append(s"\n$sym"))
           Failure(Exception(builder.toString))
+        else Success(matchingSymbols.headOption)
 
-        Success(matchingSymbols.headOption)
+  def formatType(t: Type): String =
+    t match
+      case t: MethodType =>
+        val params = t.paramNames
+          .zip(t.paramTypes)
+          .map((n, t) => s"$n: ${formatType(t)}")
+          .mkString(", ")
+        val sep = if t.resultType.isInstanceOf[MethodicType] then "" else ": "
+        val result = formatType(t.resultType)
+        s"($params)$sep$result"
+      case t: TypeRef => formatPrefix(t.prefix) + t.name
+      case t: AppliedType if isFunction(t.tycon) =>
+        val args = t.args.init.map(formatType).mkString(",")
+        val result = formatType(t.args.last)
+        if t.args.size > 2 then s"($args) => $result" else s"$args => $result"
+      case t: AppliedType if isAndOrOr(t.tycon) =>
+        val tycon = formatType(t.tycon)
+        t.args.map(formatType).mkString(s" $tycon ")
+      case t: AppliedType =>
+        val tycon = formatType(t.tycon)
+        val args = t.args.map(formatType).mkString(", ")
+        s"$tycon[$args]"
+      case t: PolyType =>
+        val args = t.paramNames.mkString(", ")
+        val sep = if t.resultType.isInstanceOf[MethodicType] then "" else ": "
+        val result = formatType(t.resultType)
+        s"[$args]$sep$result"
+      case t: OrType =>
+        val first = formatType(t.first)
+        val second = formatType(t.second)
+        s"$first | $second"
+      case t: AndType =>
+        val first = formatType(t.first)
+        val second = formatType(t.second)
+        s"$first & $second"
+      case t: ThisType => formatType(t.tref)
+      case t: TermRefinement => formatType(t.parent) + " {...}"
+      case t: AnnotatedType => formatType(t.typ)
+      case t: TypeParamRef => t.paramName.toString
+      case t: TermParamRef => formatPrefix(t) + "type"
+      case t: TermRef => formatPrefix(t) + "type"
+      case t: ConstantType =>
+        t.value.value match
+          case str: String => s"\"$str\""
+          case t: Type =>
+            // to reproduce this we should try `val x = classOf[A]`
+            s"classOf[${formatType(t)}]"
+          case v => v.toString
+      case t: ByNameType => s"=> " + formatType(t.resultType)
+      case t: TypeRefinement => formatType(t.parent) + " {...}"
+      case _: WildcardTypeBounds => "?"
+      case t: RecType => formatType(t.parent)
+      case t: TypeLambda =>
+        val args = t.paramNames.map(t => t.toString).mkString(", ")
+        val result = formatType(t.resultType)
+        s"[$args] =>> $result"
+      case t @ (_: RecThis | _: SkolemType | _: SuperType | _: MatchType | _: CustomTransientGroundType |
+          _: PackageRef) =>
+        throwOrWarn(s"Cannot format type ${t.getClass.getName}")
+        "<unsupported>"
 
-  private[stepfilter] def extractScalaTerms(
-      fqcn: String,
-      isExtensionMethod: Boolean
-  ): Seq[TermSymbol] =
+  private def formatPrefix(p: Prefix): String =
+    val prefix = p match
+      case NoPrefix => ""
+      case p: TermRef if isScalaPredef(p) => ""
+      case p: TermRef if isPackageObject(p) => ""
+      case p: TermRef => formatPrefix(p.prefix) + p.name
+      case p: TermParamRef => p.paramName.toString
+      case p: PackageRef => ""
+      case p: ThisType => ""
+      case t: Type => formatType(t)
+
+    if prefix.nonEmpty then s"$prefix." else prefix
+
+  private def formatSymbol(sym: Symbol): String =
+    val prefix =
+      sym.owner match
+        case owner: TermOrTypeSymbol => formatSymbol(owner)
+        case owner: PackageSymbol => ""
+    if prefix.isEmpty then sym.name.toString else s"$prefix.${sym.name}"
+
+  private def isPackageObject(p: TermRef): Boolean =
+    val name = p.name.toString
+    name == "package" || name.endsWith("$package")
+
+  private def isScalaPredef(ref: TermRef): Boolean =
+    isScalaPackage(ref.prefix) && ref.name.toString == "Predef"
+
+  private def isFunction(tpe: Type): Boolean =
+    tpe match
+      case ref: TypeRef =>
+        isScalaPackage(ref.prefix) && ref.name.toString.startsWith("Function")
+      case _ => false
+
+  // TODO test all symbolic or infix TypeRef
+  private def isAndOrOr(tpe: Type): Boolean =
+    tpe match
+      case ref: TypeRef =>
+        val name = ref.name.toString
+        isScalaPackage(ref.prefix) && (name == "|" || name == "&")
+      case _ => false
+
+  private def isScalaPackage(prefix: Prefix): Boolean =
+    prefix match
+      case p: PackageRef => p.fullyQualifiedName.toString == "scala"
+      case _ => false
+
+  private def extractScalaTerms(fqcn: String, isExtensionMethod: Boolean): Seq[TermSymbol] =
     for
       declaringType <- findDeclaringType(fqcn, isExtensionMethod).toSeq
       term <- declaringType.declarations
@@ -222,7 +227,7 @@ class ScalaStepFilterBridge(
   private def matchSymbol(method: jdi.Method, symbol: TermSymbol): Boolean =
     matchTargetName(method, symbol) && matchSignature(method, symbol)
 
-  def matchTargetName(method: jdi.Method, symbol: TermSymbol): Boolean =
+  private def matchTargetName(method: jdi.Method, symbol: TermSymbol): Boolean =
     val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
     // if an inner accesses a private method, the backend makes the method public
     // and prefixes its name with the full class name.
@@ -232,8 +237,8 @@ class ScalaStepFilterBridge(
     if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
     else encodedScalaName == expectedName
 
-  def matchSignature(method: jdi.Method, symbol: TermSymbol): Boolean =
-    try {
+  private def matchSignature(method: jdi.Method, symbol: TermSymbol): Boolean =
+    try
       symbol.signedName match
         case SignedName(_, sig, _) =>
           val javaArgs = method.arguments.headOption.map(_.name) match
@@ -243,21 +248,15 @@ class ScalaStepFilterBridge(
           method.returnType.forall(matchType(sig.resSig, _))
         case _ =>
           true // TODO compare symbol.declaredType
-    } catch {
+    catch
       case e: UnsupportedOperationException =>
         warn(e.getMessage)
         true
-    }
 
-  private def matchArguments(
-      scalaArgs: Seq[ParamSig],
-      javaArgs: Seq[jdi.LocalVariable]
-  ): Boolean =
+  private def matchArguments(scalaArgs: Seq[ParamSig], javaArgs: Seq[jdi.LocalVariable]): Boolean =
     scalaArgs
       .collect { case termSig: ParamSig.Term => termSig }
-      .corresponds(javaArgs) { (scalaArg, javaArg) =>
-        matchType(scalaArg.typ, javaArg.`type`)
-      }
+      .corresponds(javaArgs) { (scalaArg, javaArg) => matchType(scalaArg.typ, javaArg.`type`) }
 
   private val javaToScala: Map[String, String] = Map(
     "scala.Boolean" -> "boolean",
