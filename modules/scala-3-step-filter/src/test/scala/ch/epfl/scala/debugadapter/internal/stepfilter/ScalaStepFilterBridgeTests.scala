@@ -672,6 +672,28 @@ abstract class ScalaStepFilterBridgeTests(val scalaVersion: ScalaVersion) extend
     stepFilter.assertFormat("example.Main$", "example.Foo foo()", "Main.foo: Foo[[X] =>> Either[X, Int]]")
   }
 
+  test("package object") {
+    val source =
+      """|package object example {
+         |  def foo: String = ???
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    val stepFilter = getStepFilter(debuggee)
+    stepFilter.assertFormat("example.package", "java.lang.String foo()", "example.foo: String")
+  }
+
+  test("top-level definition".only) {
+    val source =
+      """|package example
+         |
+         |def foo: String = ???
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    val stepFilter = getStepFilter(debuggee)
+    stepFilter.assertFormat("example.example$package", "java.lang.String foo()", "example.foo: String")
+  }
+
   private def getStepFilter(debuggee: Debuggee): ScalaStepFilterBridge =
     val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
       case Java8(_, classJars, _) => classJars

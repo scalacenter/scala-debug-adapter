@@ -147,7 +147,7 @@ class ScalaStepFilterBridge(
     val prefix = p match
       case NoPrefix => ""
       case p: TermRef if isScalaPredef(p) => ""
-      case p: TermRef if isPackageObject(p) => ""
+      case p: TermRef if isPackageObject(p.name) => ""
       case p: TermRef => formatPrefix(p.prefix) + p.name
       case p: TermParamRef => p.paramName.toString
       case p: PackageRef => ""
@@ -157,15 +157,14 @@ class ScalaStepFilterBridge(
     if prefix.nonEmpty then s"$prefix." else prefix
 
   private def formatSymbol(sym: Symbol): String =
-    val prefix =
-      sym.owner match
-        case owner: TermOrTypeSymbol => formatSymbol(owner)
-        case owner: PackageSymbol => ""
+    val prefix = sym.owner match
+      case owner: ClassSymbol if isPackageObject(owner.name) => formatSymbol(owner.owner)
+      case owner: TermOrTypeSymbol => formatSymbol(owner)
+      case owner: PackageSymbol => ""
     if prefix.isEmpty then sym.name.toString else s"$prefix.${sym.name}"
 
-  private def isPackageObject(p: TermRef): Boolean =
-    val name = p.name.toString
-    name == "package" || name.endsWith("$package")
+  private def isPackageObject(name: Name): Boolean =
+    name.toString == "package" || name.toString.endsWith("$package")
 
   private def isScalaPredef(ref: TermRef): Boolean =
     isScalaPackage(ref.prefix) && ref.name.toString == "Predef"
@@ -198,7 +197,8 @@ class ScalaStepFilterBridge(
 
   private def findDeclaringType(fqcn: String, isExtensionMethod: Boolean): Option[DeclaringSymbol] =
     val javaParts = fqcn.split('.')
-    val isObject = fqcn.endsWith("$")
+    val isPackageObject = fqcn.endsWith(".package") || fqcn.endsWith("$package")
+    val isObject = isPackageObject || fqcn.endsWith("$")
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
       if packageNames.nonEmpty
