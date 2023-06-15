@@ -1,10 +1,13 @@
 package ch.epfl.scala.debugadapter.testfmk
 
-import java.nio.file.Path
 import com.microsoft.java.debug.core.protocol.Types.StackFrame
-import DebugStepAssert.*
 import munit.Assertions.*
 import munit.Location
+
+import java.nio.file.Path
+import scala.Console.*
+
+import DebugStepAssert.*
 
 sealed trait DebugStepAssert
 final case class SingleStepAssert[T](step: DebugStep[T], assertion: T => Unit) extends DebugStepAssert
@@ -157,32 +160,22 @@ object Evaluation {
     )
   }
 
-  private def assertFailed(response: Either[String, String]): Unit = {
-    if (response.isLeft) println(s"\u001b[32mExpected failure\u001b[0m")
-    else println(s"\u001b[31mUnexpected success, got ${response}\u001b[0m")
-    assert(response.isLeft)
-  }
+  private def assertFailed(response: Either[String, String]): Unit =
+    assert(response.isLeft, clue = s"Expected error, got ${response.right.get}$RESET")
 
   private def assertFailed(assertion: String => Unit)(response: Either[String, String]): Unit = {
-    if (response.isLeft) println(s"\u001b[32mExpected failure\u001b[0m")
-    else println(s"\u001b[31mUnexpected success, got ${response}\u001b[0m")
-    assert(response.isLeft)
+    assertFailed(response)
     val error = response.left.toOption.get
     assertion(error)
   }
 
-  private def assertFailed(expectedError: String)(response: Either[String, String]): Unit = {
-    if (response.isLeft) println(s"\u001b[32mExpected failure\u001b[0m")
-    else println(s"\u001b[31mUnexpected success, got ${response}\u001b[0m")
-    assert(clue(response).isLeft)
-    val error = response.left.toOption.get
-    assert(clue(error).contains(clue(expectedError)))
-  }
+  private def assertFailed(expectedError: String)(response: Either[String, String]): Unit =
+    assertFailed(error => assert(clue(error).contains(clue(expectedError))))(response)
 
   private def assertIgnore(
       expected: String
   )(response: Either[String, String])(implicit ctx: TestingContext): Unit = {
-    println(s"\u001b[33mTODO fix in ${ctx.scalaVersion}: expected ${expected}\u001b[0m")
+    println(s"${YELLOW}TODO fix in ${ctx.scalaVersion}: expected $expected$RESET")
   }
 
   private def assertSuccess(assertion: String => Unit)(response: Either[String, String]): Unit = {
@@ -194,7 +187,7 @@ object Evaluation {
   private def assertSuccess(
       expectedResult: Any
   )(response: Either[String, String])(implicit ctx: TestingContext, location: Location): Unit = {
-    if (clue(response).isLeft) println(s"\u001b[31mExpected success, got ${response.left}\u001b[0m")
+    if (clue(response).isLeft) println(s"${RED}Expected success, got ${response.left}${RESET}")
     assert(clue(response).isRight)
     val result = response.toOption.get
     expectedResult match {

@@ -135,6 +135,7 @@ trait DebugTest {
       println(s"$$ ${eval.expression}")
       client.evaluate(eval.expression, topFrame.id).map { resp =>
         resp.foreach(res => println(s"> $res"))
+        resp.left.foreach(err => println(s"> $err"))
         assertion(resp)
       }
     }
