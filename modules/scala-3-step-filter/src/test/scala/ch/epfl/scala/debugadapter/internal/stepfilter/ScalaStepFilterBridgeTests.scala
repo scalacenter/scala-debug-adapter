@@ -683,7 +683,7 @@ abstract class ScalaStepFilterBridgeTests(val scalaVersion: ScalaVersion) extend
     stepFilter.assertFormat("example.package", "java.lang.String foo()", "example.foo: String")
   }
 
-  test("top-level definition".only) {
+  test("top-level definition") {
     val source =
       """|package example
          |
