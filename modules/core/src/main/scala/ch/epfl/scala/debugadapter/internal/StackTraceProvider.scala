@@ -2,25 +2,26 @@ package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter.Debuggee
 import ch.epfl.scala.debugadapter.Logger
-import ch.epfl.scala.debugadapter.internal.stepfilter.*
-import com.microsoft.java.debug.core.adapter.{StepFilterProvider => JavaStepFilterProvider}
+import ch.epfl.scala.debugadapter.internal.stacktrace.*
+import com.microsoft.java.debug.core.adapter.{StackTraceProvider => JavaStackTraceProvider}
 import com.microsoft.java.debug.core.protocol.Requests.StepFilters
 import com.sun.jdi.Location
 import com.sun.jdi.Method
 import java.util.Optional
 
-class StepFilterProvider(
-    stepFilters: Seq[StepFilter],
-    scalaStepFilter: ScalaStepFilter,
+class StackTraceProvider(
+    runtimeFilter: RuntimeStepFilter,
+    scalaUnpickler: ScalaUnpickler,
     logger: Logger,
     testMode: Boolean
-) extends JavaStepFilterProvider() {
+) extends JavaStackTraceProvider() {
 
-  override def formatMethodSig(method: Method): Optional[String] = {
-    scalaStepFilter.format(method) match {
+  private val stepFilters: Seq[StepFilter] = Seq(ClassLoadingFilter, runtimeFilter, scalaUnpickler)
+
+  override def formatMethod(method: Method): Optional[String] = {
+    scalaUnpickler.format(method) match {
       case None => Optional.empty()
       case Some(s) => Optional.of(s)
-
     }
   }
   override def shouldSkipOver(method: Method, filters: StepFilters): Boolean = {
@@ -52,18 +53,18 @@ class StepFilterProvider(
   }
 }
 
-object StepFilterProvider {
+object StackTraceProvider {
   def apply(
       debuggee: Debuggee,
       tools: DebugTools,
       logger: Logger,
       testMode: Boolean
-  ): StepFilterProvider = {
-    val scalaStepFilter: ScalaStepFilter = ScalaStepFilter(debuggee, tools, logger, testMode)
+  ): StackTraceProvider = {
+    val scalaUnpickler: ScalaUnpickler = ScalaUnpickler(debuggee, tools, logger, testMode)
     val runtimeStepFilter = RuntimeStepFilter(debuggee.scalaVersion)
-    new StepFilterProvider(
-      Seq(ClassLoadingStepFilter, runtimeStepFilter, scalaStepFilter),
-      scalaStepFilter,
+    new StackTraceProvider(
+      runtimeStepFilter,
+      scalaUnpickler,
       logger,
       testMode
     )

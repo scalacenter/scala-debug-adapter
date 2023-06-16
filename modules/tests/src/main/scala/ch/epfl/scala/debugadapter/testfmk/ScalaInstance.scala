@@ -10,12 +10,12 @@ sealed abstract class ScalaInstance(
     val libraryJars: Seq[Library],
     compilerJars: Seq[Library],
     expressionCompilerJar: Library,
-    stepFilterJars: Seq[Library]
+    unpicklerJars: Seq[Library]
 ) {
   val libraryClassLoader = new URLClassLoader(libraryJars.map(_.toURL).toArray, null)
   val compilerClassLoader = new URLClassLoader(compilerJars.map(_.toURL).toArray, libraryClassLoader)
   val expressionCompilerClassLoader = new URLClassLoader(Array(expressionCompilerJar.toURL), compilerClassLoader)
-  val stepFilterClassLoader = new URLClassLoader(stepFilterJars.map(_.toURL).toArray, null)
+  val unpicklerClassLoader = new URLClassLoader(unpicklerJars.map(_.toURL).toArray, null)
 
   def compile(
       classDir: Path,
@@ -40,9 +40,8 @@ sealed abstract class ScalaInstance(
 final class Scala2Instance(
     libraryJars: Seq[Library],
     compilerJars: Seq[Library],
-    expressionCompilerJar: Library,
-    stepFilterJars: Seq[Library]
-) extends ScalaInstance(libraryJars, compilerJars, expressionCompilerJar, stepFilterJars) {
+    expressionCompilerJar: Library
+) extends ScalaInstance(libraryJars, compilerJars, expressionCompilerJar, Seq.empty) {
   override protected def compileInternal(args: Array[String]): Unit = {
     val main = compilerClassLoader.loadClass("scala.tools.nsc.Main")
     val process = main.getMethod("process", classOf[Array[String]])

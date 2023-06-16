@@ -53,8 +53,8 @@ object TestingResolver extends DebugToolsResolver {
   override def resolveExpressionCompiler(scalaVersion: ScalaVersion): Try[ClassLoader] =
     Try(get(scalaVersion).expressionCompilerClassLoader)
 
-  override def resolveStepFilter(scalaVersion: ScalaVersion): Try[ClassLoader] =
-    Try(get(scalaVersion).stepFilterClassLoader)
+  override def resolveUnpickler(scalaVersion: ScalaVersion): Try[ClassLoader] =
+    Try(get(scalaVersion).unpicklerClassLoader)
 
   def get(scalaVersion: ScalaVersion): ScalaInstance = {
     if (!cache.contains(scalaVersion)) {
@@ -78,7 +78,7 @@ object TestingResolver extends DebugToolsResolver {
     val expressionCompilerJar = jars.find(jar => jar.name.startsWith(expressionCompilerArtifact)).get
     val compilerJars = jars.filter(jar => !libraryJars.contains(jar) && jar != expressionCompilerJar)
 
-    new Scala2Instance(libraryJars, compilerJars, expressionCompilerJar, Seq.empty)
+    new Scala2Instance(libraryJars, compilerJars, expressionCompilerJar)
   }
 
   private def fetchScala3(scalaVersion: ScalaVersion): Scala3Instance = {
@@ -89,8 +89,8 @@ object TestingResolver extends DebugToolsResolver {
       BuildInfo.version
     )
 
-    val stepFilterDep = Dependency(
-      coursier.Module(Organization(BuildInfo.organization), ModuleName(s"${BuildInfo.scala3StepFilterName}_3")),
+    val unpicklerDep = Dependency(
+      coursier.Module(Organization(BuildInfo.organization), ModuleName(s"${BuildInfo.unpicklerName}_3")),
       BuildInfo.version
     )
 
@@ -100,12 +100,12 @@ object TestingResolver extends DebugToolsResolver {
     )
 
     val jars = fetch(expressionCompilerDep)
-    val stepFilterJars = fetch(stepFilterDep, tastyDep)
+    val unpicklerJars = fetch(unpicklerDep, tastyDep)
     val libraryJars =
       jars.filter(jar => jar.name.startsWith("scala-library") || jar.name.startsWith("scala3-library_3"))
     val expressionCompilerJar = jars.find(jar => jar.name.startsWith(expressionCompilerArtifact)).get
     val compilerJars = jars.filter(jar => !libraryJars.contains(jar) && jar != expressionCompilerJar)
 
-    new Scala3Instance(libraryJars, compilerJars, expressionCompilerJar, stepFilterJars)
+    new Scala3Instance(libraryJars, compilerJars, expressionCompilerJar, unpicklerJars)
   }
 }

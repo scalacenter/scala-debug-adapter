@@ -35,7 +35,7 @@ lazy val root = project
     expressionCompiler213,
     expressionCompiler30,
     expressionCompiler3,
-    scala3StepFilter
+    unpickler3
   )
   .settings(
     publish / skip := true
@@ -92,7 +92,7 @@ lazy val core = projectMatrix
       BuildInfoKey.action("organization")(organization.value),
       BuildInfoKey.action("version")(version.value),
       BuildInfoKey.action("expressionCompilerName")((expressionCompiler212 / name).value),
-      BuildInfoKey.action("scala3StepFilterName")((LocalProject("scala3StepFilter") / name).value),
+      BuildInfoKey.action("unpicklerName")((LocalProject("unpickler3") / name).value),
       BuildInfoKey.action("scala212")(Dependencies.scala212),
       BuildInfoKey.action("scala213")(Dependencies.scala213),
       BuildInfoKey.action("scala30")(Dependencies.scala30),
@@ -128,7 +128,7 @@ lazy val tests = projectMatrix
         expressionCompiler30 / publishLocal,
         expressionCompiler3 / publishLocal,
         // break cyclic reference
-        LocalProject("scala3StepFilter") / publishLocal
+        LocalProject("unpickler3") / publishLocal
       )
       .value
   )
@@ -194,12 +194,12 @@ lazy val expressionCompiler = projectMatrix
     scalacOptionsSetting
   )
 
-lazy val scala3StepFilter: Project = project
-  .in(file("modules/scala-3-step-filter"))
+lazy val unpickler3: Project = project
+  .in(file("modules/unpickler"))
   .disablePlugins(SbtJdiTools)
   .dependsOn(tests3 % Test)
   .settings(
-    name := "scala-debug-step-filter",
+    name := "scala-debug-unpickler",
     scalaVersion := Dependencies.scala31Plus,
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
