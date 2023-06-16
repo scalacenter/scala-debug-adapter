@@ -54,18 +54,18 @@ class SbtDebugToolsResolver(
     }
   }
 
-  override def resolveStepFilter(scalaVersion: ScalaVersion): Try[ClassLoader] = {
+  override def resolveUnpickler(scalaVersion: ScalaVersion): Try[ClassLoader] = {
     val org = BuildInfo.organization
-    val artifact = s"${BuildInfo.scala3StepFilterName}_3"
+    val artifact = s"${BuildInfo.unpicklerName}_3"
     val version = BuildInfo.version
     val tastyDep = "org.scala-lang" % "tasty-core_3" % scalaVersion.value
 
     for (report <- fetchArtifactsOf(org % artifact % version, Seq(tastyDep))) yield {
-      val stepFilterJars = report
+      val unpicklerJars = report
         .select(configurationFilter(Runtime.name), moduleFilter(), artifactFilter(extension = "jar", classifier = ""))
         .map(_.toURI.toURL)
         .toArray
-      new URLClassLoader(stepFilterJars, null)
+      new URLClassLoader(unpicklerJars, null)
     }
   }
 

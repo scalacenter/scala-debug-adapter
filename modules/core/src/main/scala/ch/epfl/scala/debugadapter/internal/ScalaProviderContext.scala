@@ -8,7 +8,7 @@ import com.microsoft.java.debug.core.adapter.ICompletionsProvider
 import com.microsoft.java.debug.core.adapter.IEvaluationProvider
 import com.microsoft.java.debug.core.adapter.IHotCodeReplaceProvider
 import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
-import com.microsoft.java.debug.core.adapter.IStepFilterProvider
+import com.microsoft.java.debug.core.adapter.IStackTraceProvider
 import com.microsoft.java.debug.core.adapter.IVirtualMachineManagerProvider
 import com.microsoft.java.debug.core.adapter.ProviderContext
 
@@ -17,7 +17,7 @@ private[debugadapter] class ScalaProviderContext private (debuggee: Debuggee, lo
   def configure(tools: DebugTools): Unit = {
     registerProvider(classOf[ISourceLookUpProvider], tools.sourceLookUp)
     registerProvider(classOf[IEvaluationProvider], EvaluationProvider(debuggee, tools, logger, config))
-    registerProvider(classOf[IStepFilterProvider], StepFilterProvider(debuggee, tools, logger, config.testMode))
+    registerProvider(classOf[IStackTraceProvider], StackTraceProvider(debuggee, tools, logger, config.testMode))
   }
 }
 
