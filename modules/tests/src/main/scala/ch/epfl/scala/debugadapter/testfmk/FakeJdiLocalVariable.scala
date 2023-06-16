@@ -7,17 +7,17 @@ final case class FakeJdiLocalVariable(
     override val `type`: Type
 ) extends LocalVariable {
 
-  override def virtualMachine(): VirtualMachine = ???
+  override def virtualMachine: VirtualMachine = ???
 
   override def compareTo(o: LocalVariable): Int = ???
 
-  override def typeName(): String = ???
+  override def typeName: String = ???
 
-  override def signature(): String = ???
+  override def signature: String = ???
 
-  override def genericSignature(): String = ???
+  override def genericSignature: String = ???
 
   override def isVisible(frame: StackFrame): Boolean = ???
 
-  override def isArgument(): Boolean = ???
+  override def isArgument: Boolean = ???
 }
