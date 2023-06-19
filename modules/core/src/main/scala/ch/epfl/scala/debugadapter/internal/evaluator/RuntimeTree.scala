@@ -211,13 +211,20 @@ case class StaticMethodTree(
 /* -------------------------------------------------------------------------- */
 /*                                 Class trees                                */
 /* -------------------------------------------------------------------------- */
-case class NewInstanceTree(init: MethodTree) extends RuntimeEvaluableTree {
+case class NewInstanceTree(init: StaticMethodTree) extends RuntimeEvaluableTree {
   override lazy val `type`: ClassType = init.method.declaringType().asInstanceOf[ClassType]
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|NewInstanceTree(
         |${indent}init= ${init.prettyPrint(depth + 1)}
         |${indent.dropRight(1)})""".stripMargin
+  }
+}
+
+object NewInstanceTree {
+  def apply(init: MethodTree): Validation[NewInstanceTree] = init match {
+    case init: StaticMethodTree => Valid(new NewInstanceTree(init))
+    case _ => Recoverable("New instance must be initialized with a static method")
   }
 }
 

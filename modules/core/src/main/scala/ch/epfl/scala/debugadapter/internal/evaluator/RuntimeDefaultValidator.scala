@@ -230,7 +230,8 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       outerFqcn = thisTree.toOption.map(_.`type`.name())
       cls <- searchAllClassesFor(name, outerFqcn)
       method <- methodTreeByNameAndArgs(cls, "<init>", args, encode = false)
-    } yield NewInstanceTree(method)
+      newInstance <- NewInstanceTree(method)
+    } yield newInstance
   }
 }
 
