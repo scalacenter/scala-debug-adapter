@@ -240,20 +240,6 @@ object RuntimeEvaluatorEnvironments {
        |  def test(i: java.lang.Integer): String = "boxed int"
        |}
        |""".stripMargin
-
-  val arraysSource =
-    """|package example
-       |
-       |object Main {
-       |  def main(args: Array[String]): Unit = {
-       |    val arr = Array(1, 2, 3)
-       |    val sh: Short = 2
-       |    val ch: Char = 2
-       |    val by: Byte = 2
-       |    println("ok")
-       |  }
-       |}
-       |""".stripMargin
 }
 
 abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
@@ -267,8 +253,6 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   lazy val cls = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.cls, "example.Main", scalaVersion)
   lazy val boxingOverloads =
     TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.boxingOverloads, "example.Main", scalaVersion)
-  lazy val arrays =
-    TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.arraysSource, "example.Main", scalaVersion)
 
   protected override def defaultConfig: DebugConfig =
     super.defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly)
@@ -408,7 +392,20 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   }
 
   test("Should work on arrays") {
-    implicit val debuggee = arrays
+    val arraysSource =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val arr = Array(1, 2, 3)
+         |    val sh: Short = 2
+         |    val ch: Char = 2
+         |    val by: Byte = 2
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee = TestingDebuggee.mainClass(arraysSource, "example.Main", scalaVersion)
     check(
       Breakpoint(9),
       Evaluation.success("arr(0)", 1),
@@ -419,6 +416,51 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Evaluation.success("arr(new Integer(2))", 3),
       Evaluation.success("arr(new Character('\u0000'))", 1),
       Evaluation.failed("arr(3)")
+    )
+  }
+
+  test("Should work on collections".only) {
+    val collectionSource =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val list = List(1, 2, 3)
+         |    val map = Map(1 -> "one", 2 -> "two")
+         |    val set = Set(1, 2, 3)
+         |    val seq = Seq(1, 2, 3)
+         |    val vector = Vector(1, 2, 3)
+         |    println("ok")
+         |  } 
+         |}
+         |""".stripMargin
+    implicit val debuggee = TestingDebuggee.mainClass(collectionSource, "example.Main", scalaVersion)
+    check(
+      Breakpoint(10),
+      Evaluation.success("list(0).toString", "1"),
+      Evaluation.success("list(2).toString", "3"),
+      Evaluation.success("list(new Integer(2)).toString", "3"),
+      Evaluation.successOrIgnore("list(new Character('\u0000')).toString", "1", true),
+      Evaluation.failed("list(3)"),
+      Evaluation.success("map(1)", "one"),
+      Evaluation.success("map(2)", "two"),
+      Evaluation.success("map(new Integer(2))", "two"),
+      Evaluation.successOrIgnore("map(new Character('\u0000'))", "one", true),
+      Evaluation.failed("map(3)"),
+      Evaluation.success("set(1)", true),
+      Evaluation.success("set(2)", true),
+      Evaluation.success("set(new Integer(2))", true),
+      Evaluation.successOrIgnore("set(new Character('\u0000')).toStrign", "1", true),
+      Evaluation.success("set(4)", false),
+      Evaluation.success("seq(0).toString", "1"),
+      Evaluation.success("seq(2).toString", "3"),
+      Evaluation.success("seq(new Integer(2)).toString", "3"),
+      Evaluation.successOrIgnore("seq(new Character('\u0000')).toString", "1", true),
+      Evaluation.failed("seq(3)"),
+      Evaluation.success("vector(0).toString", "1"),
+      Evaluation.success("vector(2).toString", "3"),
+      Evaluation.success("vector(new Integer(2)).toString", "3"),
+      Evaluation.successOrIgnore("vector(new Character('\u0000'))", 1, true)
     )
   }
 
