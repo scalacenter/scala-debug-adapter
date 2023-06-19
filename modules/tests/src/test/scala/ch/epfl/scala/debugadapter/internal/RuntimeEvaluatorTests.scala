@@ -419,7 +419,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should work on collections".only) {
+  test("Should work on collections") {
     val collectionSource =
       """|package example
          |
