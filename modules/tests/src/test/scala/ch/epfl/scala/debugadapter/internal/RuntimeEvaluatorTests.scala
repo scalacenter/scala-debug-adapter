@@ -616,6 +616,54 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Evaluation.success("test(new Integer(1))", "boxed int")
     )
   }
+
+  test("Should instantiate inner classes") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  class AA {
+         |    class AAA(val x: Int)
+         |  }
+         |  object AA {
+         |    class StaticAAA
+         |  }
+         |}
+         |
+         |object A {
+         |  class StaticAA {
+         |    class AAA
+         |  }
+         |  object StaticAA {
+         |    class StaticAAA
+         |  }
+         |}
+         |
+         |object Main {
+         |  val AStaticAA = new A.StaticAA
+         |  def main(args: Array[String]): Unit = {
+         |    val a = new A
+         |    val aAA = new a.AA
+         |    val aAAaaa1 = new aAA.AAA(42)
+         |    val aAAaaa2 = new aAA.AAA(43)
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(28),
+      Evaluation.success("new a.AA") { res => res.startsWith("A$AA@") },
+      Evaluation.success("new aAA.AAA(42)") { res => res.startsWith("A$AA$AAA@") },
+      Evaluation.success("new a.AA.StaticAAA") { res => res.startsWith("A$AA$StaticAAA@") },
+      Evaluation.success("new A.StaticAA") { res => res.startsWith("A$StaticAA@") },
+      Evaluation.success("new AStaticAA.AAA") { res => res.startsWith("A$StaticAA$AAA@") },
+      Evaluation.success("new this.AStaticAA.AAA") { res => res.startsWith("A$StaticAA$AAA@") },
+      Evaluation.success("new A.StaticAA.StaticAAA") { res => res.startsWith("A$StaticAA$StaticAAA@") },
+      Evaluation.success("aAAaaa1.x", 42),
+      Evaluation.success("aAAaaa2.x", 43)
+    )
+  }
 }
 
 /* -------------------------------------------------------------------------- */
