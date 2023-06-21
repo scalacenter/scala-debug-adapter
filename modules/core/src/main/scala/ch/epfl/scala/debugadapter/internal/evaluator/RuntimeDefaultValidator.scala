@@ -105,6 +105,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       }.extract
     }
 
+  // ? When RuntimeTree is not a ThisTree, it might be meaningful to directly load by concatenating the qualifier type's name and the target's name
   def validateModule(name: String, of: Option[RuntimeTree]): Validation[RuntimeEvaluableTree] = {
     val moduleName = if (name.endsWith("$")) name else name + "$"
     val ofName = of.map(_.`type`.name())
@@ -124,6 +125,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
     }
   }
 
+  // ? Same as validateModule, but for classes
   def validateClass(name: String, of: Validation[RuntimeTree]): Validation[ClassTree] =
     searchAllClassesFor(name.stripSuffix("$"), of.map(_.`type`.name()).toOption)
       .transform { cls =>
@@ -238,6 +240,17 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       method <- methodTreeByNameAndArgs(cls._2, "<init>", qualInjectedArgs, encode = false)
       newInstance <- NewInstanceTree(method)
     } yield newInstance
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /*                             Looking for $outer                             */
+  /* -------------------------------------------------------------------------- */
+  def findOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree] = {
+    for {
+      ref <- extractReferenceType(tree)
+      outer <- outerLookup(ref)
+      outerTree <- OuterTree(tree, outer)
+    } yield outerTree
   }
 }
 

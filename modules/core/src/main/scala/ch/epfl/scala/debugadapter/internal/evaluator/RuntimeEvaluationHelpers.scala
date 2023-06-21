@@ -163,26 +163,6 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
         }
 
   /* -------------------------------------------------------------------------- */
-  /*                             Looking for $outer                             */
-  /* -------------------------------------------------------------------------- */
-  def findOuter(tree: RuntimeTree): Validation[OuterTree] = {
-    def outerLookup(ref: ReferenceType) =
-      Validation(ref.fieldByName("$outer")).map(_.`type`()).orElse {
-        removeLastInnerTypeFromFQCN(ref.name())
-          .map(name => loadClass(name + "$")) match {
-          case Some(Safe(Success(Module(mod)))) => Valid(mod)
-          case _ => Recoverable(s"Cannot find $$outer for $ref")
-        }
-      }
-
-    for {
-      ref <- extractReferenceType(tree)
-      outer <- outerLookup(ref)
-      outerTree <- OuterTree(tree, outer)
-    } yield outerTree
-  }
-
-  /* -------------------------------------------------------------------------- */
   /*                                Class helpers                               */
   /* -------------------------------------------------------------------------- */
   def loadClass(name: String): Safe[JdiClass] =
@@ -207,6 +187,33 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     tc
   }
 
+  // ! TO REFACTOR :sob:
+  def resolveInnerType(qual: Type, name: String) = {
+    var tpe: Validation[ClassType] = Recoverable(s"Cannot find outer class for $qual")
+    def loop(on: Type): Validation[ClassType] =
+      on match {
+        case _: ArrayType | _: PrimitiveType | _: VoidType =>
+          Recoverable("Cannot find outer class on non reference type")
+        case ref: ReferenceType =>
+          val loadedCls = loadClass(concatenateInnerTypes(ref.name, name)).extract(_.cls)
+          if (loadedCls.isSuccess) Valid(loadedCls.get)
+          else {
+            var superTypes: List[ReferenceType] = ref match {
+              case cls: ClassType => cls.superclass() :: cls.interfaces().asScalaList
+              case itf: InterfaceType => itf.superinterfaces().asScalaList
+            }
+
+            while (!superTypes.isEmpty && tpe.isInvalid) {
+              val res = loop(superTypes.head)
+              if (res.isValid) tpe = res
+              else superTypes = superTypes.tail
+            }
+            tpe
+          }
+      }
+
+    loop(qual)
+  }
   def validateType(tpe: MType, thisTypeName: Option[String])(
       termValidation: Term => Validation[RuntimeEvaluableTree]
   ): Validation[(Option[RuntimeEvaluableTree], ClassTree)] =
@@ -215,13 +222,22 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
       case MType.Select(qual, name) =>
         val cls = for {
           qual <- termValidation(qual)
-          clsToLoad = concatenateInnerTypes(qual.`type`.name, name.value)
-          cls <- Validation.fromTry(loadClass(clsToLoad).extract)
+          tpe <- resolveInnerType(qual.`type`, name.value)
         } yield
-          if (cls.cls.isStatic()) (None, ClassTree(cls.cls))
-          else (Some(qual), ClassTree(cls.cls))
+          if (tpe.isStatic()) (None, ClassTree(tpe))
+          else (Some(qual), ClassTree(tpe))
         cls.orElse(searchAllClassesFor(qual.toString + "." + name.value, thisTypeName).map((None, _)))
       case _ => Recoverable("Type not supported at runtime")
+    }
+
+  // ! May not be correct when dealing with an object inside a class
+  def outerLookup(ref: ReferenceType) =
+    Validation(ref.fieldByName("$outer")).map(_.`type`()).orElse {
+      removeLastInnerTypeFromFQCN(ref.name())
+        .map(name => loadClass(name + "$").extract) match {
+        case Some(Success(Module(mod))) => Valid(mod)
+        case _ => Recoverable(s"Cannot find $$outer for $ref")
+      }
     }
 
   def searchAllClassesFor(name: String, in: Option[String]): Validation[ClassTree] = {

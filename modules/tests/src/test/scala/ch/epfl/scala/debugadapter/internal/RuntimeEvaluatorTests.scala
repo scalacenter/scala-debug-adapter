@@ -664,6 +664,45 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Evaluation.success("aAAaaa2.x", 43)
     )
   }
+
+  test("Should pre-evaluate $outer") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  val x = 42
+         |  class C
+         |  object C { def life = x }
+         |}
+         |
+         |class B extends A {
+         |  val y = 43
+         |}
+         |
+         |object B extends A {
+         |  val y = 84
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val b = new B
+         |    val bc = new b.C
+         |    val bC = b.C
+         |    val Bc = new B.C
+         |    val BC = B.C
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(24),
+      Evaluation.success("bc.y", 43),
+      Evaluation.success("bC.y", 43),
+      Evaluation.success("Bc.y", 84),
+      Evaluation.success("BC.y", 84)
+    )
+  }
 }
 
 /* -------------------------------------------------------------------------- */
