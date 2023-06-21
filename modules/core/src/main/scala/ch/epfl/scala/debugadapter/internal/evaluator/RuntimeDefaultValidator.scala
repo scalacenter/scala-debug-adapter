@@ -9,6 +9,8 @@ import RuntimeEvaluatorExtractors.*
 import scala.util.Failure
 import scala.util.Success
 
+import RuntimeEvaluationHelpers.{extractCall, extractReferenceType, toStaticIfNeeded}
+
 case class Call(fun: Term, argClause: Term.ArgClause)
 case class PreparedCall(qual: Validation[RuntimeTree], name: String)
 
@@ -222,14 +224,18 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
   /*                               New validation                               */
   /* -------------------------------------------------------------------------- */
   def validateNew(newValue: Term.New): Validation[RuntimeEvaluableTree] = {
-    val name = newValue.init.tpe.toString
+    val tpe = newValue.init.tpe
     val argClauses = newValue.init.argClauses
 
     for {
       args <- argClauses.flatMap(_.map(validate(_))).traverse
       outerFqcn = thisTree.toOption.map(_.`type`.name())
-      cls <- searchAllClassesFor(name, outerFqcn)
-      method <- methodTreeByNameAndArgs(cls, "<init>", args, encode = false)
+      cls <- validateType(tpe, outerFqcn)(validate)
+      qualInjectedArgs = cls._1 match {
+        case Some(q) => q +: args
+        case None => args
+      }
+      method <- methodTreeByNameAndArgs(cls._2, "<init>", qualInjectedArgs, encode = false)
       newInstance <- NewInstanceTree(method)
     } yield newInstance
   }
