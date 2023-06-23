@@ -176,10 +176,16 @@ object RuntimeEvaluatorEnvironments {
        |    val y = x + 1
        |    def helloInner = s"hello inner $x"
        |    case class InnerInner() { 
-       |      val str = s"inner inner $y"
+       |      val str = {
+       |        println("ok")
+       |        s"inner inner $y"
+       |      } 
        |    }
        |    object InnerInner {
-       |      val str = s"inner inner $x"
+       |      val str = {
+       |        println("ok")
+       |        s"inner inner $x"
+       |      }
        |    }
        |  }
        |  object Inner { 
@@ -715,9 +721,9 @@ class Scala212RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`
     check(
       Breakpoint(21),
       Evaluation.success("upperMain1", "upper main 1"),
-      Breakpoint(23),
+      Breakpoint(25),
       Evaluation.success("upperMain2", "upper main 2"),
-      Breakpoint(26),
+      Breakpoint(31),
       Evaluation.success("upperMain3", "upper main 3")
     )
   }
@@ -728,9 +734,9 @@ class Scala213RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`
     check(
       Breakpoint(21),
       Evaluation.success("upperMain1", "upper main 1"),
-      Breakpoint(23),
+      Breakpoint(25),
       Evaluation.success("upperMain2", "upper main 2"),
-      Breakpoint(26),
+      Breakpoint(31),
       Evaluation.success("upperMain3", "upper main 3")
     )
   }
@@ -741,12 +747,13 @@ class Scala31RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`3
     check(
       Breakpoint(21),
       Evaluation.success("upperMain1", "upper main 1"),
-      Breakpoint(26),
+      Breakpoint(31),
       Evaluation.success("upperMain2", "upper main 2"),
-      Breakpoint(26),
+      Breakpoint(25),
       Evaluation.success("upperMain3", "upper main 3")
     )
   }
+
   test("Should evaluate a local variable of a lambda") {
     val source =
       """|package example
