@@ -213,13 +213,14 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     tpe match {
       case MType.Name(name) => searchAllClassesFor(name, thisTypeName).map((None, _))
       case MType.Select(qual, name) =>
-        for {
+        val cls = for {
           qual <- termValidation(qual)
           clsToLoad = concatenateInnerTypes(qual.`type`.name, name.value)
           cls <- Validation.fromTry(loadClass(clsToLoad).extract)
         } yield
           if (cls.cls.isStatic()) (None, ClassTree(cls.cls))
           else (Some(qual), ClassTree(cls.cls))
+        cls.orElse(searchAllClassesFor(qual.toString + "." + name.value, thisTypeName).map((None, _)))
       case _ => Recoverable("Type not supported at runtime")
     }
 
