@@ -246,6 +246,117 @@ object RuntimeEvaluatorEnvironments {
        |  def test(i: java.lang.Integer): String = "boxed int"
        |}
        |""".stripMargin
+
+  val arraysSource =
+    """|package example
+       |
+       |object Main {
+       |  def main(args: Array[String]): Unit = {
+       |    val arr = Array(1, 2, 3)
+       |    val sh: Short = 2
+       |    val ch: Char = 2
+       |    val by: Byte = 2
+       |    println("ok")
+       |  }
+       |
+       |  def test(arr: Array[Int]): String = arr.mkString(",")
+       |
+       |  def test(arr: Array[Test]): String = arr.map(_.i).mkString(",")
+       |
+       |  case class Test(i: Int)
+       |}
+       |""".stripMargin
+  val collectionSource =
+    """|package example
+       |
+       |object Main {
+       |  def main(args: Array[String]): Unit = {
+       |    val list = List(1, 2, 3)
+       |    val map = Map(1 -> "one", 2 -> "two")
+       |    val set = Set(1, 2, 3)
+       |    val seq = Seq(1, 2, 3)
+       |    val vector = Vector(1, 2, 3)
+       |    println("ok")
+       |  } 
+       |}
+       |""".stripMargin
+
+  val innerInstantiation =
+    """|package example
+       |
+       |class A {
+       |  class AA {
+       |    class AAA(val x: Int)
+       |  }
+       |  object AA {
+       |    class StaticAAA
+       |  }
+       |}
+       |
+       |object A {
+       |  class StaticAA {
+       |    class AAA
+       |  }
+       |  object StaticAA {
+       |    class StaticAAA
+       |  }
+       |}
+       |
+       |object Main {
+       |  val AStaticAA = new A.StaticAA
+       |  def main(args: Array[String]): Unit = {
+       |    val a = new A
+       |    val aAA = new a.AA
+       |    val aAAaaa1 = new aAA.AAA(42)
+       |    val aAAaaa2 = new aAA.AAA(43)
+       |    println("ok")
+       |  }
+       |}
+       |""".stripMargin
+
+  val outerPreEval =
+    """|package example
+       |
+       |class A {
+       |  val x = 42
+       |  class C
+       |  object C { def life = x }
+       |}
+       |
+       |class B extends A {
+       |  val y = 43
+       |}
+       |
+       |object B extends A {
+       |  val y = 84
+       |}
+       |
+       |object Main {
+       |  def main(args: Array[String]): Unit = {
+       |    val b = new B
+       |    val bc = new b.C
+       |    val bC = b.C
+       |    val Bc = new B.C
+       |    val BC = B.C
+       |    println("ok")
+       |  }
+       |}
+       |""".stripMargin
+  val flowControl =
+    """|package example
+       |
+       |object Main {
+       |  def main(args: Array[String]): Unit = {
+       |    val x = 1
+       |    val t = Test(-1)
+       |    println("ok")
+       |  }
+       |
+       |  def test(x: Int): String = s"int $x"
+       |  def test(t: Test): String = s"test ${t.i}"
+       |
+       |  case class Test(i: Int)
+       |}""".stripMargin
 }
 
 abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
@@ -259,6 +370,16 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   lazy val cls = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.cls, "example.Main", scalaVersion)
   lazy val boxingOverloads =
     TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.boxingOverloads, "example.Main", scalaVersion)
+  lazy val arrays =
+    TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.arraysSource, "example.Main", scalaVersion)
+  lazy val collections =
+    TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.collectionSource, "example.Main", scalaVersion)
+  lazy val inners =
+    TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.innerInstantiation, "example.Main", scalaVersion)
+  lazy val outerPreEval =
+    TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.outerPreEval, "example.Main", scalaVersion)
+  lazy val controlFlow =
+    TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.flowControl, "example.Main", scalaVersion)
 
   protected override def defaultConfig: DebugConfig =
     super.defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly)
@@ -398,20 +519,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   }
 
   test("Should work on arrays") {
-    val arraysSource =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val arr = Array(1, 2, 3)
-         |    val sh: Short = 2
-         |    val ch: Char = 2
-         |    val by: Byte = 2
-         |    println("ok")
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(arraysSource, "example.Main", scalaVersion)
+    implicit val debuggee = arrays
     check(
       Breakpoint(9),
       Evaluation.success("arr(0)", 1),
@@ -421,26 +529,14 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Evaluation.success("arr(by)", 3),
       Evaluation.success("arr(new Integer(2))", 3),
       Evaluation.success("arr(new Character('\u0000'))", 1),
-      Evaluation.failed("arr(3)")
+      Evaluation.failed("arr(3)"),
+      Evaluation.success("test(arr)", "1,2,3"),
+      Evaluation.failed("test(Array(Test(1), Test(2), Test(3)))")
     )
   }
 
   test("Should work on collections") {
-    val collectionSource =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val list = List(1, 2, 3)
-         |    val map = Map(1 -> "one", 2 -> "two")
-         |    val set = Set(1, 2, 3)
-         |    val seq = Seq(1, 2, 3)
-         |    val vector = Vector(1, 2, 3)
-         |    println("ok")
-         |  } 
-         |}
-         |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(collectionSource, "example.Main", scalaVersion)
+    implicit val debuggee = collections
     check(
       Breakpoint(10),
       Evaluation.success("list(0).toString", "1"),
@@ -624,96 +720,49 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   }
 
   test("Should instantiate inner classes") {
-    val source =
-      """|package example
-         |
-         |class A {
-         |  val test = {
-         |    42
-         |    println("ok")
-         |  }
-         |  class AA {
-         |    class AAA(val x: Int)
-         |  }
-         |  object AA {
-         |    class StaticAAA
-         |  }
-         |}
-         |
-         |object A {
-         |  class StaticAA {
-         |    class AAA
-         |  }
-         |  object StaticAA {
-         |    class StaticAAA
-         |  }
-         |}
-         |
-         |object Main {
-         |  val AStaticAA = new A.StaticAA
-         |  def main(args: Array[String]): Unit = {
-         |    val a = new A
-         |    a.test
-         |    val aAA = new a.AA
-         |    val aAAaaa1 = new aAA.AAA(42)
-         |    val aAAaaa2 = new aAA.AAA(43)
-         |    println("ok")
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee = inners
     check(
-      Breakpoint(6),
-      Evaluation.success("new AA", ObjectRef("A$AA")),
-      Breakpoint(33),
-      Evaluation.success("new a.AA", ObjectRef("A$AA")),
-      Evaluation.success("new aAA.AAA(42)", ObjectRef("A$AA$AAA")),
-      Evaluation.success("new a.AA.StaticAAA", ObjectRef("A$AA$StaticAAA")),
-      Evaluation.success("new A.StaticAA", ObjectRef("A$StaticAA")),
-      Evaluation.success("new AStaticAA.AAA", ObjectRef("A$StaticAA$AAA")),
-      Evaluation.success("new this.AStaticAA.AAA", ObjectRef("A$StaticAA$AAA")),
-      Evaluation.success("new A.StaticAA.StaticAAA", ObjectRef("A$StaticAA$StaticAAA")),
-      Evaluation.success("aAAaaa1.x", 42),
-      Evaluation.success("aAAaaa2.x", 43)
+      Breakpoint(28),
+      DebugStepAssert.inParallel(
+        Evaluation.success("new a.AA") { res => res.startsWith("A$AA@") },
+        Evaluation.success("new aAA.AAA(42)") { res => res.startsWith("A$AA$AAA@") },
+        Evaluation.success("new a.AA.StaticAAA") { res => res.startsWith("A$AA$StaticAAA@") },
+        Evaluation.success("new A.StaticAA") { res => res.startsWith("A$StaticAA@") },
+        Evaluation.success("new AStaticAA.AAA") { res => res.startsWith("A$StaticAA$AAA@") },
+        Evaluation.success("new this.AStaticAA.AAA") { res => res.startsWith("A$StaticAA$AAA@") },
+        Evaluation.success("new A.StaticAA.StaticAAA") { res => res.startsWith("A$StaticAA$StaticAAA@") },
+        Evaluation.success("aAAaaa1.x", 42),
+        Evaluation.success("aAAaaa2.x", 43)
+      )
     )
   }
 
   test("Should pre-evaluate $outer") {
-    val source =
-      """|package example
-         |
-         |class A {
-         |  val x = 42
-         |  class C
-         |  object C { def life = x }
-         |}
-         |
-         |class B extends A {
-         |  val y = 43
-         |}
-         |
-         |object B extends A {
-         |  val y = 84
-         |}
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val b = new B
-         |    val bc = new b.C
-         |    val bC = b.C
-         |    val Bc = new B.C
-         |    val BC = B.C
-         |    println("ok")
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    implicit val debuggee = outerPreEval
     check(
       Breakpoint(24),
-      Evaluation.success("bc.y", 43),
-      Evaluation.success("bC.y", 43),
-      Evaluation.success("Bc.y", 84),
-      Evaluation.success("BC.y", 84)
+      DebugStepAssert.inParallel(
+        Evaluation.success("bc.y", 43),
+        Evaluation.success("bC.y", 43),
+        Evaluation.success("Bc.y", 84),
+        Evaluation.success("BC.y", 84)
+      )
+    )
+  }
+
+  test("Should evaluate if control flows") {
+    implicit val debuggee = controlFlow
+    check(
+      Breakpoint(7),
+      Evaluation.success("if (true) 1 else 2", 1),
+      Evaluation.success("if (x == 1) 2 else 1", 2),
+      Evaluation.success("if (x == 1) \"a string\" else 1", "a string"),
+      Evaluation.success("test(if(true) 1 else 2)", "int 1"),
+      Evaluation.success("test(if(false) x else t)", "test -1"),
+      Evaluation.success("test(if(true) x else t)", "int 1"),
+      Evaluation.success("(if(true) Test(-1) else x).i", -1),
+      Evaluation.success("(if(false) x else Test(-1)).i", -1),
+      Evaluation.failed("test(if(Test(-1).i == -1) Test(-1) else x)")
     )
   }
 }

@@ -31,12 +31,13 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
 
   def validate(expression: Stat): Validation[RuntimeEvaluableTree] =
     expression match {
+      case lit: Lit => validateLiteral(lit)
       case value: Term.Name => validateName(value.value, thisTree)
       case _: Term.This => thisTree
       case sup: Term.Super => Recoverable("Super not (yet) supported at runtime")
       case _: Term.Apply | _: Term.ApplyInfix | _: Term.ApplyUnary => validateMethod(extractCall(expression))
       case select: Term.Select => validateSelect(select)
-      case lit: Lit => validateLiteral(lit)
+      case branch: Term.If => validateIf(branch)
       case instance: Term.New => validateNew(instance)
       case _ => Recoverable("Expression not supported at runtime")
     }
@@ -55,10 +56,10 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
   /* -------------------------------------------------------------------------- */
   /*                             Literal validation                             */
   /* -------------------------------------------------------------------------- */
-  def validateLiteral(lit: Lit): Validation[LiteralTree] =
+  def validateLiteral(lit: Lit): Validation[RuntimeEvaluableTree] =
     frame.classLoader().map(loader => LiteralTree(fromLitToValue(lit, loader))).extract match {
       case Success(value) => value
-      case Failure(e) => Fatal(e)
+      case Failure(e) => CompilerRecoverable(e)
     }
 
   /* -------------------------------------------------------------------------- */
@@ -251,6 +252,20 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       outer <- outerLookup(ref)
       outerTree <- OuterTree(tree, outer)
     } yield outerTree
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /*                           Flow control validation                          */
+  /* -------------------------------------------------------------------------- */
+
+  def validateIf(tree: Term.If): Validation[RuntimeEvaluableTree] = {
+    lazy val objType = loadClass("java.lang.Object").extract.get.cls
+    for {
+      cond <- validate(tree.cond)
+      thenp <- validate(tree.thenp)
+      elsep <- validate(tree.elsep)
+      ifTree <- IfTree(cond, thenp, elsep, isAssignableFrom(_, _), objType)
+    } yield ifTree
   }
 }
 

@@ -247,7 +247,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     check(
       Breakpoint(17),
       DebugStepAssert.inParallel(
-        Evaluation.failed("coucou", "Accessing static field"),
+        Evaluation.failed("coucou"),
         Evaluation.success("lapin", "lapin"),
         Evaluation.success("love", "love")
       )
@@ -272,13 +272,13 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
       Breakpoint(11),
       DebugStepAssert.inParallel(
         Evaluation.success("inner.helloInner()", "hello inner 42"),
-        Evaluation.failed("inner.helloInner", "Accessing static field"),
+        Evaluation.failed("inner.helloInner"),
         Evaluation.success("Main.StaticInner.z", 84),
         Evaluation.success("Foo.StaticFriendFoo.z", 168),
-        Evaluation.failed("foo.friendFoo(new Foo()).z", "Accessing static field"),
+        Evaluation.failed("foo.friendFoo(new Foo()).z"),
         Evaluation.failed("foo.friendFoo(new Foo()).staticMethod()"),
         Evaluation.success("new Foo().friendFoo(new Foo()).y", 42),
-        Evaluation.failed("new Foo().friendFoo(new Foo()).greet", "Accessing static field"),
+        Evaluation.failed("new Foo().friendFoo(new Foo()).greet"),
         Evaluation.success("Main.StaticInner.StaticDoubleInner.z", 168)
       )
     )
@@ -289,11 +289,11 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     check(
       Breakpoint(13),
       DebugStepAssert.inParallel(
-        Evaluation.failed("main.coucou", "Accessing static field"),
-        Evaluation.failed("hiddenFoo.foofoo", "Accessing static field"),
-        Evaluation.failed("foo.foofoo", "Accessing static field"),
-        Evaluation.failed("superfoo.foofoo", "Accessing static field"),
-        Evaluation.failed("main.staticMethod()", "Accessing static method")
+        Evaluation.failed("main.coucou"),
+        Evaluation.failed("hiddenFoo.foofoo"),
+        Evaluation.failed("foo.foofoo"),
+        Evaluation.failed("superfoo.foofoo"),
+        Evaluation.failed("main.staticMethod()")
       )
     )
 

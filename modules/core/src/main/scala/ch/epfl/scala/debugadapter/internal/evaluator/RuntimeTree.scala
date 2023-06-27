@@ -1,7 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi._
-import RuntimeEvaluatorExtractors.{IsAnyVal, Module}
+import RuntimeEvaluatorExtractors.{BooleanTree, IsAnyVal, Module}
 import scala.util.Success
 
 /* -------------------------------------------------------------------------- */
@@ -51,7 +51,7 @@ case class LiteralTree private (
 object LiteralTree {
   def apply(value: (Safe[Any], Type)): Validation[LiteralTree] = value._1 match {
     case Safe(Success(_: String)) | Safe(Success(IsAnyVal(_))) => Valid(new LiteralTree(value._1, value._2))
-    case _ => Fatal(s"Unsupported literal type: ${value.getClass}")
+    case _ => CompilerRecoverable(s"Unsupported literal type: ${value.getClass}")
   }
 }
 
@@ -326,4 +326,57 @@ case class PreEvaluatedTree(
 
 object PreEvaluatedTree {
   def apply(value: (Safe[JdiValue], Type)) = new PreEvaluatedTree(value._1, value._2)
+}
+
+/* -------------------------------------------------------------------------- */
+/*                             Flow control trees                             */
+/* -------------------------------------------------------------------------- */
+case class IfTree private (
+    p: RuntimeEvaluableTree,
+    thenp: RuntimeEvaluableTree,
+    elsep: RuntimeEvaluableTree,
+    `type`: Type
+) extends RuntimeEvaluableTree {
+  override def prettyPrint(depth: Int): String = {
+    val indent = "\t" * (depth + 1)
+    s"""|IfTree(
+        |${indent}p= ${p.prettyPrint(depth + 1)},
+        |${indent}ifTrue= ${thenp.prettyPrint(depth + 1)},
+        |${indent}ifFalse= ${elsep.prettyPrint(depth + 1)}
+        |${indent}t= ${`type`}
+        |${indent.dropRight(1)})""".stripMargin
+  }
+}
+
+object IfTree {
+
+  /**
+   * Returns the type of the branch that is chosen, if any
+   *
+   * @param t1
+   * @param t2
+   * @return Some(true) if t1 is chosen, Some(false) if t2 is chosen, None if no branch is chosen
+   */
+  def apply(
+      p: RuntimeEvaluableTree,
+      ifTrue: RuntimeEvaluableTree,
+      ifFalse: RuntimeEvaluableTree,
+      assignableFrom: (
+          Type,
+          Type
+      ) => Boolean, // ! This is a hack, passing a wrong method would lead to inconsistent trees
+      objType: => Type
+  ): Validation[IfTree] = {
+    val pType = p.`type`
+    val tType = ifTrue.`type`
+    val fType = ifFalse.`type`
+
+    p match {
+      case BooleanTree(_) =>
+        if (assignableFrom(tType, fType)) Valid(IfTree(p, ifTrue, ifFalse, tType))
+        else if (assignableFrom(fType, tType)) Valid(IfTree(p, ifTrue, ifFalse, fType))
+        else Valid(IfTree(p, ifTrue, ifFalse, objType))
+      case _ => CompilerRecoverable("A predicate must be a boolean")
+    }
+  }
 }

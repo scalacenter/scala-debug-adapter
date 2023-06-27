@@ -26,19 +26,20 @@ protected[internal] object RuntimeEvaluatorExtractors {
   }
 
   object MethodCall {
-    def unapply(tree: RuntimeTree): Option[RuntimeTree] =
+    def unapply(tree: RuntimeTree): Boolean =
       tree match {
         case mt: NestedModuleTree => unapply(mt.of)
         case ft: InstanceFieldTree => unapply(ft.qual)
         case oct: OuterClassTree => unapply(oct.inner)
         case OuterModuleTree(module) => unapply(module)
-        case _: MethodTree | _: NewInstanceTree => Some(tree)
-        case _: LiteralTree | _: LocalVarTree | _: PreEvaluatedTree | _: ThisTree => None
-        case _: StaticFieldTree | _: ClassTree | _: TopLevelModuleTree => None
-        case _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree | _: ArrayElemTree => None
+        case IfTree(p, t, f, _) => unapply(p) || unapply(t) || unapply(f)
+        case _: MethodTree | _: NewInstanceTree => true
+        case _: LiteralTree | _: LocalVarTree | _: PreEvaluatedTree | _: ThisTree => false
+        case _: StaticFieldTree | _: ClassTree | _: TopLevelModuleTree => false
+        case _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree | _: ArrayElemTree => false
       }
-    def unapply(tree: Validation[RuntimeTree]): Option[RuntimeTree] =
-      tree.toOption.filter { unapply(_).isDefined }
+    def unapply(tree: Validation[RuntimeTree]): Validation[RuntimeTree] =
+      tree.filter(unapply)
   }
 
   object ReferenceTree {
@@ -58,6 +59,18 @@ protected[internal] object RuntimeEvaluatorExtractors {
       case _: Byte | _: Short | _: Char | _: Int | _: Long | _: Float | _: Double | _: Boolean =>
         Some(x.asInstanceOf[AnyVal])
       case _ => None
+    }
+  }
+
+  object BooleanTree {
+    def unapply(p: Validation[RuntimeEvaluableTree]): Validation[RuntimeEvaluableTree] =
+      p.flatMap(unapply)
+
+    def unapply(p: RuntimeEvaluableTree): Validation[RuntimeEvaluableTree] = p.`type` match {
+      case bt: BooleanType => Valid(p)
+      case rt: ReferenceType if rt.name() == "java.lang.Boolean" =>
+        Valid(p)
+      case _ => CompilerRecoverable(s"The predicate must be a boolean expression, found ${p.`type`}")
     }
   }
 

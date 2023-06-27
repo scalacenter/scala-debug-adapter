@@ -136,12 +136,12 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     }
 
     (got, expected) match {
-      case (g: ArrayType, at: ArrayType) => isAssignableFrom(g.componentType, at.componentType)
+      case (g: ArrayType, at: ArrayType) => g.componentType().equals(at.componentType()) // TODO: check this
       case (g: PrimitiveType, pt: PrimitiveType) => got.equals(pt)
       case (g: ReferenceType, ref: ReferenceType) => referenceTypesMatch(g, ref)
       case (_: VoidType, _: VoidType) => true
 
-      case (g: ClassType, pt: PrimitiveType) =>
+      case (g: ReferenceType, pt: PrimitiveType) =>
         isAssignableFrom(g, frame.getPrimitiveBoxedClass(pt))
       case (g: PrimitiveType, ct: ReferenceType) =>
         isAssignableFrom(frame.getPrimitiveBoxedClass(g), ct)
@@ -374,7 +374,9 @@ private[evaluator] object RuntimeEvaluationHelpers {
       case (_, Module(mod)) => Valid(InstanceFieldTree(field, mod))
       case (_, eval: RuntimeEvaluableTree) =>
         if (field.isStatic())
-          Fatal(s"Accessing static field $field from instance ${eval.`type`} can lead to unexpected behavior")
+          CompilerRecoverable(
+            s"Accessing static field $field from instance ${eval.`type`} can lead to unexpected behavior"
+          )
         else Valid(InstanceFieldTree(field, eval))
     }
 
@@ -387,7 +389,9 @@ private[evaluator] object RuntimeEvaluationHelpers {
     case Module(mod) => Valid(InstanceMethodTree(method, args, mod))
     case eval: RuntimeEvaluableTree =>
       if (method.isStatic())
-        Fatal(s"Accessing static method $method from instance ${eval.`type`} can lead to unexpected behavior")
+        CompilerRecoverable(
+          s"Accessing static method $method from instance ${eval.`type`} can lead to unexpected behavior"
+        )
       else Valid(InstanceMethodTree(method, args, eval))
   }
 
