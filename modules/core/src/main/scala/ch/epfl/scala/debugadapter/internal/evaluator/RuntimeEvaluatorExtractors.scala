@@ -25,6 +25,16 @@ protected[internal] object RuntimeEvaluatorExtractors {
       unapply(tree.`type`).map(_ => tree.asInstanceOf[RuntimeEvaluableTree])
   }
 
+  object ModuleCall {
+    def unapply(m: Method): Boolean = {
+      val rt = m.returnTypeName
+      val noArgs = m.argumentTypeNames.size == 0
+      val isSingleton = rt.endsWith("$")
+      val isSingletonInstantiation = rt.stripSuffix("$").endsWith(m.name)
+      noArgs && isSingleton && isSingletonInstantiation
+    }
+  }
+
   object MethodCall {
     def unapply(tree: RuntimeTree): Boolean =
       tree match {

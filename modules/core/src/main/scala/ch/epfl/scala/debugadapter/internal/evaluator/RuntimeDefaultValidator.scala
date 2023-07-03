@@ -175,7 +175,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       args: Seq[RuntimeEvaluableTree]
   ): Validation[RuntimeEvaluableTree] =
     methodTreeByNameAndArgs(on, "apply", args)
-      .orElse { ArrayElemTree(on, "apply", args) }
+      .orElse { ArrayElemTree(on, args) }
 
   def validateIndirectApply(
       on: Validation[RuntimeTree],
@@ -199,8 +199,8 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       name: String,
       args: Seq[RuntimeEvaluableTree]
   ): Validation[RuntimeEvaluableTree] =
-    validateIndirectApply(Valid(tree), name, args)
-      .orElse { methodTreeByNameAndArgs(tree, name, args) }
+    methodTreeByNameAndArgs(tree, name, args)
+      .orElse { validateIndirectApply(Valid(tree), name, args) }
       .orElse { validateApply(tree, args) }
       .orElse { findOuter(tree).flatMap(findMethod(_, name, args)) }
 

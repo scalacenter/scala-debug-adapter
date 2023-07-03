@@ -120,7 +120,11 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
       encode: Boolean = true
   ): Validation[MethodTree] = tree match {
     case ReferenceTree(ref) =>
-      methodsByNameAndArgs(ref, funName, args.map(_.`type`), encode).flatMap(toStaticIfNeeded(_, args, tree))
+      methodsByNameAndArgs(ref, funName, args.map(_.`type`), encode).flatMap {
+        case ModuleCall() =>
+          Recoverable("Accessing a module from its instanciation method is not allowed at console-level")
+        case mt => toStaticIfNeeded(mt, args, tree)
+      }
     case _ => Recoverable(new IllegalArgumentException(s"Cannot find method $funName on $tree"))
   }
 
@@ -275,7 +279,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
 
   def searchAllClassesFor(name: String, in: Option[String]): Validation[ClassTree] = {
     def fullName = in match {
-      case Some(value) if value == name => name // name duplication when implicit apply call
+      case Some(value) if value == name => name // name duplication when indirect apply call
       case Some(value) => concatenateInnerTypes(value, name)
       case None => name
     }
