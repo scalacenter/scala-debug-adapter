@@ -24,6 +24,7 @@ class RuntimeDefaultEvaluator(val frame: JdiFrame, val logger: Logger) extends R
       case branching: IfTree => evaluateIf(branching)
       case staticMethod: StaticMethodTree => invokeStatic(staticMethod)
       case outer: OuterTree => evaluateOuter(outer)
+      case UnitTree => Safe(JdiValue(frame.thread.virtualMachine.mirrorOfVoid, frame.thread))
     }
 
   /* -------------------------------------------------------------------------- */

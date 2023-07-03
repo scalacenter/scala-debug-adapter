@@ -35,6 +35,10 @@ sealed trait OuterTree extends RuntimeEvaluableTree
 /* -------------------------------------------------------------------------- */
 /*                                Simple trees                                */
 /* -------------------------------------------------------------------------- */
+case object UnitTree extends RuntimeEvaluableTree {
+  override def `type`: Type = ???
+  override def prettyPrint(depth: Int): String = "UnitTree()"
+}
 case class LiteralTree private (
     value: Safe[Any],
     `type`: Type

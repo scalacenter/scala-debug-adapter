@@ -44,7 +44,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
         case OuterModuleTree(module) => unapply(module)
         case IfTree(p, t, f, _) => unapply(p) || unapply(t) || unapply(f)
         case _: MethodTree | _: NewInstanceTree => true
-        case _: LiteralTree | _: LocalVarTree | _: PreEvaluatedTree | _: ThisTree => false
+        case _: LiteralTree | _: LocalVarTree | _: PreEvaluatedTree | _: ThisTree | UnitTree => false
         case _: StaticFieldTree | _: ClassTree | _: TopLevelModuleTree => false
         case _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree | _: ArrayElemTree => false
       }
