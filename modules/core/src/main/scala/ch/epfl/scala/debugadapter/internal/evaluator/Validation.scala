@@ -22,6 +22,8 @@ sealed abstract class Validation[+A] {
     case CompilerRecoverable(message) => CompilerRecoverable(message)
   }
 
+  def transform[B](f: Validation[A] => Validation[B]): Validation[B] = f(this)
+
   def get: A
   def getOrElse[B >: A](f: => B): B
   def orElse[B >: A](f: => Validation[B]): Validation[B]
