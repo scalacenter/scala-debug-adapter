@@ -23,6 +23,7 @@ sealed trait ModuleTree extends RuntimeEvaluableTree with TypeTree
 
 sealed trait MethodTree extends RuntimeEvaluableTree {
   def method: Method
+  def args: Seq[RuntimeEvaluableTree]
 }
 
 sealed trait FieldTree extends RuntimeEvaluableTree {
@@ -125,6 +126,37 @@ object PrimitiveBinaryOpTree {
     }
 }
 
+case class ArrayElemTree private (array: RuntimeEvaluableTree, index: RuntimeEvaluableTree, `type`: Type)
+    extends RuntimeEvaluableTree {
+  override def prettyPrint(depth: Int): String = {
+    val indent = "\t" * (depth + 1)
+    s"""|ArrayAccessorTree(
+        |${indent}array= $array,
+        |${indent}index= $index
+        |${indent.dropRight(1)})""".stripMargin
+  }
+}
+
+object ArrayElemTree {
+  def apply(tree: RuntimeTree, funName: String, index: Seq[RuntimeEvaluableTree]): Validation[ArrayElemTree] = {
+    val integerTypes = Seq("java.lang.Integer", "java.lang.Short", "java.lang.Byte", "java.lang.Character")
+    if (funName != "apply") Recoverable("Not an array accessor")
+    else if (index.size < 1 || index.size > 1) Recoverable("Array accessor must have one argument")
+    else
+      (tree, tree.`type`) match {
+        case (tree: RuntimeEvaluableTree, arr: ArrayType) =>
+          index.head.`type` match {
+            case idx @ (_: IntegerType | _: ShortType | _: ByteType | _: CharType) =>
+              Valid(new ArrayElemTree(tree, index.head, arr.componentType()))
+            case ref: ReferenceType if integerTypes.contains(ref.name) =>
+              Valid(new ArrayElemTree(tree, index.head, arr.componentType()))
+            case _ => Recoverable("Array index must be an integer")
+          }
+        case _ => Recoverable("Not an array accessor")
+      }
+  }
+}
+
 case class PrimitiveUnaryOpTree private (
     rhs: RuntimeEvaluableTree,
     op: RuntimeUnaryOp
@@ -179,14 +211,20 @@ case class StaticMethodTree(
 /* -------------------------------------------------------------------------- */
 /*                                 Class trees                                */
 /* -------------------------------------------------------------------------- */
-case class NewInstanceTree(method: Method, args: Seq[RuntimeEvaluableTree]) extends RuntimeEvaluableTree {
-  override lazy val `type`: ClassType = method.declaringType().asInstanceOf[ClassType]
+case class NewInstanceTree(init: StaticMethodTree) extends RuntimeEvaluableTree {
+  override lazy val `type`: ClassType = init.method.declaringType().asInstanceOf[ClassType]
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|NewInstanceTree(
-        |${indent}m= $method,
-        |${indent}args= ${args.map(_.prettyPrint(depth + 1)).mkString(",\n" + indent)}
+        |${indent}init= ${init.prettyPrint(depth + 1)}
         |${indent.dropRight(1)})""".stripMargin
+  }
+}
+
+object NewInstanceTree {
+  def apply(init: MethodTree): Validation[NewInstanceTree] = init match {
+    case init: StaticMethodTree => Valid(new NewInstanceTree(init))
+    case _ => Recoverable("New instance must be initialized with a static method")
   }
 }
 

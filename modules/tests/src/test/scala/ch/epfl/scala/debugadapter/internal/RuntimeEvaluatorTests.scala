@@ -139,17 +139,17 @@ object RuntimeEvaluatorEnvironments {
        |  def test(bar: Bar): String = "bar"
        |  def test(baz: Baz): String = "baz"
        |
-       |  def test(foo: Foo, subBar: SubBar): String = "foo, subbar"
+       |  def test(foo: Foo, subBar: SubBar): String = "foo, subBar"
        |  def test(bar: Bar, foo: Foo): String = "bar, foo"
        |
        |  def test(bar: Bar, baz: Baz): String = "bar, baz"
        |
-       |  def test(foo: Foo, subCool: SubCoolTrait): String = "foo, subcool"
-       |  def test(bar: Bar, subCool: SubCoolTrait): String = "bar, subcool"
-       |  def test(baz: Baz, subCool: SubCoolTrait): String = "baz, subcool"
+       |  def test(foo: Foo, subCool: SubCoolTrait): String = "foo, subCool"
+       |  def test(bar: Bar, subCool: SubCoolTrait): String = "bar, subCool"
+       |  def test(baz: Baz, subCool: SubCoolTrait): String = "baz, subCool"
        |
        |  def test(foo: Foo, bar: Bar, baz: Baz): String = "foo, bar, baz"
-       |  def test(bar: Bar, baz: Baz, subBar: SubBar): String = "bar, baz, subbar"
+       |  def test(bar: Bar, baz: Baz, subBar: SubBar): String = "bar, baz, subBar"
        |}
     """.stripMargin
 
@@ -366,12 +366,12 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("test(baz)", "baz"),
         Evaluation.failed("test(bar, subBar)"),
         Evaluation.success("test(bar, baz)", "bar, baz"),
-        Evaluation.success("test(foo, subBar)", "foo, subbar"),
-        Evaluation.success("test(foo, subCool)", "foo, subcool"),
-        Evaluation.success("test(bar, subCool)", "bar, subcool"),
-        Evaluation.success("test(baz, subCool)", "baz, subcool"),
+        Evaluation.success("test(foo, subBar)", "foo, subBar"),
+        Evaluation.success("test(foo, subCool)", "foo, subCool"),
+        Evaluation.success("test(bar, subCool)", "bar, subCool"),
+        Evaluation.success("test(baz, subCool)", "baz, subCool"),
         Evaluation.success("test(foo, bar, baz)", "foo, bar, baz"),
-        Evaluation.success("test(bar, baz, subBar)", "bar, baz, subbar")
+        Evaluation.success("test(bar, baz, subBar)", "bar, baz, subBar")
       )
     )
   }
@@ -384,8 +384,83 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("f1.foo_v2(\"hello \").bar(42)", "hello 42"),
         Evaluation.success("Foo_v1().toString()", "Foo_v1()"),
         Evaluation.success("f1.foo_v2_apply.bar(42)", "hello 42"),
-        Evaluation.success("inner(42).x", 42)
+        Evaluation.success("inner(42).x", 42),
+        Evaluation.success("list(0).toString()", "0"),
+        Evaluation.failed("list(1)")
       )
+    )
+  }
+
+  test("Should work on arrays") {
+    val arraysSource =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val arr = Array(1, 2, 3)
+         |    val sh: Short = 2
+         |    val ch: Char = 2
+         |    val by: Byte = 2
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee = TestingDebuggee.mainClass(arraysSource, "example.Main", scalaVersion)
+    check(
+      Breakpoint(9),
+      Evaluation.success("arr(0)", 1),
+      Evaluation.success("arr(2)", 3),
+      Evaluation.success("arr(sh)", 3),
+      Evaluation.success("arr(ch)", 3),
+      Evaluation.success("arr(by)", 3),
+      Evaluation.success("arr(new Integer(2))", 3),
+      Evaluation.success("arr(new Character('\u0000'))", 1),
+      Evaluation.failed("arr(3)")
+    )
+  }
+
+  test("Should work on collections") {
+    val collectionSource =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val list = List(1, 2, 3)
+         |    val map = Map(1 -> "one", 2 -> "two")
+         |    val set = Set(1, 2, 3)
+         |    val seq = Seq(1, 2, 3)
+         |    val vector = Vector(1, 2, 3)
+         |    println("ok")
+         |  } 
+         |}
+         |""".stripMargin
+    implicit val debuggee = TestingDebuggee.mainClass(collectionSource, "example.Main", scalaVersion)
+    check(
+      Breakpoint(10),
+      Evaluation.success("list(0).toString", "1"),
+      Evaluation.success("list(2).toString", "3"),
+      Evaluation.success("list(new Integer(2)).toString", "3"),
+      Evaluation.successOrIgnore("list(new Character('\u0000')).toString", "1", true),
+      Evaluation.failed("list(3)"),
+      Evaluation.success("map(1)", "one"),
+      Evaluation.success("map(2)", "two"),
+      Evaluation.success("map(new Integer(2))", "two"),
+      Evaluation.successOrIgnore("map(new Character('\u0000'))", "one", true),
+      Evaluation.failed("map(3)"),
+      Evaluation.success("set(1)", true),
+      Evaluation.success("set(2)", true),
+      Evaluation.success("set(new Integer(2))", true),
+      Evaluation.successOrIgnore("set(new Character('\u0000')).toStrign", "1", true),
+      Evaluation.success("set(4)", false),
+      Evaluation.success("seq(0).toString", "1"),
+      Evaluation.success("seq(2).toString", "3"),
+      Evaluation.success("seq(new Integer(2)).toString", "3"),
+      Evaluation.successOrIgnore("seq(new Character('\u0000')).toString", "1", true),
+      Evaluation.failed("seq(3)"),
+      Evaluation.success("vector(0).toString", "1"),
+      Evaluation.success("vector(2).toString", "3"),
+      Evaluation.success("vector(new Integer(2)).toString", "3"),
+      Evaluation.successOrIgnore("vector(new Character('\u0000'))", 1, true)
     )
   }
 
