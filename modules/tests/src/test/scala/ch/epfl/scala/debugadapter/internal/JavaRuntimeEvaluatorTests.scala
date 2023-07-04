@@ -339,7 +339,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should instantiate inner classes --- java".only) {
+  test("Should instantiate inner classes --- java") {
     implicit val debuggee = nested
     check(
       Breakpoint(15),

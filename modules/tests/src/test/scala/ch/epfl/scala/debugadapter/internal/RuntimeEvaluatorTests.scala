@@ -663,7 +663,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
          |""".stripMargin
     implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
-      Breakpoint(7),
+      Breakpoint(6),
       Evaluation.success("new AA", ObjectRef("A$AA")),
       Breakpoint(33),
       Evaluation.success("new a.AA", ObjectRef("A$AA")),
