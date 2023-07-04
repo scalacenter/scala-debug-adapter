@@ -80,7 +80,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
    * @param encode whether to encode the method name or not
    * @return the method, wrapped in a [[Validation]], with its return type loaded and prepared
    */
-  def methodsByNameAndArgs(
+  private def methodsByNameAndArgs(
       ref: ReferenceType,
       funName: String,
       args: Seq[Type],
@@ -90,16 +90,16 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
       if (encode) NameTransformer.encode(funName) else funName
     }.asScalaList
 
-    val candidatesWithoutBoxing = candidates.filter { argsMatch(_, args, boxing = false) }
+    val unboxedCandidates = candidates.filter { argsMatch(_, args, boxing = false) }
 
-    val candidatesWithBoxing = candidatesWithoutBoxing.size match {
+    val boxedCandidates = unboxedCandidates.size match {
       case 0 => candidates.filter { argsMatch(_, args, boxing = true) }
-      case _ => candidatesWithoutBoxing
+      case _ => unboxedCandidates
     }
 
-    val withoutBridges = candidatesWithBoxing.size match {
-      case 0 | 1 => candidatesWithBoxing
-      case _ => candidatesWithBoxing.filterNot(_.isBridge())
+    val withoutBridges = boxedCandidates.size match {
+      case 0 | 1 => boxedCandidates
+      case _ => boxedCandidates.filterNot(_.isBridge())
     }
 
     val finalCandidates = withoutBridges.size match {
@@ -109,7 +109,18 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
 
     finalCandidates
       .toValidation(s"Cannot find a proper method $funName with args types $args on $ref")
-      .map(loadClassOnNeed(_))
+      .map { loadClassOnNeed }
+  }
+
+  def methodTreeByNameAndArgs(
+      tree: RuntimeTree,
+      funName: String,
+      args: Seq[RuntimeEvaluableTree],
+      encode: Boolean = true
+  ): Validation[MethodTree] = tree match {
+    case ReferenceTree(ref) =>
+      methodsByNameAndArgs(ref, funName, args.map(_.`type`), encode).flatMap(toStaticIfNeeded(_, args, tree))
+    case _ => Recoverable(new IllegalArgumentException(s"Cannot find method $funName on $tree"))
   }
 
   /* -------------------------------------------------------------------------- */
@@ -157,43 +168,30 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
   /*                             Looking for $outer                             */
   /* -------------------------------------------------------------------------- */
   def findOuter(tree: RuntimeTree): Validation[OuterTree] = {
-    def outerLookup(ref: ReferenceType) = Validation(ref.fieldByName("$outer")).map(_.`type`()).orElse {
-      removeLastInnerTypeFromFQCN(ref.name())
-        .map(name => loadClass(name + "$")) match {
-        case Some(Safe(Success(Module(mod: ClassType)))) => Valid(mod)
-        case _ => Recoverable(s"Cannot find $$outer for $ref")
+    def outerLookup(ref: ReferenceType) =
+      Validation(ref.fieldByName("$outer")).map(_.`type`()).orElse {
+        removeLastInnerTypeFromFQCN(ref.name())
+          .map(name => loadClass(name + "$")) match {
+          case Some(Safe(Success(Module(mod)))) => Valid(mod)
+          case _ => Recoverable(s"Cannot find $$outer for $ref")
+        }
       }
-    }
 
     for {
-      ref <- ifReference(tree)
+      ref <- extractReferenceType(tree)
       outer <- outerLookup(ref)
       outerTree <- OuterTree(tree, outer)
     } yield outerTree
-  }
-
-  def initializeModule(modCls: ClassType, evaluated: Safe[JdiValue]): Safe[JdiValue] = {
-    for {
-      ofValue <- evaluated
-      initMethodName <- Safe(getLastInnerType(modCls.name()).get)
-      instance <- ofValue.value.`type` match {
-        case module if module == modCls => Safe(ofValue)
-        case _ => ofValue.asObject.invoke(initMethodName, Seq.empty)
-      }
-    } yield instance
   }
 
   /* -------------------------------------------------------------------------- */
   /*                               Useful patterns                              */
   /* -------------------------------------------------------------------------- */
   /* Extract reference if there is */
-  def ifReference(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
-    tree match {
-      case Valid(tree) => ifReference(tree)
-      case e: Invalid => Recoverable(s"Invalid reference: $e")
-    }
+  def extractReferenceType(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
+    tree.flatMap(extractReferenceType)
 
-  def ifReference(tree: RuntimeTree): Validation[ReferenceType] =
+  def extractReferenceType(tree: RuntimeTree): Validation[ReferenceType] =
     tree match {
       case ReferenceTree(ref) => Valid(ref)
       case t => illegalAccess(t, "ReferenceType")
@@ -267,11 +265,19 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
   }
 
   def loadClassOnNeed[T <: TypeComponent](tc: T): T = {
-    checkClassStatus(tc.`type`)(tc.typeName)
+    def tpe = tc match {
+      case field: Field => field.`type`
+      case method: Method => method.returnType
+    }
+    val name = tc match {
+      case field: Field => field.typeName()
+      case method: Method => method.returnTypeName()
+    }
+    checkClassStatus(tpe)(name)
     tc
   }
 
-  def searchAllClassesFor(name: String, in: Option[String]): Validation[ClassType] = {
+  def searchAllClassesFor(name: String, in: Option[String]): Validation[ClassTree] = {
     def fullName = in match {
       case Some(value) if value == name => name // name duplication when implicit apply call
       case Some(value) if value.endsWith("$") => value + name
@@ -311,6 +317,20 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
 
     finalCandidates
       .toValidation(s"Cannot find module/class $name, has it been loaded ?")
-      .map { cls => checkClassStatus(cls)(cls.name()).get.asInstanceOf[ClassType] }
+      .map { cls => ClassTree(checkClassStatus(cls)(cls.name()).get.asInstanceOf[ClassType]) }
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /*                              Initialize module                             */
+  /* -------------------------------------------------------------------------- */
+  def initializeModule(modCls: ClassType, evaluated: Safe[JdiValue]): Safe[JdiValue] = {
+    for {
+      ofValue <- evaluated
+      initMethodName <- Safe(getLastInnerType(modCls.name()).get)
+      instance <- ofValue.value.`type` match {
+        case module if module == modCls => Safe(ofValue)
+        case _ => ofValue.asObject.invoke(initMethodName, Seq.empty)
+      }
+    } yield instance
   }
 }

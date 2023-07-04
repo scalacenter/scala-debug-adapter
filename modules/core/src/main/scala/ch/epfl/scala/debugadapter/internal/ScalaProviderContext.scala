@@ -11,6 +11,7 @@ import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 import com.microsoft.java.debug.core.adapter.IStackTraceProvider
 import com.microsoft.java.debug.core.adapter.IVirtualMachineManagerProvider
 import com.microsoft.java.debug.core.adapter.ProviderContext
+import com.microsoft.java.debug.core.adapter.variables.IVariableProvider
 
 private[debugadapter] class ScalaProviderContext private (debuggee: Debuggee, logger: Logger, config: DebugConfig)
     extends ProviderContext {
@@ -35,6 +36,7 @@ private[debugadapter] object ScalaProviderContext {
     context.registerProvider(classOf[IHotCodeReplaceProvider], HotCodeReplaceProvider)
     context.registerProvider(classOf[ICompletionsProvider], CompletionsProvider)
     context.registerProvider(classOf[IVirtualMachineManagerProvider], VirtualMachineManagerProvider)
+    context.registerProvider(classOf[IVariableProvider], VariableProvider)
     context
   }
 }
