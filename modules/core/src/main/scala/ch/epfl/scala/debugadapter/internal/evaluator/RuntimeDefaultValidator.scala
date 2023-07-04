@@ -101,12 +101,6 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       fieldTree <- toStaticIfNeeded(field, of.get)
     } yield fieldTree
 
-  def zeroArgMethodTreeByName(
-      of: Validation[RuntimeTree],
-      name: String
-  ): Validation[RuntimeEvaluableTree] =
-    of.flatMap(methodTreeByNameAndArgs(_, name, List.empty))
-
   private def inCompanion(name: Option[String], moduleName: String) = name
     .filter(_.endsWith("$"))
     .map(n => loadClass(n.stripSuffix("$")))
@@ -145,7 +139,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
           case (Valid(c), Valid(ct: ClassTree)) =>
             if (c.`type`.isStatic()) cls
             else CompilerRecoverable(s"Cannot access non-static class ${c.`type`.name} from ${ct.`type`.name()}")
-          case (_, Valid(value)) => findOuter(value).flatMap(o => validateClass(name, Valid(o)))
+          case (_, Valid(value)) => validateOuter(value).flatMap(o => validateClass(name, Valid(o)))
           case (_, _: Invalid) => Recoverable(s"Cannot find class $name")
         }
       }
@@ -157,7 +151,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
   ): Validation[RuntimeEvaluableTree] = {
     val name = NameTransformer.encode(value)
     def field = fieldTreeByName(of, name)
-    def zeroArg = zeroArgMethodTreeByName(of, name)
+    def zeroArg = of.flatMap(methodTreeByNameAndArgs(_, name, List.empty))
     def member =
       if (methodFirst) zeroArg.orElse(field)
       else field.orElse(zeroArg)
@@ -166,7 +160,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       .flatMap { of =>
         member
           .orElse(validateModule(name, Some(of)))
-          .orElse(findOuter(of).flatMap(o => validateName(value, Valid(o), methodFirst)))
+          .orElse(validateOuter(of).flatMap(o => validateName(value, Valid(o), methodFirst)))
       }
       .orElse {
         of match {
@@ -212,7 +206,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
     methodTreeByNameAndArgs(tree, name, args)
       .orElse { validateIndirectApply(Valid(tree), name, args) }
       .orElse { validateApply(tree, args) }
-      .orElse { findOuter(tree).flatMap(findMethod(_, name, args)) }
+      .orElse { validateOuter(tree).flatMap(findMethod(_, name, args)) }
 
   def validateMethod(call: Call): Validation[RuntimeEvaluableTree] = {
     lazy val preparedCall = call.fun match {
@@ -257,7 +251,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
   /* -------------------------------------------------------------------------- */
   /*                             Looking for $outer                             */
   /* -------------------------------------------------------------------------- */
-  def findOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree] = {
+  def validateOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree] = {
     for {
       ref <- extractReferenceType(tree)
       outer <- outerLookup(ref)

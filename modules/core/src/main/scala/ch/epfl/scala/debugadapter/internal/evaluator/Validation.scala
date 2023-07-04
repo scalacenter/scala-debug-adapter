@@ -5,6 +5,13 @@ import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
 
+import com.sun.jdi.VMDisconnectedException
+import com.sun.jdi.ObjectCollectedException
+import com.sun.jdi.InvalidStackFrameException
+import com.sun.jdi.AbsentInformationException
+import com.sun.jdi.InvocationException
+import com.sun.jdi.VMOutOfMemoryException
+
 sealed abstract class Validation[+A] {
   def isValid: Boolean
   def isInvalid: Boolean = !isValid
@@ -76,13 +83,22 @@ final case class Fatal(override val exception: Exception) extends Unrecoverable(
 final case class CompilerRecoverable(override val exception: Exception) extends Unrecoverable(exception)
 
 object Validation {
+  private def handler: Function[Throwable, Invalid] = {
+    case e @ (_: VMDisconnectedException | _: ObjectCollectedException) => Fatal(e)
+    case e @ (_: InvalidStackFrameException | _: AbsentInformationException) => Fatal(e)
+    case e @ (_: InvocationException | _: VMOutOfMemoryException) => Fatal(e)
+    case e: Exception =>
+      println(s"\u001b[35mUnexpected error while validating: ${e}\u001b[0m")
+      CompilerRecoverable(e)
+  }
+
   def apply[A](input: => A): Validation[A] = {
     try {
       val value = input
       if (value == null) Recoverable("Found null value, expected non-null value")
       else Valid(value)
     } catch {
-      case t: Throwable => CompilerRecoverable(new Exception(t))
+      case t: Throwable => handler(t)
     }
   }
 
@@ -96,7 +112,7 @@ object Validation {
   def fromTry[A](value: => scala.util.Try[A]): Validation[A] = {
     value match {
       case scala.util.Success(value) => Valid(value)
-      case scala.util.Failure(t) => CompilerRecoverable(new Exception(t))
+      case scala.util.Failure(t) => handler(t)
     }
   }
 
