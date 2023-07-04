@@ -27,7 +27,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        jvm: ['adopt:1.8.0-292', 'adopt:1.11.0.11', 'temurin:1.17.0.3']
+        jvm: ['adoptium:1.8.0-372', 'adoptium:1.11.0.19', 'adoptium:1.17.0.7']
+        include:
+          - os: ubuntu-latest
+            jvm: 'adoptium:1.20.0.1'
     name: Test on ${{ matrix.os }} -- ${{ matrix.jvm }}
     runs-on: ${{ matrix.os }}
     steps:
@@ -44,3 +47,4 @@ jobs:
     - name: Scripted sbt tests
       run: sbt sbtPlugin/scripted
       shell: bash
+      if: ${{ matrix.jvm != 'adoptium:1.20.0.1' }}
