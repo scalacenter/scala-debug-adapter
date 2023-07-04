@@ -607,8 +607,8 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
-        Evaluation.success("foo.getClass", ObjectRef("Class (Foo)@")),
-        Evaluation.success("Foo", ObjectRef("Foo$@")),
+        Evaluation.success("foo.getClass", ObjectRef("Class (Foo)")),
+        Evaluation.success("Foo", ObjectRef("Foo$")),
         Evaluation.failed("NoObject")
       )
     )
@@ -666,13 +666,13 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Breakpoint(7),
       Evaluation.success("new AA", ObjectRef("A$AA")),
       Breakpoint(33),
-      Evaluation.success("new a.AA", ObjectRef("A$AA@")),
-      Evaluation.success("new aAA.AAA(42)", ObjectRef("A$AA$AAA@")),
-      Evaluation.success("new a.AA.StaticAAA", ObjectRef("A$AA$StaticAAA@")),
-      Evaluation.success("new A.StaticAA", ObjectRef("A$StaticAA@")),
-      Evaluation.success("new AStaticAA.AAA", ObjectRef("A$StaticAA$AAA@")),
-      Evaluation.success("new this.AStaticAA.AAA", ObjectRef("A$StaticAA$AAA@")),
-      Evaluation.success("new A.StaticAA.StaticAAA", ObjectRef("A$StaticAA$StaticAAA@")),
+      Evaluation.success("new a.AA", ObjectRef("A$AA")),
+      Evaluation.success("new aAA.AAA(42)", ObjectRef("A$AA$AAA")),
+      Evaluation.success("new a.AA.StaticAAA", ObjectRef("A$AA$StaticAAA")),
+      Evaluation.success("new A.StaticAA", ObjectRef("A$StaticAA")),
+      Evaluation.success("new AStaticAA.AAA", ObjectRef("A$StaticAA$AAA")),
+      Evaluation.success("new this.AStaticAA.AAA", ObjectRef("A$StaticAA$AAA")),
+      Evaluation.success("new A.StaticAA.StaticAAA", ObjectRef("A$StaticAA$StaticAAA")),
       Evaluation.success("aAAaaa1.x", 42),
       Evaluation.success("aAAaaa2.x", 43)
     )
