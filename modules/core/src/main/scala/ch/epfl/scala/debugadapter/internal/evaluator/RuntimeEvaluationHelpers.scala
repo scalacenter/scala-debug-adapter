@@ -214,11 +214,17 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
 
     loop(qual)
   }
-  def validateType(tpe: MType, thisTypeName: Option[String])(
+  def validateType(tpe: MType, thisType: Option[RuntimeEvaluableTree])(
       termValidation: Term => Validation[RuntimeEvaluableTree]
   ): Validation[(Option[RuntimeEvaluableTree], ClassTree)] =
     tpe match {
-      case MType.Name(name) => searchAllClassesFor(name, thisTypeName).map((None, _))
+      case MType.Name(name) =>
+        searchAllClassesFor(name, thisType.map(_.`type`.name)).map { cls =>
+          outerLookup(cls.`type`) match {
+            case Valid(_) => (thisType, cls)
+            case _: Invalid => (None, cls)
+          }
+        }
       case MType.Select(qual, name) =>
         val cls = for {
           qual <- termValidation(qual)
@@ -226,7 +232,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
         } yield
           if (tpe.isStatic()) (None, ClassTree(tpe))
           else (Some(qual), ClassTree(tpe))
-        cls.orElse(searchAllClassesFor(qual.toString + "." + name.value, thisTypeName).map((None, _)))
+        cls.orElse(searchAllClassesFor(qual.toString + "." + name.value, thisType.map(_.`type`.name)).map((None, _)))
       case _ => Recoverable("Type not supported at runtime")
     }
 

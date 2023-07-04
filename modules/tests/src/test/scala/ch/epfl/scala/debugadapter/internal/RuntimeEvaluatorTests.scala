@@ -628,6 +628,10 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       """|package example
          |
          |class A {
+         |  val test = {
+         |    42
+         |    println("ok")
+         |  }
          |  class AA {
          |    class AAA(val x: Int)
          |  }
@@ -649,6 +653,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
          |  val AStaticAA = new A.StaticAA
          |  def main(args: Array[String]): Unit = {
          |    val a = new A
+         |    a.test
          |    val aAA = new a.AA
          |    val aAAaaa1 = new aAA.AAA(42)
          |    val aAAaaa2 = new aAA.AAA(43)
@@ -658,7 +663,9 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
          |""".stripMargin
     implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
-      Breakpoint(28),
+      Breakpoint(7),
+      Evaluation.success("new AA") { res => res.startsWith("A$AA@") },
+      Breakpoint(33),
       Evaluation.success("new a.AA") { res => res.startsWith("A$AA@") },
       Evaluation.success("new aAA.AAA(42)") { res => res.startsWith("A$AA$AAA@") },
       Evaluation.success("new a.AA.StaticAAA") { res => res.startsWith("A$AA$StaticAAA@") },

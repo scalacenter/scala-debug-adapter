@@ -231,7 +231,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
 
     for {
       args <- argClauses.flatMap(_.map(validate(_))).traverse
-      outerFqcn = thisTree.toOption.map(_.`type`.name())
+      outerFqcn = thisTree.toOption
       cls <- validateType(tpe, outerFqcn)(validate)
       qualInjectedArgs = cls._1 match {
         case Some(q) => q +: args
