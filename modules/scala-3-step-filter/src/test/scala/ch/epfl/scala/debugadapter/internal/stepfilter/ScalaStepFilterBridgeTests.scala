@@ -331,10 +331,10 @@ abstract class ScalaStepFilterBridgeTests(scalaVersion: ScalaVersion) extends Fu
     val initDefault2 = FakeJdiMethod("example.A$", "$lessinit$greater$default$2")()("int")
 
     // TODO fix: should be able to find a1, y, x and the other y by traversing the trees of m and <init>
-    assert(stepFilter.findSymbol(mDefault1).isEmpty)
-    assert(stepFilter.findSymbol(mDefault2).isEmpty)
-    assert(stepFilter.findSymbol(initDefault1).isEmpty)
-    assert(stepFilter.findSymbol(initDefault2).isEmpty)
+    assert(stepFilter.findSymbol(mDefault1).isDefined)
+    assert(stepFilter.findSymbol(mDefault2).isDefined)
+    assert(stepFilter.findSymbol(initDefault1).isDefined)
+    assert(stepFilter.findSymbol(initDefault2).isDefined)
   }
 
   test("matches on return types") {
