@@ -345,6 +345,13 @@ object RuntimeEvaluatorEnvironments {
   val flowControl =
     """|package example
        |
+       |class A {
+       |  val x: String = "a"
+       |}
+       |
+       |class B extends A
+       |class C extends A
+       |
        |object Main {
        |  def main(args: Array[String]): Unit = {
        |    val x = 1
@@ -354,6 +361,7 @@ object RuntimeEvaluatorEnvironments {
        |
        |  def test(x: Int): String = s"int $x"
        |  def test(t: Test): String = s"test ${t.i}"
+       |  def isTrue = true
        |
        |  case class Test(i: Int)
        |}""".stripMargin
@@ -522,16 +530,18 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     implicit val debuggee = arrays
     check(
       Breakpoint(9),
-      Evaluation.success("arr(0)", 1),
-      Evaluation.success("arr(2)", 3),
-      Evaluation.success("arr(sh)", 3),
-      Evaluation.success("arr(ch)", 3),
-      Evaluation.success("arr(by)", 3),
-      Evaluation.success("arr(new Integer(2))", 3),
-      Evaluation.success("arr(new Character('\u0000'))", 1),
-      Evaluation.failed("arr(3)"),
-      Evaluation.success("test(arr)", "1,2,3"),
-      Evaluation.failed("test(Array(Test(1), Test(2), Test(3)))")
+      DebugStepAssert.inParallel(
+        Evaluation.success("arr(0)", 1),
+        Evaluation.success("arr(2)", 3),
+        Evaluation.success("arr(sh)", 3),
+        Evaluation.success("arr(ch)", 3),
+        Evaluation.success("arr(by)", 3),
+        Evaluation.success("arr(new Integer(2))", 3),
+        Evaluation.success("arr(new Character('\u0000'))", 1),
+        Evaluation.failed("arr(3)"),
+        Evaluation.success("test(arr)", "1,2,3"),
+        Evaluation.failed("test(Array(Test(1), Test(2), Test(3)))")
+      )
     )
   }
 
@@ -539,30 +549,32 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     implicit val debuggee = collections
     check(
       Breakpoint(10),
-      Evaluation.success("list(0).toString", "1"),
-      Evaluation.success("list(2).toString", "3"),
-      Evaluation.success("list(new Integer(2)).toString", "3"),
-      Evaluation.successOrIgnore("list(new Character('\u0000')).toString", "1", true),
-      Evaluation.failed("list(3)"),
-      Evaluation.success("map(1)", "one"),
-      Evaluation.success("map(2)", "two"),
-      Evaluation.success("map(new Integer(2))", "two"),
-      Evaluation.successOrIgnore("map(new Character('\u0000'))", "one", true),
-      Evaluation.failed("map(3)"),
-      Evaluation.success("set(1)", true),
-      Evaluation.success("set(2)", true),
-      Evaluation.success("set(new Integer(2))", true),
-      Evaluation.successOrIgnore("set(new Character('\u0000')).toStrign", "1", true),
-      Evaluation.success("set(4)", false),
-      Evaluation.success("seq(0).toString", "1"),
-      Evaluation.success("seq(2).toString", "3"),
-      Evaluation.success("seq(new Integer(2)).toString", "3"),
-      Evaluation.successOrIgnore("seq(new Character('\u0000')).toString", "1", true),
-      Evaluation.failed("seq(3)"),
-      Evaluation.success("vector(0).toString", "1"),
-      Evaluation.success("vector(2).toString", "3"),
-      Evaluation.success("vector(new Integer(2)).toString", "3"),
-      Evaluation.successOrIgnore("vector(new Character('\u0000'))", 1, true)
+      DebugStepAssert.inParallel(
+        Evaluation.success("list(0).toString", "1"),
+        Evaluation.success("list(2).toString", "3"),
+        Evaluation.success("list(new Integer(2)).toString", "3"),
+        Evaluation.successOrIgnore("list(new Character('\u0000')).toString", "1", true),
+        Evaluation.failed("list(3)"),
+        Evaluation.success("map(1)", "one"),
+        Evaluation.success("map(2)", "two"),
+        Evaluation.success("map(new Integer(2))", "two"),
+        Evaluation.successOrIgnore("map(new Character('\u0000'))", "one", true),
+        Evaluation.failed("map(3)"),
+        Evaluation.success("set(1)", true),
+        Evaluation.success("set(2)", true),
+        Evaluation.success("set(new Integer(2))", true),
+        Evaluation.successOrIgnore("set(new Character('\u0000')).toStrign", "1", true),
+        Evaluation.success("set(4)", false),
+        Evaluation.success("seq(0).toString", "1"),
+        Evaluation.success("seq(2).toString", "3"),
+        Evaluation.success("seq(new Integer(2)).toString", "3"),
+        Evaluation.successOrIgnore("seq(new Character('\u0000')).toString", "1", true),
+        Evaluation.failed("seq(3)"),
+        Evaluation.success("vector(0).toString", "1"),
+        Evaluation.success("vector(2).toString", "3"),
+        Evaluation.success("vector(new Integer(2)).toString", "3"),
+        Evaluation.successOrIgnore("vector(new Character('\u0000'))", 1, true)
+      )
     )
   }
 
@@ -753,16 +765,19 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("Should evaluate if control flows") {
     implicit val debuggee = controlFlow
     check(
-      Breakpoint(7),
-      Evaluation.success("if (true) 1 else 2", 1),
-      Evaluation.success("if (x == 1) 2 else 1", 2),
-      Evaluation.success("if (x == 1) \"a string\" else 1", "a string"),
-      Evaluation.success("test(if(true) 1 else 2)", "int 1"),
-      Evaluation.success("test(if(false) x else t)", "test -1"),
-      Evaluation.success("test(if(true) x else t)", "int 1"),
-      Evaluation.success("(if(true) Test(-1) else x).i", -1),
-      Evaluation.success("(if(false) x else Test(-1)).i", -1),
-      Evaluation.failed("test(if(Test(-1).i == -1) Test(-1) else x)")
+      Breakpoint(14),
+      DebugStepAssert.inParallel(
+        Evaluation.success("if (true) 1 else 2", 1),
+        Evaluation.success("if (x == 1) 2 else 1", 2),
+        Evaluation.success("if (x == 1) \"a string\" else 1", "a string"),
+        Evaluation.success("test(if(true) 1 else 2)", "int 1"),
+        Evaluation.success("test(if(false) x else t)", "test -1"),
+        Evaluation.success("test(if(true) x else t)", "int 1"),
+        Evaluation.success("(if(true) Test(-1) else x).i", -1),
+        Evaluation.success("(if(false) x else Test(-1)).i", -1),
+        Evaluation.failed("test(if(Test(-1).i == -1) Test(-1) else x)"),
+        Evaluation.success("(if (isTrue) new B else new C).x", "a")
+      )
     )
   }
 }

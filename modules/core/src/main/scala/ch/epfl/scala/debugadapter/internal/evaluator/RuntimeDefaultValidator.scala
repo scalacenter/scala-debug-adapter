@@ -264,7 +264,13 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       cond <- validate(tree.cond)
       thenp <- validate(tree.thenp)
       elsep <- validate(tree.elsep)
-      ifTree <- IfTree(cond, thenp, elsep, isAssignableFrom(_, _), objType)
+      ifTree <- IfTree(
+        cond,
+        thenp,
+        elsep,
+        isAssignableFrom(_, _),
+        extractCommonType(thenp.`type`, elsep.`type`).getOrElse(objType)
+      )
     } yield ifTree
   }
 }
