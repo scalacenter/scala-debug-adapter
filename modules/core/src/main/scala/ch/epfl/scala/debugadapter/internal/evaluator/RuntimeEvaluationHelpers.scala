@@ -10,6 +10,7 @@ import scala.meta.Term
 import scala.meta.{Type => MType}
 import scala.util.Failure
 import scala.util.Try
+import scala.jdk.CollectionConverters.*
 
 private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
   import RuntimeEvaluationHelpers.*
@@ -237,14 +238,24 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     }
 
   // ! May not be correct when dealing with an object inside a class
-  def outerLookup(ref: ReferenceType) =
-    Validation(ref.fieldByName("$outer")).map(_.`type`()).orElse {
-      removeLastInnerTypeFromFQCN(ref.name())
-        .map(name => loadClass(name + "$").extract) match {
-        case Some(Success(Module(mod))) => Valid(mod)
-        case _ => Recoverable(s"Cannot find $$outer for $ref")
+  def outerLookup(ref: ReferenceType): Validation[Type] =
+    Validation(ref.fieldByName("$outer"))
+      .map(_.`type`())
+      .orElse {
+        removeLastInnerTypeFromFQCN(ref.name())
+          .map(name => loadClass(name + "$").extract) match {
+          case Some(Success(Module(mod))) => Valid(mod)
+          case _ => Recoverable(s"Cannot find $$outer for $ref")
+        }
       }
-    }
+      .orElse { // For Java compatibility
+        ref
+          .fields()
+          .asScala
+          .collect { case f if f.name().startsWith("this$") => f.`type`() }
+          .toSeq
+          .toValidation("Cannot find $$this$$xx for $ref")
+      }
 
   def searchAllClassesFor(name: String, in: Option[String]): Validation[ClassTree] = {
     def fullName = in match {

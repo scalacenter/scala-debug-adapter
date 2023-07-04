@@ -338,4 +338,17 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
       )
     )
   }
+
+  test("Should instantiate inner classes --- java".only) {
+    implicit val debuggee = nested
+    check(
+      Breakpoint(15),
+      Evaluation.success("new Inner(2)", ObjectRef("Main$Inner")),
+      Breakpoint(11),
+      DebugStepAssert.inParallel(
+        Evaluation.success("new main.Inner(2)", ObjectRef("Main$Inner")),
+        Evaluation.success("new foo.FriendFoo(foo)", ObjectRef("Foo$FriendFoo"))
+      )
+    )
+  }
 }

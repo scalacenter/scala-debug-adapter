@@ -155,8 +155,8 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       member
         .orElse(validateModule(name, Some(of)))
         .orElse(findOuter(of).flatMap(o => validateName(value, Valid(o), methodFirst)))
-    }.orElse(validateModule(name, None))
-      .orElse(localVarTreeByName(name))
+    }.orElse(localVarTreeByName(name))
+      .orElse(validateModule(name, None))
   }
 
   /* -------------------------------------------------------------------------- */
