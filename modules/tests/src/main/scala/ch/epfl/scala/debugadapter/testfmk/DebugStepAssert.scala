@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter.testfmk
 import com.microsoft.java.debug.core.protocol.Types.StackFrame
 import munit.Assertions.*
 import munit.Location
+import com.microsoft.java.debug.core.protocol.Types.Variable
 
 import java.nio.file.Path
 import scala.Console.*
@@ -22,6 +23,7 @@ final case class StepOver() extends DebugStep[List[StackFrame]]
 final case class Evaluation(expression: String) extends DebugStep[Either[String, String]]
 final case class Outputed() extends DebugStep[String]
 final case class NoStep() extends DebugStep[Nothing]
+final case class Watch(variable: String) extends DebugStep[Array[Variable]]
 
 final case class ObjectRef(clsName: String)
 
@@ -161,7 +163,7 @@ object Evaluation {
   }
 
   private def assertFailed(response: Either[String, String]): Unit =
-    assert(response.isLeft, clue = s"Expected error, got ${response.right.toOption.get}$RESET")
+    assert(response.isLeft, clue = s"Expected error, got ${response.toOption.get}$RESET")
 
   private def assertFailed(assertion: String => Unit)(response: Either[String, String]): Unit = {
     assertFailed(response)
@@ -208,6 +210,18 @@ object Evaluation {
         assert(result.endsWith("\"" + expected + "\""))
     }
   }
+}
+
+object Watch {
+  def success(variable: String)(p: Array[Variable] => Boolean)(implicit
+      ctx: TestingContext,
+      location: Location
+  ): SingleStepAssert[Array[Variable]] =
+    new SingleStepAssert(new Watch(variable), assertSuccess(p))
+
+  def assertSuccess(p: Array[Variable] => Boolean)(
+      response: Array[Variable]
+  )(implicit ctx: TestingContext, location: Location): Unit = assert(p(response))
 }
 
 object Outputed {
