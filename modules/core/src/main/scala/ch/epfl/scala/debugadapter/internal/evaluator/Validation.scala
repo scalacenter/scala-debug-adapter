@@ -81,7 +81,7 @@ object Validation {
       if (value == null) Recoverable("Found null value, expected non-null value")
       else Valid(value)
     } catch {
-      case t: Throwable => Fatal(new Exception(t))
+      case t: Throwable => CompilerRecoverable(new Exception(t))
     }
   }
 
@@ -95,7 +95,7 @@ object Validation {
   def fromTry[A](value: => scala.util.Try[A]): Validation[A] = {
     value match {
       case scala.util.Success(value) => Valid(value)
-      case scala.util.Failure(t) => Fatal(new Exception(t))
+      case scala.util.Failure(t) => CompilerRecoverable(new Exception(t))
     }
   }
 

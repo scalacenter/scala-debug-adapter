@@ -176,10 +176,16 @@ object RuntimeEvaluatorEnvironments {
        |    val y = x + 1
        |    def helloInner = s"hello inner $x"
        |    case class InnerInner() { 
-       |      val str = s"inner inner $y"
+       |      val str = {
+       |        println("ok")
+       |        s"inner inner $y"
+       |      } 
        |    }
        |    object InnerInner {
-       |      val str = s"inner inner $x"
+       |      val str = {
+       |        println("ok")
+       |        s"inner inner $x"
+       |      }
        |    }
        |  }
        |  object Inner { 
@@ -601,8 +607,8 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
-        Evaluation.success("foo.getClass") { res => assert(res.startsWith("Class (Foo)@")) },
-        Evaluation.success("Foo") { res => assert(res.startsWith("Foo$@")) },
+        Evaluation.success("foo.getClass", ObjectRef("Class (Foo)")),
+        Evaluation.success("Foo", ObjectRef("Foo$")),
         Evaluation.failed("NoObject")
       )
     )
@@ -614,6 +620,100 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Breakpoint(5),
       Evaluation.success("test(1)", "primitive int"),
       Evaluation.success("test(new Integer(1))", "boxed int")
+    )
+  }
+
+  test("Should instantiate inner classes") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  val test = {
+         |    42
+         |    println("ok")
+         |  }
+         |  class AA {
+         |    class AAA(val x: Int)
+         |  }
+         |  object AA {
+         |    class StaticAAA
+         |  }
+         |}
+         |
+         |object A {
+         |  class StaticAA {
+         |    class AAA
+         |  }
+         |  object StaticAA {
+         |    class StaticAAA
+         |  }
+         |}
+         |
+         |object Main {
+         |  val AStaticAA = new A.StaticAA
+         |  def main(args: Array[String]): Unit = {
+         |    val a = new A
+         |    a.test
+         |    val aAA = new a.AA
+         |    val aAAaaa1 = new aAA.AAA(42)
+         |    val aAAaaa2 = new aAA.AAA(43)
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(6),
+      Evaluation.success("new AA", ObjectRef("A$AA")),
+      Breakpoint(33),
+      Evaluation.success("new a.AA", ObjectRef("A$AA")),
+      Evaluation.success("new aAA.AAA(42)", ObjectRef("A$AA$AAA")),
+      Evaluation.success("new a.AA.StaticAAA", ObjectRef("A$AA$StaticAAA")),
+      Evaluation.success("new A.StaticAA", ObjectRef("A$StaticAA")),
+      Evaluation.success("new AStaticAA.AAA", ObjectRef("A$StaticAA$AAA")),
+      Evaluation.success("new this.AStaticAA.AAA", ObjectRef("A$StaticAA$AAA")),
+      Evaluation.success("new A.StaticAA.StaticAAA", ObjectRef("A$StaticAA$StaticAAA")),
+      Evaluation.success("aAAaaa1.x", 42),
+      Evaluation.success("aAAaaa2.x", 43)
+    )
+  }
+
+  test("Should pre-evaluate $outer") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  val x = 42
+         |  class C
+         |  object C { def life = x }
+         |}
+         |
+         |class B extends A {
+         |  val y = 43
+         |}
+         |
+         |object B extends A {
+         |  val y = 84
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val b = new B
+         |    val bc = new b.C
+         |    val bC = b.C
+         |    val Bc = new B.C
+         |    val BC = B.C
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(24),
+      Evaluation.success("bc.y", 43),
+      Evaluation.success("bC.y", 43),
+      Evaluation.success("Bc.y", 84),
+      Evaluation.success("BC.y", 84)
     )
   }
 }
@@ -628,9 +728,9 @@ class Scala212RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`
     check(
       Breakpoint(21),
       Evaluation.success("upperMain1", "upper main 1"),
-      Breakpoint(23),
+      Breakpoint(25),
       Evaluation.success("upperMain2", "upper main 2"),
-      Breakpoint(26),
+      Breakpoint(31),
       Evaluation.success("upperMain3", "upper main 3")
     )
   }
@@ -641,9 +741,9 @@ class Scala213RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`
     check(
       Breakpoint(21),
       Evaluation.success("upperMain1", "upper main 1"),
-      Breakpoint(23),
+      Breakpoint(25),
       Evaluation.success("upperMain2", "upper main 2"),
-      Breakpoint(26),
+      Breakpoint(31),
       Evaluation.success("upperMain3", "upper main 3")
     )
   }
@@ -654,12 +754,13 @@ class Scala31RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`3
     check(
       Breakpoint(21),
       Evaluation.success("upperMain1", "upper main 1"),
-      Breakpoint(26),
+      Breakpoint(31),
       Evaluation.success("upperMain2", "upper main 2"),
-      Breakpoint(26),
+      Breakpoint(25),
       Evaluation.success("upperMain3", "upper main 3")
     )
   }
+
   test("Should evaluate a local variable of a lambda") {
     val source =
       """|package example
