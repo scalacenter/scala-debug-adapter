@@ -55,6 +55,7 @@ object RuntimeEvaluatorEnvironments {
        |  private val lapinou = "lapinou"
        |  def bar(str: String, int: Int): String = str + int
        |  def keepTheRabbit: String = lapinou
+       |  def bar(i: Int) = s"bar ${i}"
        |}
        |
        |object Foo { val foofoo = "foofoo" }
@@ -806,6 +807,15 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Breakpoint(7),
       Evaluation.success("test(-1)", "int -1"),
       Evaluation.success("test(test)", "test -1")
+    )
+  }
+
+  test("Should evaluate blocks") {
+    implicit val debuggee = field
+    check(
+      Breakpoint(8),
+      Evaluation.success("{ 1+1; 2+2; lapin}", "lapin"),
+      Evaluation.success("f1.bar { 1+1; 2+2 }", "bar 4")
     )
   }
 }

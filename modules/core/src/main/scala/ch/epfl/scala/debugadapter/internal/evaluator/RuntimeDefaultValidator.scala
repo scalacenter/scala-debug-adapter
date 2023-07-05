@@ -39,6 +39,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       case select: Term.Select => validateSelect(select)
       case branch: Term.If => validateIf(branch)
       case instance: Term.New => validateNew(instance)
+      case block: Term.Block => validateBlock(block)
       case _ => Recoverable("Expression not supported at runtime")
     }
 
@@ -51,6 +52,15 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
           name <- validateName(name.value, Valid(qual)).orElse(validateClass(name.value, Valid(qual)))
         } yield name
       case _ => validate(expression)
+    }
+
+  /* -------------------------------------------------------------------------- */
+  /*                              Block validation                              */
+  /* -------------------------------------------------------------------------- */
+  def validateBlock(block: Term.Block): Validation[RuntimeEvaluableTree] =
+    block.stats.foldLeft(Valid(UnitTree): Validation[RuntimeEvaluableTree]) {
+      case (Valid(_), stat) => validate(stat)
+      case (err: Invalid, _) => err
     }
 
   /* -------------------------------------------------------------------------- */
