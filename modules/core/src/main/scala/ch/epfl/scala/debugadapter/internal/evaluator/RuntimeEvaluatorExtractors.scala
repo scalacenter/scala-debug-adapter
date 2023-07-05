@@ -39,7 +39,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
   object MethodCall {
     def unapply(tree: RuntimeTree): Boolean =
       tree match {
-        case mt: NestedModuleTree => unapply(mt.of)
+        case mt: NestedModuleTree => unapply(mt.init.qual)
         case ft: InstanceFieldTree => unapply(ft.qual)
         case oct: OuterClassTree => unapply(oct.inner)
         case OuterModuleTree(module) => unapply(module)

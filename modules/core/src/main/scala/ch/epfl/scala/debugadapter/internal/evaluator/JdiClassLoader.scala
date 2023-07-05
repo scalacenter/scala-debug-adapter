@@ -5,6 +5,8 @@ import com.sun.jdi._
 import java.nio.file.Path
 import RuntimeEvaluatorExtractors.IsAnyVal
 
+import scala.jdk.CollectionConverters.*
+
 private[internal] class JdiClassLoader(
     reference: ClassLoaderReference,
     thread: ThreadReference
@@ -122,7 +124,7 @@ private[internal] class JdiClassLoader(
   def boxUnboxOnNeed(
       expected: java.util.List[Type],
       received: Seq[JdiValue]
-  ): Safe[Seq[JdiValue]] = boxUnboxOnNeed(expected.asScalaSeq, received)
+  ): Safe[Seq[JdiValue]] = boxUnboxOnNeed(expected.asScala.toSeq, received)
 
   def createArray(arrayType: String, values: Seq[JdiValue]): Safe[JdiArray] =
     for {
