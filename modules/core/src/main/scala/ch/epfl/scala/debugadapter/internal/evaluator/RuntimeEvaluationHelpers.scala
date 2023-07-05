@@ -83,13 +83,11 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
    */
   private def methodsByNameAndArgs(
       ref: ReferenceType,
-      funName: String,
+      encodedName: String,
       args: Seq[Type],
       encode: Boolean = true
   ): Validation[Method] = {
-    val candidates: List[Method] = ref.methodsByName {
-      if (encode) NameTransformer.encode(funName) else funName
-    }.asScalaList
+    val candidates: List[Method] = ref.methodsByName(encodedName).asScalaList
 
     val unboxedCandidates = candidates.filter { argsMatch(_, args, boxing = false) }
 
@@ -109,24 +107,27 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     }
 
     finalCandidates
-      .toValidation(s"Cannot find a proper method $funName with args types $args on $ref")
+      .toValidation(s"Cannot find a proper method $encodedName with args types $args on $ref")
       .map { loadClassOnNeed }
   }
 
   def methodTreeByNameAndArgs(
       tree: RuntimeTree,
       funName: String,
-      args: Seq[RuntimeEvaluableTree],
-      encode: Boolean = true
+      args: Seq[RuntimeEvaluableTree]
   ): Validation[MethodTree] = tree match {
     case ReferenceTree(ref) =>
-      methodsByNameAndArgs(ref, funName, args.map(_.`type`), encode).flatMap {
+      methodsByNameAndArgs(ref, NameTransformer.encode(funName), args.map(_.`type`)).flatMap {
         case ModuleCall() =>
           Recoverable("Accessing a module from its instanciation method is not allowed at console-level")
         case mt => toStaticIfNeeded(mt, args, tree)
       }
     case _ => Recoverable(new IllegalArgumentException(s"Cannot find method $funName on $tree"))
   }
+
+  def newInstanceTreeByArgs(cls: ClassType, args: Seq[RuntimeEvaluableTree]): Validation[NewInstanceTree] =
+    methodsByNameAndArgs(cls, "<init>", args.map(_.`type`))
+      .map(m => NewInstanceTree(StaticMethodTree(m, args, cls)))
 
   /* -------------------------------------------------------------------------- */
   /*                                Type checker                                */
@@ -240,12 +241,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
   ): Validation[(Option[RuntimeEvaluableTree], ClassTree)] =
     tpe match {
       case MType.Name(name) =>
-        searchAllClassesFor(name, thisType.map(_.`type`.name)).map { cls =>
-          outerLookup(cls.`type`) match {
-            case Valid(_) => (thisType, cls)
-            case _: Invalid => (None, cls)
-          }
-        }
+        searchAllClassesFor(name, thisType.map(_.`type`.name)).map(cls => (thisType, cls))
       case MType.Select(qual, name) =>
         val cls = for {
           qual <- termValidation(qual)
