@@ -276,7 +276,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
         thenp,
         elsep,
         isAssignableFrom(_, _),
-        extractCommonType(thenp.`type`, elsep.`type`).getOrElse(objType)
+        extractCommonSuperClass(thenp.`type`, elsep.`type`).getOrElse(objType)
       )
     } yield ifTree
   }

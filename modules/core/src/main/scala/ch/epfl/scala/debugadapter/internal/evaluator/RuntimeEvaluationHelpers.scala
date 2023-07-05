@@ -1,17 +1,18 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi._
-import scala.meta.trees.*
+
 import scala.meta.Lit
-import scala.util.Success
-import RuntimeEvaluatorExtractors.*
 import scala.meta.Stat
 import scala.meta.Term
+import scala.meta.trees.*
 import scala.meta.{Type => MType}
 import scala.util.Failure
+import scala.util.Success
 import scala.util.Try
 import scala.jdk.CollectionConverters.*
-import scala.annotation.tailrec
+
+import RuntimeEvaluatorExtractors.*
 
 private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
   import RuntimeEvaluationHelpers.*
@@ -217,40 +218,17 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     loop(qual)
   }
 
-  @tailrec
-  private def getAncestors(
-      of: Type,
-      depth: Int = 0,
-      acc: List[(ClassType, Int)] = List()
-  ): List[(ReferenceType, Int)] = {
-    of match {
-      case cls: ClassType =>
-        val spr = cls.superclass()
-        if (spr != null) getAncestors(spr, depth + 1, (cls, depth) :: acc)
-        else (cls, depth) :: acc
-      case _ => acc
-    }
-  }
-
-  def extractCommonType(tpe1: Type, tpe2: Type): Option[Type] = {
-    lazy val commonAncestors = for {
-      ancestors1 <- getAncestors(tpe1)
-      ancestors2 <- getAncestors(tpe2)
-      if ancestors1._1.equals(ancestors2._1)
-    } yield (ancestors1, ancestors2)
-
-    if (tpe1.equals(tpe2)) Some(tpe1)
-    else if (commonAncestors.isEmpty) None
-    else
-      Some {
-        commonAncestors
-          .reduce { (acc, elem) =>
-            if (acc._1._2 < elem._1._2 && acc._2._2 < elem._2._2) acc
-            else elem
-          }
-          ._1
-          ._1
+  def extractCommonSuperClass(tpe1: Type, tpe2: Type): Option[Type] = {
+    def getSuperClasses(of: Type): Array[ClassType] =
+      of match {
+        case cls: ClassType =>
+          Iterator.iterate(cls)(cls => cls.superclass()).takeWhile(_ != null).toArray
+        case _ => Array()
       }
+
+    val superClasses1 = getSuperClasses(tpe1)
+    val superClasses2 = getSuperClasses(tpe2)
+    superClasses1.find(superClasses2.contains)
   }
 
   def validateType(tpe: MType, thisType: Option[RuntimeEvaluableTree])(
