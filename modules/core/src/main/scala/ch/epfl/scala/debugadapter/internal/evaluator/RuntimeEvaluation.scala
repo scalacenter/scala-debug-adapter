@@ -47,7 +47,7 @@ trait RuntimeValidator {
    */
   protected def validateWithClass(expression: Stat): Validation[RuntimeTree]
 
-  def validateLiteral(lit: Lit): Validation[LiteralTree]
+  def validateLiteral(lit: Lit): Validation[RuntimeEvaluableTree]
 
   def localVarTreeByName(name: String): Validation[RuntimeEvaluableTree]
 

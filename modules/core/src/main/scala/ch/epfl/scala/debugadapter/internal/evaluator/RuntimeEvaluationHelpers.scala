@@ -1,16 +1,18 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi._
-import scala.meta.trees.*
+
 import scala.meta.Lit
-import scala.util.Success
-import RuntimeEvaluatorExtractors.*
 import scala.meta.Stat
 import scala.meta.Term
+import scala.meta.trees.*
 import scala.meta.{Type => MType}
 import scala.util.Failure
+import scala.util.Success
 import scala.util.Try
 import scala.jdk.CollectionConverters.*
+
+import RuntimeEvaluatorExtractors.*
 
 private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
   import RuntimeEvaluationHelpers.*
@@ -136,12 +138,12 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     }
 
     (got, expected) match {
-      case (g: ArrayType, at: ArrayType) => isAssignableFrom(g.componentType, at.componentType)
+      case (g: ArrayType, at: ArrayType) => g.componentType().equals(at.componentType()) // TODO: check this
       case (g: PrimitiveType, pt: PrimitiveType) => got.equals(pt)
       case (g: ReferenceType, ref: ReferenceType) => referenceTypesMatch(g, ref)
       case (_: VoidType, _: VoidType) => true
 
-      case (g: ClassType, pt: PrimitiveType) =>
+      case (g: ReferenceType, pt: PrimitiveType) =>
         isAssignableFrom(g, frame.getPrimitiveBoxedClass(pt))
       case (g: PrimitiveType, ct: ReferenceType) =>
         isAssignableFrom(frame.getPrimitiveBoxedClass(g), ct)
@@ -215,6 +217,20 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
 
     loop(qual)
   }
+
+  def extractCommonSuperClass(tpe1: Type, tpe2: Type): Option[Type] = {
+    def getSuperClasses(of: Type): Array[ClassType] =
+      of match {
+        case cls: ClassType =>
+          Iterator.iterate(cls)(cls => cls.superclass()).takeWhile(_ != null).toArray
+        case _ => Array()
+      }
+
+    val superClasses1 = getSuperClasses(tpe1)
+    val superClasses2 = getSuperClasses(tpe2)
+    superClasses1.find(superClasses2.contains)
+  }
+
   def validateType(tpe: MType, thisType: Option[RuntimeEvaluableTree])(
       termValidation: Term => Validation[RuntimeEvaluableTree]
   ): Validation[(Option[RuntimeEvaluableTree], ClassTree)] =
@@ -374,7 +390,9 @@ private[evaluator] object RuntimeEvaluationHelpers {
       case (_, Module(mod)) => Valid(InstanceFieldTree(field, mod))
       case (_, eval: RuntimeEvaluableTree) =>
         if (field.isStatic())
-          Fatal(s"Accessing static field $field from instance ${eval.`type`} can lead to unexpected behavior")
+          CompilerRecoverable(
+            s"Accessing static field $field from instance ${eval.`type`} can lead to unexpected behavior"
+          )
         else Valid(InstanceFieldTree(field, eval))
     }
 
@@ -387,7 +405,9 @@ private[evaluator] object RuntimeEvaluationHelpers {
     case Module(mod) => Valid(InstanceMethodTree(method, args, mod))
     case eval: RuntimeEvaluableTree =>
       if (method.isStatic())
-        Fatal(s"Accessing static method $method from instance ${eval.`type`} can lead to unexpected behavior")
+        CompilerRecoverable(
+          s"Accessing static method $method from instance ${eval.`type`} can lead to unexpected behavior"
+        )
       else Valid(InstanceMethodTree(method, args, eval))
   }
 
