@@ -253,7 +253,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
       }
   }
 
-  def validateType(tpe: MType, thisTypeName: Option[String])(
+  def validateType(tpe: MType, thisType: Option[RuntimeEvaluableTree])(
       termValidation: Term => Validation[RuntimeEvaluableTree]
   ): Validation[(Option[RuntimeEvaluableTree], ClassTree)] =
     tpe match {

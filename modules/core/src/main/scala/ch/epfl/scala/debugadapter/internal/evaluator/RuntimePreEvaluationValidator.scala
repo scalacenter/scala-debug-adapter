@@ -16,9 +16,6 @@ class RuntimePreEvaluationValidator(
     Validation.fromTry(tpe).map(PreEvaluatedTree(value, _))
   }
 
-  override lazy val thisTree: Validation[PreEvaluatedTree] =
-    ThisTree(frame.thisObject).flatMap(preEvaluate)
-
   override def validateLiteral(lit: Lit): Validation[RuntimeEvaluableTree] =
     super.validateLiteral(lit).flatMap(preEvaluate)
 

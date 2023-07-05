@@ -152,12 +152,19 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
       if (methodFirst) zeroArg.orElse(field)
       else field.orElse(zeroArg)
 
-    of.flatMap { of =>
-      member
-        .orElse(validateModule(name, Some(of)))
-        .orElse(findOuter(of).flatMap(o => validateName(value, Valid(o), methodFirst)))
-    }.orElse(localVarTreeByName(name))
-      .orElse(validateModule(name, None))
+    of
+      .flatMap { of =>
+        member
+          .orElse(validateModule(name, Some(of)))
+          .orElse(findOuter(of).flatMap(o => validateName(value, Valid(o), methodFirst)))
+      }
+      .orElse {
+        of match {
+          case Valid(_: ThisTree) | _: Recoverable => localVarTreeByName(name)
+          case _ => Recoverable(s"${name} is not a local variable")
+        }
+      }
+      .orElse { validateModule(name, None) }
   }
 
   /* -------------------------------------------------------------------------- */

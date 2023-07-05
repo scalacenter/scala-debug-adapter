@@ -776,7 +776,8 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("(if(true) Test(-1) else x).i", -1),
         Evaluation.success("(if(false) x else Test(-1)).i", -1),
         Evaluation.failed("test(if(Test(-1).i == -1) Test(-1) else x)"),
-        Evaluation.success("(if (isTrue) new B else new C).x", "a")
+        Evaluation.success("(if (isTrue) new B else new C).x", "a"),
+        Evaluation.failed("(if (isTrue) 1 else \"a string\").x")
       )
     )
   }
