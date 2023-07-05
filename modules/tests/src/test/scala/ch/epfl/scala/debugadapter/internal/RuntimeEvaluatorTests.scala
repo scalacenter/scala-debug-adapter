@@ -543,7 +543,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   }
 
   test("Should work on arrays") {
-    implicit val debuggee = arrays
+    implicit val debuggee: TestingDebuggee = arrays
     check(
       Breakpoint(9),
       DebugStepAssert.inParallel(
@@ -562,7 +562,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   }
 
   test("Should work on collections") {
-    implicit val debuggee = collections
+    implicit val debuggee: TestingDebuggee = collections
     check(
       Breakpoint(10),
       DebugStepAssert.inParallel(
@@ -748,7 +748,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   }
 
   test("Should instantiate inner classes") {
-    implicit val debuggee = inners
+    implicit val debuggee: TestingDebuggee = inners
     check(
       Breakpoint(28),
       DebugStepAssert.inParallel(
@@ -766,7 +766,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   }
 
   test("Should pre-evaluate $outer") {
-    implicit val debuggee = outerPreEval
+    implicit val debuggee: TestingDebuggee = outerPreEval
     check(
       Breakpoint(24),
       DebugStepAssert.inParallel(

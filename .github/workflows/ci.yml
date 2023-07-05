@@ -21,7 +21,7 @@ jobs:
       - uses: coursier/setup-action@v1.3.3
         with:
           apps: sbt
-      - run: sbt +compile
+      - run: sbt +Test/compile
   test:
     strategy:
       fail-fast: false
