@@ -220,13 +220,6 @@ case class NewInstanceTree(init: StaticMethodTree) extends RuntimeEvaluableTree 
   }
 }
 
-object NewInstanceTree {
-  def apply(init: MethodTree): Validation[NewInstanceTree] = init match {
-    case init: StaticMethodTree => Valid(new NewInstanceTree(init))
-    case _ => Recoverable("New instance must be initialized with a static method")
-  }
-}
-
 case class OuterClassTree(
     inner: RuntimeEvaluableTree,
     `type`: ClassType

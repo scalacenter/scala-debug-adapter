@@ -12,6 +12,7 @@ sealed abstract class Validation[+A] {
 
   def filter(p: A => Boolean, runtimeFatal: Boolean = false): Validation[A]
   def filterNot(p: A => Boolean, runtimeFatal: Boolean = false): Validation[A] = filter(!p(_), runtimeFatal)
+  def withFilter(p: A => Boolean): Validation[A] = filter(p)
 
   def map[B](f: A => B): Validation[B]
   def flatMap[B](f: A => Validation[B]): Validation[B]

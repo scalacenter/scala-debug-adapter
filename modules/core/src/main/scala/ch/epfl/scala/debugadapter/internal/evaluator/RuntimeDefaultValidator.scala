@@ -240,13 +240,9 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
     for {
       args <- argClauses.flatMap(_.map(validate(_))).traverse
       outerFqcn = thisTree.toOption
-      cls <- validateType(tpe, outerFqcn)(validate)
-      qualInjectedArgs = cls._1 match {
-        case Some(q) => q +: args
-        case None => args
-      }
-      method <- methodTreeByNameAndArgs(cls._2, "<init>", qualInjectedArgs, encode = false)
-      newInstance <- NewInstanceTree(method)
+      (outer, cls) <- validateType(tpe, outerFqcn)(validate)
+      newInstance <- newInstanceTreeByArgs(cls.`type`, args)
+        .orElse(outer.recoverable.flatMap(outer => newInstanceTreeByArgs(cls.`type`, outer +: args)))
     } yield newInstance
   }
 
