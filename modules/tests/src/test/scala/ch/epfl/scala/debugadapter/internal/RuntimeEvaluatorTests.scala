@@ -365,6 +365,20 @@ object RuntimeEvaluatorEnvironments {
        |
        |  case class Test(i: Int)
        |}""".stripMargin
+
+  val staticAccess =
+    """|package example
+       |
+       |object Main {
+       |  def main(args: Array[String]): Unit = {
+       |    val x = 1
+       |    val test = Test(-1)
+       |    println("ok")
+       |  }
+       |  def test(x: Int): String = s"int $x"
+       |  def test(t: Test): String = s"test ${t.i}"
+       |  case class Test(i: Int)
+       |}""".stripMargin
 }
 
 abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
@@ -388,6 +402,8 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.outerPreEval, "example.Main", scalaVersion)
   lazy val controlFlow =
     TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.flowControl, "example.Main", scalaVersion)
+  lazy val staticAccess =
+    TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.staticAccess, "example.Main", scalaVersion)
 
   protected override def defaultConfig: DebugConfig =
     super.defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly)
@@ -779,6 +795,17 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("(if (isTrue) new B else new C).x", "a"),
         Evaluation.failed("(if (isTrue) 1 else \"a string\").x")
       )
+    )
+  }
+
+  test(
+    "Should not call the apply method when calling a method with the same name as an instance with an apply method"
+  ) {
+    implicit val debuggee = staticAccess
+    check(
+      Breakpoint(7),
+      Evaluation.success("test(-1)", "int -1"),
+      Evaluation.success("test(test)", "test -1")
     )
   }
 }

@@ -138,10 +138,9 @@ case class ArrayElemTree private (array: RuntimeEvaluableTree, index: RuntimeEva
 }
 
 object ArrayElemTree {
-  def apply(tree: RuntimeTree, funName: String, index: Seq[RuntimeEvaluableTree]): Validation[ArrayElemTree] = {
+  def apply(tree: RuntimeTree, index: Seq[RuntimeEvaluableTree]): Validation[ArrayElemTree] = {
     val integerTypes = Seq("java.lang.Integer", "java.lang.Short", "java.lang.Byte", "java.lang.Character")
-    if (funName != "apply") Recoverable("Not an array accessor")
-    else if (index.size < 1 || index.size > 1) Recoverable("Array accessor must have one argument")
+    if (index.size < 1 || index.size > 1) Recoverable("Array accessor must have one argument")
     else
       (tree, tree.`type`) match {
         case (tree: RuntimeEvaluableTree, arr: ArrayType) =>
