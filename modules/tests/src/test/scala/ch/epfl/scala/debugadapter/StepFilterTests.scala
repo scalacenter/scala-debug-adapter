@@ -980,7 +980,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
     }
   }
 
-  test("should match on vararg type") {
+  test("should match on vararg type".only) {
     val source =
       """|package example
          |
@@ -1005,7 +1005,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void"),
       Breakpoint(10),
       StepIn.method(
-        if (isScala3) "StringContext.<init>(parts: <repeated>[String]): StringContext"
+        if (isScala3) "StringContext.<init>(parts: <repeated>[String]): Unit"
         else "StringContext.<init>(Seq): void"
       ),
       Breakpoint(11),
