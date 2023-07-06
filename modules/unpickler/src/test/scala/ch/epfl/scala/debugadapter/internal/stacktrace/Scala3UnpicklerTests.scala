@@ -310,11 +310,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
 
-    // TODO fix: should be able to find a1, y, x and the other y by traversing the trees of m and <init>
-    unpickler.assertNotFound("example.A", "java.lang.String m$default$1()")
-    unpickler.assertNotFound("example.A", "int m$default$1()")
-    unpickler.assertNotFound("example.A$", "java.lang.String $lessinit$greater$default$1()")
-    unpickler.assertNotFound("example.A$", "int $lessinit$greater$default$2()")
+    unpickler.assertFormat("example.A", "java.lang.String m$default$1()", "A.m$default$1: String")
+    unpickler.assertFormat("example.A", "int m$default$2()", "A.m$default$2: Int")
+    unpickler.assertFormat("example.A$", "java.lang.String $lessinit$greater$default$1()", "A.<init>$default$1: String")
+    unpickler.assertFormat("example.A$", "int $lessinit$greater$default$2()", "A.<init>$default$2: Int")
   }
 
   test("matches on return types") {

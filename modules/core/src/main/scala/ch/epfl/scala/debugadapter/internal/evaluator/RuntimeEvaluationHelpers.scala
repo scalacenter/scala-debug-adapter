@@ -1,20 +1,21 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi._
-import scala.meta.trees.*
+
 import scala.meta.Lit
-import scala.util.Success
-import RuntimeEvaluatorExtractors.*
 import scala.meta.Stat
 import scala.meta.Term
+import scala.meta.trees.*
+import scala.meta.{Type => MType}
 import scala.util.Failure
+import scala.util.Success
 import scala.util.Try
+import scala.jdk.CollectionConverters.*
+
+import RuntimeEvaluatorExtractors.*
 
 private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
-  def illegalAccess(x: Any, typeName: String) = Fatal {
-    new ClassCastException(s"Cannot cast $x to $typeName")
-  }
-
+  import RuntimeEvaluationHelpers.*
   def fromLitToValue(literal: Lit, classLoader: JdiClassLoader): (Safe[Any], Type) = {
     val tpe = classLoader
       .mirrorOfLiteral(literal.value)
@@ -119,7 +120,11 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
       encode: Boolean = true
   ): Validation[MethodTree] = tree match {
     case ReferenceTree(ref) =>
-      methodsByNameAndArgs(ref, funName, args.map(_.`type`), encode).flatMap(toStaticIfNeeded(_, args, tree))
+      methodsByNameAndArgs(ref, funName, args.map(_.`type`), encode).flatMap {
+        case ModuleCall() =>
+          Recoverable("Accessing a module from its instanciation method is not allowed at console-level")
+        case mt => toStaticIfNeeded(mt, args, tree)
+      }
     case _ => Recoverable(new IllegalArgumentException(s"Cannot find method $funName on $tree"))
   }
 
@@ -137,12 +142,12 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     }
 
     (got, expected) match {
-      case (g: ArrayType, at: ArrayType) => isAssignableFrom(g.componentType, at.componentType)
+      case (g: ArrayType, at: ArrayType) => g.componentType().equals(at.componentType()) // TODO: check this
       case (g: PrimitiveType, pt: PrimitiveType) => got.equals(pt)
       case (g: ReferenceType, ref: ReferenceType) => referenceTypesMatch(g, ref)
       case (_: VoidType, _: VoidType) => true
 
-      case (g: ClassType, pt: PrimitiveType) =>
+      case (g: ReferenceType, pt: PrimitiveType) =>
         isAssignableFrom(g, frame.getPrimitiveBoxedClass(pt))
       case (g: PrimitiveType, ct: ReferenceType) =>
         isAssignableFrom(frame.getPrimitiveBoxedClass(g), ct)
@@ -163,94 +168,6 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
           case (expected, got) =>
             isAssignableFrom(got, expected)
         }
-
-  /* -------------------------------------------------------------------------- */
-  /*                             Looking for $outer                             */
-  /* -------------------------------------------------------------------------- */
-  def findOuter(tree: RuntimeTree): Validation[OuterTree] = {
-    def outerLookup(ref: ReferenceType) =
-      Validation(ref.fieldByName("$outer")).map(_.`type`()).orElse {
-        removeLastInnerTypeFromFQCN(ref.name())
-          .map(name => loadClass(name + "$")) match {
-          case Some(Safe(Success(Module(mod)))) => Valid(mod)
-          case _ => Recoverable(s"Cannot find $$outer for $ref")
-        }
-      }
-
-    for {
-      ref <- extractReferenceType(tree)
-      outer <- outerLookup(ref)
-      outerTree <- OuterTree(tree, outer)
-    } yield outerTree
-  }
-
-  /* -------------------------------------------------------------------------- */
-  /*                               Useful patterns                              */
-  /* -------------------------------------------------------------------------- */
-  /* Extract reference if there is */
-  def extractReferenceType(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
-    tree.flatMap(extractReferenceType)
-
-  def extractReferenceType(tree: RuntimeTree): Validation[ReferenceType] =
-    tree match {
-      case ReferenceTree(ref) => Valid(ref)
-      case t => illegalAccess(t, "ReferenceType")
-    }
-
-  /* Standardize method calls */
-  def extractCall(apply: Stat): Call =
-    apply match {
-      case apply: Term.Apply => Call(apply.fun, apply.argClause)
-      case ColonEndingInfix(apply) => Call(Term.Select(apply.argClause.head, apply.op), List(apply.lhs))
-      case apply: Term.ApplyInfix => Call(Term.Select(apply.lhs, apply.op), apply.argClause)
-      case apply: Term.ApplyUnary => Call(Term.Select(apply.arg, Term.Name("unary_" + apply.op)), List.empty)
-    }
-
-  /* -------------------------------------------------------------------------- */
-  /*                           Last nested types regex                          */
-  /* -------------------------------------------------------------------------- */
-  def getLastInnerType(className: String): Option[String] = {
-    val pattern = """(.+\$)([^$]+)$""".r
-    className.stripSuffix("$") match {
-      case pattern(_, innerType) => Some(innerType)
-      case _ => None
-    }
-  }
-
-  def removeLastInnerTypeFromFQCN(className: String): Option[String] = {
-    val pattern = """(.+)\$[\w]+\${0,1}$""".r
-    className match {
-      case pattern(baseName) => Some(baseName)
-      case _ => None
-    }
-  }
-
-  /* -------------------------------------------------------------------------- */
-  /*                  Transformation to static or instance tree                 */
-  /* -------------------------------------------------------------------------- */
-  def toStaticIfNeeded(field: Field, on: RuntimeTree): Validation[RuntimeEvaluableTree] =
-    (field.`type`, on) match {
-      case (Module(module), _) => Valid(TopLevelModuleTree(module))
-      case (_, cls: ClassTree) => Valid(StaticFieldTree(field, cls.`type`))
-      case (_, Module(mod)) => Valid(InstanceFieldTree(field, mod))
-      case (_, eval: RuntimeEvaluableTree) =>
-        if (field.isStatic())
-          Fatal(s"Accessing static field $field from instance ${eval.`type`} can lead to unexpected behavior")
-        else Valid(InstanceFieldTree(field, eval))
-    }
-
-  def toStaticIfNeeded(
-      method: Method,
-      args: Seq[RuntimeEvaluableTree],
-      on: RuntimeTree
-  ): Validation[MethodTree] = on match {
-    case cls: ClassTree => Valid(StaticMethodTree(method, args, cls.`type`))
-    case Module(mod) => Valid(InstanceMethodTree(method, args, mod))
-    case eval: RuntimeEvaluableTree =>
-      if (method.isStatic())
-        Fatal(s"Accessing static method $method from instance ${eval.`type`} can lead to unexpected behavior")
-      else Valid(InstanceMethodTree(method, args, eval))
-  }
 
   /* -------------------------------------------------------------------------- */
   /*                                Class helpers                               */
@@ -277,11 +194,93 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     tc
   }
 
+  // ! TO REFACTOR :sob:
+  def resolveInnerType(qual: Type, name: String) = {
+    var tpe: Validation[ClassType] = Recoverable(s"Cannot find outer class for $qual")
+    def loop(on: Type): Validation[ClassType] =
+      on match {
+        case _: ArrayType | _: PrimitiveType | _: VoidType =>
+          Recoverable("Cannot find outer class on non reference type")
+        case ref: ReferenceType =>
+          val loadedCls = loadClass(concatenateInnerTypes(ref.name, name)).extract(_.cls)
+          if (loadedCls.isSuccess) Valid(loadedCls.get)
+          else {
+            var superTypes: List[ReferenceType] = ref match {
+              case cls: ClassType => cls.superclass() :: cls.interfaces().asScalaList
+              case itf: InterfaceType => itf.superinterfaces().asScalaList
+            }
+
+            while (!superTypes.isEmpty && tpe.isInvalid) {
+              val res = loop(superTypes.head)
+              if (res.isValid) tpe = res
+              else superTypes = superTypes.tail
+            }
+            tpe
+          }
+      }
+
+    loop(qual)
+  }
+
+  def extractCommonSuperClass(tpe1: Type, tpe2: Type): Option[Type] = {
+    def getSuperClasses(of: Type): Array[ClassType] =
+      of match {
+        case cls: ClassType =>
+          Iterator.iterate(cls)(cls => cls.superclass()).takeWhile(_ != null).toArray
+        case _ => Array()
+      }
+
+    val superClasses1 = getSuperClasses(tpe1)
+    val superClasses2 = getSuperClasses(tpe2)
+    superClasses1.find(superClasses2.contains)
+  }
+
+  def validateType(tpe: MType, thisType: Option[RuntimeEvaluableTree])(
+      termValidation: Term => Validation[RuntimeEvaluableTree]
+  ): Validation[(Option[RuntimeEvaluableTree], ClassTree)] =
+    tpe match {
+      case MType.Name(name) =>
+        searchAllClassesFor(name, thisType.map(_.`type`.name)).map { cls =>
+          outerLookup(cls.`type`) match {
+            case Valid(_) => (thisType, cls)
+            case _: Invalid => (None, cls)
+          }
+        }
+      case MType.Select(qual, name) =>
+        val cls = for {
+          qual <- termValidation(qual)
+          tpe <- resolveInnerType(qual.`type`, name.value)
+        } yield
+          if (tpe.isStatic()) (None, ClassTree(tpe))
+          else (Some(qual), ClassTree(tpe))
+        cls.orElse(searchAllClassesFor(qual.toString + "." + name.value, thisType.map(_.`type`.name)).map((None, _)))
+      case _ => Recoverable("Type not supported at runtime")
+    }
+
+  // ! May not be correct when dealing with an object inside a class
+  def outerLookup(ref: ReferenceType): Validation[Type] =
+    Validation(ref.fieldByName("$outer"))
+      .map(_.`type`())
+      .orElse {
+        removeLastInnerTypeFromFQCN(ref.name())
+          .map(name => loadClass(name + "$").extract) match {
+          case Some(Success(Module(mod))) => Valid(mod)
+          case _ => Recoverable(s"Cannot find $$outer for $ref")
+        }
+      }
+      .orElse { // For Java compatibility
+        ref
+          .fields()
+          .asScala
+          .collect { case f if f.name().startsWith("this$") => f.`type`() }
+          .toSeq
+          .toValidation("Cannot find $$this$$xx for $ref")
+      }
+
   def searchAllClassesFor(name: String, in: Option[String]): Validation[ClassTree] = {
     def fullName = in match {
-      case Some(value) if value == name => name // name duplication when implicit apply call
-      case Some(value) if value.endsWith("$") => value + name
-      case Some(value) => value + "$" + name
+      case Some(value) if value == name => name // name duplication when indirect apply call
+      case Some(value) => concatenateInnerTypes(value, name)
       case None => name
     }
 
@@ -333,4 +332,87 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
       }
     } yield instance
   }
+}
+
+private[evaluator] object RuntimeEvaluationHelpers {
+  def illegalAccess(x: Any, typeName: String) = Fatal {
+    new ClassCastException(s"Cannot cast $x to $typeName")
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /*                               Useful patterns                              */
+  /* -------------------------------------------------------------------------- */
+  /* Extract reference if there is */
+  def extractReferenceType(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
+    tree.flatMap(extractReferenceType)
+
+  def extractReferenceType(tree: RuntimeTree): Validation[ReferenceType] =
+    tree match {
+      case ReferenceTree(ref) => Valid(ref)
+      case t => illegalAccess(t, "ReferenceType")
+    }
+
+  /* Standardize method calls */
+  def extractCall(apply: Stat): Call =
+    apply match {
+      case apply: Term.Apply => Call(apply.fun, apply.argClause)
+      case ColonEndingInfix(apply) => Call(Term.Select(apply.argClause.head, apply.op), List(apply.lhs))
+      case apply: Term.ApplyInfix => Call(Term.Select(apply.lhs, apply.op), apply.argClause)
+      case apply: Term.ApplyUnary => Call(Term.Select(apply.arg, Term.Name("unary_" + apply.op)), List.empty)
+    }
+
+  /* -------------------------------------------------------------------------- */
+  /*                           Nested types regex                          */
+  /* -------------------------------------------------------------------------- */
+  def getLastInnerType(className: String): Option[String] = {
+    val pattern = """(.+\$)([^$]+)$""".r
+    className.stripSuffix("$") match {
+      case pattern(_, innerType) => Some(innerType)
+      case _ => None
+    }
+  }
+
+  def removeLastInnerTypeFromFQCN(className: String): Option[String] = {
+    val pattern = """(.+)\$[\w]+\${0,1}$""".r
+    className match {
+      case pattern(baseName) => Some(baseName)
+      case _ => None
+    }
+  }
+
+  def concatenateInnerTypes(className: String, innerName: String): String =
+    if (className.endsWith("$")) className + innerName
+    else className + "$" + innerName
+
+  /* -------------------------------------------------------------------------- */
+  /*                  Transformation to static or instance tree                 */
+  /* -------------------------------------------------------------------------- */
+  def toStaticIfNeeded(field: Field, on: RuntimeTree): Validation[RuntimeEvaluableTree] =
+    (field.`type`, on) match {
+      case (Module(module), _) => Valid(TopLevelModuleTree(module))
+      case (_, cls: ClassTree) => Valid(StaticFieldTree(field, cls.`type`))
+      case (_, Module(mod)) => Valid(InstanceFieldTree(field, mod))
+      case (_, eval: RuntimeEvaluableTree) =>
+        if (field.isStatic())
+          CompilerRecoverable(
+            s"Accessing static field $field from instance ${eval.`type`} can lead to unexpected behavior"
+          )
+        else Valid(InstanceFieldTree(field, eval))
+    }
+
+  def toStaticIfNeeded(
+      method: Method,
+      args: Seq[RuntimeEvaluableTree],
+      on: RuntimeTree
+  ): Validation[MethodTree] = on match {
+    case cls: ClassTree => Valid(StaticMethodTree(method, args, cls.`type`))
+    case Module(mod) => Valid(InstanceMethodTree(method, args, mod))
+    case eval: RuntimeEvaluableTree =>
+      if (method.isStatic())
+        CompilerRecoverable(
+          s"Accessing static method $method from instance ${eval.`type`} can lead to unexpected behavior"
+        )
+      else Valid(InstanceMethodTree(method, args, eval))
+  }
+
 }

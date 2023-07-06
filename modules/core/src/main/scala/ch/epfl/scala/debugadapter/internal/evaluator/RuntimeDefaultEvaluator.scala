@@ -21,8 +21,10 @@ class RuntimeDefaultEvaluator(val frame: JdiFrame, val logger: Logger) extends R
       case instance: NewInstanceTree => instantiate(instance)
       case method: InstanceMethodTree => invoke(method)
       case array: ArrayElemTree => evaluateArrayElement(array)
+      case branching: IfTree => evaluateIf(branching)
       case staticMethod: StaticMethodTree => invokeStatic(staticMethod)
       case outer: OuterTree => evaluateOuter(outer)
+      case UnitTree => Safe(JdiValue(frame.thread.virtualMachine.mirrorOfVoid, frame.thread))
     }
 
   /* -------------------------------------------------------------------------- */
@@ -120,6 +122,15 @@ class RuntimeDefaultEvaluator(val frame: JdiFrame, val logger: Logger) extends R
       array <- eval(tree.array)
       index <- eval(tree.index).flatMap(_.unboxIfPrimitive).flatMap(_.toInt)
     } yield array.asArray.getValue(index)
+
+  /* -------------------------------------------------------------------------- */
+  /*                             If tree evaluation                             */
+  /* -------------------------------------------------------------------------- */
+  def evaluateIf(tree: IfTree): Safe[JdiValue] =
+    for {
+      predicate <- eval(tree.p).flatMap(_.unboxIfPrimitive).flatMap(_.toBoolean)
+      value <- if (predicate) eval(tree.thenp) else eval(tree.elsep)
+    } yield value
 }
 
 object RuntimeDefaultEvaluator {
