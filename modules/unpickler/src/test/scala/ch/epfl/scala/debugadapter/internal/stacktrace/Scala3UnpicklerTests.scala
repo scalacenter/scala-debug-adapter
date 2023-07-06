@@ -362,6 +362,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |  def mbis(a: Main.type): Main.type = a
          |  def m(x: => Int ): Int = 1
          |  def m(x : Int => Int): Int = 1
+         |  def m(x : (Int,Int)) : Int = 1
          |  def mter(x: 1&1): 1|1 = 1
          |  def m(x: Int): Option[?] = Some(x)
          |  def m(a: A { type B })(b: a.type): b.B = new a.B
@@ -386,6 +387,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     assertFormat("example.Main$ mbis(example.Main$ a)", "Main.mbis(a: Main.type): Main.type")
     assertFormat("int m(scala.Function0 x)", "Main.m(x: => Int): Int")
     assertFormat("int m(scala.Function1 x)", "Main.m(x: Int => Int): Int")
+    assertFormat("int m(scala.Tuple2 x)", "Main.m(x: (Int,Int)): Int")
+
     // TODO fix: should be m
     assertFormat("int mter(int x)", "Main.mter(x: 1 & 1): 1 | 1")
     assertFormat("scala.Option m(int x)", "Main.m(x: Int): Option[?]")
@@ -544,9 +547,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
-    // TODO fix: should find the constructors and initializers
-    unpickler.assertNotFound("example.A", "void $init$(example.A $this)")
-    unpickler.assertNotFound("example.B", "example.B <init>()")
+    unpickler.assertFormat("example.A", "void $init$(example.A $this)", "A.<init>(): Unit")
+    unpickler.assertFormat("example.B", "example.B <init>()", "B.<init>(): Unit")
+
   }
 
   test("vararg type") {

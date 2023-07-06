@@ -22,4 +22,10 @@ class Method(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method"):
   def isExtensionMethod: Boolean =
     name.endsWith("$extension")
 
+  def isTraitInitializer: Boolean =
+    name == "$init$"
+
+  def isClassInitializer: Boolean =
+    name == "<init>"
+
   override def toString: String = invokeMethod("toString")
