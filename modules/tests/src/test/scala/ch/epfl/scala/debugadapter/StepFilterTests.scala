@@ -980,7 +980,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
     }
   }
 
-  test("should match on vararg type".only) {
+  test("should match on vararg type") {
     val source =
       """|package example
          |
