@@ -258,19 +258,12 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     Validation(ref.fieldByName("$outer"))
       .map(_.`type`())
       .orElse {
+        // outer static object
         removeLastInnerTypeFromFQCN(ref.name())
           .map(name => loadClass(name + "$").extract) match {
           case Some(Success(Module(mod))) => Valid(mod)
           case _ => Recoverable(s"Cannot find $$outer for $ref")
         }
-      }
-      .orElse { // For Java compatibility
-        ref
-          .fields()
-          .asScala
-          .collect { case f if f.name().startsWith("this$") => f.`type`() }
-          .toSeq
-          .toValidation("Cannot find $$this$$xx for $ref")
       }
 
   def searchAllClassesFor(name: String, in: Option[String]): Validation[ClassTree] = {
