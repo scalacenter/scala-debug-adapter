@@ -84,8 +84,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
   private def methodsByNameAndArgs(
       ref: ReferenceType,
       encodedName: String,
-      args: Seq[Type],
-      encode: Boolean = true
+      args: Seq[Type]
   ): Validation[Method] = {
     val candidates: List[Method] = ref.methodsByName(encodedName).asScalaList
 
@@ -124,6 +123,19 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
       }
     case _ => Recoverable(new IllegalArgumentException(s"Cannot find method $funName on $tree"))
   }
+
+  def needsOuter(cls: ClassType): Boolean =
+    cls
+      .methodsByName("<init>")
+      .asScala
+      .filter(init => init.declaringType.name == cls.name)
+      .forall { init =>
+        init.argumentTypeNames.asScala.headOption
+          .exists { argType =>
+            val suffix = argType.stripSuffix("$") + "$"
+            cls.name.startsWith(suffix) && cls.name.size > suffix.size
+          }
+      }
 
   def newInstanceTreeByArgs(cls: ClassType, args: Seq[RuntimeEvaluableTree]): Validation[NewInstanceTree] =
     methodsByNameAndArgs(cls, "<init>", args.map(_.`type`))
@@ -236,12 +248,13 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
     superClasses1.find(superClasses2.contains)
   }
 
-  def validateType(tpe: MType, thisType: Option[RuntimeEvaluableTree])(
+  def validateType(tpe: MType, thisTree: Option[RuntimeEvaluableTree])(
       termValidation: Term => Validation[RuntimeEvaluableTree]
   ): Validation[(Option[RuntimeEvaluableTree], ClassTree)] =
     tpe match {
       case MType.Name(name) =>
-        searchAllClassesFor(name, thisType.map(_.`type`.name)).map(cls => (thisType, cls))
+        // won't work if the class is defined in one of the outer of this
+        searchAllClassesFor(name, thisTree.map(_.`type`.name)).map(cls => (thisTree, cls))
       case MType.Select(qual, name) =>
         val cls = for {
           qual <- termValidation(qual)
@@ -249,7 +262,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
         } yield
           if (tpe.isStatic()) (None, ClassTree(tpe))
           else (Some(qual), ClassTree(tpe))
-        cls.orElse(searchAllClassesFor(qual.toString + "." + name.value, thisType.map(_.`type`.name)).map((None, _)))
+        cls.orElse(searchAllClassesFor(qual.toString + "." + name.value, thisTree.map(_.`type`.name)).map((None, _)))
       case _ => Recoverable("Type not supported at runtime")
     }
 
