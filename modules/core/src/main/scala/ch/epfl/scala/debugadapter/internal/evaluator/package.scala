@@ -35,11 +35,6 @@ package object evaluator {
     }
   }
 
-  implicit class OptionExtensions[A](opt: Option[A]) {
-    def recoverable: Validation[A] =
-      opt.map[Validation[A]](Valid.apply).getOrElse(Recoverable("Not found"))
-  }
-
   implicit class SeqExtensions[A](seq: Seq[A]) {
     def toValidation(message: String): Validation[A] =
       seq.size match {

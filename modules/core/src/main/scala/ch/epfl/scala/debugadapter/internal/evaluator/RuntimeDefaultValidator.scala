@@ -246,13 +246,11 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends R
   def validateNew(newValue: Term.New): Validation[RuntimeEvaluableTree] = {
     val tpe = newValue.init.tpe
     val argClauses = newValue.init.argClauses
-
     for {
       args <- argClauses.flatMap(_.map(validate(_))).traverse
-      outerFqcn = thisTree.toOption
-      (outer, cls) <- validateType(tpe, outerFqcn)(validate)
-      newInstance <- newInstanceTreeByArgs(cls.`type`, args)
-        .orElse(outer.recoverable.flatMap(outer => newInstanceTreeByArgs(cls.`type`, outer +: args)))
+      (outer, cls) <- validateType(tpe, thisTree.toOption)(validate)
+      allArgs = outer.filter(_ => needsOuter(cls.`type`)).toSeq ++ args
+      newInstance <- newInstanceTreeByArgs(cls.`type`, allArgs)
     } yield newInstance
   }
 
