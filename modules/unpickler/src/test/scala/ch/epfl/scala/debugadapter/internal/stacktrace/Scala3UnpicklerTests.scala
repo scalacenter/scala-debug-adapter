@@ -552,7 +552,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     unpickler.assertFormat("example.B", "example.B <init>()", "B.<init>(): Unit")
 
   }
-  
+
   test("vararg type") {
     val source =
       """|package example
