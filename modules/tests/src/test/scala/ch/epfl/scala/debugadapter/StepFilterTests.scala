@@ -504,7 +504,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       ),
       StepOut.line(10),
       Breakpoint(11),
-      StepIn.method("A.<init>(String): void"),
+      StepIn.method("A.<init>(a: String): Unit"),
       StepOut.line(11),
       Breakpoint(12),
       StepIn.method(
@@ -604,7 +604,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       StepIn.line(21),
       StepOut.line(18),
       StepOut.line(8),
-      StepIn.method("B.<init>(String): void")
+      StepIn.method("B.<init>(b: String): Unit")
     )
   }
 
@@ -947,11 +947,11 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
     if (isScala3) {
       check(
         Breakpoint(19),
-        StepIn.method("D.<init>(): void"),
+        StepIn.method("D.<init>(): Unit"),
         StepIn.method("Object.<init>(): void"),
-        StepIn.method("D.<init>(): void"),
-        StepIn.method("A.$init$(A): void"),
-        StepIn.method("D.<init>(): void"),
+        StepIn.method("D.<init>(): Unit"),
+        StepIn.method("A.<init>(): Unit"),
+        StepIn.method("D.<init>(): Unit"),
         StepIn.method("Statics.releaseFence(): void"),
         Breakpoint(21),
         StepIn.line(8),
@@ -1000,11 +1000,11 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(8),
-      StepIn.method("A.<init>(Seq): void"),
+      StepIn.method("A.<init>(as: <repeated>[String]): Unit"),
       Breakpoint(9),
       StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void"),
       Breakpoint(10),
-      StepIn.method("StringContext.<init>(Seq): void"),
+      StepIn.method("StringContext.<init>(parts: <repeated>[String]): StringContext"),
       Breakpoint(11),
       StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void")
     )
@@ -1032,7 +1032,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(5),
-      StepIn.method("$less$greater.<init>(): void"),
+      StepIn.method("<>.<init>(): Unit"),
       Breakpoint(6),
       StepIn.method(if (isScala3) "<>.m: <>" else "$less$greater.m(): $less$greater"),
       Breakpoint(7),
@@ -1116,7 +1116,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(7), StepIn.method("A.<init>(): void"))
+    check(Breakpoint(7), StepIn.method("A.<init>(): Unit"))
   }
 
   test("step in private method of outer class") {
