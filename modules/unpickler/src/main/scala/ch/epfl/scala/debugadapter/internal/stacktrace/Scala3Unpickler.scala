@@ -254,6 +254,7 @@ class Scala3Unpickler(
         case SignedName(_, sig, _) =>
           val javaArgs = method.arguments.headOption.map(_.name) match
             case Some("$this") if method.isExtensionMethod => method.arguments.tail
+            case Some("$outer") if method.isClassInitializer => method.arguments.tail
             case _ => method.arguments
           matchArguments(sig.paramsSig, javaArgs) &&
           method.returnType.forall(returnType => {

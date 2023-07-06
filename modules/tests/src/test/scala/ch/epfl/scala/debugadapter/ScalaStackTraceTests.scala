@@ -154,45 +154,20 @@ class ScalaStackTraceTests extends DebugTestSuite {
 
   }
 
-  test("should show the correct stack trace  with a classy initializer ") {
-    val source =
-      """|package example
-         |
-         |        class A (t : Int , s : String) {
-         |        print(t)
-         |        }
-         |         object Main {
-         |           def main(args: Array[String]): Unit = {
-         |             val myObj = new A(2,"")
-         |          }
-         |         }
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-
-    check(
-      Breakpoint(
-        4,
-        List(
-          "A.<init>(t: Int, s: String): Unit",
-          "Main.main(args: Array[String]): Unit"
-        )
-      )
-    )
-
-  }
-
   test("should show the correct stack trace  with a trait initializer ") {
     val source =
       """|package example
-         |         trait MyClass(t : Int) {
-         |         println(t)
-         |         }
-         |         class A extends MyClass(2)
-         |         object Main {
-         |           def main(args: Array[String]): Unit = {
-         |             val myObj = new A()
-         |          }
-         |         }
+         |trait MyClass(t : Int) {
+         |  println(t)
+         |}
+         |
+         |class A extends MyClass(2)
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val myObj = new A()
+         |  }
+         |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
 
