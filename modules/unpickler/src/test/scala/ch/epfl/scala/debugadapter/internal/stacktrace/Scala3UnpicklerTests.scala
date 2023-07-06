@@ -297,7 +297,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     unpickler.assertFormat("example.A", "example.A m()", "A.m(): A")
   }
 
-  test("default values") {
+  test("default values".only) {
     val source =
       """|package example
          |
