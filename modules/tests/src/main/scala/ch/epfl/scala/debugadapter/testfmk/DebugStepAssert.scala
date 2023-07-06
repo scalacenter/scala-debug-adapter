@@ -62,7 +62,8 @@ object Breakpoint {
     SingleStepAssert(breakpoint, assertOnFrame(sourceFile, line, None))
   }
   def apply(line: Int, expectedStackTrace: List[String])(implicit
-      ctx: TestingContext
+      ctx: TestingContext,
+      location: Location
   ): SingleStepAssert[List[StackFrame]] = {
     val breakpoint = Breakpoint(ctx.mainSource, line, None)
     SingleStepAssert(breakpoint, assertOnFrame(ctx.mainSource, line, Some(expectedStackTrace)))

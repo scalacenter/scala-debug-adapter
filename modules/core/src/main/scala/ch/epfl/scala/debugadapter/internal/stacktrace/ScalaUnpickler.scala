@@ -40,7 +40,6 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion) extends StepFilter {
     else if (isJava(method)) Some(formatJava(method))
     // TODO add in shouldSkipOver and test in StepFilterBridgeTest
     else if (isStaticMain(method)) None
-    else if (isConstructor(method)) Some(formatJava(method))
     else if (isStaticConstructor(method)) Some(formatJava(method))
     else if (isAdaptedMethod(method)) None
     else if (isAnonFunction(method)) Some(formatJava(method))
@@ -50,7 +49,6 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion) extends StepFilter {
     else if (isLocalClass(method.declaringType)) Some(formatJava(method))
     else if (scalaVersion.isScala2 && isNestedClass(method.declaringType)) Some(formatJava(method))
     else if (isDefaultValue(method)) Some(formatJava(method))
-    else if (isTraitInitializer(method)) Some(formatJava(method))
     else formatScala(method)
   }
 

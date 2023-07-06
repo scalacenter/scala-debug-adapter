@@ -97,6 +97,9 @@ class Scala3Unpickler(
         val args = t.args.init.map(formatType).mkString(",")
         val result = formatType(t.args.last)
         if t.args.size > 2 then s"($args) => $result" else s"$args => $result"
+      case t: AppliedType if isTuple(t.tycon) =>
+        val types = t.args.map(formatType).mkString(",")
+        s"(${types})"
       case t: AppliedType if isAndOrOr(t.tycon) =>
         val tycon = formatType(t.tycon)
         t.args.map(formatType).mkString(s" $tycon ")
@@ -174,7 +177,11 @@ class Scala3Unpickler(
       case ref: TypeRef =>
         isScalaPackage(ref.prefix) && ref.name.toString.startsWith("Function")
       case _ => false
-
+  private def isTuple(tpe: Type): Boolean =
+    tpe match
+      case ref: TypeRef =>
+        isScalaPackage(ref.prefix) && ref.name.toString.startsWith("Tuple")
+      case _ => false
   // TODO test all symbolic or infix TypeRef
   private def isAndOrOr(tpe: Type): Boolean =
     tpe match
@@ -225,7 +232,7 @@ class Scala3Unpickler(
       }
 
   private def matchSymbol(method: jdi.Method, symbol: TermSymbol): Boolean =
-    matchTargetName(method, symbol) && matchSignature(method, symbol)
+    matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
 
   private def matchTargetName(method: jdi.Method, symbol: TermSymbol): Boolean =
     val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
@@ -233,7 +240,11 @@ class Scala3Unpickler(
     // and prefixes its name with the full class name.
     // Example: method foo in class example.Inner becomes example$Inner$$foo
     val expectedName = method.name.stripPrefix(javaPrefix)
-    val encodedScalaName = NameTransformer.encode(symbol.targetName.toString)
+    val symbolName = symbol.targetName.toString
+    val encodedScalaName = symbolName match
+      case "<init>" if symbol.owner.is(Flags.Trait) => "$init$"
+      case "<init>" => "<init>"
+      case _ => NameTransformer.encode(symbolName)
     if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
     else encodedScalaName == expectedName
 
@@ -245,7 +256,11 @@ class Scala3Unpickler(
             case Some("$this") if method.isExtensionMethod => method.arguments.tail
             case _ => method.arguments
           matchArguments(sig.paramsSig, javaArgs) &&
-          method.returnType.forall(matchType(sig.resSig, _))
+          method.returnType.forall(returnType => {
+            val javaRetType =
+              if (method.isClassInitializer) method.declaringType else returnType
+            matchType(sig.resSig, javaRetType)
+          })
         case _ =>
           true // TODO compare symbol.declaredType
     catch
