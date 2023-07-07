@@ -351,6 +351,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |trait A {
          |  class B
          |}
+         |
+         |case class !:[A, B](left: A, right: B)
+         |
          |object Main extends A {
          |  def m(a : example.A): example.A = a
          |  def mbis(b: A#B): A#B = b
@@ -368,6 +371,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |  def m(a: A { type B })(b: a.type): b.B = new a.B
          |  val x: A = new A {}
          |  def m(a: x.type)(b: x.B): A = a
+         |  def m(t: Int !: Int) = 1
          |}
          |""".stripMargin
 
@@ -388,6 +392,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     assertFormat("int m(scala.Function0 x)", "Main.m(x: => Int): Int")
     assertFormat("int m(scala.Function1 x)", "Main.m(x: Int => Int): Int")
     assertFormat("int m(scala.Tuple2 x)", "Main.m(x: (Int,Int)): Int")
+    assertFormat("int m(example.$bang$colon t)", "Main.m(t: Int !: Int): Int")
 
     // TODO fix: should be m
     assertFormat("int mter(int x)", "Main.mter(x: 1 & 1): 1 | 1")
