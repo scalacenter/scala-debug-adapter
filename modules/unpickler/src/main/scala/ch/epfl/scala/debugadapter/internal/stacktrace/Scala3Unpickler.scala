@@ -100,9 +100,14 @@ class Scala3Unpickler(
       case t: AppliedType if isTuple(t.tycon) =>
         val types = t.args.map(formatType).mkString(",")
         s"(${types})"
-      case t: AppliedType if isAndOrOr(t.tycon) =>
-        val tycon = formatType(t.tycon)
-        t.args.map(formatType).mkString(s" $tycon ")
+      case t: AppliedType if isOperatorLike(t.tycon) =>
+        val operatorLikeTypeFormat = t.args
+          .map(formatType)
+          .mkString(
+            t.tycon match
+              case ref: TypeRef => s" ${ref.name.toString} "
+          )
+        s"${operatorLikeTypeFormat}"
       case t: AppliedType =>
         val tycon = formatType(t.tycon)
         val args = t.args.map(formatType).mkString(", ")
@@ -182,12 +187,13 @@ class Scala3Unpickler(
       case ref: TypeRef =>
         isScalaPackage(ref.prefix) && ref.name.toString.startsWith("Tuple")
       case _ => false
-  // TODO test all symbolic or infix TypeRef
-  private def isAndOrOr(tpe: Type): Boolean =
+
+  private def isOperatorLike(tpe: Type): Boolean =
     tpe match
       case ref: TypeRef =>
-        val name = ref.name.toString
-        isScalaPackage(ref.prefix) && (name == "|" || name == "&")
+        val operatorChars = "\\+\\-\\*\\/\\%\\&\\|\\^\\<\\>\\=\\!\\~\\#\\:\\@\\?"
+        val regex = s"[^$operatorChars]".r
+        !regex.findFirstIn(ref.name.toString).isDefined
       case _ => false
 
   private def isScalaPackage(prefix: Prefix): Boolean =
