@@ -184,4 +184,36 @@ class ScalaStackTraceTests extends DebugTestSuite {
 
   }
 
+  test("should show the correct stack trace  when using default values") {
+    val source =
+      """|package example
+         |def m1(y : Int)(z : Int , x: Int = m2(y)): Int = {
+         |  x * 2
+         |}
+         |
+         |def m2(t : Int ) : Int = {
+         |  t*2  
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    println(m1(2)(3))
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+
+    check(
+      Breakpoint(
+        7,
+        List(
+          "example.m2(t: Int): Int",
+          "example.m1.<default 3>(y: Int): Int",
+          "Main.main(args: Array[String]): Unit"
+        )
+      )
+    )
+
+  }
+  
 }
