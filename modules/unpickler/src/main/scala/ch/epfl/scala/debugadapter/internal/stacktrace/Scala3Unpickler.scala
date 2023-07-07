@@ -160,7 +160,6 @@ class Scala3Unpickler(
       case DefaultGetterName(termName, num) => s"${termName.toString()}.<default ${num + 1}>"
       case _ => sym.name.toString()
 
-      
     if prefix.isEmpty then symName else s"$prefix.${symName}"
 
   private def isPackageObject(name: Name): Boolean =
