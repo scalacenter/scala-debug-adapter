@@ -310,10 +310,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
 
-    unpickler.assertFormat("example.A", "java.lang.String m$default$1()", "A.m$default$1: String")
-    unpickler.assertFormat("example.A", "int m$default$2()", "A.m$default$2: Int")
-    unpickler.assertFormat("example.A$", "java.lang.String $lessinit$greater$default$1()", "A.<init>$default$1: String")
-    unpickler.assertFormat("example.A$", "int $lessinit$greater$default$2()", "A.<init>$default$2: Int")
+    unpickler.assertFormat("example.A", "java.lang.String m$default$1()", "A.m.<default 1>: String")
+    unpickler.assertFormat("example.A", "int m$default$2()", "A.m.<default 2>: Int")
+    unpickler.assertFormat("example.A$", "java.lang.String $lessinit$greater$default$1()", "A.<init>.<default 1>: String")
+    unpickler.assertFormat("example.A$", "int $lessinit$greater$default$2()", "A.<init>.<default 2>: Int")
   }
 
   test("matches on return types") {

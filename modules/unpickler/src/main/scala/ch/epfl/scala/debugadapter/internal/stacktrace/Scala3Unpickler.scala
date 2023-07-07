@@ -156,7 +156,12 @@ class Scala3Unpickler(
       case owner: ClassSymbol if isPackageObject(owner.name) => formatSymbol(owner.owner)
       case owner: TermOrTypeSymbol => formatSymbol(owner)
       case owner: PackageSymbol => ""
-    if prefix.isEmpty then sym.name.toString else s"$prefix.${sym.name}"
+    val symName= sym.name match
+      case DefaultGetterName(termName,num) => s"${termName.toString()}.<default ${num+1}>"
+      case _ => sym.name.toString()
+    
+    
+    if prefix.isEmpty then symName else s"$prefix.${symName}"
 
   private def isPackageObject(name: Name): Boolean =
     name.toString == "package" || name.toString.endsWith("$package")
