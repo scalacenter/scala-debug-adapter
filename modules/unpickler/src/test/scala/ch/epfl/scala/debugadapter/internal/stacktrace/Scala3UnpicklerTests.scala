@@ -696,6 +696,21 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     unpickler.assertFormat("example.example$package", "java.lang.String foo()", "example.foo: String")
   }
 
+  test("i491") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  val m: String = ""
+         |  def m(x: String): String = ""
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    val unpickler = getUnpickler(debuggee)
+    unpickler.assertFormat("example.A", "java.lang.String m()", "A.m: String")
+    unpickler.assertFormat("example.A", "java.lang.String m(java.lang.String x)", "A.m(x: String): String")
+  }
+
   private def getUnpickler(debuggee: Debuggee): Scala3Unpickler =
     val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
       case Java8(_, classJars, _) => classJars
@@ -703,7 +718,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
         java9OrAbove.classSystems.map(_.fileSystem.getPath("/modules", "java.base"))
     }
     val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
-    new Scala3Unpickler(debuggeeClasspath, println, false)
+    new Scala3Unpickler(debuggeeClasspath, println, testMode = true)
 
   extension (unpickler: Scala3Unpickler)
     private def assertFind(declaringType: String, javaSig: String)(using munit.Location): Unit =
