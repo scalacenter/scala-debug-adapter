@@ -10,8 +10,6 @@ import ch.epfl.scala.debugadapter.Java8
 import ch.epfl.scala.debugadapter.Java9OrAbove
 import scala.util.Try
 import java.nio.file.Path
-import scala.util.Success
-import scala.util.Failure
 import java.util.Optional
 import ch.epfl.scala.debugadapter.ScalaVersion
 import scala.jdk.OptionConverters._
@@ -20,8 +18,9 @@ class Scala3UnpicklerBridge(
     scalaVersion: ScalaVersion,
     bridge: Any,
     skipMethod: Method,
-    formatMethod: Method
-) extends ScalaUnpickler(scalaVersion) {
+    formatMethod: Method,
+    testMode: Boolean
+) extends ScalaUnpickler(scalaVersion, testMode) {
   override protected def skipScala(method: jdi.Method): Boolean = {
     try skipMethod.invoke(bridge, method).asInstanceOf[Boolean]
     catch {
@@ -47,7 +46,7 @@ object Scala3UnpicklerBridge {
       logger: Logger,
       testMode: Boolean
   ): Try[Scala3UnpicklerBridge] = {
-    try {
+    Try {
       val className = "ch.epfl.scala.debugadapter.internal.stacktrace.Scala3Unpickler"
       val cls = classLoader.loadClass(className)
       val ctr = cls.getConstructor(classOf[Array[Path]], classOf[Consumer[String]], classOf[Boolean])
@@ -68,9 +67,7 @@ object Scala3UnpicklerBridge {
       val skipMethod = cls.getMethods.find(m => m.getName == "skipMethod").get
       val formatMethod = cls.getMethods.find(m => m.getName == "formatMethod").get
 
-      Success(new Scala3UnpicklerBridge(debuggee.scalaVersion, bridge, skipMethod, formatMethod))
-    } catch {
-      case cause: Throwable => Failure(cause)
+      new Scala3UnpicklerBridge(debuggee.scalaVersion, bridge, skipMethod, formatMethod, testMode)
     }
   }
 }

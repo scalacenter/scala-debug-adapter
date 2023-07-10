@@ -36,11 +36,11 @@ final case class FakeJdiMethod(
 
   override def compareTo(o: Method): Int = ???
 
-  override def returnTypeName(): String = ???
+  override def returnTypeName(): String = returnType.name
 
   override def argumentTypeNames(): ju.List[String] = ???
 
-  override def argumentTypes(): ju.List[Type] = ???
+  override def argumentTypes(): ju.List[Type] = arguments.asScala.map(_.`type`).asJava
 
   override def isAbstract(): Boolean = ???
 
