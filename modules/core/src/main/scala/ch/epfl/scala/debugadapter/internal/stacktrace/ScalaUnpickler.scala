@@ -11,10 +11,15 @@ import com.sun.jdi.Method
 import com.sun.jdi.ReferenceType
 
 import scala.jdk.CollectionConverters.*
+import scala.util.control.NonFatal
 
-abstract class ScalaUnpickler(scalaVersion: ScalaVersion) extends StepFilter {
+abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) extends StepFilter {
   protected def skipScala(method: Method): Boolean
   protected def formatScala(method: Method): Option[String] = Some(formatJava(method))
+
+  private def throwOrWarn(exception: Throwable): Unit =
+    if (testMode) throw exception
+    else exception.getMessage
 
   override def shouldSkipOver(method: Method): Boolean = {
     if (method.isBridge) true
@@ -31,7 +36,11 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion) extends StepFilter {
     else if (scalaVersion.isScala2 && isNestedClass(method.declaringType)) false
     else if (isDefaultValue(method)) false
     else if (isTraitInitializer(method)) skipTraitInitializer(method)
-    else skipScala(method)
+    else
+      try skipScala(method)
+      catch {
+        case NonFatal(e) => throwOrWarn(e); false
+      }
   }
 
   def format(method: Method): Option[String] = {
@@ -49,7 +58,11 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion) extends StepFilter {
     else if (isLocalClass(method.declaringType)) Some(formatJava(method))
     else if (scalaVersion.isScala2 && isNestedClass(method.declaringType)) Some(formatJava(method))
     else if (isDefaultValue(method)) Some(formatJava(method))
-    else formatScala(method)
+    else
+      try formatScala(method)
+      catch {
+        case NonFatal(e) => throwOrWarn(e); Some(formatJava(method))
+      }
   }
 
   private def formatJava(method: Method): String = {
@@ -150,10 +163,11 @@ object ScalaUnpickler {
             .tryLoad(debuggee, classLoader, logger, testMode)
             .warnFailure(logger, s"Cannot load step filter for Scala ${debuggee.scalaVersion}")
         }
-        .getOrElse(fallback(debuggee.scalaVersion))
+        .getOrElse(fallback(debuggee.scalaVersion, testMode))
   }
 
-  private def fallback(scalaVersion: ScalaVersion): ScalaUnpickler = new ScalaUnpickler(scalaVersion) {
-    override protected def skipScala(method: Method): Boolean = false
-  }
+  private def fallback(scalaVersion: ScalaVersion, testMode: Boolean): ScalaUnpickler =
+    new ScalaUnpickler(scalaVersion, testMode) {
+      override protected def skipScala(method: Method): Boolean = false
+    }
 }

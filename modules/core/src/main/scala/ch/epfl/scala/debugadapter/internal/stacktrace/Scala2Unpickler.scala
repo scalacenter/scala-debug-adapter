@@ -13,7 +13,7 @@ class Scala2Unpickler(
     scalaVersion: ScalaVersion,
     logger: Logger,
     testMode: Boolean
-) extends ScalaUnpickler(scalaVersion) {
+) extends ScalaUnpickler(scalaVersion, testMode) {
   override protected def skipScala(method: jdi.Method): Boolean = {
     if (isLazyInitializer(method)) {
       skipLazyInitializer(method)

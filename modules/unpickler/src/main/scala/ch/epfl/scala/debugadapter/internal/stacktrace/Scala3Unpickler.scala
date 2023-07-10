@@ -41,32 +41,21 @@ class Scala3Unpickler(
     else exception.getMessage
 
   def skipMethod(obj: Any): Boolean =
-    findSymbolImpl(obj) match
-      case Failure(exception) => throwOrWarn(exception); false
-      case Success(Some(symbol)) => skip(symbol)
-      case Success(None) => true
+    findSymbol(obj).forall(skip)
 
   def formatMethod(obj: Any): Optional[String] =
-    val method = jdi.Method(obj)
-    findSymbol(obj).map { t =>
-      val notMethodType = t.declaredType match {
-        case _: MethodType => false
-        case _: PolyType => false
-        case _ => true
-      }
-      val optionalString = if (notMethodType) ": " else ""
-      s"${formatSymbol(t)}${optionalString}${formatType(t.declaredType)}"
-    }.asJava
+    findSymbol(obj) match
+      case None => Optional.empty
+      case Some(symbol) =>
+        val sep = if !symbol.declaredType.isInstanceOf[MethodicType] then ": " else ""
+        Optional.of(s"${formatSymbol(symbol)}$sep${formatType(symbol.declaredType)}")
 
   private[stacktrace] def findSymbol(obj: Any): Option[TermSymbol] =
-    findSymbolImpl(obj).get
-
-  private def findSymbolImpl(obj: Any): Try[Option[TermSymbol]] =
     val method = jdi.Method(obj)
     val fqcn = method.declaringType.name
     findDeclaringType(fqcn, method.isExtensionMethod) match
       case None =>
-        Failure(Exception(s"Cannot find Scala symbol of $fqcn"))
+        throw new Exception(s"Cannot find Scala symbol of $fqcn")
       case Some(declaringType) =>
         val matchingSymbols =
           declaringType.declarations
@@ -74,13 +63,11 @@ class Scala3Unpickler(
             .filter(matchSymbol(method, _))
 
         if matchingSymbols.size > 1 then
-          val builder = new java.lang.StringBuilder
-          builder.append(
-            s"Found ${matchingSymbols.size} matching symbols for $method:"
-          )
-          matchingSymbols.foreach(sym => builder.append(s"\n$sym"))
-          Failure(Exception(builder.toString))
-        else Success(matchingSymbols.headOption)
+          val message =
+            s"Found ${matchingSymbols.size} matching symbols for $method:" +
+              matchingSymbols.mkString("\n")
+          throw new Exception(message)
+        else matchingSymbols.headOption
 
   def formatType(t: Type): String =
     t match

@@ -10,8 +10,10 @@ class Method(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method"):
     ReferenceType(invokeMethod("declaringType"))
 
   def arguments: Seq[LocalVariable] =
-    invokeMethod[java.util.List[Object]]("arguments").asScala.toSeq
-      .map(LocalVariable.apply(_))
+    invokeMethod[java.util.List[Object]]("arguments").asScala.toSeq.map(LocalVariable.apply(_))
+
+  def argumentTypes: Seq[Type] =
+    invokeMethod[java.util.List[Object]]("argumentTypes").asScala.toSeq.map(Type.apply(_))
 
   def returnType: Option[Type] =
     try Some(Type(invokeMethod("returnType")))
@@ -19,13 +21,12 @@ class Method(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method"):
       case e: InvocationTargetException if e.getCause.getClass.getName == "com.sun.jdi.ClassNotLoadedException" =>
         None
 
-  def isExtensionMethod: Boolean =
-    name.endsWith("$extension")
+  def returnTypeName: String = invokeMethod("returnTypeName")
 
-  def isTraitInitializer: Boolean =
-    name == "$init$"
+  def isExtensionMethod: Boolean = name.endsWith("$extension")
 
-  def isClassInitializer: Boolean =
-    name == "<init>"
+  def isTraitInitializer: Boolean = name == "$init$"
+
+  def isClassInitializer: Boolean = name == "<init>"
 
   override def toString: String = invokeMethod("toString")
