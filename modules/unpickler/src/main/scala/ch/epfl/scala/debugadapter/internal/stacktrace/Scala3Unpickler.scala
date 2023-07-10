@@ -87,14 +87,14 @@ class Scala3Unpickler(
       case t: AppliedType if isTuple(t.tycon) =>
         val types = t.args.map(formatType).mkString(",")
         s"(${types})"
-      case t: AppliedType if isOperatorLike(t.tycon) =>
+      case t: AppliedType if isOperatorLike(t.tycon) && t.args.size == 2 =>
         val operatorLikeTypeFormat = t.args
           .map(formatType)
           .mkString(
             t.tycon match
-              case ref: TypeRef => s" ${ref.name.toString} "
+              case ref: TypeRef => s" ${ref.name} "
           )
-        s"${operatorLikeTypeFormat}"
+        operatorLikeTypeFormat
       case t: AppliedType =>
         val tycon = formatType(t.tycon)
         val args = t.args.map(formatType).mkString(", ")
