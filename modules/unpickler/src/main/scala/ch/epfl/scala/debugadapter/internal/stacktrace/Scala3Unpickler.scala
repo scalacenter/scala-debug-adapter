@@ -249,25 +249,21 @@ class Scala3Unpickler(
     else encodedScalaName == expectedName
 
   private def matchSignature(method: jdi.Method, symbol: TermSymbol): Boolean =
-    try
-      symbol.signedName match
-        case SignedName(_, sig, _) =>
-          val javaArgs = method.arguments.headOption.map(_.name) match
-            case Some("$this") if method.isExtensionMethod => method.arguments.tail
-            case Some("$outer") if method.isClassInitializer => method.arguments.tail
-            case _ => method.arguments
-          matchArguments(sig.paramsSig, javaArgs) &&
-          method.returnType.forall(returnType => {
-            val javaRetType =
-              if (method.isClassInitializer) method.declaringType else returnType
-            matchType(sig.resSig, javaRetType)
-          })
-        case _ =>
-          true // TODO compare symbol.declaredType
-    catch
-      case e: UnsupportedOperationException =>
-        warn(e.getMessage)
-        true
+    symbol.signedName match
+      case SignedName(_, sig, _) =>
+        val javaArgs = method.arguments.headOption.map(_.name) match
+          case Some("$this") if method.isExtensionMethod => method.arguments.tail
+          case Some("$outer") if method.isClassInitializer => method.arguments.tail
+          case _ => method.arguments
+        matchArguments(sig.paramsSig, javaArgs) &&
+        method.returnType.forall { returnType =>
+          val javaRetType =
+            if (method.isClassInitializer) method.declaringType else returnType
+          matchType(sig.resSig, javaRetType)
+        }
+      case _ =>
+        // TODO compare symbol.declaredType
+        method.arguments.isEmpty
 
   private def matchArguments(scalaArgs: Seq[ParamSig], javaArgs: Seq[jdi.LocalVariable]): Boolean =
     scalaArgs
