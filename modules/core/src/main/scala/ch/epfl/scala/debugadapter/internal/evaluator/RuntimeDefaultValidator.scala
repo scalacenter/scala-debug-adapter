@@ -9,12 +9,10 @@ import RuntimeEvaluatorExtractors.*
 import scala.util.Failure
 import scala.util.Success
 
-import RuntimeEvaluationHelpers.{extractCall, extractReferenceType, toStaticIfNeeded}
-
 case class Call(fun: Term, argClause: Term.ArgClause)
 case class PreparedCall(qual: Validation[RuntimeTree], name: String)
 
-class RuntimeDefaultValidator(val frame: JdiFrame, val logger: Logger) extends RuntimeValidator {
+class RuntimeDefaultValidator(val frame: JdiFrame, implicit val logger: Logger) extends RuntimeValidator {
   val helper = new RuntimeEvaluationHelpers(frame)
   import helper.*
 
