@@ -7,7 +7,7 @@ import scala.meta.Lit
 
 class RuntimePreEvaluationValidator(
     override val frame: JdiFrame,
-    override val logger: Logger,
+    override implicit val logger: Logger,
     evaluator: RuntimeEvaluator
 ) extends RuntimeDefaultValidator(frame, logger) {
   private def preEvaluate(tree: RuntimeEvaluableTree): Validation[PreEvaluatedTree] = {

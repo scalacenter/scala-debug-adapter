@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import com.sun.jdi._
 import RuntimeEvaluatorExtractors.{BooleanTree, IsAnyVal, Module}
 import scala.util.Success
+import ch.epfl.scala.debugadapter.Logger
 
 /* -------------------------------------------------------------------------- */
 /*                              Global hierarchy                              */
@@ -53,7 +54,7 @@ case class LiteralTree private (
 }
 
 object LiteralTree {
-  def apply(value: (Safe[Any], Type)): Validation[LiteralTree] = value._1 match {
+  def apply(value: (Safe[Any], Type))(implicit logger: Logger): Validation[LiteralTree] = value._1 match {
     case Safe(Success(_: String)) | Safe(Success(IsAnyVal(_))) => Valid(new LiteralTree(value._1, value._2))
     case _ => CompilerRecoverable(s"Unsupported literal type: ${value.getClass}")
   }
@@ -122,7 +123,9 @@ case class PrimitiveBinaryOpTree private (
 }
 
 object PrimitiveBinaryOpTree {
-  def apply(lhs: RuntimeTree, args: Seq[RuntimeEvaluableTree], name: String): Validation[PrimitiveBinaryOpTree] =
+  def apply(lhs: RuntimeTree, args: Seq[RuntimeEvaluableTree], name: String)(implicit
+      logger: Logger
+  ): Validation[PrimitiveBinaryOpTree] =
     (lhs, args) match {
       case (ret: RuntimeEvaluableTree, Seq(right)) =>
         RuntimeBinaryOp(ret, right, name).map(PrimitiveBinaryOpTree(ret, right, _))
@@ -142,7 +145,7 @@ case class ArrayElemTree private (array: RuntimeEvaluableTree, index: RuntimeEva
 }
 
 object ArrayElemTree {
-  def apply(tree: RuntimeTree, index: Seq[RuntimeEvaluableTree]): Validation[ArrayElemTree] = {
+  def apply(tree: RuntimeTree, index: Seq[RuntimeEvaluableTree])(implicit logger: Logger): Validation[ArrayElemTree] = {
     val integerTypes = Seq("java.lang.Integer", "java.lang.Short", "java.lang.Byte", "java.lang.Character")
     if (index.size < 1 || index.size > 1) Recoverable("Array accessor must have one argument")
     else
@@ -174,7 +177,7 @@ case class PrimitiveUnaryOpTree private (
   }
 }
 object PrimitiveUnaryOpTree {
-  def apply(rhs: RuntimeTree, name: String): Validation[PrimitiveUnaryOpTree] = rhs match {
+  def apply(rhs: RuntimeTree, name: String)(implicit logger: Logger): Validation[PrimitiveUnaryOpTree] = rhs match {
     case ret: RuntimeEvaluableTree => RuntimeUnaryOp(ret, name).map(PrimitiveUnaryOpTree(ret, _))
     case _ => Recoverable(s"Primitive operation operand must be evaluable")
   }
@@ -250,7 +253,7 @@ case class OuterModuleTree(
 }
 
 object OuterTree {
-  def apply(of: RuntimeTree, tpe: Type): Validation[OuterTree] = (of, tpe) match {
+  def apply(of: RuntimeTree, tpe: Type)(implicit logger: Logger): Validation[OuterTree] = (of, tpe) match {
     case (tree: RuntimeEvaluableTree, Module(module)) => Valid(new OuterModuleTree(TopLevelModuleTree(module)))
     case (tree: RuntimeEvaluableTree, ct: ClassType) => Valid(new OuterClassTree(tree, ct))
     case _ => Recoverable("No valid outer can be found")
@@ -264,7 +267,7 @@ case class ThisTree(
 }
 
 object ThisTree {
-  def apply(ths: Option[JdiObject]): Validation[ThisTree] =
+  def apply(ths: Option[JdiObject])(implicit logger: Logger): Validation[ThisTree] =
     Validation.fromOption(ths).map(ths => ThisTree(ths.reference.referenceType()))
 }
 
@@ -362,7 +365,7 @@ object IfTree {
           Type
       ) => Boolean, // ! This is a hack, passing a wrong method would lead to inconsistent trees
       objType: => Type
-  ): Validation[IfTree] = {
+  )(implicit logger: Logger): Validation[IfTree] = {
     val pType = p.`type`
     val tType = ifTrue.`type`
     val fType = ifFalse.`type`

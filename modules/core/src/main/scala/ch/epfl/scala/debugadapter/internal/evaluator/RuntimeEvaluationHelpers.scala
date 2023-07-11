@@ -13,9 +13,9 @@ import scala.util.Try
 import scala.jdk.CollectionConverters.*
 
 import RuntimeEvaluatorExtractors.*
+import ch.epfl.scala.debugadapter.Logger
 
-private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
-  import RuntimeEvaluationHelpers.*
+private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame)(implicit logger: Logger) {
   def fromLitToValue(literal: Lit, classLoader: JdiClassLoader): (Safe[Any], Type) = {
     val tpe = classLoader
       .mirrorOfLiteral(literal.value)
@@ -334,9 +334,6 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
       }
     } yield instance
   }
-}
-
-private[evaluator] object RuntimeEvaluationHelpers {
   def illegalAccess(x: Any, typeName: String) = Fatal {
     new ClassCastException(s"Cannot cast $x to $typeName")
   }
@@ -416,5 +413,4 @@ private[evaluator] object RuntimeEvaluationHelpers {
         )
       else Valid(InstanceMethodTree(method, args, eval))
   }
-
 }
