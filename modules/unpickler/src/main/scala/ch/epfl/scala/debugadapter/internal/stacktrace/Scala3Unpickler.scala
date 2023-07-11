@@ -22,6 +22,8 @@ import tastyquery.Signatures.*
 import java.util.Optional
 import scala.jdk.OptionConverters.*
 import java.lang.reflect.Method
+import tastyquery.Trees.DefDef
+import tastyquery.Trees.ValDef
 
 class Scala3Unpickler(
     classpaths: Array[Path],
@@ -57,10 +59,35 @@ class Scala3Unpickler(
       case None =>
         throw new Exception(s"Cannot find Scala symbol of $fqcn")
       case Some(declaringType) =>
-        val matchingSymbols =
-          declaringType.declarations
-            .collect { case sym: TermSymbol if sym.isTerm => sym }
-            .filter(matchSymbol(method, _))
+        val matchingSymbols = matchesLocalMethodOrLazyVal(method) match
+          case Some((methodName, n)) => {
+            val matchingSymbols =
+              declaringType.declarations
+                .flatMap(sym => {
+                 sym.tree match
+                    case Some(tree) =>
+                      tree.walkTree(tree => {
+                        tree match
+                          case DefDef(_,_,_,_,symbol) =>
+                            List((symbol, depth(declaringType,symbol)))
+                          case ValDef(_,_,_,symbol) => List((symbol,depth(declaringType,symbol)))
+                          case _ => List()
+
+                      })((l1, l2) => l1 ++ l2, List())
+                    case None => List()
+
+                })
+                .filter((symbol, depth) =>
+                
+                  matchTargetName(method, symbol) && depth >= 1
+                )
+            List(matchingSymbols.sortBy((_,depth) => depth).map((symbol, _) => symbol)(n - 1))
+          }
+          case _ => {
+            declaringType.declarations
+              .collect { case sym: TermSymbol if sym.isTerm => sym }
+              .filter(matchSymbol(method, _))
+          }
 
         if matchingSymbols.size > 1 then
           val message =
@@ -230,7 +257,28 @@ class Scala3Unpickler(
 
   private def matchSymbol(method: jdi.Method, symbol: TermSymbol): Boolean =
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
+  private def matchesLocalMethodOrLazyVal(method: jdi.Method): Option[(String, Int)] = {
+    val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
+    val expectedName = method.name.stripPrefix(javaPrefix)
+    val pattern = """^(.+)[$](\d+)$""".r
+    expectedName match {
+      case pattern(stringPart, numberPart) if (!stringPart.endsWith("$lzyINIT1") && !stringPart.endsWith("$default")) =>
+        Some((stringPart, numberPart.toInt))
+      case _ => None
+    }
 
+  }
+  private def depth(declaringSymbol: Symbol, symbol: Symbol): Int = {
+
+    symbol.owner match
+      case s: Symbol => {
+
+        if (s.name == declaringSymbol.name) 0
+        else 1 + depth(declaringSymbol, s)
+      }
+      case _ => 0
+
+  }
   private def matchTargetName(method: jdi.Method, symbol: TermSymbol): Boolean =
     val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
     // if an inner accesses a private method, the backend makes the method public
@@ -242,8 +290,16 @@ class Scala3Unpickler(
       case "<init>" if symbol.owner.is(Flags.Trait) => "$init$"
       case "<init>" => "<init>"
       case _ => NameTransformer.encode(symbolName)
-    if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
-    else encodedScalaName == expectedName
+    matchesLocalMethodOrLazyVal(method) match
+      case None => {
+        if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
+        else encodedScalaName == expectedName
+      }
+      case Some((methodName,depth)) => {
+        if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
+        else encodedScalaName == methodName
+
+      }
 
   private def matchSignature(method: jdi.Method, symbol: TermSymbol): Boolean =
     symbol.signedName match
@@ -258,9 +314,12 @@ class Scala3Unpickler(
             if (method.isClassInitializer) method.declaringType else returnType
           matchType(sig.resSig, javaRetType)
         }
-      case _ =>
-        // TODO compare symbol.declaredType
-        method.arguments.isEmpty
+      case _ => {
+
+        method.arguments.isEmpty || (method.arguments.size == 1 && method.argumentTypes.head.name == "scala.runtime.LazyRef")
+      }
+
+      // TODO compare symbol.declaredType
 
   private def matchArguments(scalaArgs: Seq[ParamSig], javaArgs: Seq[jdi.LocalVariable]): Boolean =
     scalaArgs

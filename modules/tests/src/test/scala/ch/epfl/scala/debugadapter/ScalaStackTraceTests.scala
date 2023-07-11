@@ -213,7 +213,79 @@ class ScalaStackTraceTests extends DebugTestSuite {
         )
       )
     )
-
   }
 
+  test("stacktrace with a lazy val") {
+    val source =
+      """|package example
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |
+         |    def m(t: Int) = {
+         |      lazy val m1 : Int = {
+         |        def m(t: Int): Int = {
+         |          t + 1
+         |        }
+         |        m(2)
+         |      }
+         |      m1
+         |    }
+         |    m(4)
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+
+    check(
+      Breakpoint(
+
+        8,
+        List(
+          "Main.main.m.m1.m(t: Int): Int",
+          "Main.main.m.m1: Int",
+          "Main.main.m(t: Int): Int",
+          "Main.main(args: Array[String]): Unit"
+        )
+      )
+    )
+  }
+
+  test("should show the correct stack trace  with a local method inside constructor") {
+    val source =
+      """|package example
+         |object Main {        
+         |  class A {
+         |    m(2)
+         |    def  m(t : Int )  : Unit = {
+         |      m2(4)
+         |      def m2(ty : Int )  : Unit = {
+         |        def m (u : Int,t : String) : Unit = {
+         |          println(u)
+         |        }
+         |        m(6,"")
+         |      }
+         |    } 
+         |  }
+         |                  
+         |  def main(args: Array[String]): Unit = {
+         |    val a = new A ()
+         |      println(a)
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+
+    check(
+      Breakpoint(
+        9,
+        List(
+          "Main.A.m.m2.m(u: Int, t: String): Unit",
+          "Main.A.m.m2(ty: Int): Unit",
+          "Main.A.m(t: Int): Unit",
+          "Main.A.<init>(): Unit",
+          "Main.main(args: Array[String]): Unit"
+        )
+      )
+    )
+  }
 }

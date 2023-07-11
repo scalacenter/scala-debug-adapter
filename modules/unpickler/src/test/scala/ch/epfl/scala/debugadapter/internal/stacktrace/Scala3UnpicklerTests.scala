@@ -280,7 +280,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
     // TODO fix: it should find the symbol f by traversing the tree of object Main
-    unpickler.assertNotFound("example.Main$", "int $anonfun$1(int x)")
+    unpickler.assertFormat("example.Main$", "int $anonfun$1(int x)", "Main.main.f.$anonfun(x: Int): Int")
   }
 
   test("this.type") {
@@ -616,7 +616,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
     // TODO fix: find rec by traversing the tree of object Main
-    unpickler.assertNotFound("example.Main$", "int rec$1(int x, int acc)")
+    unpickler.assertFormat("example.Main$", "int rec$1(int x, int acc)", "Main.fac.rec(x: Int, acc: Int): Int")
   }
 
   test("local lazy initializer") {
@@ -638,7 +638,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val unpickler = getUnpickler(debuggee)
     // TODO fix: find foo by traversing the tree of object Main
     unpickler.assertNotFound("example.Main$", "java.lang.String foo$lzyINIT1$1(scala.runtime.LazyRef foo$lzy1$1)")
-    unpickler.assertNotFound("example.Main$", "java.lang.String foo$1(scala.runtime.LazyRef foo$lzy1$2)")
+    unpickler.assertFind("example.Main$", "java.lang.String foo$1(scala.runtime.LazyRef foo$lzy1$2)")
   }
 
   test("private methods made public") {
