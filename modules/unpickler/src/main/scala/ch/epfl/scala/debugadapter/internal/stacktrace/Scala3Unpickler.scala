@@ -64,24 +64,21 @@ class Scala3Unpickler(
             val matchingSymbols =
               declaringType.declarations
                 .flatMap(sym => {
-                 sym.tree match
+                  sym.tree match
                     case Some(tree) =>
                       tree.walkTree(tree => {
                         tree match
-                          case DefDef(_,_,_,_,symbol) =>
-                            List((symbol, depth(declaringType,symbol)))
-                          case ValDef(_,_,_,symbol) => List((symbol,depth(declaringType,symbol)))
+                          case DefDef(_, _, _, _, symbol) =>
+                            List((symbol, depth(declaringType, symbol)))
+                          case ValDef(_, _, _, symbol) => List((symbol, depth(declaringType, symbol)))
                           case _ => List()
 
                       })((l1, l2) => l1 ++ l2, List())
                     case None => List()
 
                 })
-                .filter((symbol, depth) =>
-                
-                  matchTargetName(method, symbol) && depth >= 1
-                )
-            List(matchingSymbols.sortBy((_,depth) => depth).map((symbol, _) => symbol)(n - 1))
+                .filter((symbol, depth) => matchTargetName(method, symbol) && depth >= 1)
+            List(matchingSymbols.sortBy((_, depth) => depth).map((symbol, _) => symbol)(n - 1))
           }
           case _ => {
             declaringType.declarations
@@ -295,7 +292,7 @@ class Scala3Unpickler(
         if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
         else encodedScalaName == expectedName
       }
-      case Some((methodName,depth)) => {
+      case Some((methodName, depth)) => {
         if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
         else encodedScalaName == methodName
 
