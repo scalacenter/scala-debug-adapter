@@ -1095,7 +1095,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       Breakpoint(9),
       StepIn.method(if (isScala3) "LazyRef.initialized: Boolean" else "LazyRef.initialized(): boolean"),
       StepIn.method(
-        if (isScala3) "Main$.foo$lzyINIT1$1(LazyRef): String"
+        if (isScala3) "Main.main.foo: String"
         else "Main$.foo$lzycompute$1(LazyRef): String"
       ),
       StepOut.line(9),
