@@ -54,7 +54,7 @@ case class LiteralTree private (
 }
 
 object LiteralTree {
-  def apply(value: (Safe[Any], Type))(implicit logger: Logger): Validation[LiteralTree] = value._1 match {
+  def apply(value: (Safe[Any], Type)): Validation[LiteralTree] = value._1 match {
     case Safe(Success(_: String)) | Safe(Success(IsAnyVal(_))) => Valid(new LiteralTree(value._1, value._2))
     case _ => CompilerRecoverable(s"Unsupported literal type: ${value.getClass}")
   }
@@ -145,7 +145,7 @@ case class ArrayElemTree private (array: RuntimeEvaluableTree, index: RuntimeEva
 }
 
 object ArrayElemTree {
-  def apply(tree: RuntimeTree, index: Seq[RuntimeEvaluableTree])(implicit logger: Logger): Validation[ArrayElemTree] = {
+  def apply(tree: RuntimeTree, index: Seq[RuntimeEvaluableTree]): Validation[ArrayElemTree] = {
     val integerTypes = Seq("java.lang.Integer", "java.lang.Short", "java.lang.Byte", "java.lang.Character")
     if (index.size < 1 || index.size > 1) Recoverable("Array accessor must have one argument")
     else
@@ -253,7 +253,7 @@ case class OuterModuleTree(
 }
 
 object OuterTree {
-  def apply(of: RuntimeTree, tpe: Type)(implicit logger: Logger): Validation[OuterTree] = (of, tpe) match {
+  def apply(of: RuntimeTree, tpe: Type): Validation[OuterTree] = (of, tpe) match {
     case (tree: RuntimeEvaluableTree, Module(module)) => Valid(new OuterModuleTree(TopLevelModuleTree(module)))
     case (tree: RuntimeEvaluableTree, ct: ClassType) => Valid(new OuterClassTree(tree, ct))
     case _ => Recoverable("No valid outer can be found")
@@ -365,7 +365,7 @@ object IfTree {
           Type
       ) => Boolean, // ! This is a hack, passing a wrong method would lead to inconsistent trees
       objType: => Type
-  )(implicit logger: Logger): Validation[IfTree] = {
+  ): Validation[IfTree] = {
     val pType = p.`type`
     val tType = ifTrue.`type`
     val fType = ifFalse.`type`

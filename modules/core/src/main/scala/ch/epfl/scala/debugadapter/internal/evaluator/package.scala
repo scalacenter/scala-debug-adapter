@@ -36,7 +36,7 @@ package object evaluator {
     }
   }
 
-  implicit class SeqExtensions[A](seq: Seq[A])(implicit logger: Logger) {
+  implicit class SeqExtensions[A](seq: Seq[A]) {
     def toValidation(message: String): Validation[A] =
       seq.size match {
         case 1 => Valid(seq.head)

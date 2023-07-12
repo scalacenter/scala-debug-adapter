@@ -2,7 +2,6 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi._
 import RuntimeEvaluatorExtractors.PrimitiveTest.*
-import ch.epfl.scala.debugadapter.Logger
 
 sealed trait RuntimeBinaryOp {
   def evaluate(lhs: JdiValue, rhs: JdiValue, loader: JdiClassLoader): Safe[JdiValue]
@@ -77,7 +76,7 @@ object RuntimeBinaryOp {
       lhs: RuntimeEvaluableTree,
       rhs: RuntimeEvaluableTree,
       op: String
-  )(implicit logger: Logger): Validation[RuntimeBinaryOp] = {
+  ): Validation[RuntimeBinaryOp] = {
     (lhs.`type`, rhs.`type`, op) match {
       case (_, _, "==") => Valid(Eq)
       case (_, _, "!=") => Valid(Neq)
@@ -106,7 +105,7 @@ object RuntimeBinaryOp {
       lhs: RuntimeTree,
       rhs: Seq[RuntimeEvaluableTree],
       op: String
-  )(implicit logger: Logger): Validation[RuntimeBinaryOp] =
+  ): Validation[RuntimeBinaryOp] =
     (lhs, rhs) match {
       case (left: RuntimeEvaluableTree, Seq(right)) => apply(left, right, op)
       case _ => Recoverable("Not a primitive binary operation")
@@ -309,7 +308,7 @@ case object Not extends RuntimeUnaryOp {
 }
 
 object RuntimeUnaryOp {
-  def apply(rhs: RuntimeEvaluableTree, op: String)(implicit logger: Logger): Validation[RuntimeUnaryOp] = {
+  def apply(rhs: RuntimeEvaluableTree, op: String): Validation[RuntimeUnaryOp] = {
     (rhs.`type`, op) match {
       case (IsNumeric(), "unary_+") => Valid(UnaryPlus)
       case (IsNumeric(), "unary_-") => Valid(UnaryMinus)
@@ -319,7 +318,7 @@ object RuntimeUnaryOp {
     }
   }
 
-  def apply(rhs: RuntimeTree, op: String)(implicit logger: Logger): Validation[RuntimeUnaryOp] =
+  def apply(rhs: RuntimeTree, op: String): Validation[RuntimeUnaryOp] =
     rhs match {
       case ret: RuntimeEvaluableTree => apply(ret, op)
       case _ => Recoverable("Not a primitive unary operation")
