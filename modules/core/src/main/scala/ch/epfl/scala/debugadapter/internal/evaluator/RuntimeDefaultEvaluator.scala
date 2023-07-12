@@ -56,7 +56,7 @@ class RuntimeDefaultEvaluator(val frame: JdiFrame, implicit val logger: Logger) 
     }
 
   def evaluateStaticField(tree: StaticFieldTree): Safe[JdiValue] =
-    Safe { JdiValue(tree.on.getValue(tree.field), frame.thread) }
+    Safe(JdiValue(tree.on.getValue(tree.field), frame.thread))
 
   /* -------------------------------------------------------------------------- */
   /*                              Method evaluation                             */

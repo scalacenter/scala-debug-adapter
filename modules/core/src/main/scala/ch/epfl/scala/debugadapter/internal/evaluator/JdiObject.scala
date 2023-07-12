@@ -37,9 +37,7 @@ private[evaluator] class JdiObject(
       for {
         exception <- Safe(invocationException.exception).map(JdiObject(_, thread))
         message <- exception.invoke("toString", List()).map(_.asString.stringValue).recover { case _ => "" }
-      } yield {
-        throw new MethodInvocationFailed(message, Some(exception))
-      }
+      } yield throw new MethodInvocationFailed(message, Some(exception))
   }
 
   // we use a Seq instead of a Map because the ScalaEvaluator rely on the order of the fields

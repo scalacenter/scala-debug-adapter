@@ -114,9 +114,7 @@ private class ClassEntryLookUp(
             cachedSourceLines.getOrElse(line, Seq.empty) :+ classFile
           )
         }
-      } finally {
-        inputStream.close()
-      }
+      } finally inputStream.close()
     }
   }
 
@@ -315,9 +313,7 @@ private object ClassEntryLookUp {
         isValueClass,
         classSystem
       )
-    } finally {
-      inputStream.close()
-    }
+    } finally inputStream.close()
   }
 
   private def findPackage(

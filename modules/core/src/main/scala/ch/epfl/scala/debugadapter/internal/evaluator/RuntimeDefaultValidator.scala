@@ -76,7 +76,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, implicit val logger: Logger) 
   lazy val thisTree: Validation[RuntimeEvaluableTree] =
     Validation.fromOption {
       frame.thisObject
-        .map { ths => ThisTree(ths.reference.referenceType().asInstanceOf[ClassType]) }
+        .map(ths => ThisTree(ths.reference.referenceType().asInstanceOf[ClassType]))
     }
 
   /* -------------------------------------------------------------------------- */
@@ -117,7 +117,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, implicit val logger: Logger) 
 
       (isInModule, moduleCls.`type`, of) match {
         case (Some(Success(cls: JdiClass)), _, _) =>
-          CompilerRecoverable(s"Cannot access module ${name} from ${ofName}")
+          CompilerRecoverable(s"Cannot access module $name from $ofName")
         case (_, Module(module), _) => Valid(TopLevelModuleTree(module))
         case (_, cls, Some(instance: RuntimeEvaluableTree)) =>
           if (cls.name().startsWith(instance.`type`.name()))
@@ -163,10 +163,10 @@ class RuntimeDefaultValidator(val frame: JdiFrame, implicit val logger: Logger) 
       .orElse {
         of match {
           case Valid(_: ThisTree) | _: Recoverable => localVarTreeByName(name)
-          case _ => Recoverable(s"${name} is not a local variable")
+          case _ => Recoverable(s"$name is not a local variable")
         }
       }
-      .orElse { validateModule(name, None) }
+      .orElse(validateModule(name, None))
   }
 
   /* -------------------------------------------------------------------------- */
@@ -177,7 +177,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, implicit val logger: Logger) 
       args: Seq[RuntimeEvaluableTree]
   ): Validation[RuntimeEvaluableTree] =
     methodTreeByNameAndArgs(on, "apply", args)
-      .orElse { ArrayElemTree(on, args) }
+      .orElse(ArrayElemTree(on, args))
 
   def validateIndirectApply(
       on: Validation[RuntimeTree],
@@ -218,8 +218,8 @@ class RuntimeDefaultValidator(val frame: JdiFrame, implicit val logger: Logger) 
       lhs <- preparedCall.qual
       methodTree <-
         PrimitiveUnaryOpTree(lhs, preparedCall.name)
-          .orElse { PrimitiveBinaryOpTree(lhs, args, preparedCall.name) }
-          .orElse { findMethod(lhs, preparedCall.name, args) }
+          .orElse(PrimitiveBinaryOpTree(lhs, args, preparedCall.name))
+          .orElse(findMethod(lhs, preparedCall.name, args))
     } yield methodTree
   }
 

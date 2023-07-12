@@ -78,20 +78,18 @@ class Scala3Unpickler(
         case _ => declaringType
 
       declaringtpe.declarations
-        .flatMap(sym => {
+        .flatMap(sym =>
           sym.tree match
             case Some(tree) =>
-              tree.walkTree(tree => {
+              tree.walkTree(tree =>
                 tree match
                   case DefDef(_, _, _, _, symbol) =>
                     List((symbol, depth(declaringType, symbol)))
                   case ValDef(_, _, _, symbol) => List((symbol, depth(declaringType, symbol)))
                   case _ => List()
-
-              })((l1, l2) => l1 ++ l2, List())
+              )((l1, l2) => l1 ++ l2, List())
             case None => List()
-
-        })
+        )
         .filter((symbol, depth) => matchTargetName(name, symbol) && depth >= 1)
     Some(matchingSymbols.sortBy((_, depth) => depth).map((symbol, _) => symbol)(index - 1))
 
@@ -112,7 +110,7 @@ class Scala3Unpickler(
         if t.args.size > 2 then s"($args) => $result" else s"$args => $result"
       case t: AppliedType if isTuple(t.tycon) =>
         val types = t.args.map(formatType).mkString(",")
-        s"(${types})"
+        s"($types)"
       case t: AppliedType if isOperatorLike(t.tycon) && t.args.size == 2 =>
         val operatorLikeTypeFormat = t.args
           .map(formatType)
@@ -186,7 +184,7 @@ class Scala3Unpickler(
       case DefaultGetterName(termName, num) => s"${termName.toString()}.<default ${num + 1}>"
       case _ => sym.name.toString()
 
-    if prefix.isEmpty then symName else s"$prefix.${symName}"
+    if prefix.isEmpty then symName else s"$prefix.$symName"
 
   private def isPackageObject(name: Name): Boolean =
     name.toString == "package" || name.toString.endsWith("$package")
@@ -258,29 +256,21 @@ class Scala3Unpickler(
   private def matchSymbol(method: jdi.Method, symbol: TermSymbol): Boolean =
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
 
-  private def matchesLocalMethodOrLazyVal(method: jdi.Method): Option[(String, Int)] = {
+  private def matchesLocalMethodOrLazyVal(method: jdi.Method): Option[(String, Int)] =
     val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
     val expectedName = method.name.stripPrefix(javaPrefix)
     val pattern = """^(.+)[$](\d+)$""".r
-    expectedName match {
+    expectedName match
       case pattern(stringPart, numberPart) if (!stringPart.endsWith("$lzyINIT1") && !stringPart.endsWith("$default")) =>
         Some((stringPart, numberPart.toInt))
       case _ => None
-    }
 
-  }
-
-  private def depth(declaringSymbol: Symbol, symbol: Symbol): Int = {
-
+  private def depth(declaringSymbol: Symbol, symbol: Symbol): Int =
     symbol.owner match
-      case s: Symbol => {
-
-        if (s.name == declaringSymbol.name) 0
+      case s: Symbol =>
+        if s.name == declaringSymbol.name then 0
         else 1 + depth(declaringSymbol, s)
-      }
       case _ => 0
-
-  }
 
   private def matchTargetName(method: jdi.Method, symbol: TermSymbol): Boolean =
     val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
@@ -310,20 +300,18 @@ class Scala3Unpickler(
         matchArguments(sig.paramsSig, javaArgs) &&
         method.returnType.forall { returnType =>
           val javaRetType =
-            if (method.isClassInitializer) method.declaringType else returnType
+            if method.isClassInitializer then method.declaringType else returnType
           matchType(sig.resSig, javaRetType)
         }
-      case _ => {
-
+      case _ =>
         method.arguments.isEmpty || (method.arguments.size == 1 && method.argumentTypes.head.name == "scala.runtime.LazyRef")
-      }
 
       // TODO compare symbol.declaredType
 
   private def matchArguments(scalaArgs: Seq[ParamSig], javaArgs: Seq[jdi.LocalVariable]): Boolean =
     scalaArgs
       .collect { case termSig: ParamSig.Term => termSig }
-      .corresponds(javaArgs) { (scalaArg, javaArg) => matchType(scalaArg.typ, javaArg.`type`) }
+      .corresponds(javaArgs)((scalaArg, javaArg) => matchType(scalaArg.typ, javaArg.`type`))
 
   private val javaToScala: Map[String, String] = Map(
     "scala.Boolean" -> "boolean",
