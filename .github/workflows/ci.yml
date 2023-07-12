@@ -47,4 +47,4 @@ jobs:
     - name: Scripted sbt tests
       run: sbt sbtPlugin/scripted
       shell: bash
-      if: ${{ matrix.jvm != 'adoptium:1.20.0.1' }}
+      if: ${{ matrix.jvm != 'adoptium:1.20.0.1' && (matrix.jvm != 'adoptium:1.17.0.7' || matrix.os != 'windows-latest' ) }}
