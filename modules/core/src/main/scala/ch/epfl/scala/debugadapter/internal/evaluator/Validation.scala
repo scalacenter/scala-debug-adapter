@@ -78,6 +78,7 @@ final case class Recoverable(override val exception: Exception) extends Invalid(
 
 sealed abstract class Unrecoverable(override val exception: Exception) extends Invalid(exception) {
   override def orElse[B >: Nothing](f: => Validation[B]): Validation[B] = this
+  override def transform[B](f: Validation[Nothing] => Validation[B]): Validation[B] = this
 }
 
 final case class Fatal(override val exception: Exception) extends Unrecoverable(exception)

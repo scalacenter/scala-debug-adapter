@@ -356,13 +356,12 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
   /*                              Initialize module                             */
   /* -------------------------------------------------------------------------- */
   def moduleInitializer(modCls: ClassType, of: RuntimeEvaluableTree): Validation[NestedModuleTree] =
-    for {
-      initMethodName <- Validation.fromOption(getLastInnerType(modCls.name()))
-      initMethod <- of.`type` match {
-        case ref: ReferenceType => zeroArgMethodByName(ref, initMethodName)
-        case _ => Recoverable(s"Cannot find module initializer for non-reference type $modCls")
-      }
-    } yield NestedModuleTree(modCls, InstanceMethodTree(initMethod, Seq(), of))
+    of.`type` match {
+      case ref: ReferenceType =>
+        zeroArgMethodByName(ref, SourceLookUpProvider.getClassName(modCls.name()).stripSuffix("$"))
+          .map(m => NestedModuleTree(modCls, InstanceMethodTree(m, Seq.empty, of)))
+      case _ => Recoverable(s"Cannot find module initializer for non-reference type $modCls")
+    }
 
   def illegalAccess(x: Any, typeName: String) = Fatal {
     new ClassCastException(s"Cannot cast $x to $typeName")
@@ -383,19 +382,13 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
   /* -------------------------------------------------------------------------- */
   /*                           Nested types regex                          */
   /* -------------------------------------------------------------------------- */
-  def getLastInnerType(className: String): Option[String] = {
-    val pattern = """(.+\$)([^$]+)$""".r
-    className.stripSuffix("$") match {
-      case pattern(_, innerType) => Some(innerType)
-      case _ => None
-    }
-  }
-
   def removeLastInnerTypeFromFQCN(className: String): Option[String] = {
-    val pattern = """(.+)\$[\w]+\${0,1}$""".r
-    className match {
-      case pattern(baseName) => Some(baseName)
-      case _ => None
+    val (packageName, clsName) = className.splitAt(className.lastIndexOf('.') + 1)
+    val name = NameTransformer.decode(clsName)
+    val lastDollar = name.stripSuffix("$").lastIndexOf('$')
+    lastDollar match {
+      case -1 => None
+      case _ => Some(packageName + NameTransformer.encode(name.dropRight(name.length - lastDollar)))
     }
   }
 
