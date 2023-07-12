@@ -238,7 +238,6 @@ class ScalaStackTraceTests extends DebugTestSuite {
 
     check(
       Breakpoint(
-
         8,
         List(
           "Main.main.m.m1.m(t: Int): Int",

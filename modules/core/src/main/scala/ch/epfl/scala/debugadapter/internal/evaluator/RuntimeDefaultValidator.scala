@@ -202,9 +202,9 @@ class RuntimeDefaultValidator(val frame: JdiFrame, implicit val logger: Logger) 
       args: Seq[RuntimeEvaluableTree]
   ): Validation[RuntimeEvaluableTree] =
     methodTreeByNameAndArgs(tree, name, args)
-      .orElse { validateIndirectApply(Valid(tree), name, args) }
-      .orElse { validateApply(tree, args) }
-      .orElse { validateOuter(tree).flatMap(findMethod(_, name, args)) }
+      .orElse(validateIndirectApply(Valid(tree), name, args))
+      .orElse(validateApply(tree, args))
+      .orElse(validateOuter(tree).flatMap(findMethod(_, name, args)))
 
   def validateMethod(call: Call): Validation[RuntimeEvaluableTree] = {
     lazy val preparedCall = call.fun match {
