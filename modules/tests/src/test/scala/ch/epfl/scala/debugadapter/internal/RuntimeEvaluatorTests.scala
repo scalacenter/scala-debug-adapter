@@ -861,17 +861,6 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
          |      y
          |    }
          |  }
-         |}
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val b = new B("x", "y")
-         |    val bInner = new b.BInner
-         |    val aInner = new b.AInner
-         |    bInner.yy
-         |    println("ok")
-         |  }
-         |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
@@ -884,6 +873,47 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Evaluation.success("a", "a"),
       Breakpoint(28),
       Evaluation.success("aInner.b", "b")
+    )
+  }
+
+  test("Should support names with special characters".only) {
+    val source =
+      """|package example
+         |
+         |class `A+B` {
+         |  val foo = 42
+         |  object && {
+         |    def x = {
+         |      println(foo)
+         |      42
+         |    }
+         |  }
+         |  object ~~ { def x = foo + 1 }
+         |}
+         |
+         |object `A+B` {
+         |  object || { def x = 43 }
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val b = new B("x", "y")
+         |    val bInner = new b.BInner
+         |    val aInner = new b.AInner
+         |    bInner.yy
+         |    val a = new `A+B`
+         |    a.&&.x
+         |    println("ok")
+         |  }
+         |}
+         """.stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(8),
+      Evaluation.success("~~.x", 43),
+      Breakpoint(22),
+      Evaluation.success("a.&&.x", 42),
+      Evaluation.success("`A+B`.||.x", 43)
     )
   }
 }
