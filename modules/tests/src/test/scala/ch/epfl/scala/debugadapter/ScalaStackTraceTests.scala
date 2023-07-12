@@ -250,7 +250,7 @@ class ScalaStackTraceTests extends DebugTestSuite {
     )
   }
 
-  test("should show the correct stack trace  with a local method inside constructor") {
+  test("local method inside constructor") {
     val source =
       """|package example
          |object Main {        

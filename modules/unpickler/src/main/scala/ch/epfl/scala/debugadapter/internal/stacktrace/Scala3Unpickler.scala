@@ -59,10 +59,26 @@ class Scala3Unpickler(
       case None =>
         throw new Exception(s"Cannot find Scala symbol of $fqcn")
       case Some(declaringType) =>
-        val matchingSymbols = matchesLocalMethodOrLazyVal(method) match
-          case Some((methodName, n)) => {
-            val matchingSymbols =
-              declaringType.declarations
+         matchesLocalMethodOrLazyVal(method) match
+          case Some((methodName, index)) => findLocalMethodOrLazyVal(declaringType,methodName,index)
+          case _ => 
+              val matchingSymbols = declaringType.declarations
+              .collect { case sym: TermSymbol if sym.isTerm => sym }
+              .filter(matchSymbol(method, _))
+               if matchingSymbols.size > 1 then
+               val message =s"Found ${matchingSymbols.size} matching symbols for $method:" +
+               matchingSymbols.mkString("\n")
+               throw new Exception(message)
+               else matchingSymbols.headOption
+          
+
+  def findLocalMethodOrLazyVal(declaringType: DeclaringSymbol, name: String, index: Int): Option[TermSymbol] =
+    val matchingSymbols =
+              val declaringtpe= declaringType.owner match
+                case s :DeclaringSymbol => s 
+                case _ => declaringType
+              
+              declaringtpe.declarations
                 .flatMap(sym => {
                   sym.tree match
                     case Some(tree) =>
@@ -77,21 +93,8 @@ class Scala3Unpickler(
                     case None => List()
 
                 })
-                .filter((symbol, depth) => matchTargetName(method, symbol) && depth >= 1)
-            List(matchingSymbols.sortBy((_, depth) => depth).map((symbol, _) => symbol)(n - 1))
-          }
-          case _ => {
-            declaringType.declarations
-              .collect { case sym: TermSymbol if sym.isTerm => sym }
-              .filter(matchSymbol(method, _))
-          }
-
-        if matchingSymbols.size > 1 then
-          val message =
-            s"Found ${matchingSymbols.size} matching symbols for $method:" +
-              matchingSymbols.mkString("\n")
-          throw new Exception(message)
-        else matchingSymbols.headOption
+                .filter((symbol, depth) => matchTargetName(name, symbol) && depth >= 1)
+    Some(matchingSymbols.sortBy((_, depth) => depth).map((symbol, _) => symbol)(index - 1))  
 
   def formatType(t: Type): String =
     t match
@@ -197,6 +200,7 @@ class Scala3Unpickler(
       case ref: TypeRef =>
         isScalaPackage(ref.prefix) && ref.name.toString.startsWith("Function")
       case _ => false
+
   private def isTuple(tpe: Type): Boolean =
     tpe match
       case ref: TypeRef =>
@@ -254,6 +258,7 @@ class Scala3Unpickler(
 
   private def matchSymbol(method: jdi.Method, symbol: TermSymbol): Boolean =
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
+  
   private def matchesLocalMethodOrLazyVal(method: jdi.Method): Option[(String, Int)] = {
     val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
     val expectedName = method.name.stripPrefix(javaPrefix)
@@ -265,6 +270,7 @@ class Scala3Unpickler(
     }
 
   }
+ 
   private def depth(declaringSymbol: Symbol, symbol: Symbol): Int = {
 
     symbol.owner match
@@ -276,6 +282,7 @@ class Scala3Unpickler(
       case _ => 0
 
   }
+
   private def matchTargetName(method: jdi.Method, symbol: TermSymbol): Boolean =
     val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
     // if an inner accesses a private method, the backend makes the method public
@@ -287,16 +294,13 @@ class Scala3Unpickler(
       case "<init>" if symbol.owner.is(Flags.Trait) => "$init$"
       case "<init>" => "<init>"
       case _ => NameTransformer.encode(symbolName)
-    matchesLocalMethodOrLazyVal(method) match
-      case None => {
-        if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
-        else encodedScalaName == expectedName
-      }
-      case Some((methodName, depth)) => {
-        if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
-        else encodedScalaName == methodName
-
-      }
+    if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
+    else encodedScalaName == expectedName
+      
+  private def matchTargetName(expectedName: String, symbol: TermSymbol): Boolean =
+    val symbolName = symbol.targetName.toString
+    expectedName==NameTransformer.encode(symbolName)
+        
 
   private def matchSignature(method: jdi.Method, symbol: TermSymbol): Boolean =
     symbol.signedName match
