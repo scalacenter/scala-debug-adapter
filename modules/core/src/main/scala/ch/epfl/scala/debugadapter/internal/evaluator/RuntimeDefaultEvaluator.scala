@@ -22,7 +22,6 @@ class RuntimeDefaultEvaluator(val frame: JdiFrame, implicit val logger: Logger) 
       case array: ArrayElemTree => evaluateArrayElement(array)
       case branching: IfTree => evaluateIf(branching)
       case staticMethod: StaticMethodTree => invokeStatic(staticMethod)
-      case outer: OuterTree => evaluateOuter(outer)
       case UnitTree => Safe(JdiValue(frame.thread.virtualMachine.mirrorOfVoid, frame.thread))
     }
 
@@ -35,16 +34,6 @@ class RuntimeDefaultEvaluator(val frame: JdiFrame, implicit val logger: Logger) 
       value <- tree.value
       result <- loader.mirrorOfLiteral(value)
     } yield result
-
-  /* -------------------------------------------------------------------------- */
-  /*                              Outer evaluation                              */
-  /* -------------------------------------------------------------------------- */
-  def evaluateOuter(tree: OuterTree): Safe[JdiValue] =
-    tree match {
-      case OuterModuleTree(module) => evaluateModule(module)
-      case outerClass: OuterClassTree =>
-        eval(outerClass.inner).map(_.asObject.getField("$outer"))
-    }
 
   /* -------------------------------------------------------------------------- */
   /*                              Field evaluation                              */

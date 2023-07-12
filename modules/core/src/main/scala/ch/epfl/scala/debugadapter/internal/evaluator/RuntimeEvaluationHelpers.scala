@@ -306,18 +306,20 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
     }
 
   // ! May not be correct when dealing with an object inside a class
-  def outerLookup(ref: ReferenceType): Validation[Type] =
-    Validation(ref.fieldByName("$outer"))
-      .map(_.`type`())
-      .orElse {
-        for {
-          outerName <- Validation.fromOption(removeLastInnerTypeFromFQCN(ref.name()))
-          outer <- loadClass(outerName + "$").map(_.`type`) match {
-            case Valid(Module(mod)) => Valid(mod)
-            case _ => Recoverable(s"Cannot find $$outer for $ref")
+  def outerLookup(tree: RuntimeTree): Validation[RuntimeEvaluableTree] =
+    tree match {
+      case ReferenceTree(ref) =>
+        Validation(ref.fieldByName("$outer"))
+          .flatMap(toStaticIfNeeded(_, tree))
+          .orElse {
+            removeLastInnerTypeFromFQCN(tree.`type`.name())
+              .map(name => loadClass(name + "$")) match {
+              case Some(Valid(Module(mod))) => Valid(mod)
+              case res => Recoverable(s"Cannot find $$outer for ${tree.`type`.name()}}")
+            }
           }
-        } yield outer
-      }
+      case _ => Recoverable(s"Cannot find $$outer for non-reference type ${tree.`type`.name()}}")
+    }
 
   def searchAllClassesFor(name: String, in: Option[String]): Validation[ClassTree] = {
     def declaringTypeName = frame.current().location().declaringType().name()
@@ -369,16 +371,6 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
   /* -------------------------------------------------------------------------- */
   /*                               Useful patterns                              */
   /* -------------------------------------------------------------------------- */
-  /* Extract reference if there is */
-  def extractReferenceType(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
-    tree.flatMap(extractReferenceType)
-
-  def extractReferenceType(tree: RuntimeTree): Validation[ReferenceType] =
-    tree match {
-      case ReferenceTree(ref) => Valid(ref)
-      case t => illegalAccess(t, "ReferenceType")
-    }
-
   /* Standardize method calls */
   def extractCall(apply: Stat): Call =
     apply match {

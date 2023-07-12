@@ -43,7 +43,7 @@ class RuntimePreEvaluationValidator(
 
   override def validateOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree] =
     super.validateOuter(tree).flatMap {
-      case tree @ (_: OuterModuleTree | OuterClassTree(_: PreEvaluatedTree, _)) =>
+      case tree @ (_: FieldTree | _: TopLevelModuleTree) =>
         preEvaluate(tree)
       case tree => Valid(tree)
     }

@@ -1,7 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi._
-import RuntimeEvaluatorExtractors.{BooleanTree, IsAnyVal, Module}
+import RuntimeEvaluatorExtractors.{BooleanTree, IsAnyVal}
 import scala.util.Success
 import ch.epfl.scala.debugadapter.Logger
 
@@ -30,8 +30,6 @@ sealed trait MethodTree extends RuntimeEvaluableTree {
 sealed trait FieldTree extends RuntimeEvaluableTree {
   def field: Field
 }
-
-sealed trait OuterTree extends RuntimeEvaluableTree
 
 /* -------------------------------------------------------------------------- */
 /*                                Simple trees                                */
@@ -224,39 +222,6 @@ case class NewInstanceTree(init: StaticMethodTree) extends RuntimeEvaluableTree 
     s"""|NewInstanceTree(
         |${indent}init= ${init.prettyPrint(depth + 1)}
         |${indent.dropRight(1)})""".stripMargin
-  }
-}
-
-case class OuterClassTree(
-    inner: RuntimeEvaluableTree,
-    `type`: ClassType
-) extends OuterTree {
-  override def prettyPrint(depth: Int): String = {
-    val indent = "\t" * (depth + 1)
-    s"""|OuterClassTree(
-        |${indent}of= ${inner.prettyPrint(depth + 1)}
-        |${indent}type= ${`type`}
-        |${indent.dropRight(1)})""".stripMargin
-  }
-}
-
-case class OuterModuleTree(
-    module: ModuleTree
-) extends OuterTree {
-  override def `type`: ClassType = module.`type`
-  override def prettyPrint(depth: Int): String = {
-    val indent = "\t" * (depth + 1)
-    s"""|OuterModuleTree(
-        |${indent}module= ${module.prettyPrint(depth + 1)}
-        |${indent.dropRight(1)})""".stripMargin
-  }
-}
-
-object OuterTree {
-  def apply(of: RuntimeTree, tpe: Type): Validation[OuterTree] = (of, tpe) match {
-    case (tree: RuntimeEvaluableTree, Module(module)) => Valid(new OuterModuleTree(TopLevelModuleTree(module)))
-    case (tree: RuntimeEvaluableTree, ct: ClassType) => Valid(new OuterClassTree(tree, ct))
-    case _ => Recoverable("No valid outer can be found")
   }
 }
 

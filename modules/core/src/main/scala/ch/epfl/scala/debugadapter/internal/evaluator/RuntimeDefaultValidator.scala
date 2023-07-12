@@ -11,6 +11,8 @@ import scala.util.Success
 
 import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
 
+import scala.jdk.CollectionConverters.*
+
 case class Call(fun: Term, argClause: Term.ArgClause)
 case class PreparedCall(qual: Validation[RuntimeTree], name: String)
 
@@ -91,16 +93,24 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
       .filter(_.`type`.name() != "scala.Function0", runtimeFatal = true)
       .map(v => LocalVarTree(name, v.`type`))
 
+  // We might sometimes need to access a 'private' attribute of a class
+  private def fieldLookup(name: String, ref: ReferenceType) =
+    Option(ref.fieldByName(name))
+      .orElse { ref.visibleFields().asScala.find(_.name().endsWith("$" + name)) }
+
   def fieldTreeByName(
       of: Validation[RuntimeTree],
       name: String
   ): Validation[RuntimeEvaluableTree] =
-    for {
-      ref <- extractReferenceType(of)
-      field <- Validation(ref.fieldByName(name))
-      _ = loadClassOnNeed(field)
-      fieldTree <- toStaticIfNeeded(field, of.get)
-    } yield fieldTree
+    of match {
+      case ReferenceTree(ref) =>
+        for {
+          field <- Validation.fromOption { fieldLookup(name, ref) }
+          _ = loadClassOnNeed(field)
+          fieldTree <- toStaticIfNeeded(field, of.get)
+        } yield fieldTree
+      case _ => Recoverable(s"Cannot access field $name from non reference type ${of.get.`type`.name()}")
+    }
 
   private def inCompanion(name: Option[String], moduleName: String) = name
     .filter(_.endsWith("$"))
@@ -247,13 +257,8 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
   /* -------------------------------------------------------------------------- */
   /*                             Looking for $outer                             */
   /* -------------------------------------------------------------------------- */
-  def validateOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree] = {
-    for {
-      ref <- extractReferenceType(tree)
-      outer <- outerLookup(ref)
-      outerTree <- OuterTree(tree, outer)
-    } yield outerTree
-  }
+  def validateOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree] =
+    outerLookup(tree)
 
   /* -------------------------------------------------------------------------- */
   /*                           Flow control validation                          */

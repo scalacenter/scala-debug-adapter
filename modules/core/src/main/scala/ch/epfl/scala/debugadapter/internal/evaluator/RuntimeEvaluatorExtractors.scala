@@ -23,7 +23,10 @@ protected[internal] object RuntimeEvaluatorExtractors {
     def unapply(cls: JdiClass): Option[ClassType] = unapply(cls.cls)
 
     def unapply(tree: RuntimeTree): Option[RuntimeEvaluableTree] =
-      unapply(tree.`type`).map(_ => tree.asInstanceOf[RuntimeEvaluableTree])
+      tree match {
+        case cls: ClassTree => unapply(cls.`type`).map(TopLevelModuleTree(_))
+        case tree: RuntimeEvaluableTree => unapply(tree.`type`).map(_ => tree)
+      }
   }
 
   object ModuleCall {
@@ -41,8 +44,6 @@ protected[internal] object RuntimeEvaluatorExtractors {
       tree match {
         case mt: NestedModuleTree => unapply(mt.init.qual)
         case ft: InstanceFieldTree => unapply(ft.qual)
-        case oct: OuterClassTree => unapply(oct.inner)
-        case OuterModuleTree(module) => unapply(module)
         case IfTree(p, t, f, _) => unapply(p) || unapply(t) || unapply(f)
         case _: MethodTree | _: NewInstanceTree => true
         case _: LiteralTree | _: LocalVarTree | _: PreEvaluatedTree | _: ThisTree | UnitTree => false
