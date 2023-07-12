@@ -54,7 +54,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
   }
 
   object ReferenceTree {
-    def unapply(tree: RuntimeTree)(implicit logger: Logger): Validation[ReferenceType] = {
+    def unapply(tree: RuntimeTree): Validation[ReferenceType] = {
       tree.`type` match {
         case ref: ReferenceType => Valid(ref)
         case _ => Recoverable(s"$tree is not a reference type")
@@ -77,7 +77,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
     def unapply(p: Validation[RuntimeEvaluableTree])(implicit logger: Logger): Validation[RuntimeEvaluableTree] =
       p.flatMap(unapply)
 
-    def unapply(p: RuntimeEvaluableTree)(implicit logger: Logger): Validation[RuntimeEvaluableTree] = p.`type` match {
+    def unapply(p: RuntimeEvaluableTree): Validation[RuntimeEvaluableTree] = p.`type` match {
       case bt: BooleanType => Valid(p)
       case rt: ReferenceType if rt.name() == "java.lang.Boolean" =>
         Valid(p)
