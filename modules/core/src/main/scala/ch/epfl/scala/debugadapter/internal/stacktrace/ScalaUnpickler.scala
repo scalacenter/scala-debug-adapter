@@ -56,7 +56,6 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
     // TODO in Scala 3 we should be able to find the symbol of a local class using TASTy Query
     else if (isLocalClass(method.declaringType)) Some(formatJava(method))
     else if (scalaVersion.isScala2 && isNestedClass(method.declaringType)) Some(formatJava(method))
-    else if (isDefaultValue(method)) Some(formatJava(method))
     else
       try formatScala(method)
       catch {
