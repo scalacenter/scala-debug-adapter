@@ -202,6 +202,31 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     unpickler.assertFormat("example.A$", "java.lang.String m$extension(java.lang.String $this)", "A.m(): String")
   }
 
+  test("local method inside a value class") {
+    val source =
+      """|package example
+         |
+         |class A(val x: String) extends AnyVal {
+         |  def m(): String = {
+         |    def m1(t : String) : String = {
+         |      "t"+""
+         |    }
+         |    return m1("")
+         |  }
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val a: A = new A("x")
+         |    println(a.m())
+         |  }
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val unpickler = getUnpickler(debuggee)
+    unpickler.assertFormat("example.A$", "java.lang.String m1$1(java.lang.String t)", "A.m.m1(t: String): String")
+  }
+
   test("multi parameter lists") {
     val source =
       """|package example
@@ -634,7 +659,11 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val unpickler = getUnpickler(debuggee)
     // TODO fix: find foo by traversing the tree of object Main
     unpickler.assertNotFound("example.Main$", "java.lang.String foo$lzyINIT1$1(scala.runtime.LazyRef foo$lzy1$1)")
-    unpickler.assertFind("example.Main$", "java.lang.String foo$1(scala.runtime.LazyRef foo$lzy1$2)")
+    unpickler.assertFormat(
+      "example.Main$",
+      "java.lang.String foo$1(scala.runtime.LazyRef foo$lzy1$2)",
+      "Main.main.foo: String"
+    )
   }
 
   test("private methods made public") {

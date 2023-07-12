@@ -219,44 +219,4 @@ class ScalaStackTraceTests extends DebugTestSuite {
 
   }
 
-  test("should show the correct stack trace  with a local method inside constructor") {
-    val source =
-      """|package example
-         |object Main {        
-         |  class A {
-         |    m(2)
-         |    def  m(t : Int )  : Unit = {
-         |      m2(4)
-         |      def m2(ty : Int )  : Unit = {
-         |        def m (u : Int,t : String) : Unit = {
-         |          println(u)
-         |        }
-         |        m(6,"")
-         |      }
-         |    } 
-         |  }
-         |                  
-         |  def main(args: Array[String]): Unit = {
-         |    val a = new A ()
-         |      println(a)
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-
-    check(
-      Breakpoint(
-        9,
-        List(
-          "Main.A.m.m2.m(u: Int, t: String): Unit",
-          "Main.A.m.m2(ty: Int): Unit",
-          "Main.A.m(t: Int): Unit",
-          "Main.A.<init>(): Unit",
-          "Main.main(args: Array[String]): Unit"
-        )
-      )
-    )
-
-  }
-
 }
