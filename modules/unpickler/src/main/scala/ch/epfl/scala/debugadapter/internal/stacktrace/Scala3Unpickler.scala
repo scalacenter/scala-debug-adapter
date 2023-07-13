@@ -55,13 +55,13 @@ class Scala3Unpickler(
   private[stacktrace] def findSymbol(obj: Any): Option[TermSymbol] =
     val method = jdi.Method(obj)
     val fqcn = method.declaringType.name
-    findDeclaringType(fqcn, method.isExtensionMethod) match
-      case None =>
-        throw new Exception(s"Cannot find Scala symbol of $fqcn")
-      case Some(declaringType) =>
-        matchesLocalMethodOrLazyVal(method) match
-          case Some((methodName, index)) => findLocalMethodOrLazyVal(declaringType, methodName, index)
-          case _ =>
+    matchesLocalMethodOrLazyVal(method) match
+      case Some((methodName, index)) => findLocalMethodOrLazyVal(findCompanionObjectAndClass(fqcn), methodName, index)
+      case _ =>
+        findDeclaringType(fqcn, method.isExtensionMethod) match
+          case None =>
+            throw new Exception(s"Cannot find Scala symbol of $fqcn")
+          case Some(declaringType) =>
             val matchingSymbols = declaringType.declarations
               .collect { case sym: TermSymbol if sym.isTerm => sym }
               .filter(matchSymbol(method, _))
@@ -71,36 +71,35 @@ class Scala3Unpickler(
               throw new Exception(message)
             else matchingSymbols.headOption
 
-  def findLocalMethodOrLazyVal(declaringType: DeclaringSymbol, name: String, index: Int): Option[TermSymbol] =
-    var currentindex = 1
-    val declaringtpe = declaringType.owner match
-      case s: DeclaringSymbol => s
-      case _ => declaringType
-
+  def traverseCompanionObjectOrClass(declaringtpe: DeclaringSymbol, name: String): List[TermSymbol] =
     declaringtpe.declarations
-      .flatMap(sym =>
-        sym.tree match
-          case Some(tree) =>
-            tree.walkTree(tree =>
-              if currentindex <= index then
-                tree match
-                  case DefDef(_, _, _, _, symbol) =>
-                    if matchTargetName(name, symbol) && currentindex == index then List(symbol)
-                    else
-                      if matchTargetName(name, symbol) then currentindex += 1
-                      List()
-                  case ValDef(_, _, _, symbol) =>
-                    if matchTargetName(name, symbol) && currentindex == index then List(symbol)
-                    else
-                      if matchTargetName(name, symbol) then currentindex += 1
-                      List()
-
-                  case _ => List()
-              else List()
-            )((l1, l2) => l1 ++ l2, List())
-          case None => List()
+      .flatMap(sym => sym.tree)
+      .flatMap(tree =>
+        tree.walkTree {
+          case DefDef(_, _, _, _, symbol) if matchTargetName(name, symbol) => List(symbol)
+          case ValDef(_, _, _, symbol) if matchTargetName(name, symbol) => List(symbol)
+          case _ => List.empty
+        }(_ ++ _, List.empty)
       )
-      .headOption
+
+  def findLocalMethodOrLazyVal(
+      declaringTypes: (Option[DeclaringSymbol], Option[DeclaringSymbol]),
+      name: String,
+      index: Int
+  ): Option[TermSymbol] =
+    declaringTypes match
+      case (Some(declaringtpe), None) =>
+        val matchingSymbols = traverseCompanionObjectOrClass(declaringtpe, name)
+        Some(matchingSymbols(index - 1))
+      case (None, Some(declaringtpe)) =>
+        val matchingSymbols = traverseCompanionObjectOrClass(declaringtpe, name)
+        Some(matchingSymbols(index - 1))
+      case (Some(companionObject), Some(companionClass)) =>
+        val companionClassMatchingSymbols = traverseCompanionObjectOrClass(companionObject, name)
+        if companionClassMatchingSymbols.isEmpty then
+          Some(traverseCompanionObjectOrClass(companionClass, name)(index - 1))
+        else Some(companionClassMatchingSymbols(index - 1))
+      case (None, None) => None
 
   def formatType(t: Type): String =
     t match
@@ -233,10 +232,8 @@ class Scala3Unpickler(
         .collect { case sym: TermSymbol if sym.isTerm => sym }
     yield term
 
-  private def findDeclaringType(fqcn: String, isExtensionMethod: Boolean): Option[DeclaringSymbol] =
+  private def findCompanionObjectAndClass(fqcn: String): (Option[DeclaringSymbol], Option[DeclaringSymbol]) =
     val javaParts = fqcn.split('.')
-    val isPackageObject = fqcn.endsWith(".package") || fqcn.endsWith("$package")
-    val isObject = isPackageObject || fqcn.endsWith("$")
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
       if packageNames.nonEmpty
@@ -247,6 +244,14 @@ class Scala3Unpickler(
     val obj = clsSymbols.filter(_.is(Flags.Module))
     val cls = clsSymbols.filter(!_.is(Flags.Module))
     assert(obj.size <= 1 && cls.size <= 1)
+    (obj.headOption, cls.headOption)
+
+  private def findDeclaringType(fqcn: String, isExtensionMethod: Boolean): Option[DeclaringSymbol] =
+    val isPackageObject = fqcn.endsWith(".package") || fqcn.endsWith("$package")
+    val isObject = isPackageObject || fqcn.endsWith("$")
+    val companionObjectAndClass = findCompanionObjectAndClass(fqcn)
+    val obj = companionObjectAndClass._1
+    val cls = companionObjectAndClass._2
     if isObject && !isExtensionMethod then obj.headOption else cls.headOption
 
   private def findSymbolsRecursively(owner: DeclaringSymbol, encodedName: String): Seq[DeclaringSymbol] =
