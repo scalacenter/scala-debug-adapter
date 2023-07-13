@@ -122,12 +122,11 @@ class Scala2Unpickler(
     // TODO try use tryEncode
     getOwners(scalaClass)
       .foldRight(Option(javaClass.name)) { (sym, acc) =>
-        for (javaName <- acc if javaName.contains(sym.name)) yield {
-          javaName
+        for (javaName <- acc if javaName.contains(sym.name))
+          yield javaName
             .split(sym.name)
             .drop(1)
             .mkString(sym.name)
-        }
       }
       .exists { remainder =>
         remainder.forall(c => c.isDigit || c == '$')
@@ -157,13 +156,13 @@ class Scala2Unpickler(
       }
     }
     def matchReturnType: Boolean = {
-      try {
+      try
         matchType(
           javaMethod.returnType,
           scalaReturnType,
           javaMethod.declaringType
         )
-      } catch {
+      catch {
         // javaMethod.returnType can throw ClassNotLoadedException
         case cause: jdi.ClassNotLoadedException => true
       }

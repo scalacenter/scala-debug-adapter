@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import com.sun.jdi._
 import RuntimeEvaluatorExtractors.{BooleanTree, IsAnyVal, Module}
 import scala.util.Success
+import ch.epfl.scala.debugadapter.Logger
 
 /* -------------------------------------------------------------------------- */
 /*                              Global hierarchy                              */
@@ -122,7 +123,9 @@ case class PrimitiveBinaryOpTree private (
 }
 
 object PrimitiveBinaryOpTree {
-  def apply(lhs: RuntimeTree, args: Seq[RuntimeEvaluableTree], name: String): Validation[PrimitiveBinaryOpTree] =
+  def apply(lhs: RuntimeTree, args: Seq[RuntimeEvaluableTree], name: String)(implicit
+      logger: Logger
+  ): Validation[PrimitiveBinaryOpTree] =
     (lhs, args) match {
       case (ret: RuntimeEvaluableTree, Seq(right)) =>
         RuntimeBinaryOp(ret, right, name).map(PrimitiveBinaryOpTree(ret, right, _))
@@ -174,7 +177,7 @@ case class PrimitiveUnaryOpTree private (
   }
 }
 object PrimitiveUnaryOpTree {
-  def apply(rhs: RuntimeTree, name: String): Validation[PrimitiveUnaryOpTree] = rhs match {
+  def apply(rhs: RuntimeTree, name: String)(implicit logger: Logger): Validation[PrimitiveUnaryOpTree] = rhs match {
     case ret: RuntimeEvaluableTree => RuntimeUnaryOp(ret, name).map(PrimitiveUnaryOpTree(ret, _))
     case _ => Recoverable(s"Primitive operation operand must be evaluable")
   }
@@ -264,7 +267,7 @@ case class ThisTree(
 }
 
 object ThisTree {
-  def apply(ths: Option[JdiObject]): Validation[ThisTree] =
+  def apply(ths: Option[JdiObject])(implicit logger: Logger): Validation[ThisTree] =
     Validation.fromOption(ths).map(ths => ThisTree(ths.reference.referenceType()))
 }
 
@@ -286,7 +289,7 @@ case class NestedModuleTree(
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|NestedModuleTree(
-        |${indent}mod= ${module}
+        |${indent}mod= $module
         |${indent}of= ${of.prettyPrint(depth + 1)}
         |${indent.dropRight(1)})""".stripMargin
   }

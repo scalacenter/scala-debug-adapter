@@ -2,6 +2,7 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 
 import scala.meta.Term
 import com.sun.jdi._
+import ch.epfl.scala.debugadapter.Logger
 
 protected[internal] object RuntimeEvaluatorExtractors {
   object ColonEndingInfix {
@@ -60,7 +61,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
       }
     }
 
-    def unapply(tree: Validation[RuntimeTree]): Validation[ReferenceType] =
+    def unapply(tree: Validation[RuntimeTree])(implicit logger: Logger): Validation[ReferenceType] =
       tree.flatMap(unapply)
   }
 
@@ -73,7 +74,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
   }
 
   object BooleanTree {
-    def unapply(p: Validation[RuntimeEvaluableTree]): Validation[RuntimeEvaluableTree] =
+    def unapply(p: Validation[RuntimeEvaluableTree])(implicit logger: Logger): Validation[RuntimeEvaluableTree] =
       p.flatMap(unapply)
 
     def unapply(p: RuntimeEvaluableTree): Validation[RuntimeEvaluableTree] = p.`type` match {

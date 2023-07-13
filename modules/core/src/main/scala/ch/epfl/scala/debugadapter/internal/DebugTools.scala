@@ -93,7 +93,7 @@ object DebugTools {
     def resolveCompilerClassLoader(scalaVersion: ScalaVersion): Option[ClassLoader] =
       resolver
         .resolveExpressionCompiler(scalaVersion)
-        .warnFailure(logger, s"Cannot fetch expression compiler of Scala ${scalaVersion}")
+        .warnFailure(logger, s"Cannot fetch expression compiler of Scala $scalaVersion")
 
     val scala3Loader = if (scala3Entries.isEmpty) None else resolveCompilerClassLoader(scala3Version)
     val scala2Loader = if (scala2Entries.isEmpty) None else resolveCompilerClassLoader(scala2Version)
@@ -114,7 +114,7 @@ object DebugTools {
         classLoader <- if (entry.isScala2) scala2Loader else if (entry.isScala3) scala3Loader else None
         scalaVersion <- entry.scalaVersion
         compiler <- ExpressionCompiler(scalaVersion, scalacOptions, classPath, classLoader)
-          .warnFailure(logger, s"Cannot load expression compiler of Scala ${scalaVersion}")
+          .warnFailure(logger, s"Cannot load expression compiler of Scala $scalaVersion")
       } yield entry -> compiler
     }
 

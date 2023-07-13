@@ -37,11 +37,9 @@ object DebugStepAssert {
     assertEquals(frames.head.source.path, expectedSource.toString)
     assertEquals(frames.head.line, expectedLine)
     expectedStackTrace match {
-      case None => {}
-      case Some(expectedStackTrace) => {
+      case None =>
+      case Some(expectedStackTrace) =>
         assertEquals(expectedStackTrace, frames.map(frame => frame.name))
-
-      }
 
     }
 
@@ -190,7 +188,7 @@ object Evaluation {
   private def assertSuccess(
       expectedResult: Any
   )(response: Either[String, String])(implicit ctx: TestingContext, location: Location): Unit = {
-    if (clue(response).isLeft) println(s"${RED}Expected success, got ${response.left}${RESET}")
+    if (clue(response).isLeft) println(s"${RED}Expected success, got ${response.left}$RESET")
     assert(clue(response).isRight)
     val result = response.toOption.get
     expectedResult match {

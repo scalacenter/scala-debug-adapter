@@ -123,9 +123,9 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
 
   private def assertJDITools(logger: sbt.util.Logger): Unit = {
     val loader = getClass().getClassLoader()
-    try {
+    try
       loader.loadClass("com.sun.jdi.Value")
-    } catch {
+    catch {
       case c: ClassNotFoundException =>
         logger.warn("The sbt-debug-adapter cannot work because the JDI tools are not loaded.")
         logger.warn(

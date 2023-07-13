@@ -14,7 +14,7 @@ import tastyquery.Names.*
 import tastyquery.Symbols.TermSymbol
 import scala.jdk.OptionConverters.*
 
-import java.{util => ju}
+import java.util as ju
 
 class Scala30UnpicklerTests extends Scala3UnpicklerTests(ScalaVersion.`3.0`)
 class Scala31PlusUnpicklerTests extends Scala3UnpicklerTests(ScalaVersion.`3.1+`)

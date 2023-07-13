@@ -204,7 +204,7 @@ private[internal] class EvaluationProvider(
   private def evaluationBlock[T](f: => T): T = {
     isEvaluating.set(true)
     try f
-    finally { isEvaluating.set(false) }
+    finally isEvaluating.set(false)
   }
 
   override def clearState(thread: ThreadReference): Unit = {}

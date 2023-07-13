@@ -29,29 +29,29 @@ class SbtDebugToolsResolver(
     val artifact = s"${BuildInfo.expressionCompilerName}_$scalaVersion"
     val version = BuildInfo.version
 
-    for (report <- fetchArtifactsOf(org % artifact % version, Seq.empty)) yield {
-      if (scalaInstance.version == scalaVersion.value) {
-        val expressionCompilerJars = report
-          .select(
-            configurationFilter(Runtime.name),
-            moduleFilter(org, artifact, version),
-            artifactFilter(extension = "jar", classifier = "")
-          )
-          .map(_.toURI.toURL)
-          .toArray
-        new URLClassLoader(expressionCompilerJars, scalaInstance.loader)
-      } else {
-        val expressionCompilerJars = report
-          .select(
-            configurationFilter(Runtime.name),
-            moduleFilter(),
-            artifactFilter(extension = "jar", classifier = "")
-          )
-          .map(_.toURI.toURL)
-          .toArray
-        new URLClassLoader(expressionCompilerJars, null)
-      }
-    }
+    for (report <- fetchArtifactsOf(org % artifact % version, Seq.empty))
+      yield
+        if (scalaInstance.version == scalaVersion.value) {
+          val expressionCompilerJars = report
+            .select(
+              configurationFilter(Runtime.name),
+              moduleFilter(org, artifact, version),
+              artifactFilter(extension = "jar", classifier = "")
+            )
+            .map(_.toURI.toURL)
+            .toArray
+          new URLClassLoader(expressionCompilerJars, scalaInstance.loader)
+        } else {
+          val expressionCompilerJars = report
+            .select(
+              configurationFilter(Runtime.name),
+              moduleFilter(),
+              artifactFilter(extension = "jar", classifier = "")
+            )
+            .map(_.toURI.toURL)
+            .toArray
+          new URLClassLoader(expressionCompilerJars, null)
+        }
   }
 
   override def resolveUnpickler(scalaVersion: ScalaVersion): Try[ClassLoader] = {

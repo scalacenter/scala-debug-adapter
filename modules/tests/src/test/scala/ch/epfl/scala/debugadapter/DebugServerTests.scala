@@ -85,9 +85,7 @@ class DebugServerTests extends DebugTestSuite {
       } catch {
         case _: SocketTimeoutException => ()
         case _: TimeoutException => ()
-      } finally {
-        if (client2 != null) client2.close()
-      }
+      } finally if (client2 != null) client2.close()
 
     } finally {
       server.close()
@@ -297,15 +295,12 @@ class DebugServerTests extends DebugTestSuite {
       client1.disconnect(restart = true)
 
       val client2 = TestingDebugClient.connect(handler.uri)
-      try {
+      try
         client2.initialize()
-      } finally {
+      finally
         client2.close()
-      }
 
-    } finally {
-      client1.close()
-    }
+    } finally client1.close()
   }
 
   test("should not accept a second connection when the session disconnects with restart = false") {
@@ -329,12 +324,8 @@ class DebugServerTests extends DebugTestSuite {
         case e: SocketException =>
           val msg = e.getMessage
           assert(connectionFailedMessages.exists(msg.endsWith))
-      } finally {
-        if (client2 != null) client2.close()
-      }
+      } finally if (client2 != null) client2.close()
 
-    } finally {
-      client1.close()
-    }
+    } finally client1.close()
   }
 }

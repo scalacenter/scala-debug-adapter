@@ -13,9 +13,9 @@ import scala.util.Try
 import scala.jdk.CollectionConverters.*
 
 import RuntimeEvaluatorExtractors.*
+import ch.epfl.scala.debugadapter.Logger
 
-private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
-  import RuntimeEvaluationHelpers.*
+private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame)(implicit logger: Logger) {
   def fromLitToValue(literal: Lit, classLoader: JdiClassLoader): (Safe[Any], Type) = {
     val tpe = classLoader
       .mirrorOfLiteral(literal.value)
@@ -88,10 +88,10 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
   ): Validation[Method] = {
     val candidates: List[Method] = ref.methodsByName(encodedName).asScalaList
 
-    val unboxedCandidates = candidates.filter { argsMatch(_, args, boxing = false) }
+    val unboxedCandidates = candidates.filter(argsMatch(_, args, boxing = false))
 
     val boxedCandidates = unboxedCandidates.size match {
-      case 0 => candidates.filter { argsMatch(_, args, boxing = true) }
+      case 0 => candidates.filter(argsMatch(_, args, boxing = true))
       case _ => unboxedCandidates
     }
 
@@ -107,7 +107,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
 
     finalCandidates
       .toValidation(s"Cannot find a proper method $encodedName with args types $args on $ref")
-      .map { loadClassOnNeed }
+      .map(loadClassOnNeed)
   }
 
   def methodTreeByNameAndArgs(
@@ -299,7 +299,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
         .virtualMachine
         .allClasses()
         .asScalaSeq
-        .filter { cls => cls.name() == name || nameEndMatch(cls.name()) }
+        .filter(cls => cls.name() == name || nameEndMatch(cls.name()))
 
     def finalCandidates =
       candidates.size match {
@@ -309,7 +309,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
             .map(_.split('.').init.mkString(".") + "." + name)
             .getOrElse("")
           loadClass(fullName)
-            .orElse { loadClass(topLevelClassName) }
+            .orElse(loadClass(topLevelClassName))
             .extract(_.cls)
             .toSeq
         case 1 => candidates
@@ -318,7 +318,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
 
     finalCandidates
       .toValidation(s"Cannot find module/class $name, has it been loaded ?")
-      .map { cls => ClassTree(checkClassStatus(cls)(cls.name()).get.asInstanceOf[ClassType]) }
+      .map(cls => ClassTree(checkClassStatus(cls)(cls.name()).get.asInstanceOf[ClassType]))
   }
 
   /* -------------------------------------------------------------------------- */
@@ -334,9 +334,6 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame) {
       }
     } yield instance
   }
-}
-
-private[evaluator] object RuntimeEvaluationHelpers {
   def illegalAccess(x: Any, typeName: String) = Fatal {
     new ClassCastException(s"Cannot cast $x to $typeName")
   }
@@ -416,5 +413,4 @@ private[evaluator] object RuntimeEvaluationHelpers {
         )
       else Valid(InstanceMethodTree(method, args, eval))
   }
-
 }

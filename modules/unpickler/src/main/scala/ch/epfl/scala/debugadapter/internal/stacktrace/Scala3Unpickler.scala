@@ -121,7 +121,7 @@ class Scala3Unpickler(
         if t.args.size > 2 then s"($args) => $result" else s"$args => $result"
       case t: AppliedType if isTuple(t.tycon) =>
         val types = t.args.map(formatType).mkString(",")
-        s"(${types})"
+        s"($types)"
       case t: AppliedType if isOperatorLike(t.tycon) && t.args.size == 2 =>
         val operatorLikeTypeFormat = t.args
           .map(formatType)
@@ -195,7 +195,7 @@ class Scala3Unpickler(
       case DefaultGetterName(termName, num) => s"${termName.toString()}.<default ${num + 1}>"
       case _ => sym.name.toString()
 
-    if prefix.isEmpty then symName else s"$prefix.${symName}"
+    if prefix.isEmpty then symName else s"$prefix.$symName"
 
   private def isPackageObject(name: Name): Boolean =
     name.toString == "package" || name.toString.endsWith("$package")
@@ -307,7 +307,7 @@ class Scala3Unpickler(
         matchArguments(sig.paramsSig, javaArgs) &&
         method.returnType.forall { returnType =>
           val javaRetType =
-            if (method.isClassInitializer) method.declaringType else returnType
+            if method.isClassInitializer then method.declaringType else returnType
           matchType(sig.resSig, javaRetType)
         }
       case _ => {
@@ -320,7 +320,7 @@ class Scala3Unpickler(
   private def matchArguments(scalaArgs: Seq[ParamSig], javaArgs: Seq[jdi.LocalVariable]): Boolean =
     scalaArgs
       .collect { case termSig: ParamSig.Term => termSig }
-      .corresponds(javaArgs) { (scalaArg, javaArg) => matchType(scalaArg.typ, javaArg.`type`) }
+      .corresponds(javaArgs)((scalaArg, javaArg) => matchType(scalaArg.typ, javaArg.`type`))
 
   private val javaToScala: Map[String, String] = Map(
     "scala.Boolean" -> "boolean",

@@ -213,7 +213,40 @@ class ScalaStackTraceTests extends DebugTestSuite {
         )
       )
     )
+  }
 
+  test("stacktrace with a lazy val") {
+    val source =
+      """|package example
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |
+         |    def m(t: Int) = {
+         |      lazy val m1 : Int = {
+         |        def m(t: Int): Int = {
+         |          t + 1
+         |        }
+         |        m(2)
+         |      }
+         |      m1
+         |    }
+         |    m(4)
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+
+    check(
+      Breakpoint(
+        8,
+        List(
+          "Main.main.m.m1.m(t: Int): Int",
+          "Main.main.m.m1: Int",
+          "Main.main.m(t: Int): Int",
+          "Main.main(args: Array[String]): Unit"
+        )
+      )
+    )
   }
 
   test("correct stacktrace with a lazy val") {

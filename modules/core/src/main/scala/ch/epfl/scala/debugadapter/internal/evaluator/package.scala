@@ -4,6 +4,7 @@ import scala.util.Try
 import scala.jdk.CollectionConverters.*
 import scala.util.Failure
 import scala.util.Success
+import ch.epfl.scala.debugadapter.Logger
 
 package object evaluator {
   implicit class SafeSeq[A](seq: Seq[Safe[A]]) {
@@ -27,7 +28,7 @@ package object evaluator {
     }
   }
 
-  implicit class ValidationSeq[A](seq: Seq[Validation[A]]) {
+  implicit class ValidationSeq[A](seq: Seq[Validation[A]])(implicit logger: Logger) {
     def traverse: Validation[Seq[A]] = {
       seq.foldRight(Validation(Seq.empty[A])) { (safeHead, safeTail) =>
         safeTail.flatMap(tail => safeHead.map(head => head +: tail))

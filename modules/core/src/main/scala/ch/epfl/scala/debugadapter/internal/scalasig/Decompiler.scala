@@ -122,9 +122,8 @@ private[internal] object Decompiler {
       }
 
       // Print classes
-      for (symbol <- symbols) {
+      for (symbol <- symbols)
         printer.printSymbol(symbol)
-      }
 
       Some(printer.result)
     } catch {
@@ -148,9 +147,8 @@ private[internal] object Decompiler {
             innerIdx < arrayLength && text(
               wordStartIdx + innerIdx
             ) == ScalaSigBytes(innerIdx)
-          ) {
+          )
             innerIdx += 1
-          }
           if (innerIdx == arrayLength) return true
           else {
             wordStartIdx += 1
