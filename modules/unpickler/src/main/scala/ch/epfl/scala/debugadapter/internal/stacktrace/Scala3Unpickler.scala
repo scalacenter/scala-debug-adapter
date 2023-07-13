@@ -60,7 +60,7 @@ class Scala3Unpickler(
         throw new Exception(s"Cannot find Scala symbol of $fqcn")
       case Some(declaringType) =>
         matchesLocalMethodOrLazyVal(method) match
-          case Some((methodName, index)) => findLocalMethodOrLazyVal(declaringType, methodName, index)       
+          case Some((methodName, index)) => findLocalMethodOrLazyVal(declaringType, methodName, index)
           case _ =>
             val matchingSymbols = declaringType.declarations
               .collect { case sym: TermSymbol if sym.isTerm => sym }
@@ -72,37 +72,35 @@ class Scala3Unpickler(
             else matchingSymbols.headOption
 
   def findLocalMethodOrLazyVal(declaringType: DeclaringSymbol, name: String, index: Int): Option[TermSymbol] =
-      var currentindex=1
-      val declaringtpe = declaringType.owner match
-        case s: DeclaringSymbol => s
-        case _ => declaringType
+    var currentindex = 1
+    val declaringtpe = declaringType.owner match
+      case s: DeclaringSymbol => s
+      case _ => declaringType
 
-      declaringtpe.declarations
-        .flatMap(sym => {
-          sym.tree match
-            case Some(tree) =>
-              tree.walkTree(tree => if (currentindex<=index) {              
+    declaringtpe.declarations
+      .flatMap(sym =>
+        sym.tree match
+          case Some(tree) =>
+            tree.walkTree(tree =>
+              if currentindex <= index then
                 tree match
                   case DefDef(_, _, _, _, symbol) =>
-                    if(matchTargetName(name, symbol) && currentindex==index) List(symbol) 
-                    else 
-                     if(matchTargetName(name, symbol)) currentindex+=1
+                    if matchTargetName(name, symbol) && currentindex == index then List(symbol)
+                    else
+                      if matchTargetName(name, symbol) then currentindex += 1
                       List()
-                  case ValDef(_, _, _, symbol) => 
-                    if(matchTargetName(name, symbol) && currentindex==index) 
-                      List(symbol)
-                    else 
-                      if(matchTargetName(name, symbol)) currentindex+=1
+                  case ValDef(_, _, _, symbol) =>
+                    if matchTargetName(name, symbol) && currentindex == index then List(symbol)
+                    else
+                      if matchTargetName(name, symbol) then currentindex += 1
                       List()
 
-                    
                   case _ => List()
-
-              } else List())((l1, l2) => l1 ++ l2, List())
-            case None => List()
-
-        })
-        .headOption
+              else List()
+            )((l1, l2) => l1 ++ l2, List())
+          case None => List()
+      )
+      .headOption
 
   def formatType(t: Type): String =
     t match
@@ -252,32 +250,29 @@ class Scala3Unpickler(
     if isObject && !isExtensionMethod then obj.headOption else cls.headOption
 
   private def findSymbolsRecursively(owner: DeclaringSymbol, encodedName: String): Seq[DeclaringSymbol] =
-   owner.declarations
-     .collect { case sym: DeclaringSymbol => sym }
+    owner.declarations
+      .collect { case sym: DeclaringSymbol => sym }
       .flatMap { sym =>
         val encodedSymName = NameTransformer.encode(sym.name.toString)
         val Symbol = s"${Regex.quote(encodedSymName)}\\$$?(.*)".r
         encodedName match
           case Symbol(remaining) =>
-           if remaining.isEmpty then Some(sym)
-           else findSymbolsRecursively(sym, remaining)
+            if remaining.isEmpty then Some(sym)
+            else findSymbolsRecursively(sym, remaining)
           case _ => None
-     }
+      }
 
   private def matchSymbol(method: jdi.Method, symbol: TermSymbol): Boolean =
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
 
-  private def matchesLocalMethodOrLazyVal(method: jdi.Method): Option[(String, Int)] = {
+  private def matchesLocalMethodOrLazyVal(method: jdi.Method): Option[(String, Int)] =
     val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
     val expectedName = method.name.stripPrefix(javaPrefix)
     val pattern = """^(.+)[$](\d+)$""".r
-    expectedName match {
+    expectedName match
       case pattern(stringPart, numberPart) if (!stringPart.endsWith("$lzyINIT1") && !stringPart.endsWith("$default")) =>
         Some((stringPart, numberPart.toInt))
       case _ => None
-    }
-
-  }
 
   private def matchTargetName(method: jdi.Method, symbol: TermSymbol): Boolean =
     val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
@@ -310,10 +305,8 @@ class Scala3Unpickler(
             if method.isClassInitializer then method.declaringType else returnType
           matchType(sig.resSig, javaRetType)
         }
-      case _ => {
-
+      case _ =>
         method.arguments.isEmpty || (method.arguments.size == 1 && method.argumentTypes.head.name == "scala.runtime.LazyRef")
-      }
 
       // TODO compare symbol.declaredType
 

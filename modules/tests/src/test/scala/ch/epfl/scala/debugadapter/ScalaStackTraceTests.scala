@@ -282,5 +282,5 @@ class ScalaStackTraceTests extends DebugTestSuite {
       )
     )
   }
-  
+
 }
