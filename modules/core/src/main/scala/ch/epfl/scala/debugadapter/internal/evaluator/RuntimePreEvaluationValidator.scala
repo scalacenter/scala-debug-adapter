@@ -5,11 +5,14 @@ import scala.util.Success
 import scala.meta.Term
 import scala.meta.Lit
 
+import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
+
 class RuntimePreEvaluationValidator(
     override val frame: JdiFrame,
-    override implicit val logger: Logger,
-    evaluator: RuntimeEvaluator
-) extends RuntimeDefaultValidator(frame, logger) {
+    evaluator: RuntimeEvaluator,
+    sourceLookUp: SourceLookUpProvider,
+    override implicit val logger: Logger
+) extends RuntimeDefaultValidator(frame, sourceLookUp, logger) {
   private def preEvaluate(tree: RuntimeEvaluableTree): Validation[PreEvaluatedTree] = {
     val value = evaluator.evaluate(tree)
     var tpe = value.extract(_.value.`type`)
@@ -26,21 +29,21 @@ class RuntimePreEvaluationValidator(
     super.fieldTreeByName(of, name).flatMap {
       case tree @ (_: StaticFieldTree | InstanceFieldTree(_, _: PreEvaluatedTree)) =>
         preEvaluate(tree)
-      case tree @ (_: TopLevelModuleTree | NestedModuleTree(_, _: PreEvaluatedTree)) =>
+      case tree @ (_: TopLevelModuleTree | NestedModuleTree(_, InstanceMethodTree(_, _, _: PreEvaluatedTree))) =>
         preEvaluate(tree)
       case tree => Valid(tree)
     }
 
   override def validateModule(name: String, of: Option[RuntimeTree]): Validation[RuntimeEvaluableTree] =
     super.validateModule(name, of).flatMap {
-      case tree @ (_: TopLevelModuleTree | NestedModuleTree(_, _: PreEvaluatedTree)) =>
+      case tree @ (_: TopLevelModuleTree | NestedModuleTree(_, InstanceMethodTree(_, _, _: PreEvaluatedTree))) =>
         preEvaluate(tree)
       case tree => Valid(tree)
     }
 
   override def validateOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree] =
     super.validateOuter(tree).flatMap {
-      case tree @ (_: OuterModuleTree | OuterClassTree(_: PreEvaluatedTree, _)) =>
+      case tree @ (_: FieldTree | _: TopLevelModuleTree) =>
         preEvaluate(tree)
       case tree => Valid(tree)
     }
@@ -63,6 +66,11 @@ class RuntimePreEvaluationValidator(
 }
 
 object RuntimePreEvaluationValidator {
-  def apply(frame: JdiFrame, logger: Logger, evaluator: RuntimeEvaluator): RuntimePreEvaluationValidator =
-    new RuntimePreEvaluationValidator(frame, logger, evaluator)
+  def apply(
+      frame: JdiFrame,
+      evaluator: RuntimeEvaluator,
+      sourceLookup: SourceLookUpProvider,
+      logger: Logger
+  ): RuntimePreEvaluationValidator =
+    new RuntimePreEvaluationValidator(frame, evaluator, sourceLookup, logger)
 }

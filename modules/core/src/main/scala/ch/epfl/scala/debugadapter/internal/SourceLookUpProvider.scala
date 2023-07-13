@@ -13,6 +13,9 @@ private[debugadapter] final class SourceLookUpProvider(
     sourceUriToClassPathEntry: Map[URI, ClassEntryLookUp],
     fqcnToClassPathEntry: Map[String, ClassEntryLookUp]
 ) extends ISourceLookUpProvider {
+  private val classSearch = new SourceEntrySearchMap
+  for (entries <- classPathEntries; fqcn <- entries.fullyQualifiedNames) classSearch.insert(fqcn)
+
   override def supportsRealtimeBreakpointVerification(): Boolean = true
 
   override def getSourceFileURI(fqcn: String, path: String): String = {
@@ -62,6 +65,8 @@ private[debugadapter] final class SourceLookUpProvider(
     classPathEntries.flatMap(_.fullyQualifiedNames)
   private[internal] def allOrphanClasses: Iterable[ClassFile] =
     classPathEntries.flatMap(_.orphanClassFiles)
+  private[internal] def classesByName(name: String) =
+    classSearch.find(name)
 
   private[internal] def getScalaSig(fqcn: String): Option[ScalaSig] = {
     for {
