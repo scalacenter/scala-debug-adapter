@@ -100,6 +100,34 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     unpickler.assertFailure("example.Main$B$2$", "void m()")
   }
 
+  test("local methods with same name") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  def m1: Unit = {
+         |    def m: Unit = { // m$1
+         |      println(1)
+         |      def m(x: String): Unit = // m$2
+         |        println(2)
+         |      m("hello")
+         |    }
+         |    m
+         |  }
+         |
+         |  def m2: Unit = {
+         |    def m(x: Int): Unit = println(3) // m$3
+         |    m(1)
+         |  }
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    val unpickler = getUnpickler(debuggee)
+    unpickler.assertFormat("example.A", "void m$1()", "A.m1.m: Unit")
+    unpickler.assertFormat("example.A", "void m$2(java.lang.String x)", "A.m1.m.m(x: String): Unit")
+    unpickler.assertFormat("example.A", "void m$3(int x)", "A.m2.m(x: Int): Unit")
+  }
+
   test("getters and setters") {
     val source =
       """|package example

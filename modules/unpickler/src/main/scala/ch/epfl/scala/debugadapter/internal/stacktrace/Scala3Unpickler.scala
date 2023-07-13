@@ -60,7 +60,7 @@ class Scala3Unpickler(
         throw new Exception(s"Cannot find Scala symbol of $fqcn")
       case Some(declaringType) =>
         matchesLocalMethodOrLazyVal(method) match
-          case Some((methodName, index)) => findLocalMethodOrLazyVal(declaringType, methodName, index)
+          case Some((methodName, index)) => findLocalMethodOrLazyVal(declaringType, methodName, index)       
           case _ =>
             val matchingSymbols = declaringType.declarations
               .collect { case sym: TermSymbol if sym.isTerm => sym }
@@ -72,7 +72,7 @@ class Scala3Unpickler(
             else matchingSymbols.headOption
 
   def findLocalMethodOrLazyVal(declaringType: DeclaringSymbol, name: String, index: Int): Option[TermSymbol] =
-    val matchingSymbols =
+      var currentindex=1
       val declaringtpe = declaringType.owner match
         case s: DeclaringSymbol => s
         case _ => declaringType
@@ -81,19 +81,28 @@ class Scala3Unpickler(
         .flatMap(sym => {
           sym.tree match
             case Some(tree) =>
-              tree.walkTree(tree => {
+              tree.walkTree(tree => if (currentindex<=index) {              
                 tree match
                   case DefDef(_, _, _, _, symbol) =>
-                    List((symbol, depth(declaringType, symbol)))
-                  case ValDef(_, _, _, symbol) => List((symbol, depth(declaringType, symbol)))
+                    if(matchTargetName(name, symbol) && currentindex==index) List(symbol) 
+                    else 
+                     if(matchTargetName(name, symbol)) currentindex+=1
+                      List()
+                  case ValDef(_, _, _, symbol) => 
+                    if(matchTargetName(name, symbol) && currentindex==index) 
+                      List(symbol)
+                    else 
+                      if(matchTargetName(name, symbol)) currentindex+=1
+                      List()
+
+                    
                   case _ => List()
 
-              })((l1, l2) => l1 ++ l2, List())
+              } else List())((l1, l2) => l1 ++ l2, List())
             case None => List()
 
         })
-        .filter((symbol, depth) => matchTargetName(name, symbol) && depth >= 1)
-    Some(matchingSymbols.sortBy((_, depth) => depth).map((symbol, _) => symbol)(index - 1))
+        .headOption
 
   def formatType(t: Type): String =
     t match
@@ -243,17 +252,17 @@ class Scala3Unpickler(
     if isObject && !isExtensionMethod then obj.headOption else cls.headOption
 
   private def findSymbolsRecursively(owner: DeclaringSymbol, encodedName: String): Seq[DeclaringSymbol] =
-    owner.declarations
-      .collect { case sym: DeclaringSymbol => sym }
+   owner.declarations
+     .collect { case sym: DeclaringSymbol => sym }
       .flatMap { sym =>
         val encodedSymName = NameTransformer.encode(sym.name.toString)
         val Symbol = s"${Regex.quote(encodedSymName)}\\$$?(.*)".r
         encodedName match
           case Symbol(remaining) =>
-            if remaining.isEmpty then Some(sym)
-            else findSymbolsRecursively(sym, remaining)
+           if remaining.isEmpty then Some(sym)
+           else findSymbolsRecursively(sym, remaining)
           case _ => None
-      }
+     }
 
   private def matchSymbol(method: jdi.Method, symbol: TermSymbol): Boolean =
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
@@ -267,18 +276,6 @@ class Scala3Unpickler(
         Some((stringPart, numberPart.toInt))
       case _ => None
     }
-
-  }
-
-  private def depth(declaringSymbol: Symbol, symbol: Symbol): Int = {
-
-    symbol.owner match
-      case s: Symbol => {
-
-        if (s.name == declaringSymbol.name) 0
-        else 1 + depth(declaringSymbol, s)
-      }
-      case _ => 0
 
   }
 
