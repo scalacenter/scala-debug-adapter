@@ -916,6 +916,42 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Evaluation.success("`A+B`.||.x", 43)
     )
   }
+
+  test("Should accept partially qualifier class name") {
+    val source =
+      """|package foo.bar
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    println("ok")
+         |  }
+         |}
+         |
+         |object Baz {
+         |  def x() = 42
+         |  def z = 42
+         |  val y = 42
+         |  case class Buzz(y: Int)
+         |  object Buzz { def x = 43 }
+         |}
+         |case class Baz(y: Int) {
+         |  case class Bizz(y: Int)
+         |  object Bizz { def x = 43 }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "foo.bar.Main", scalaVersion)
+    check(
+      Breakpoint(5),
+      Evaluation.success("bar.Baz.x()", 42),
+      Evaluation.success("bar.Baz.z", 42),
+      Evaluation.success("bar.Baz.y", 42),
+      Evaluation.success("bar.Baz(42).y", 42),
+      Evaluation.success("bar.Baz.Buzz(43).y", 43),
+      Evaluation.success("bar.Baz.Buzz.x", 43),
+      Evaluation.success("bar.Baz(42).Bizz(43).y", 43),
+      Evaluation.success("bar.Baz(42).Bizz.x", 43)
+    )
+  }
 }
 
 /* -------------------------------------------------------------------------- */

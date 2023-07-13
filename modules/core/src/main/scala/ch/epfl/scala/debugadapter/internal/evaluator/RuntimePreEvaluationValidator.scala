@@ -26,26 +26,26 @@ class RuntimePreEvaluationValidator(
     super.localVarTreeByName(name).flatMap(preEvaluate)
 
   override def fieldTreeByName(of: Validation[RuntimeTree], name: String): Validation[RuntimeEvaluableTree] =
-    super.fieldTreeByName(of, name).flatMap {
-      case tree @ (_: StaticFieldTree | InstanceFieldTree(_, _: PreEvaluatedTree)) =>
+    super.fieldTreeByName(of, name).transform {
+      case Valid(tree @ (_: StaticFieldTree | InstanceFieldTree(_, _: PreEvaluatedTree))) =>
         preEvaluate(tree)
-      case tree @ (_: TopLevelModuleTree | NestedModuleTree(_, InstanceMethodTree(_, _, _: PreEvaluatedTree))) =>
+      case Valid(tree @ (_: TopLevelModuleTree | NestedModuleTree(_, InstanceMethodTree(_, _, _: PreEvaluatedTree)))) =>
         preEvaluate(tree)
-      case tree => Valid(tree)
+      case tree => tree
     }
 
   override def validateModule(name: String, of: Option[RuntimeTree]): Validation[RuntimeEvaluableTree] =
-    super.validateModule(name, of).flatMap {
-      case tree @ (_: TopLevelModuleTree | NestedModuleTree(_, InstanceMethodTree(_, _, _: PreEvaluatedTree))) =>
+    super.validateModule(name, of).transform {
+      case Valid(tree @ (_: TopLevelModuleTree | NestedModuleTree(_, InstanceMethodTree(_, _, _: PreEvaluatedTree)))) =>
         preEvaluate(tree)
-      case tree => Valid(tree)
+      case tree => tree
     }
 
   override def validateOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree] =
-    super.validateOuter(tree).flatMap {
-      case tree @ (_: FieldTree | _: TopLevelModuleTree) =>
+    super.validateOuter(tree).transform {
+      case Valid(tree @ (_: FieldTree | _: TopLevelModuleTree)) =>
         preEvaluate(tree)
-      case tree => Valid(tree)
+      case tree => tree
     }
 
   override def validateIf(tree: Term.If): Validation[RuntimeEvaluableTree] =
