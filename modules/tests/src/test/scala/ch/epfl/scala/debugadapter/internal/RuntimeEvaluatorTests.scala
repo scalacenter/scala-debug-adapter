@@ -861,6 +861,17 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
          |      y
          |    }
          |  }
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val b = new B("x", "y")
+         |    val bInner = new b.BInner
+         |    val aInner = new b.AInner
+         |    bInner.yy
+         |    println("ok")
+         |  }
+         |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
@@ -876,7 +887,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should support names with special characters".only) {
+  test("Should support names with special characters") {
     val source =
       """|package example
          |
@@ -897,10 +908,6 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
          |
          |object Main {
          |  def main(args: Array[String]): Unit = {
-         |    val b = new B("x", "y")
-         |    val bInner = new b.BInner
-         |    val aInner = new b.AInner
-         |    bInner.yy
          |    val a = new `A+B`
          |    a.&&.x
          |    println("ok")
