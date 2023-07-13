@@ -442,6 +442,27 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
+  test("Should access a field defined in super class --- scala") {
+    val source =
+      """|package example
+         |
+         |class A(x: Int)
+         |class B(x: Int) extends A(x) { def foo = x}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val b = new B(42)
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(9),
+      Evaluation.success("b.x", 42)
+    )
+  }
+
   test("Should resolve non-generic overloads --- scala") {
     implicit val debuggee = method
     check(
@@ -816,6 +837,53 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Breakpoint(8),
       Evaluation.success("{ 1+1; 2+2; lapin}", "lapin"),
       Evaluation.success("f1.bar { 1+1; 2+2 }", "bar 4")
+    )
+  }
+
+  test("Should evaluate when multiple outers are present") {
+    val source =
+      """|package example
+         |
+         |class A(x: String) {
+         |  def a = "a"
+         |  class AInner {
+         |    def xx: String = {
+         |      x
+         |    }
+         |    def ai = "ai"
+         |  }
+         |}
+         |
+         |class B(x: String, y: String) extends A(x) {
+         |  def b = "b"
+         |  class BInner extends AInner {
+         |    def yy: String = {
+         |      y
+         |    }
+         |  }
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val b = new B("x", "y")
+         |    val bInner = new b.BInner
+         |    val aInner = new b.AInner
+         |    bInner.yy
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(25),
+      Evaluation.success("b.x", "x"),
+      Breakpoint(17),
+      Evaluation.success("x", "x"),
+      Evaluation.success("y", "y"),
+      Evaluation.success("ai", "ai"),
+      Evaluation.success("a", "a"),
+      Breakpoint(28),
+      Evaluation.success("aInner.b", "b")
     )
   }
 }

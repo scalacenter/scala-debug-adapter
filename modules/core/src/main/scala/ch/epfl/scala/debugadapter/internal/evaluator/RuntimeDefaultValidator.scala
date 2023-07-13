@@ -9,11 +9,16 @@ import RuntimeEvaluatorExtractors.*
 import scala.util.Failure
 import scala.util.Success
 
+import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
+
+import scala.jdk.CollectionConverters.*
+
 case class Call(fun: Term, argClause: Term.ArgClause)
 case class PreparedCall(qual: Validation[RuntimeTree], name: String)
 
-class RuntimeDefaultValidator(val frame: JdiFrame, implicit val logger: Logger) extends RuntimeValidator {
-  val helper = new RuntimeEvaluationHelpers(frame)
+class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookUpProvider, implicit val logger: Logger)
+    extends RuntimeValidator {
+  val helper = new RuntimeEvaluationHelpers(frame, sourceLookUp)
   import helper.*
 
   protected def parse(expression: String): Validation[Stat] =
@@ -88,49 +93,52 @@ class RuntimeDefaultValidator(val frame: JdiFrame, implicit val logger: Logger) 
       .filter(_.`type`.name() != "scala.Function0", runtimeFatal = true)
       .map(v => LocalVarTree(name, v.`type`))
 
+  // We might sometimes need to access a 'private' attribute of a class
+  private def fieldLookup(name: String, ref: ReferenceType) =
+    Option(ref.fieldByName(name))
+      .orElse { ref.visibleFields().asScala.find(_.name().endsWith("$" + name)) }
+
   def fieldTreeByName(
       of: Validation[RuntimeTree],
       name: String
   ): Validation[RuntimeEvaluableTree] =
-    for {
-      ref <- extractReferenceType(of)
-      field <- Validation(ref.fieldByName(name))
-      _ = loadClassOnNeed(field)
-      fieldTree <- toStaticIfNeeded(field, of.get)
-    } yield fieldTree
+    of match {
+      case ReferenceTree(ref) =>
+        for {
+          field <- Validation.fromOption { fieldLookup(name, ref) }
+          _ = loadClassOnNeed(field)
+          fieldTree <- toStaticIfNeeded(field, of.get)
+        } yield fieldTree
+      case _ => Recoverable(s"Cannot access field $name from non reference type ${of.get.`type`.name()}")
+    }
 
   private def inCompanion(name: Option[String], moduleName: String) = name
     .filter(_.endsWith("$"))
     .map(n => loadClass(n.stripSuffix("$")))
-    .map {
-      _.withFilterNot {
-        _.cls.methodsByName(moduleName.stripSuffix("$")).isEmpty()
-      }.extract
-    }
+    .exists(_.filterNot {
+      _.`type`.methodsByName(moduleName.stripSuffix("$")).isEmpty()
+    }.isValid)
 
-  // ? When RuntimeTree is not a ThisTree, it might be meaningful to directly load by concatenating the qualifier type's name and the target's name
   def validateModule(name: String, of: Option[RuntimeTree]): Validation[RuntimeEvaluableTree] = {
     val moduleName = if (name.endsWith("$")) name else name + "$"
     val ofName = of.map(_.`type`.name())
-    searchAllClassesFor(moduleName, ofName).flatMap { moduleCls =>
+    searchClasses(moduleName, ofName).flatMap { moduleCls =>
       val isInModule = inCompanion(ofName, moduleName)
 
       (isInModule, moduleCls.`type`, of) match {
-        case (Some(Success(cls: JdiClass)), _, _) =>
-          CompilerRecoverable(s"Cannot access module $name from $ofName")
+        case (true, _, _) => CompilerRecoverable(s"Cannot access module ${name} from ${ofName}")
         case (_, Module(module), _) => Valid(TopLevelModuleTree(module))
         case (_, cls, Some(instance: RuntimeEvaluableTree)) =>
           if (cls.name().startsWith(instance.`type`.name()))
-            Valid(NestedModuleTree(cls, instance))
+            moduleInitializer(cls, instance)
           else Recoverable(s"Cannot access module $moduleCls from ${instance.`type`.name()}")
         case _ => Recoverable(s"Cannot access module $moduleCls")
       }
     }
   }
 
-  // ? Same as validateModule, but for classes
   def validateClass(name: String, of: Validation[RuntimeTree]): Validation[ClassTree] =
-    searchAllClassesFor(name.stripSuffix("$"), of.map(_.`type`.name()).toOption)
+    searchClasses(name.stripSuffix("$"), of.map(_.`type`.name()).toOption)
       .transform { cls =>
         (cls, of) match {
           case (Valid(_), Valid(_: RuntimeEvaluableTree) | _: Invalid) => cls
@@ -149,7 +157,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, implicit val logger: Logger) 
   ): Validation[RuntimeEvaluableTree] = {
     val name = NameTransformer.encode(value)
     def field = fieldTreeByName(of, name)
-    def zeroArg = of.flatMap(methodTreeByNameAndArgs(_, name, List.empty))
+    def zeroArg = of.flatMap(zeroArgMethodTreeByName(_, name))
     def member =
       if (methodFirst) zeroArg.orElse(field)
       else field.orElse(zeroArg)
@@ -249,20 +257,15 @@ class RuntimeDefaultValidator(val frame: JdiFrame, implicit val logger: Logger) 
   /* -------------------------------------------------------------------------- */
   /*                             Looking for $outer                             */
   /* -------------------------------------------------------------------------- */
-  def validateOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree] = {
-    for {
-      ref <- extractReferenceType(tree)
-      outer <- outerLookup(ref)
-      outerTree <- OuterTree(tree, outer)
-    } yield outerTree
-  }
+  def validateOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree] =
+    outerLookup(tree)
 
   /* -------------------------------------------------------------------------- */
   /*                           Flow control validation                          */
   /* -------------------------------------------------------------------------- */
 
   def validateIf(tree: Term.If): Validation[RuntimeEvaluableTree] = {
-    lazy val objType = loadClass("java.lang.Object").extract.get.cls
+    lazy val objType = loadClass("java.lang.Object").get.`type`
     for {
       cond <- validate(tree.cond)
       thenp <- validate(tree.thenp)
@@ -279,6 +282,6 @@ class RuntimeDefaultValidator(val frame: JdiFrame, implicit val logger: Logger) 
 }
 
 object RuntimeDefaultValidator {
-  def apply(frame: JdiFrame, logger: Logger) =
-    new RuntimeDefaultValidator(frame, logger)
+  def apply(frame: JdiFrame, sourceLookUp: SourceLookUpProvider, logger: Logger) =
+    new RuntimeDefaultValidator(frame, sourceLookUp, logger)
 }

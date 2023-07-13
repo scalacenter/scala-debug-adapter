@@ -1,10 +1,11 @@
 package ch.epfl.scala.debugadapter.internal
 
 import scala.util.Try
-import scala.jdk.CollectionConverters.*
 import scala.util.Failure
 import scala.util.Success
 import ch.epfl.scala.debugadapter.Logger
+
+import scala.jdk.CollectionConverters.*
 
 package object evaluator {
   implicit class SafeSeq[A](seq: Seq[Safe[A]]) {

@@ -70,8 +70,6 @@ trait RuntimeEvaluator {
 
   def evaluateLiteral(tree: LiteralTree): Safe[JdiValue]
 
-  def evaluateOuter(tree: OuterTree): Safe[JdiValue]
-
   def evaluateField(tree: InstanceFieldTree): Safe[JdiValue]
 
   def evaluateStaticField(tree: StaticFieldTree): Safe[JdiValue]

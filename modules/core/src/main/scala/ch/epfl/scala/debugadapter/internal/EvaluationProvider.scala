@@ -60,7 +60,7 @@ private[internal] class EvaluationProvider(
   override def evaluate(expression: String, thread: ThreadReference, depth: Int): CompletableFuture[Value] = {
     val frame = JdiFrame(thread, depth)
     val evaluator = RuntimeDefaultEvaluator(frame, logger)
-    val validator = RuntimePreEvaluationValidator(frame, logger, evaluator)
+    val validator = RuntimePreEvaluationValidator(frame, evaluator, sourceLookUp, logger)
     val evaluation = for {
       preparedExpression <- prepare(expression, frame, validator)
       evaluation <- evaluate(preparedExpression, frame)
@@ -85,7 +85,7 @@ private[internal] class EvaluationProvider(
       if (breakpoint.getCompiledExpression(locationCode) != null) {
         breakpoint.getCompiledExpression(locationCode).asInstanceOf[Try[PreparedExpression]]
       } else if (breakpoint.containsConditionalExpression) {
-        prepare(breakpoint.getCondition, frame, RuntimeDefaultValidator(frame, logger))
+        prepare(breakpoint.getCondition, frame, RuntimeDefaultValidator(frame, sourceLookUp, logger))
       } else if (breakpoint.containsLogpointExpression) {
         prepareLogMessage(breakpoint.getLogMessage, frame)
       } else {
@@ -147,7 +147,7 @@ private[internal] class EvaluationProvider(
     } else {
       val tripleQuote = "\"\"\""
       val expression = s"""println(s$tripleQuote$message$tripleQuote)"""
-      prepare(expression, frame, RuntimeDefaultValidator(frame, logger))
+      prepare(expression, frame, RuntimeDefaultValidator(frame, sourceLookUp, logger))
     }
   }
 
