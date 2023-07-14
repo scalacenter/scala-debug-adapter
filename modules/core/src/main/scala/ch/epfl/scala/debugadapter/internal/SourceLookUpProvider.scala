@@ -17,8 +17,8 @@ private[debugadapter] final class SourceLookUpProvider(
 
   val classSearch =
     classPathEntries
-      .flatMap { _.fullyQualifiedNames.filterNot { _.contains("$$anon$") } }
-      .groupBy { SourceLookUpProvider.getScalaClassName }
+      .flatMap(_.fullyQualifiedNames.filterNot(_.contains("$$anon$")))
+      .groupBy(SourceLookUpProvider.getScalaClassName)
 
   override def supportsRealtimeBreakpointVerification(): Boolean = true
 
@@ -92,9 +92,9 @@ private[debugadapter] object SourceLookUpProvider {
 
   def getScalaClassName(className: String): String = {
     val lastDot = className.lastIndexOf('.') + 1
-    val decoded = NameTransformer.decode { className.drop(lastDot) }
+    val decoded = NameTransformer.decode(className.drop(lastDot))
     val lastDollar = decoded.stripSuffix("$").lastIndexOf('$') + 1
-    decoded.drop { lastDollar }
+    decoded.drop(lastDollar)
   }
 
   def apply(entries: Seq[ClassEntry], logger: Logger): SourceLookUpProvider = {

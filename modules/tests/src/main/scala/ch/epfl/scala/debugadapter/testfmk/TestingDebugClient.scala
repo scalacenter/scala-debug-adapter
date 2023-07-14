@@ -297,7 +297,7 @@ class AbstractDebugClient(
     var received = ""
     val buffer = new Array[Char](BufferSize)
 
-    while (!terminateSession) {
+    while (!terminateSession)
       try {
         val read = reader.read(buffer, 0, BufferSize)
 
@@ -311,7 +311,6 @@ class AbstractDebugClient(
         case _: IOException =>
           terminateSession = true
       }
-    }
   }
 
   def sendRequest(

@@ -90,7 +90,7 @@ object Validation {
     case e @ (_: InvalidStackFrameException | _: AbsentInformationException) => Fatal(e)
     case e @ (_: InvocationException | _: VMOutOfMemoryException) => Fatal(e)
     case e: Exception =>
-      logger.warn(s"\u001b[35mUnexpected error while validating: ${e}\u001b[0m")
+      logger.warn(s"Unexpected error while validating: $e")
       CompilerRecoverable(e)
   }
 

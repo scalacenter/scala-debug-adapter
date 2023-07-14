@@ -151,7 +151,7 @@ class ScalaSigPrinter(builder: StringBuilder) {
       filterFirstCons: Boolean = false
   ): Unit = {
     var firstConsFiltered = !filterFirstCons
-    for (child <- symbol.children) {
+    for (child <- symbol.children)
       if (child.isParam && child.isType) {} // do nothing
       else if (!firstConsFiltered)
         child match {
@@ -160,7 +160,6 @@ class ScalaSigPrinter(builder: StringBuilder) {
           case _ => printSymbol(level + 1, child)
         }
       else printSymbol(level + 1, child)
-    }
   }
 
   def printWithIndent(level: Int, s: String): Unit = {
@@ -251,9 +250,7 @@ class ScalaSigPrinter(builder: StringBuilder) {
         print("\n")
         printChildren(level, c, !c.isTrait)
         printWithIndent(level, "}\n")
-      } finally {
-        for (param <- typeParams) removeTypeParameter(param.get)
-      }
+      } finally for (param <- typeParams) removeTypeParameter(param.get)
     }
   }
 
@@ -358,10 +355,10 @@ class ScalaSigPrinter(builder: StringBuilder) {
 
     def _pmt(mt: FunctionType): Unit = {
 
-      val paramEntries = mt.paramSymbols.map({
+      val paramEntries = mt.paramSymbols.map {
         case ms: MethodSymbol => pe(ms)
         case _ => "^___^"
-      })
+      }
 
       // Print parameter clauses
       print(
@@ -398,11 +395,10 @@ class ScalaSigPrinter(builder: StringBuilder) {
         val typeParams = pt.paramSymbols
         for (param <- typeParams) addTypeParameter(param)
         print(typeParamString(typeParams))
-        try {
+        try
           printMethodType(pt.typeRef.get, printResult)({})
-        } finally {
+        finally
           for (param <- typeParams) removeTypeParameter(param)
-        }
       // todo consider another method types
       case x => print(" : "); printType(x)
     }
@@ -1014,9 +1010,8 @@ object ScalaSigPrinter {
 
     def lastIdentifierCharIdx(s: String): Int = {
       var idx = -1
-      while (idx + 1 < s.length && isIdentifierPart(s.charAt(idx + 1))) {
+      while (idx + 1 < s.length && isIdentifierPart(s.charAt(idx + 1)))
         idx += 1
-      }
       idx
     }
 

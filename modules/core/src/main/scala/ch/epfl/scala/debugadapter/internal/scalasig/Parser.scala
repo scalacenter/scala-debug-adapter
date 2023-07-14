@@ -27,9 +27,9 @@ object Parser {
       className: String,
       logger: Logger
   ): ScalaSig = {
-    try {
+    try
       new Builder(bytes).readAll()
-    } catch {
+    catch {
       case ex: IOException =>
         throw ex
       case ex: Throwable =>
