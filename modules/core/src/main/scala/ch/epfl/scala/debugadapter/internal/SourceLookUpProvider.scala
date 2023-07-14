@@ -70,7 +70,7 @@ private[debugadapter] final class SourceLookUpProvider(
   private[internal] def allOrphanClasses: Iterable[ClassFile] =
     classPathEntries.flatMap(_.orphanClassFiles)
   private[internal] def classesByName(name: String): Seq[String] =
-    classSearch.find(_._1 == name).map(_._2).getOrElse(Seq.empty)
+    classSearch.get(name).getOrElse(Seq.empty)
 
   private[internal] def getScalaSig(fqcn: String): Option[ScalaSig] = {
     for {
