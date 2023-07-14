@@ -96,7 +96,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
   // We might sometimes need to access a 'private' attribute of a class
   private def fieldLookup(name: String, ref: ReferenceType) =
     Option(ref.fieldByName(name))
-      .orElse { ref.visibleFields().asScala.find(_.name().endsWith("$" + name)) }
+      .orElse(ref.visibleFields().asScala.find(_.name().endsWith("$" + name)))
 
   def fieldTreeByName(
       of: Validation[RuntimeTree],
@@ -105,7 +105,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
     of match {
       case ReferenceTree(ref) =>
         for {
-          field <- Validation.fromOption { fieldLookup(name, ref) }
+          field <- Validation.fromOption(fieldLookup(name, ref))
           _ = loadClassOnNeed(field)
           fieldTree <- toStaticIfNeeded(field, of.get)
         } yield fieldTree
@@ -126,7 +126,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
       val isInModule = inCompanion(ofName, moduleName)
 
       (isInModule, moduleCls.`type`, of) match {
-        case (true, _, _) => CompilerRecoverable(s"Cannot access module ${name} from ${ofName}")
+        case (true, _, _) => CompilerRecoverable(s"Cannot access module $name from $ofName")
         case (_, Module(module), _) => Valid(TopLevelModuleTree(module))
         case (_, cls, Some(instance: RuntimeEvaluableTree)) =>
           if (cls.name().startsWith(instance.`type`.name()))

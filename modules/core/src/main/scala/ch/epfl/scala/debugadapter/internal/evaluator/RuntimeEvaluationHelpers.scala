@@ -121,7 +121,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
 
     finalCandidates
       .validateSingle(s"Cannot find a proper method $encodedName with args types $args on $ref")
-      .map { loadClassOnNeed }
+      .map(loadClassOnNeed)
   }
 
   private def zeroArgMethodByName(ref: ReferenceType, funName: String, encode: Boolean = true): Validation[Method] = {
@@ -157,7 +157,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
     case ReferenceTree(ref) =>
       if (!args.isEmpty)
         methodsByNameAndArgs(ref, NameTransformer.encode(funName), args.map(_.`type`))
-          .flatMap { toStaticIfNeeded(_, args, tree) }
+          .flatMap(toStaticIfNeeded(_, args, tree))
       else zeroArgMethodTreeByName(tree, NameTransformer.encode(funName))
     case _ => Recoverable(new IllegalArgumentException(s"Cannot find method $funName on $tree"))
   }
@@ -336,7 +336,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
 
     bestMatch
       .validateSingle(s"Cannot find class $name")
-      .flatMap { loadClass }
+      .flatMap(loadClass)
   }
 
   def searchClasses(name: String, in: Option[String]): Validation[ClassTree] = {
