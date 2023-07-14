@@ -246,6 +246,7 @@ case class TopLevelModuleTree(
         |${indent.dropRight(1)})""".stripMargin
   }
 }
+
 case class NestedModuleTree(
     module: ClassType,
     init: InstanceMethodTree
@@ -254,7 +255,7 @@ case class NestedModuleTree(
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|NestedModuleTree(
-        |${indent}mod= ${module}
+        |${indent}mod= $module
         |${indent}init= ${init.prettyPrint(depth + 1)}
         |${indent.dropRight(1)})""".stripMargin
   }
