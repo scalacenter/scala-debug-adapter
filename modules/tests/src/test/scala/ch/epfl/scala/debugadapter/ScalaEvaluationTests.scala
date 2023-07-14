@@ -2441,7 +2441,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("support for -language:strictEquality".only) {
+  test("support for -language:strictEquality") {
     val source =
       """|package example
          |
@@ -2455,7 +2455,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
       Breakpoint(5),
       DebugStepAssert.inParallel(
         Evaluation.success("msg == \"\"", false),
-        Evaluation.failed("msg == 5", "not a member of ClassLoader | Null")
+        Evaluation.failed("msg == 5", "cannot be compared")
       )
     )
   }
