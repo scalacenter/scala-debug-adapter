@@ -60,7 +60,8 @@ class Scala3Unpickler(
       case None => throw new Exception(s"Cannot find Scala symbol of ${method.declaringType.name}")
       case Some(declaringClass) =>
         matchesLocalMethodOrLazyVal(method) match
-          case Some((name, index)) => Some(findLocalMethodOrLazyVal(declaringClass, name, index))
+          case Some((name, index)) =>
+            Some(findLocalMethodOrLazyVal(declaringClass, name, index))
           case None =>
             val matchingSymbols = declaringClass.declarations
               .collect { case sym: TermSymbol if sym.isTerm => sym }
@@ -91,7 +92,9 @@ class Scala3Unpickler(
         tree <- decl.tree.toSeq
         localSym <- findLocalSymbol(tree)
       yield localSym
-    if matchingSymbols.size < index then
+    if matchingSymbols.size < index
+    then
+      // TODO we cannot find the local symbol of Scala 2.13 classes, it should not throw
       throw new Exception(s"Cannot find local symbol $name$$$index in ${declaringClass.name}")
     matchingSymbols(index - 1)
 
