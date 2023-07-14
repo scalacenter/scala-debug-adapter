@@ -24,6 +24,7 @@ import scala.jdk.OptionConverters.*
 import java.lang.reflect.Method
 import tastyquery.Trees.DefDef
 import tastyquery.Trees.ValDef
+import tastyquery.Trees.ClassDef
 
 class Scala3Unpickler(
     classpaths: Array[Path],
@@ -255,7 +256,7 @@ class Scala3Unpickler(
     if isObject && !isExtensionMethod then obj.headOption else cls.headOption
 
   private def findSymbolsRecursively(owner: DeclaringSymbol, encodedName: String): Seq[DeclaringSymbol] =
-    owner.declarations
+    val a =owner.declarations
       .collect { case sym: DeclaringSymbol => sym }
       .flatMap { sym =>
         val encodedSymName = NameTransformer.encode(sym.name.toString)
@@ -266,6 +267,35 @@ class Scala3Unpickler(
             else findSymbolsRecursively(sym, remaining)
           case _ => None
       }
+    if(a.isEmpty) walkingtree(owner,encodedName).toSeq else a 
+  
+  private def walkingtree( sym : DeclaringSymbol, remaining : String) : Option[DeclaringSymbol] = {
+   
+       ( sym.tree match
+         case Some(tree) =>
+            val x =tree.walkTree(tree =>
+                
+                tree match
+                  case ClassDef(_,_,symbol) =>
+                    val Pattern = s"${Regex.quote(symbol.name.toString)}\\$$\\d+\\$$?(.*)".r
+                    val xoo=symbol.name.toString
+                    val xo = Regex.quote(symbol.name.toString)
+                    remaining match
+                      case Pattern(rem) => 
+                        if(rem.isEmpty) List(symbol)
+                        else List()
+                      case _ => List()
+                  case _ => List()
+              
+            )((l1, l2) => l1 ++ l2, List())
+            if(x.isEmpty) None 
+            else Some(x.head)
+          
+         case None =>None)
+      
+
+  }
+      
 
   private def matchSymbol(method: jdi.Method, symbol: TermSymbol): Boolean =
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))

@@ -75,7 +75,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     unpickler.assertFailure("example.Main$$anon$2", javaSig)
   }
 
-  test("local classes or local objects") {
+  test("local classes or local objects".only) {
     val source =
       """|package example
          |
@@ -96,8 +96,47 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
-    unpickler.assertFailure("example.Main$A$1", "void m()")
-    unpickler.assertFailure("example.Main$B$2$", "void m()")
+    unpickler.assertFind("example.Main$A$1", "void m()")
+    unpickler.assertFind("example.Main$B$2$", "void m()")
+  }
+
+  test("local classes or local objects within local method") {
+    val source =
+      """|package example
+         |
+         |object Main3 {
+         |  def main(args: Array[String]) = {
+         |    class A {
+         |        class C {
+         |      def m(): Unit = {
+         |        class D {
+         |        println("A.m")
+         |        def m1() : Unit = {
+         |            println("")
+         |        }
+         |        }
+         |        D().m1()
+         |      } 
+         |        }
+         |    }
+         |    object B {
+         |      def m(): Unit = {
+         |        println("B.m")
+         |      }
+         |    }
+         |
+         |    val a = A()
+         |    val c = a.C()
+         |    c.m()
+         |  }
+         | }
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val unpickler = getUnpickler(debuggee)
+    unpickler.assertFind("example.Main$A$1", "void m()")
+    unpickler.assertFind("example.Main$B$2$", "void m()")
+    unpickler.assertFind("example.Main$A$1$C", "void m()")
+
   }
 
   test("local methods with same name") {
