@@ -7,12 +7,19 @@ import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 
 import java.net.URI
 import scala.collection.parallel.immutable.ParVector
+import ch.epfl.scala.debugadapter.internal.evaluator.NameTransformer
 
 private[debugadapter] final class SourceLookUpProvider(
     private[internal] val classPathEntries: Seq[ClassEntryLookUp],
     sourceUriToClassPathEntry: Map[URI, ClassEntryLookUp],
     fqcnToClassPathEntry: Map[String, ClassEntryLookUp]
 ) extends ISourceLookUpProvider {
+
+  val classSearch =
+    classPathEntries
+      .flatMap { _.fullyQualifiedNames.filterNot { _.contains("$$anon$") } }
+      .groupBy { SourceLookUpProvider.getScalaClassName }
+
   override def supportsRealtimeBreakpointVerification(): Boolean = true
 
   override def getSourceFileURI(fqcn: String, path: String): String = {
@@ -62,6 +69,8 @@ private[debugadapter] final class SourceLookUpProvider(
     classPathEntries.flatMap(_.fullyQualifiedNames)
   private[internal] def allOrphanClasses: Iterable[ClassFile] =
     classPathEntries.flatMap(_.orphanClassFiles)
+  private[internal] def classesByName(name: String): Seq[String] =
+    classSearch.get(name).getOrElse(Seq.empty)
 
   private[internal] def getScalaSig(fqcn: String): Option[ScalaSig] = {
     for {
@@ -80,6 +89,13 @@ private[debugadapter] final class SourceLookUpProvider(
 private[debugadapter] object SourceLookUpProvider {
   def empty: SourceLookUpProvider =
     new SourceLookUpProvider(Seq.empty, Map.empty, Map.empty)
+
+  def getScalaClassName(className: String): String = {
+    val lastDot = className.lastIndexOf('.') + 1
+    val decoded = NameTransformer.decode { className.drop(lastDot) }
+    val lastDollar = decoded.stripSuffix("$").lastIndexOf('$') + 1
+    decoded.drop { lastDollar }
+  }
 
   def apply(entries: Seq[ClassEntry], logger: Logger): SourceLookUpProvider = {
     val parrallelEntries = ParVector(entries*)

@@ -37,84 +37,21 @@ trait RuntimeValidator {
 
   def validate(expression: Stat): Validation[RuntimeEvaluableTree]
 
-  /**
-   * Validates an expression, with access to class lookup.
-   *
-   * Because it might return a [[ClassTree]], its result might not be evaluable and must be contained in an [[EvaluationTree]]
-   *
-   * @param expression
-   * @return a [[ValidationTree]] of the expression
-   */
-  protected def validateWithClass(expression: Stat): Validation[RuntimeTree]
-
-  def validateLiteral(lit: Lit): Validation[RuntimeEvaluableTree]
-
-  def localVarTreeByName(name: String): Validation[RuntimeEvaluableTree]
-
-  /**
-   * Returns a [[FieldTree]] if the name is a field, or a [[ModuleTree]] if it is a module (in Scala 3 we can access modules nested in modules by a field)
-   *
-   * It must load the field type if it isn't already loaded.
-   *
-   * It should convert the tree to a [[StaticFieldTree]] if the field is static.
-   *
-   * @param of
-   * @param name
-   * @return a [[RuntimeEvaluableTree]] representing the field or module
-   */
-  def fieldTreeByName(of: Validation[RuntimeTree], name: String): Validation[RuntimeEvaluableTree]
-
-  /**
-   * Returns a [[MethodTree]] if the name is a 0-arg method.
-   *
-   * It must load the method return type if it isn't already loaded.
-   *
-   * It should convert the tree to a [[StaticMethodTree]] if the method is static.
-   *
-   * @param of
-   * @param name
-   * @return
-   */
-  def zeroArgMethodTreeByName(
-      of: Validation[RuntimeTree],
-      name: String
-  ): Validation[RuntimeEvaluableTree]
-
-  /**
-   * Returns a [[ModuleTree]], if the name is a (nested) module
-   *
-   * If it is a nested, then a check is performed to ensure that the module is not accessed from a static context (e.g. when $of is a [[ClassTree]])
-   *
-   * @param name
-   * @param of an option representing the qualifier of the module. It helps resolving name conflicts by selecting the most suitable one
-   * @return a [[ModuleTree]] representing the module
-   */
-  def validateModule(name: String, of: Option[RuntimeTree]): Validation[RuntimeEvaluableTree]
-
-  /**
-   * Returns a [[ClassTree]]] if the name is a (nested) class. Fails when accessing a non-static class from a static context (e.g. when of is a [[ClassTree]])
-   *
-   * @param name
-   * @param of the potential parent of the class, can be another [[ClassTree]]
-   * @return a [[ClassTree]] representing the class
-   */
-  def validateClass(name: String, of: Validation[RuntimeTree]): Validation[ClassTree]
-
   def validateName(
       value: String,
       of: Validation[RuntimeTree],
       methodFirst: Boolean = false
   ): Validation[RuntimeEvaluableTree]
 
-  /**
-   * @param call the standardize call
-   * @return a [[PrimitiveBinaryOpTree]] or [[PrimitiveUnaryOpTree]] if the method is primitive. Otherwise, returns a [[MethodTree]] representing the call
-   */
   def validateMethod(call: Call): Validation[RuntimeEvaluableTree]
 
   def validateSelect(select: Term.Select): Validation[RuntimeEvaluableTree]
 
   def validateNew(newValue: Term.New): Validation[RuntimeEvaluableTree]
+
+  def validateOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree]
+
+  def validateIf(tree: Term.If): Validation[RuntimeEvaluableTree]
 }
 
 trait RuntimeEvaluator {
@@ -132,8 +69,6 @@ trait RuntimeEvaluator {
   def evaluate(stat: RuntimeEvaluableTree): Safe[JdiValue]
 
   def evaluateLiteral(tree: LiteralTree): Safe[JdiValue]
-
-  def evaluateOuter(tree: OuterTree): Safe[JdiValue]
 
   def evaluateField(tree: InstanceFieldTree): Safe[JdiValue]
 

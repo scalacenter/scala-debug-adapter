@@ -442,6 +442,27 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
+  test("Should access a field defined in super class --- scala") {
+    val source =
+      """|package example
+         |
+         |class A(x: Int)
+         |class B(x: Int) extends A(x) { def foo = x}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val b = new B(42)
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(9),
+      Evaluation.success("b.x", 42)
+    )
+  }
+
   test("Should resolve non-generic overloads --- scala") {
     implicit val debuggee = method
     check(
@@ -816,6 +837,130 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Breakpoint(8),
       Evaluation.success("{ 1+1; 2+2; lapin}", "lapin"),
       Evaluation.success("f1.bar { 1+1; 2+2 }", "bar 4")
+    )
+  }
+
+  test("Should evaluate when multiple outers are present") {
+    val source =
+      """|package example
+         |
+         |class A(x: String) {
+         |  def a = "a"
+         |  class AInner {
+         |    def xx: String = {
+         |      x
+         |    }
+         |    def ai = "ai"
+         |  }
+         |}
+         |
+         |class B(x: String, y: String) extends A(x) {
+         |  def b = "b"
+         |  class BInner extends AInner {
+         |    def yy: String = {
+         |      y
+         |    }
+         |  }
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val b = new B("x", "y")
+         |    val bInner = new b.BInner
+         |    val aInner = new b.AInner
+         |    bInner.yy
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(25),
+      Evaluation.success("b.x", "x"),
+      Breakpoint(17),
+      Evaluation.success("x", "x"),
+      Evaluation.success("y", "y"),
+      Evaluation.success("ai", "ai"),
+      Evaluation.success("a", "a"),
+      Breakpoint(28),
+      Evaluation.success("aInner.b", "b")
+    )
+  }
+
+  test("Should support names with special characters") {
+    val source =
+      """|package example
+         |
+         |class `A+B` {
+         |  val foo = 42
+         |  object && {
+         |    def x = {
+         |      println(foo)
+         |      42
+         |    }
+         |  }
+         |  object ~~ { def x = foo + 1 }
+         |}
+         |
+         |object `A+B` {
+         |  object || { def x = 43 }
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val a = new `A+B`
+         |    a.&&.x
+         |    println("ok")
+         |  }
+         |}
+         """.stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    if (scalaVersion == ScalaVersion.`3.1+`)
+      check(
+        Breakpoint(7),
+        Evaluation.success("~~.x", 43)
+      )
+
+    check(
+      Breakpoint(22),
+      Evaluation.success("a.&&.x", 42),
+      Evaluation.success("`A+B`.||.x", 43)
+    )
+  }
+
+  test("Should accept partially qualifier class name") {
+    val source =
+      """|package foo.bar
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    println("ok")
+         |  }
+         |}
+         |
+         |object Baz {
+         |  def x() = 42
+         |  def z = 42
+         |  val y = 42
+         |  case class Buzz(y: Int)
+         |  object Buzz { def x = 43 }
+         |}
+         |case class Baz(y: Int) {
+         |  case class Bizz(y: Int)
+         |  object Bizz { def x = 43 }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "foo.bar.Main", scalaVersion)
+    check(
+      Breakpoint(5),
+      Evaluation.success("bar.Baz.x()", 42),
+      Evaluation.success("bar.Baz.z", 42),
+      Evaluation.success("bar.Baz.y", 42),
+      Evaluation.success("bar.Baz(42).y", 42),
+      Evaluation.success("bar.Baz.Buzz(43).y", 43),
+      Evaluation.success("bar.Baz.Buzz.x", 43),
+      Evaluation.success("bar.Baz(42).Bizz(43).y", 43),
+      Evaluation.success("bar.Baz(42).Bizz.x", 43)
     )
   }
 }

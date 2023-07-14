@@ -1,8 +1,9 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi._
-import RuntimeEvaluatorExtractors.{BooleanTree, IsAnyVal, Module}
+import RuntimeEvaluatorExtractors.{BooleanTree, IsAnyVal}
 import scala.util.Success
+import ch.epfl.scala.debugadapter.Logger
 
 /* -------------------------------------------------------------------------- */
 /*                              Global hierarchy                              */
@@ -29,8 +30,6 @@ sealed trait MethodTree extends RuntimeEvaluableTree {
 sealed trait FieldTree extends RuntimeEvaluableTree {
   def field: Field
 }
-
-sealed trait OuterTree extends RuntimeEvaluableTree
 
 /* -------------------------------------------------------------------------- */
 /*                                Simple trees                                */
@@ -122,7 +121,9 @@ case class PrimitiveBinaryOpTree private (
 }
 
 object PrimitiveBinaryOpTree {
-  def apply(lhs: RuntimeTree, args: Seq[RuntimeEvaluableTree], name: String): Validation[PrimitiveBinaryOpTree] =
+  def apply(lhs: RuntimeTree, args: Seq[RuntimeEvaluableTree], name: String)(implicit
+      logger: Logger
+  ): Validation[PrimitiveBinaryOpTree] =
     (lhs, args) match {
       case (ret: RuntimeEvaluableTree, Seq(right)) =>
         RuntimeBinaryOp(ret, right, name).map(PrimitiveBinaryOpTree(ret, right, _))
@@ -174,7 +175,7 @@ case class PrimitiveUnaryOpTree private (
   }
 }
 object PrimitiveUnaryOpTree {
-  def apply(rhs: RuntimeTree, name: String): Validation[PrimitiveUnaryOpTree] = rhs match {
+  def apply(rhs: RuntimeTree, name: String)(implicit logger: Logger): Validation[PrimitiveUnaryOpTree] = rhs match {
     case ret: RuntimeEvaluableTree => RuntimeUnaryOp(ret, name).map(PrimitiveUnaryOpTree(ret, _))
     case _ => Recoverable(s"Primitive operation operand must be evaluable")
   }
@@ -224,39 +225,6 @@ case class NewInstanceTree(init: StaticMethodTree) extends RuntimeEvaluableTree 
   }
 }
 
-case class OuterClassTree(
-    inner: RuntimeEvaluableTree,
-    `type`: ClassType
-) extends OuterTree {
-  override def prettyPrint(depth: Int): String = {
-    val indent = "\t" * (depth + 1)
-    s"""|OuterClassTree(
-        |${indent}of= ${inner.prettyPrint(depth + 1)}
-        |${indent}type= ${`type`}
-        |${indent.dropRight(1)})""".stripMargin
-  }
-}
-
-case class OuterModuleTree(
-    module: ModuleTree
-) extends OuterTree {
-  override def `type`: ClassType = module.`type`
-  override def prettyPrint(depth: Int): String = {
-    val indent = "\t" * (depth + 1)
-    s"""|OuterModuleTree(
-        |${indent}module= ${module.prettyPrint(depth + 1)}
-        |${indent.dropRight(1)})""".stripMargin
-  }
-}
-
-object OuterTree {
-  def apply(of: RuntimeTree, tpe: Type): Validation[OuterTree] = (of, tpe) match {
-    case (tree: RuntimeEvaluableTree, Module(module)) => Valid(new OuterModuleTree(TopLevelModuleTree(module)))
-    case (tree: RuntimeEvaluableTree, ct: ClassType) => Valid(new OuterClassTree(tree, ct))
-    case _ => Recoverable("No valid outer can be found")
-  }
-}
-
 case class ThisTree(
     `type`: ReferenceType
 ) extends RuntimeEvaluableTree {
@@ -264,7 +232,7 @@ case class ThisTree(
 }
 
 object ThisTree {
-  def apply(ths: Option[JdiObject]): Validation[ThisTree] =
+  def apply(ths: Option[JdiObject])(implicit logger: Logger): Validation[ThisTree] =
     Validation.fromOption(ths).map(ths => ThisTree(ths.reference.referenceType()))
 }
 
@@ -278,16 +246,17 @@ case class TopLevelModuleTree(
         |${indent.dropRight(1)})""".stripMargin
   }
 }
+
 case class NestedModuleTree(
     module: ClassType,
-    of: RuntimeEvaluableTree
+    init: InstanceMethodTree
 ) extends ModuleTree {
   override def `type`: ClassType = module
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|NestedModuleTree(
         |${indent}mod= ${module}
-        |${indent}of= ${of.prettyPrint(depth + 1)}
+        |${indent}init= ${init.prettyPrint(depth + 1)}
         |${indent.dropRight(1)})""".stripMargin
   }
 }
