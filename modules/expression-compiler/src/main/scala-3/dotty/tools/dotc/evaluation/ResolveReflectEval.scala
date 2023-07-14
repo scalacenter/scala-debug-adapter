@@ -151,10 +151,10 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
         case _ => tree
 
     def boxIfValueClass(term: TermSymbol, tree: Tree): Tree =
-      atPhase(Phases.elimErasedValueTypePhase)(term.info) match
-        case tpe: ErasedValueType =>
-          boxValueClass(tpe.tycon.typeSymbol.asClass, tree)
-        case tpe => tree
+      getErasedValueType(atPhase(Phases.elimErasedValueTypePhase)(term.info)) match
+        case Some(erasedValueType) =>
+          boxValueClass(erasedValueType.tycon.typeSymbol.asClass, tree)
+        case None => tree
 
     def boxValueClass(valueClass: ClassSymbol, tree: Tree): Tree =
       // qualifier is null: a value class cannot be nested into a class
@@ -162,9 +162,14 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
       callConstructor(nullLiteral, ctor, List(tree))
 
     def unboxIfValueClass(term: TermSymbol, tree: Tree): Tree =
-      atPhase(Phases.elimErasedValueTypePhase)(term.info) match
-        case tpe: ErasedValueType => unboxValueClass(tree, tpe)
-        case tpe => tree
+      getErasedValueType(atPhase(Phases.elimErasedValueTypePhase)(term.info)) match
+        case Some(erasedValueType) => unboxValueClass(tree, erasedValueType)
+        case None => tree
+
+    private def getErasedValueType(tpe: Type): Option[ErasedValueType] = tpe match
+      case tpe: ErasedValueType => Some(tpe)
+      case tpe: MethodOrPoly => getErasedValueType(tpe.resultType)
+      case tpe => None
 
     private def unboxValueClass(tree: Tree, tpe: ErasedValueType): Tree =
       val cls = tpe.tycon.typeSymbol.asClass
