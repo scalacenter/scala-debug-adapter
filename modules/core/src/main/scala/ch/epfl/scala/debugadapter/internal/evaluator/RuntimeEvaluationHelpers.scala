@@ -224,8 +224,13 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
   /* -------------------------------------------------------------------------- */
   /*                                Class helpers                               */
   /* -------------------------------------------------------------------------- */
-  def loadClass(name: String): Validation[ClassTree] =
-    Validation.fromTry(frame.classLoader().flatMap(_.loadClass(name)).extract(c => ClassTree(c.cls)))
+  def loadClass(name: String): Validation[ClassType] =
+    Validation.fromTry {
+      frame
+        .classLoader()
+        .flatMap(_.loadClass(name))
+        .extract(_.cls)
+    }
 
   def checkClassStatus(tpe: => Type) = Try(tpe) match {
     case Failure(e: ClassNotLoadedException) => loadClass(e.className())
@@ -248,8 +253,8 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
 
   // ! TO REFACTOR :sob:
   def resolveInnerType(qual: Type, name: String) = {
-    var tpe: Validation[ClassTree] = Recoverable(s"Cannot find outer class for $qual")
-    def loop(on: Type): Validation[ClassTree] =
+    var tpe: Validation[ClassType] = Recoverable(s"Cannot find outer class for $qual")
+    def loop(on: Type): Validation[ClassType] =
       on match {
         case _: ArrayType | _: PrimitiveType | _: VoidType =>
           Recoverable("Cannot find outer class on non reference type")
@@ -289,7 +294,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
 
   def validateType(tpe: MType, thisTree: Option[RuntimeEvaluableTree])(
       termValidation: Term => Validation[RuntimeEvaluableTree]
-  ): Validation[(Option[RuntimeEvaluableTree], ClassTree)] =
+  ): Validation[(Option[RuntimeEvaluableTree], ClassType)] =
     tpe match {
       case MType.Name(name) =>
         // won't work if the class is defined in one of the outer of this
@@ -299,9 +304,11 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
           qual <- termValidation(qual)
           tpe <- resolveInnerType(qual.`type`, name.value)
         } yield
-          if (tpe.`type`.isStatic()) (None, tpe)
+          if (tpe.isStatic()) (None, tpe)
           else (Some(qual), tpe)
-        cls.orElse(searchClasses(qual.toString + "." + name.value, thisTree.map(_.`type`.name)).map((None, _)))
+        cls.orElse {
+          searchClassesQCN(qual.toString + "." + name.value).map(c => (None, c.`type`.asInstanceOf[ClassType]))
+        }
       case _ => Recoverable("Type not supported at runtime")
     }
 
@@ -314,24 +321,24 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
           .orElse {
             removeLastInnerTypeFromFQCN(tree.`type`.name())
               .map(name => loadClass(name + "$")) match {
-              case Some(Valid(Module(mod))) => Valid(mod)
+              case Some(Valid(Module(mod))) => Valid(TopLevelModuleTree(mod))
               case res => Recoverable(s"Cannot find $$outer for ${tree.`type`.name()}}")
             }
           }
       case _ => Recoverable(s"Cannot find $$outer for non-reference type ${tree.`type`.name()}}")
     }
 
-  def searchAllClassesFor(name: String, in: Option[String]): Validation[ClassTree] = {
-    def declaringTypeName = frame.current().location().declaringType().name()
+  def searchClasses(name: String, in: Option[String]): Validation[ClassType] = {
+    def baseName = in.getOrElse { frame.current().location().declaringType().name() }
 
     val candidates = sourceLookup.classesByName(name)
 
     val bestMatch = candidates.size match {
       case 0 | 1 => candidates
       case _ =>
-        candidates.filter(_.startsWith {
-          in.getOrElse(declaringTypeName)
-        })
+        candidates.filter { name =>
+          name.contains(s".$baseName") || name.startsWith(baseName)
+        }
     }
 
     bestMatch
@@ -339,30 +346,23 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
       .flatMap(loadClass)
   }
 
-  def searchClasses(name: String, in: Option[String]): Validation[ClassTree] = {
-    if (isFQCN(name)) loadClass(name)
-    else searchAllClassesFor(name, in)
-  }
-
-  def isFQCN(name: String): Boolean = {
-    val regex = """([\w\.]+)\.([^\.]+)""".r
-    name match {
-      case regex(_, _) => true
-      case _ => false
-    }
+  def searchClassesQCN(partialClassName: String): Validation[RuntimeTree] = {
+    val name = SourceLookUpProvider.getScalaClassName(partialClassName)
+    searchClasses(name + "$", Some(partialClassName))
+      .map { TopLevelModuleTree(_) }
+      .orElse { searchClasses(name, Some(partialClassName)).map { ClassTree(_) } }
   }
 
   /* -------------------------------------------------------------------------- */
   /*                              Initialize module                             */
   /* -------------------------------------------------------------------------- */
   def moduleInitializer(modCls: ClassType, of: RuntimeEvaluableTree): Validation[NestedModuleTree] =
-    for {
-      initMethodName <- Validation.fromOption(getLastInnerType(modCls.name()))
-      initMethod <- of.`type` match {
-        case ref: ReferenceType => zeroArgMethodByName(ref, initMethodName)
-        case _ => Recoverable(s"Cannot find module initializer for non-reference type $modCls")
-      }
-    } yield NestedModuleTree(modCls, InstanceMethodTree(initMethod, Seq(), of))
+    of.`type` match {
+      case ref: ReferenceType =>
+        zeroArgMethodByName(ref, SourceLookUpProvider.getScalaClassName(modCls.name).stripSuffix("$"))
+          .map(m => NestedModuleTree(modCls, InstanceMethodTree(m, Seq.empty, of)))
+      case _ => Recoverable(s"Cannot find module initializer for non-reference type $modCls")
+    }
 
   def illegalAccess(x: Any, typeName: String) = Fatal {
     new ClassCastException(s"Cannot cast $x to $typeName")
@@ -383,19 +383,13 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
   /* -------------------------------------------------------------------------- */
   /*                           Nested types regex                          */
   /* -------------------------------------------------------------------------- */
-  def getLastInnerType(className: String): Option[String] = {
-    val pattern = """(.+\$)([^$]+)$""".r
-    className.stripSuffix("$") match {
-      case pattern(_, innerType) => Some(innerType)
-      case _ => None
-    }
-  }
-
   def removeLastInnerTypeFromFQCN(className: String): Option[String] = {
-    val pattern = """(.+)\$[\w]+\${0,1}$""".r
-    className match {
-      case pattern(baseName) => Some(baseName)
-      case _ => None
+    val (packageName, clsName) = className.splitAt(className.lastIndexOf('.') + 1)
+    val name = NameTransformer.decode(clsName)
+    val lastDollar = name.stripSuffix("$").lastIndexOf('$')
+    lastDollar match {
+      case -1 => None
+      case _ => Some(packageName + name.dropRight(name.length - lastDollar))
     }
   }
 

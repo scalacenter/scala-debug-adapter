@@ -886,6 +886,83 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Evaluation.success("aInner.b", "b")
     )
   }
+
+  test("Should support names with special characters") {
+    val source =
+      """|package example
+         |
+         |class `A+B` {
+         |  val foo = 42
+         |  object && {
+         |    def x = {
+         |      println(foo)
+         |      42
+         |    }
+         |  }
+         |  object ~~ { def x = foo + 1 }
+         |}
+         |
+         |object `A+B` {
+         |  object || { def x = 43 }
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val a = new `A+B`
+         |    a.&&.x
+         |    println("ok")
+         |  }
+         |}
+         """.stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    if (scalaVersion == ScalaVersion.`3.1+`)
+      check(
+        Breakpoint(7),
+        Evaluation.success("~~.x", 43)
+      )
+
+    check(
+      Breakpoint(22),
+      Evaluation.success("a.&&.x", 42),
+      Evaluation.success("`A+B`.||.x", 43)
+    )
+  }
+
+  test("Should accept partially qualifier class name") {
+    val source =
+      """|package foo.bar
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    println("ok")
+         |  }
+         |}
+         |
+         |object Baz {
+         |  def x() = 42
+         |  def z = 42
+         |  val y = 42
+         |  case class Buzz(y: Int)
+         |  object Buzz { def x = 43 }
+         |}
+         |case class Baz(y: Int) {
+         |  case class Bizz(y: Int)
+         |  object Bizz { def x = 43 }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "foo.bar.Main", scalaVersion)
+    check(
+      Breakpoint(5),
+      Evaluation.success("bar.Baz.x()", 42),
+      Evaluation.success("bar.Baz.z", 42),
+      Evaluation.success("bar.Baz.y", 42),
+      Evaluation.success("bar.Baz(42).y", 42),
+      Evaluation.success("bar.Baz.Buzz(43).y", 43),
+      Evaluation.success("bar.Baz.Buzz.x", 43),
+      Evaluation.success("bar.Baz(42).Bizz(43).y", 43),
+      Evaluation.success("bar.Baz(42).Bizz.x", 43)
+    )
+  }
 }
 
 /* -------------------------------------------------------------------------- */

@@ -246,6 +246,7 @@ case class TopLevelModuleTree(
         |${indent.dropRight(1)})""".stripMargin
   }
 }
+
 case class NestedModuleTree(
     module: ClassType,
     init: InstanceMethodTree
