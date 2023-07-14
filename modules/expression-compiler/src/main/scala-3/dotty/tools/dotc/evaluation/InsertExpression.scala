@@ -107,9 +107,7 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
         |      case e: InvocationTargetException => throw e.getCause.nn
         |
         |  extension [T] (x: T | Null)
-        |    private def nn: T = 
-        |      assert(x != null)
-        |      x.asInstanceOf[T]
+        |    private def nn: T = x.asInstanceOf[T]
         |""".stripMargin
 
   override def run(using Context): Unit =
