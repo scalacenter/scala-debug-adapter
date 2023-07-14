@@ -53,7 +53,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
         validateWithClass(qual).transform {
           case qual: Valid[?] =>
             validateName(name.value, qual)
-              .orElse { validateClass(name.value, qual) }
+              .orElse(validateClass(name.value, qual))
           case _: Invalid =>
             searchClassesQCN(qual.toString + "." + name.value)
         }

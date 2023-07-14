@@ -329,7 +329,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
     }
 
   def searchClasses(name: String, in: Option[String]): Validation[ClassType] = {
-    def baseName = in.getOrElse { frame.current().location().declaringType().name() }
+    def baseName = in.getOrElse(frame.current().location().declaringType().name())
 
     val candidates = sourceLookup.classesByName(name)
 
@@ -349,8 +349,8 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
   def searchClassesQCN(partialClassName: String): Validation[RuntimeTree] = {
     val name = SourceLookUpProvider.getScalaClassName(partialClassName)
     searchClasses(name + "$", Some(partialClassName))
-      .map { TopLevelModuleTree(_) }
-      .orElse { searchClasses(name, Some(partialClassName)).map { ClassTree(_) } }
+      .map(TopLevelModuleTree(_))
+      .orElse(searchClasses(name, Some(partialClassName)).map(ClassTree(_)))
   }
 
   /* -------------------------------------------------------------------------- */
