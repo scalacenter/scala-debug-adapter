@@ -217,13 +217,6 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |    x + x
          |  }
          |}
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val a: A = new A("x")
-         |    println(a.m())
-         |  }
-         |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
@@ -237,22 +230,25 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |class A(val x: String) extends AnyVal {
          |  def m(): String = {
          |    def m1(t : String) : String = {
-         |      "t"+""
+         |      t
          |    }
-         |    return m1("")
+         |    m1("")
          |  }
          |}
          |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val a: A = new A("x")
-         |    println(a.m())
+         |object A {
+         |  def m(): String = {
+         |    def m1 : String = {
+         |      "m1"
+         |    }
+         |    m1
          |  }
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.A$", "java.lang.String m1$1(java.lang.String t)", "A.m.m1(t: String): String")
+    unpickler.assertFormat("example.A$", "java.lang.String m1$2(java.lang.String t)", "A.m.m1(t: String): String")
+    unpickler.assertFormat("example.A$", "java.lang.String m1$1()", "A.m.m1: String")
   }
 
   test("multi parameter lists") {
