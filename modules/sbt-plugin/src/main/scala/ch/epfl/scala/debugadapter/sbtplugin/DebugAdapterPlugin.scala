@@ -62,7 +62,9 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val startRemoteDebugSession = inputKey[URI](
       "Start a debug session on a remote process"
     ).withRank(KeyRanks.DTask)
-
+    val debugConfig = settingKey[DebugConfig](
+      "Configure the debug session"
+    ).withRank(KeyRanks.DTask)
     val stopDebugSession =
       taskKey[Unit]("Stop the current debug session").withRank(KeyRanks.DTask)
   }
@@ -90,6 +92,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   override def projectSettings: Seq[Def.Setting[_]] = Def.settings(
     inConfig(Compile)(runSettings),
     inConfig(Test)(testSettings),
+    debugConfig := DebugConfig.default,
     startMainClassDebugSession / Keys.aggregate := false,
     startTestSuitesDebugSession / Keys.aggregate := false,
     startTestSuitesSelectionDebugSession / Keys.aggregate := false,
@@ -245,7 +248,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             mainClass.arguments,
             new LoggerAdapter(logger)
           )
-        startServer(jobService, scope, state, target, debuggee, debugToolsResolver)
+        startServer(jobService, scope, state, target, debuggee, debugToolsResolver, debugConfig.value)
       }
 
       res match {
@@ -352,7 +355,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             testDefinitions,
             new LoggerAdapter(logger)
           )
-        startServer(jobService, scope, state, target, debuggee, debugToolsResolver)
+        startServer(jobService, scope, state, target, debuggee, debugToolsResolver, debugConfig.value)
       }
 
       res match {
@@ -413,7 +416,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           InternalTasks.javaRuntime.value,
           new LoggerAdapter(logger)
         )
-      startServer(jobService, scope, state, target, debuggee, debugToolsResolver)
+      startServer(jobService, scope, state, target, debuggee, debugToolsResolver, debugConfig.value)
     }
 
   private def startServer(
@@ -422,7 +425,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       state: State,
       target: BuildTargetIdentifier,
       debuggeeF: sbt.Logger => SbtDebuggee,
-      resolverF: sbt.Logger => DebugToolsResolver
+      resolverF: sbt.Logger => DebugToolsResolver,
+      config: DebugConfig
   ): URI = {
     val address = new DebugServer.Address()
     jobService.runInBackground(scope, state) { (logger, _) =>
@@ -431,7 +435,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         val resolver = resolverF(logger)
         // if there is a server for this target then close it
         debugServers.get(target).foreach(_.close())
-        val server = DebugServer(debuggee, resolver, new LoggerAdapter(logger), address)
+        val server = DebugServer(debuggee, resolver, new LoggerAdapter(logger), address, config)
         debugServers.update(target, server)
         Await.result(server.start(), Duration.Inf)
       } catch {
