@@ -2012,6 +2012,33 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     // a pure expression does nothing in statement position
     check(Breakpoint(8), Evaluation.successOrIgnore("m", 1, ignore = isScala2))
   }
+
+  test("i425") {
+    val source =
+      """|package example
+         |
+         |object Rewrites {
+         |  private class Patch(var span: Span)
+         |  
+         |  def main(args: Array[String]): Unit = {
+         |    val patch = new Patch(new Span(0))
+         |    println("ok")
+         |  }
+         |}
+         |
+         |class Span(val start: Int) extends AnyVal {
+         |  def end = start + 1
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClass(source, "example.Rewrites", scalaVersion)
+    check(
+      Breakpoint(8),
+      Evaluation.success("patch.span", 0),
+      Evaluation.success("patch.span = new Span(1)", ()),
+      Evaluation.success("patch.span", 1)
+    )
+  }
 }
 
 abstract class Scala2EvaluationTests(val scalaVersion: ScalaVersion) extends ScalaEvaluationTests(scalaVersion) {
