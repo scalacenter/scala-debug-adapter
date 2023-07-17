@@ -102,10 +102,10 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
   ): Validation[Method] = {
     val candidates = ref.methodsByName(encodedName).asScala
 
-    val unboxedCandidates = candidates.filter { argsMatch(_, args, boxing = false) }
+    val unboxedCandidates = candidates.filter(argsMatch(_, args, boxing = false))
 
     val boxedCandidates = unboxedCandidates.size match {
-      case 0 => candidates.filter { argsMatch(_, args, boxing = true) }
+      case 0 => candidates.filter(argsMatch(_, args, boxing = true))
       case _ => unboxedCandidates
     }
 
@@ -121,7 +121,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
 
     finalCandidates
       .validateSingle(s"Cannot find a proper method $encodedName with args types $args on $ref")
-      .map { loadClassOnNeed }
+      .map(loadClassOnNeed)
   }
 
   private def zeroArgMethodByName(ref: ReferenceType, funName: String, encode: Boolean = true): Validation[Method] = {
@@ -157,7 +157,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
     case ReferenceTree(ref) =>
       if (!args.isEmpty)
         methodsByNameAndArgs(ref, NameTransformer.encode(funName), args.map(_.`type`))
-          .flatMap { toStaticIfNeeded(_, args, tree) }
+          .flatMap(toStaticIfNeeded(_, args, tree))
       else zeroArgMethodTreeByName(tree, NameTransformer.encode(funName))
     case _ => Recoverable(new IllegalArgumentException(s"Cannot find method $funName on $tree"))
   }
@@ -329,7 +329,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
     }
 
   def searchClasses(name: String, in: Option[String]): Validation[ClassType] = {
-    def baseName = in.getOrElse { frame.current().location().declaringType().name() }
+    def baseName = in.getOrElse(frame.current().location().declaringType().name())
 
     val candidates = sourceLookup.classesByName(name)
 
@@ -343,14 +343,14 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
 
     bestMatch
       .validateSingle(s"Cannot find class $name")
-      .flatMap { loadClass }
+      .flatMap(loadClass)
   }
 
   def searchClassesQCN(partialClassName: String): Validation[RuntimeTree] = {
     val name = SourceLookUpProvider.getScalaClassName(partialClassName)
     searchClasses(name + "$", Some(partialClassName))
-      .map { TopLevelModuleTree(_) }
-      .orElse { searchClasses(name, Some(partialClassName)).map { ClassTree(_) } }
+      .map(TopLevelModuleTree(_))
+      .orElse(searchClasses(name, Some(partialClassName)).map(ClassTree(_)))
   }
 
   /* -------------------------------------------------------------------------- */

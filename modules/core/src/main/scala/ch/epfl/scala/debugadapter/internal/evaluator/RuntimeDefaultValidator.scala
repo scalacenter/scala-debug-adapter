@@ -53,7 +53,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
         validateWithClass(qual).transform {
           case qual: Valid[?] =>
             validateName(name.value, qual)
-              .orElse { validateClass(name.value, qual) }
+              .orElse(validateClass(name.value, qual))
           case _: Invalid =>
             searchClassesQCN(qual.toString + "." + name.value)
         }
@@ -84,7 +84,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
   lazy val thisTree: Validation[RuntimeEvaluableTree] =
     Validation.fromOption {
       frame.thisObject
-        .map { ths => ThisTree(ths.reference.referenceType().asInstanceOf[ClassType]) }
+        .map(ths => ThisTree(ths.reference.referenceType().asInstanceOf[ClassType]))
     }
 
   /* -------------------------------------------------------------------------- */
@@ -99,7 +99,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
   // We might sometimes need to access a 'private' attribute of a class
   private def fieldLookup(name: String, ref: ReferenceType) =
     Option(ref.fieldByName(name))
-      .orElse { ref.visibleFields().asScala.find(_.name().endsWith("$" + name)) }
+      .orElse(ref.visibleFields().asScala.find(_.name().endsWith("$" + name)))
 
   def fieldTreeByName(
       of: Validation[RuntimeTree],
@@ -108,7 +108,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
     of match {
       case ReferenceTree(ref) =>
         for {
-          field <- Validation.fromOption { fieldLookup(name, ref) }
+          field <- Validation.fromOption(fieldLookup(name, ref))
           _ = loadClassOnNeed(field)
           fieldTree <- toStaticIfNeeded(field, of.get)
         } yield fieldTree
@@ -131,7 +131,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
       val isInModule = inCompanion(ofName, moduleName)
 
       (isInModule, moduleCls, of) match {
-        case (true, _, _) => CompilerRecoverable(s"Cannot access module ${name} from ${ofName}")
+        case (true, _, _) => CompilerRecoverable(s"Cannot access module $name from $ofName")
         case (_, Module(_), _) => Valid(TopLevelModuleTree(moduleCls))
         case (_, cls, Some(instance: RuntimeEvaluableTree)) =>
           if (cls.name.startsWith(instance.`type`.name()))
@@ -180,7 +180,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
       .orElse {
         of match {
           case Valid(_: ThisTree) | _: Recoverable => localVarTreeByName(name)
-          case _ => Recoverable(s"${value} is not a local variable")
+          case _ => Recoverable(s"$value is not a local variable")
         }
       }
   }
@@ -193,7 +193,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
       args: Seq[RuntimeEvaluableTree]
   ): Validation[RuntimeEvaluableTree] =
     methodTreeByNameAndArgs(on, "apply", args)
-      .orElse { ArrayElemTree(on, args) }
+      .orElse(ArrayElemTree(on, args))
 
   def validateIndirectApply(
       on: Validation[RuntimeTree],
@@ -218,9 +218,9 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
       args: Seq[RuntimeEvaluableTree]
   ): Validation[RuntimeEvaluableTree] =
     methodTreeByNameAndArgs(tree, name, args)
-      .orElse { validateIndirectApply(Valid(tree), name, args) }
-      .orElse { validateApply(tree, args) }
-      .orElse { validateOuter(tree).flatMap(findMethod(_, name, args)) }
+      .orElse(validateIndirectApply(Valid(tree), name, args))
+      .orElse(validateApply(tree, args))
+      .orElse(validateOuter(tree).flatMap(findMethod(_, name, args)))
 
   def validateMethod(call: Call): Validation[RuntimeEvaluableTree] = {
     lazy val preparedCall = call.fun match {
@@ -239,8 +239,8 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
       lhs <- preparedCall.qual
       methodTree <-
         PrimitiveUnaryOpTree(lhs, preparedCall.name)
-          .orElse { PrimitiveBinaryOpTree(lhs, args, preparedCall.name) }
-          .orElse { findMethod(lhs, preparedCall.name, args) }
+          .orElse(PrimitiveBinaryOpTree(lhs, args, preparedCall.name))
+          .orElse(findMethod(lhs, preparedCall.name, args))
     } yield methodTree
 
     call.fun match {

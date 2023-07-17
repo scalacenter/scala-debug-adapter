@@ -227,11 +227,10 @@ private[debugadapter] final class DebugSession private (
   }
 
   override def sendEvent(event: Events.DebugEvent): Unit = {
-    try {
+    try
       super.sendEvent(event)
-    } finally {
+    finally
       if (event.`type` == "terminated") terminatedEvent.trySuccess(())
-    }
   }
 
   private def name = debuggee.name

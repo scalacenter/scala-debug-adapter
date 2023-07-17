@@ -52,7 +52,6 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
     else if (isStaticConstructor(method)) Some(formatJava(method))
     else if (isAdaptedMethod(method)) None
     else if (isAnonFunction(method)) Some(formatJava(method))
-    else if (isLiftedMethod(method) && !isDefaultValue(method)) Some(formatJava(method))
     else if (isAnonClass(method.declaringType)) Some(formatJava(method))
     // TODO in Scala 3 we should be able to find the symbol of a local class using TASTy Query
     else if (isLocalClass(method.declaringType)) Some(formatJava(method))
@@ -78,10 +77,10 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
     m.isStatic && m.name == "main"
 
   private def isDynamicClass(tpe: ReferenceType): Boolean =
-    try {
+    try
       // source of java.lang.invoke.LambdaForm$DMH.1175962212.invokeStatic_L_L(java.lang.Object, java.lang.Object) is LambdaForm$DMH
       !tpe.sourceName.contains('.')
-    } catch {
+    catch {
       case _: AbsentInformationException =>
         // We assume that a ReferenceType with no source name is necessarily a dynamic class
         true

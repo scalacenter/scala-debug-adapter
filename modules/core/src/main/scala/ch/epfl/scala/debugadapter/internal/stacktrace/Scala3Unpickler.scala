@@ -29,11 +29,10 @@ class Scala3UnpicklerBridge(
   }
 
   override def formatScala(method: jdi.Method): Option[String] = {
-    try {
-
+    try
       formatMethod.invoke(bridge, method).asInstanceOf[Optional[String]].toScala
 
-    } catch {
+    catch {
       case e: InvocationTargetException => throw e.getCause
     }
   }

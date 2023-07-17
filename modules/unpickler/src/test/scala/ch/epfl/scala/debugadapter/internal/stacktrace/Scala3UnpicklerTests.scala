@@ -14,7 +14,7 @@ import tastyquery.Names.*
 import tastyquery.Symbols.TermSymbol
 import scala.jdk.OptionConverters.*
 
-import java.{util => ju}
+import java.util as ju
 
 class Scala30UnpicklerTests extends Scala3UnpicklerTests(ScalaVersion.`3.0`)
 class Scala31PlusUnpicklerTests extends Scala3UnpicklerTests(ScalaVersion.`3.1+`)
@@ -98,6 +98,34 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val unpickler = getUnpickler(debuggee)
     unpickler.assertFailure("example.Main$A$1", "void m()")
     unpickler.assertFailure("example.Main$B$2$", "void m()")
+  }
+
+  test("local methods with same name") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  def m1: Unit = {
+         |    def m: Unit = { // m$1
+         |      println(1)
+         |      def m(x: String): Unit = // m$2
+         |        println(2)
+         |      m("hello")
+         |    }
+         |    m
+         |  }
+         |
+         |  def m2: Unit = {
+         |    def m(x: Int): Unit = println(3) // m$3
+         |    m(1)
+         |  }
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    val unpickler = getUnpickler(debuggee)
+    unpickler.assertFormat("example.A", "void m$1()", "A.m1.m: Unit")
+    unpickler.assertFormat("example.A", "void m$2(java.lang.String x)", "A.m1.m.m(x: String): Unit")
+    unpickler.assertFormat("example.A", "void m$3(int x)", "A.m2.m(x: Int): Unit")
   }
 
   test("getters and setters") {
@@ -189,17 +217,38 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |    x + x
          |  }
          |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val unpickler = getUnpickler(debuggee)
+    unpickler.assertFormat("example.A$", "java.lang.String m$extension(java.lang.String $this)", "A.m(): String")
+  }
+
+  test("local method inside a value class") {
+    val source =
+      """|package example
          |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val a: A = new A("x")
-         |    println(a.m())
+         |class A(val x: String) extends AnyVal {
+         |  def m(): String = {
+         |    def m1(t : String) : String = {
+         |      t
+         |    }
+         |    m1("")
+         |  }
+         |}
+         |
+         |object A {
+         |  def m(): String = {
+         |    def m1 : String = {
+         |      "m1"
+         |    }
+         |    m1
          |  }
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.A$", "java.lang.String m$extension(java.lang.String $this)", "A.m(): String")
+    unpickler.assertFormat("example.A$", "java.lang.String m1$2(java.lang.String t)", "A.m.m1(t: String): String")
+    unpickler.assertFormat("example.A$", "java.lang.String m1$1()", "A.m.m1: String")
   }
 
   test("multi parameter lists") {
@@ -280,7 +329,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
     // TODO fix: it should find the symbol f by traversing the tree of object Main
-    unpickler.assertNotFound("example.Main$", "int $anonfun$1(int x)")
+    unpickler.assertFormat("example.Main$", "int $anonfun$1(int x)", "Main.main.f.$anonfun(x: Int): Int")
   }
 
   test("this.type") {
@@ -616,7 +665,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
     // TODO fix: find rec by traversing the tree of object Main
-    unpickler.assertNotFound("example.Main$", "int rec$1(int x, int acc)")
+    unpickler.assertFormat("example.Main$", "int rec$1(int x, int acc)", "Main.fac.rec(x: Int, acc: Int): Int")
   }
 
   test("local lazy initializer") {
@@ -638,7 +687,11 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val unpickler = getUnpickler(debuggee)
     // TODO fix: find foo by traversing the tree of object Main
     unpickler.assertNotFound("example.Main$", "java.lang.String foo$lzyINIT1$1(scala.runtime.LazyRef foo$lzy1$1)")
-    unpickler.assertNotFound("example.Main$", "java.lang.String foo$1(scala.runtime.LazyRef foo$lzy1$2)")
+    unpickler.assertFormat(
+      "example.Main$",
+      "java.lang.String foo$1(scala.runtime.LazyRef foo$lzy1$2)",
+      "Main.main.foo: String"
+    )
   }
 
   test("private methods made public") {
