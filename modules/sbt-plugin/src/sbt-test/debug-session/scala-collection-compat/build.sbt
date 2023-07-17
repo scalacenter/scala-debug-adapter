@@ -17,5 +17,5 @@ lazy val scala212Compat =
     .settings(
       scalaVersion := scalaV,
       scalaCollectionCompat := checkScalaCollectionCompat.evaluated,
-      debugConfig := DebugConfig.default.copy(evaluationMode = DebugConfig.ScalaEvaluationOnly)
+      debugAdapterConfig := DebugConfig.default.copy(evaluationMode = DebugConfig.ScalaEvaluationOnly)
     )

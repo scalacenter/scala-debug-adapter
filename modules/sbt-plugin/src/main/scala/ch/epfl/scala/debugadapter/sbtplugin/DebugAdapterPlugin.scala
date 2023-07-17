@@ -62,7 +62,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     val startRemoteDebugSession = inputKey[URI](
       "Start a debug session on a remote process"
     ).withRank(KeyRanks.DTask)
-    val debugConfig = settingKey[DebugConfig](
+    val debugAdapterConfig = settingKey[DebugConfig](
       "Configure the debug session"
     ).withRank(KeyRanks.DTask)
     val stopDebugSession =
@@ -92,7 +92,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   override def projectSettings: Seq[Def.Setting[_]] = Def.settings(
     inConfig(Compile)(runSettings),
     inConfig(Test)(testSettings),
-    debugConfig := DebugConfig.default,
+    debugAdapterConfig := DebugConfig.default,
     startMainClassDebugSession / Keys.aggregate := false,
     startTestSuitesDebugSession / Keys.aggregate := false,
     startTestSuitesSelectionDebugSession / Keys.aggregate := false,
@@ -243,7 +243,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             mainClass.arguments,
             new LoggerAdapter(logger)
           )
-        startServer(jobService, scope, state, target, debuggee, debugToolsResolver, debugConfig.value)
+        startServer(jobService, scope, state, target, debuggee, debugToolsResolver, debugAdapterConfig.value)
       }
 
       res match {
@@ -350,7 +350,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             testDefinitions,
             new LoggerAdapter(logger)
           )
-        startServer(jobService, scope, state, target, debuggee, debugToolsResolver, debugConfig.value)
+        startServer(jobService, scope, state, target, debuggee, debugToolsResolver, debugAdapterConfig.value)
       }
 
       res match {
@@ -411,7 +411,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           InternalTasks.javaRuntime.value,
           new LoggerAdapter(logger)
         )
-      startServer(jobService, scope, state, target, debuggee, debugToolsResolver, debugConfig.value)
+      startServer(jobService, scope, state, target, debuggee, debugToolsResolver, debugAdapterConfig.value)
     }
 
   private def startServer(
