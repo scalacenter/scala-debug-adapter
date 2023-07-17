@@ -103,7 +103,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     stopDebugSession := stopSessionTask.value,
     Keys.compile / Keys.javacOptions := {
       val jo = (Keys.compile / Keys.javacOptions).value
-      if (jo.contains("-g")) jo
+      if (jo.exists(_.startsWith("-g"))) jo
       else jo :+ "-g"
     }
   )

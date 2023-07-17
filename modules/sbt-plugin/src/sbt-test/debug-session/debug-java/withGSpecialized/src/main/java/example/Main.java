@@ -5,4 +5,8 @@ public class Main {
     var x = 1;
     System.out.println("Hello, world!");
   }
+
+  public static String foo() {
+    return "foo";
+  }
 }
