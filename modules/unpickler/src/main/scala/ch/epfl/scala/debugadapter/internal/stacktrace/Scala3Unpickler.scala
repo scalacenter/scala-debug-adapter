@@ -81,13 +81,6 @@ class Scala3Unpickler(
             else matchingSymbols.headOption
 
   def findLocalMethodOrLazyVal(declaringClass: ClassSymbol, name: String, index: Int): TermSymbol =
-    def findLocalSymbol(tree: Tree): Seq[TermSymbol] =
-      tree.walkTree {
-        case DefDef(_, _, _, _, symbol) if matchTargetName(name, symbol) => Seq(symbol)
-        case ValDef(_, _, _, symbol) if matchTargetName(name, symbol) => Seq(symbol)
-        case _ => Seq.empty
-      }(_ ++ _, Seq.empty)
-
     val declaringClasses = declaringClass.companionClass match
       case Some(companionClass) if companionClass.isSubclass(ctx.defn.AnyValClass) =>
         Seq(declaringClass, companionClass)
@@ -97,14 +90,13 @@ class Scala3Unpickler(
       for
         declaringSym <- declaringClasses
         decl <- declaringSym.declarations
-        tree <- decl.tree.toSeq
-        localSym <- findLocalSymbol(tree)
+        localSym <- findMatchingSymbols(decl, name)
       yield localSym
     if matchingSymbols.size < index
     then
       // TODO we cannot find the local symbol of Scala 2.13 classes, it should not throw
       throw new Exception(s"Cannot find local symbol $name$$$index in ${declaringClass.name}")
-    matchingSymbols(index - 1)
+    matchingSymbols(index - 1).asTerm
 
   def formatType(t: Type): String =
     t match
@@ -245,53 +237,46 @@ class Scala3Unpickler(
     if method.declaringType.isObject && !method.isExtensionMethod then obj.headOption else cls.headOption
 
   private def findSymbolsRecursively(owner: DeclaringSymbol, encodedName: String): Seq[ClassSymbol] =
-    owner.declarations
-      .collect { case sym: ClassSymbol => sym }
-      .flatMap { sym =>
-        val encodedSymName = NameTransformer.encode(sym.name.toString)
-        val Symbol = s"${Regex.quote(encodedSymName)}\\$$?(.*)".r
-        encodedName match
-          case Symbol(remaining) =>
-            if remaining.isEmpty then Some(sym)
-            else findSymbolsRecursively(sym, remaining)
-          case _ => None
-      }
-    // if(a.isEmpty) walkingtree(owner,encodedName).toSeq else a 
-  
-  private def walkingtree( sym : DeclaringSymbol, remaining : String) : Option[DeclaringSymbol] = {
-   
-       ( sym.tree match
-         case Some(tree) =>
-            val x =tree.walkTree(tree =>
-                
-                tree match
-                  case ClassDef(_,_,symbol) =>
-                    val Pattern = s"${Regex.quote(symbol.name.toString)}\\$$\\d+\\$$?(.*)".r
-                    val xoo=symbol.name.toString
-                    val xo = Regex.quote(symbol.name.toString)
-                    remaining match
-                      case Pattern(rem) => 
-                        if(rem.isEmpty) List(symbol)
-                        else List()
-                      case _ => List()
-                  case _ => List()
-              
-            )((l1, l2) => l1 ++ l2, List())
-            if(x.isEmpty) None 
-            else Some(x.head)
-          
-         case None =>None)
-      
+    val pattern = """^([^$]+)[$](\d+)[$]?(.*)$""".r
+    encodedName match
+      case pattern(className, index, remaining) =>
+        val sym = (for
+          decl <- owner.declarations
+          sym <- findMatchingSymbols(decl, className)
+        yield sym)(index.toInt - 1)
+        if remaining.isEmpty then Seq(sym.asClass)
+        else findSymbolsRecursively(sym.asDeclaringSymbol, remaining)
+      case _ =>
+        owner.declarations
+          .collect { case sym: ClassSymbol => sym }
+          .flatMap { sym =>
+            val encodedSymName = NameTransformer.encode(sym.name.toString)
+            val Symbol = s"${Regex.quote(encodedSymName)}\\$$?(.*)".r
+            encodedName match
+              case Symbol(remaining) =>
+                if remaining.isEmpty then Some(sym)
+                else findSymbolsRecursively(sym, remaining)
+              case _ => None
+          }
 
-  }
-      
+  private def findMatchingSymbols(owner: Symbol, name: String): Seq[Symbol] =
+    owner.tree match
+      case Some(tree) =>
+        tree.walkTree {
+          case ClassDef(_, _, symbol) =>
+            if matchTargetName(name, symbol) && symbol.owner.isTerm then Seq(symbol) else Seq.empty
+          case DefDef(_, _, _, _, symbol) if matchTargetName(name, symbol) && symbol.owner.isTerm => Seq(symbol)
+          case ValDef(_, _, _, symbol) if matchTargetName(name, symbol) && symbol.owner.isTerm => Seq(symbol)
+          case _ => Seq.empty
+        }(_ ++ _, Seq.empty)
+      case None => Seq.empty
 
   private def matchSymbol(method: jdi.Method, symbol: TermSymbol): Boolean =
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
 
   private def matchesLocalMethodOrLazyVal(method: jdi.Method): Option[(String, Int)] =
     val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
-    val expectedName = method.name.stripPrefix(javaPrefix)
+    val expectedName = method.name.stripPrefix(javaPrefix).split("\\$_\\$").last
     val pattern = """^(.+)[$](\d+)$""".r
     expectedName match
       case pattern(stringPart, numberPart) if (!stringPart.endsWith("$lzyINIT1") && !stringPart.endsWith("$default")) =>
@@ -312,8 +297,8 @@ class Scala3Unpickler(
     if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
     else encodedScalaName == expectedName
 
-  private def matchTargetName(expectedName: String, symbol: TermSymbol): Boolean =
-    val symbolName = symbol.targetName.toString
+  private def matchTargetName(expectedName: String, symbol: Symbol): Boolean =
+    val symbolName = symbol.name.toString
     expectedName == NameTransformer.encode(symbolName)
 
   private def matchSignature(method: jdi.Method, symbol: TermSymbol): Boolean =

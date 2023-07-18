@@ -70,9 +70,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     unpickler.assertNotFound("example.F$", javaSig)
     unpickler.assertFormat("example.Main$G", javaSig, "Main.G.m(): String")
     unpickler.assertNotFound("example.Main$H", javaSig)
-    unpickler.assertFailure("example.Main$$anon$1", javaSig)
+    unpickler.assertNotFound("example.Main$$anon$1", javaSig)
     // TODO fix: we could find it by traversing the tree of `Main`
-    unpickler.assertFailure("example.Main$$anon$2", javaSig)
+    unpickler.assertFind("example.Main$$anon$2", javaSig)
   }
 
   test("local classes or local objects") {
@@ -100,43 +100,47 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     unpickler.assertFind("example.Main$B$2$", "void m()")
   }
 
-  test("local classes or local objects within local method") {
+  test("local class and object with same name within a local method") {
     val source =
       """|package example
-         |
-         |object Main3 {
+         |object Main {
          |  def main(args: Array[String]) = {
-         |    class A {
-         |        class C {
-         |      def m(): Unit = {
-         |        class D {
-         |        println("A.m")
-         |        def m1() : Unit = {
-         |            println("")
-         |        }
-         |        }
-         |        D().m1()
+         |    class A {   
+         |      def m(t : Int) = {
+         |    
          |      } 
-         |        }
-         |    }
-         |    object B {
-         |      def m(): Unit = {
-         |        println("B.m")
+         |    }     
+         |    object A {
+         |      def m(s : String) = {
+         |    
          |      }
          |    }
-         |
-         |    val a = A()
-         |    val c = a.C()
-         |    c.m()
          |  }
-         | }
+         |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
-    unpickler.assertFind("example.Main$A$1", "void m()")
-    unpickler.assertFind("example.Main$B$2$", "void m()")
-    unpickler.assertFind("example.Main$A$1$C", "void m()")
+    unpickler.assertFormat("example.Main$A$1", "void m(int t)", "Main.main.A.m(t: Int): Unit")
+    unpickler.assertFormat("example.Main$", "Main$A$3$ A$2(LazyRef A$lzy1$2)", "Main.main.A: A")
+    unpickler.assertFormat("example.Main$A$3$", "void m(java.lang.String s)", "Main.main.A.m(s: String): Unit")
+  }
 
+  test("local class in  a local method in a local class in a local method") {
+    val source =
+      """|package example
+         |object Main {
+         |  def m =
+         |    class A // Main$A$1
+         |    class Bar :
+         |      def A = ()
+         |      def m =
+         |        class A  // Main$A$2
+         |        def A = () // Main.example$Main$Bar$1$$_$A$3()
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val unpickler = getUnpickler(debuggee)
+    unpickler.assertFormat("example.Main", "void example$Main$Bar$1$$_$A$3()", "Main.Foo.m.Bar.m.A: Unit")
   }
 
   test("local methods with same name") {
