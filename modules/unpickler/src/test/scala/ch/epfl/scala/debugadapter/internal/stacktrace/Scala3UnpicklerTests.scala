@@ -70,9 +70,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     unpickler.assertNotFound("example.F$", javaSig)
     unpickler.assertFormat("example.Main$G", javaSig, "Main.G.m(): String")
     unpickler.assertNotFound("example.Main$H", javaSig)
-    unpickler.assertNotFound("example.Main$$anon$1", javaSig)
+    unpickler.assertFailure("example.Main$$anon$1", javaSig)
     // TODO fix: we could find it by traversing the tree of `Main`
-    unpickler.assertFind("example.Main$$anon$2", javaSig)
+    unpickler.assertFailure("example.Main$$anon$2", javaSig)
   }
 
   test("local classes or local objects") {
@@ -140,7 +140,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.Main", "void example$Main$Bar$1$$_$A$3()", "Main.Foo.m.Bar.m.A: Unit")
+    unpickler.assertFormat("example.Main$", "void example$Main$Bar$1$$_$A$3()", "Main.m.Bar.m.A: Unit")
   }
 
   test("local methods with same name") {
