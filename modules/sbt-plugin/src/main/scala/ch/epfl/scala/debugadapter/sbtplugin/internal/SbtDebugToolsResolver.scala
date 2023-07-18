@@ -35,7 +35,10 @@ class SbtDebugToolsResolver(
           val expressionCompilerJars = report
             .select(
               configurationFilter(Runtime.name),
-              moduleFilter(org, artifact, version),
+              moduleFilter(org, artifact, version) | moduleFilter(
+                "org.scala-lang.modules",
+                "scala-collection-compat_2.12"
+              ),
               artifactFilter(extension = "jar", classifier = "")
             )
             .map(_.toURI.toURL)
