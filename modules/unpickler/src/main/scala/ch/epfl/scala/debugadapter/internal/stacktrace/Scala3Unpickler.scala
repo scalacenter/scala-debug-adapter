@@ -69,7 +69,7 @@ class Scala3Unpickler(
       case Some(declaringClass) =>
         matchesLocalMethodOrLazyVal(method) match
           case Some((name, index)) =>
-            Some(findLocalMethodOrLazyVal(declaringClass, name, index))
+            Some(findLocalMethodOrLazyVal(declaringClass, NameTransformer.decode(name), index))
           case None =>
             val matchingSymbols = declaringClass.declarations
               .collect { case sym: TermSymbol if sym.isTerm => sym }
@@ -90,7 +90,7 @@ class Scala3Unpickler(
       for
         declaringSym <- declaringClasses
         decl <- declaringSym.declarations
-        localSym <- findMatchingSymbols(decl, name)
+        localSym <- findLocalSymbols(decl, name)
       yield localSym
     if matchingSymbols.size < index
     then
@@ -229,29 +229,28 @@ class Scala3Unpickler(
       if packageNames.nonEmpty
       then ctx.findSymbolFromRoot(packageNames).asInstanceOf[PackageSymbol]
       else ctx.defn.EmptyPackage
-    val className = javaParts.last
-    val clsSymbols = findSymbolsRecursively(packageSym, className)
+    val decodedClassName = NameTransformer.decode(javaParts.last)
+    val clsSymbols = findSymbolsRecursively(packageSym, decodedClassName)
     val obj = clsSymbols.filter(_.is(Flags.Module))
     val cls = clsSymbols.filter(!_.is(Flags.Module))
     assert(obj.size <= 1 && cls.size <= 1)
     if method.declaringType.isObject && !method.isExtensionMethod then obj.headOption else cls.headOption
 
   private def findSymbolsRecursively(owner: DeclaringSymbol, encodedName: String): Seq[ClassSymbol] =
-    val pattern = """^([^$]+)[$](\d+)[$]?(.*)$""".r
+    val pattern = """^([^$]+)\$(\d+)(\$.*)?""".r
     encodedName match
       case pattern(className, index, remaining) =>
         val sym = (for
           decl <- owner.declarations
-          sym <- findMatchingSymbols(decl, className)
+          sym <- findLocalSymbols(decl, className)
         yield sym)(index.toInt - 1)
-        if remaining.isEmpty then Seq(sym.asClass)
-        else findSymbolsRecursively(sym.asDeclaringSymbol, remaining)
+        if remaining == null || remaining == "$" then Seq(sym.asClass)
+        else findSymbolsRecursively(sym.asDeclaringSymbol, remaining.stripPrefix("$"))
       case _ =>
         owner.declarations
           .collect { case sym: ClassSymbol => sym }
           .flatMap { sym =>
-            val encodedSymName = NameTransformer.encode(sym.name.toString)
-            val Symbol = s"${Regex.quote(encodedSymName)}\\$$?(.*)".r
+            val Symbol = s"${Regex.quote(sym.name.toString)}\\$$?(.*)".r
             encodedName match
               case Symbol(remaining) =>
                 if remaining.isEmpty then Some(sym)
@@ -259,14 +258,14 @@ class Scala3Unpickler(
               case _ => None
           }
 
-  private def findMatchingSymbols(owner: Symbol, name: String): Seq[Symbol] =
+  private def findLocalSymbols(owner: Symbol, name: String): Seq[Symbol] =
     owner.tree match
       case Some(tree) =>
         tree.walkTree {
           case ClassDef(_, _, symbol) =>
-            if matchTargetName(name, symbol) && symbol.owner.isTerm then Seq(symbol) else Seq.empty
-          case DefDef(_, _, _, _, symbol) if matchTargetName(name, symbol) && symbol.owner.isTerm => Seq(symbol)
-          case ValDef(_, _, _, symbol) if matchTargetName(name, symbol) && symbol.owner.isTerm => Seq(symbol)
+            if name == symbol.name.toString && symbol.owner.isTerm then Seq(symbol) else Seq.empty
+          case DefDef(_, _, _, _, symbol) if name == symbol.name.toString && symbol.owner.isTerm => Seq(symbol)
+          case ValDef(_, _, _, symbol) if name == symbol.name.toString && symbol.owner.isTerm => Seq(symbol)
           case _ => Seq.empty
         }(_ ++ _, Seq.empty)
       case None => Seq.empty
@@ -296,10 +295,6 @@ class Scala3Unpickler(
       case _ => NameTransformer.encode(symbolName)
     if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
     else encodedScalaName == expectedName
-
-  private def matchTargetName(expectedName: String, symbol: Symbol): Boolean =
-    val symbolName = symbol.name.toString
-    expectedName == NameTransformer.encode(symbolName)
 
   private def matchSignature(method: jdi.Method, symbol: TermSymbol): Boolean =
     symbol.signedName match

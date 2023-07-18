@@ -75,45 +75,34 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     unpickler.assertFailure("example.Main$$anon$2", javaSig)
   }
 
-  test("local classes or local objects") {
+  test("local class with encoded name") {
     val source =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]) = {
-         |    class A {
-         |      def m(): Unit = {
-         |        println("A.m")
-         |      }
-         |    }
-         |    object B {
-         |      def m(): Unit = {
-         |        println("B.m")
-         |      }
+      """|package example 
+         |class ++ {
+         |  def m = {
+         |    def ++ = 1
+         |    class ++ {
+         |      def m: Unit = ()
          |    }
          |  }
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
-    unpickler.assertFind("example.Main$A$1", "void m()")
-    unpickler.assertFind("example.Main$B$2$", "void m()")
+    unpickler.assertFormat("example.$plus$plus", "int $plus$plus$1()", "++.m.++: Int")
+    unpickler.assertFormat("example.$plus$plus$$plus$plus$2", "void m()", "++.m.++.m: Unit")
   }
 
-  test("local class and object with same name within a local method") {
+  test("local class and object with same name") {
     val source =
       """|package example
          |object Main {
          |  def main(args: Array[String]) = {
          |    class A {   
-         |      def m(t : Int) = {
-         |    
-         |      } 
+         |      def m(t : Int) = ()
          |    }     
          |    object A {
-         |      def m(s : String) = {
-         |    
-         |      }
+         |      def m(s : String) = ()
          |    }
          |  }
          |}
@@ -125,7 +114,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     unpickler.assertFormat("example.Main$A$3$", "void m(java.lang.String s)", "Main.main.A.m(s: String): Unit")
   }
 
-  test("local class in  a local method in a local class in a local method") {
+  test("local class and local method in a local class") {
     val source =
       """|package example
          |object Main {
