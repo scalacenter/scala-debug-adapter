@@ -103,7 +103,12 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
   def runSettings: Seq[Def.Setting[_]] = Seq(
     startMainClassDebugSession := mainClassSessionTask.evaluated,
     startRemoteDebugSession := remoteSessionTask.evaluated,
-    stopDebugSession := stopSessionTask.value
+    stopDebugSession := stopSessionTask.value,
+    Keys.compile / Keys.javacOptions := {
+      val jo = (Keys.compile / Keys.javacOptions).value
+      if (jo.exists(_.startsWith("-g"))) jo
+      else jo :+ "-g"
+    }
   )
 
   /**
