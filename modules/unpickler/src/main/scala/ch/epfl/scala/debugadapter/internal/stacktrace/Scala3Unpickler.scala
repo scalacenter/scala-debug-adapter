@@ -104,8 +104,13 @@ class Scala3Unpickler(
     t match
       case t: MethodType =>
         val params = t.paramNames
+          .map(paramName =>
+            val pattern: Regex = """.+\$\d+$""".r
+            if pattern.matches(paramName.toString) then ""
+            else s"${paramName.toString()}: "
+          )
           .zip(t.paramTypes)
-          .map((n, t) => s"$n: ${formatType(t)}")
+          .map((n, t) => s"$n${formatType(t)}")
           .mkString(", ")
         val sep = if t.resultType.isInstanceOf[MethodicType] then "" else ": "
         val result = formatType(t.resultType)
