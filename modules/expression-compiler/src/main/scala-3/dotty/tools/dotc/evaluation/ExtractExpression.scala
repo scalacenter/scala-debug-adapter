@@ -137,8 +137,8 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
     private def isInaccessibleField(tree: Tree)(using Context): Boolean =
       val symbol = tree.symbol
       symbol.isField &&
-        symbol.owner.isType &&
-        !isTermAccessible(symbol.asTerm, getQualifierTypeSymbol(tree))
+      symbol.owner.isType &&
+      !isTermAccessible(symbol.asTerm, getQualifierTypeSymbol(tree))
 
     /**
      * The symbol is a real method and the expression class cannot access it
@@ -147,8 +147,8 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
     private def isInaccessibleMethod(tree: Tree)(using Context): Boolean =
       val symbol = tree.symbol
       !isOwnedByExpression(symbol) &&
-        symbol.isRealMethod &&
-        (!symbol.owner.isType || !isTermAccessible(symbol.asTerm, getQualifierTypeSymbol(tree)))
+      symbol.isRealMethod &&
+      (!symbol.owner.isType || !isTermAccessible(symbol.asTerm, getQualifierTypeSymbol(tree)))
 
     /**
      * The symbol is a constructor and the expression class cannot access it
@@ -159,8 +159,8 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
     ): Boolean =
       val symbol = tree.symbol
       !isOwnedByExpression(symbol) &&
-        symbol.isConstructor &&
-        (isInaccessibleMethod(tree) || !symbol.owner.isStatic)
+      symbol.isConstructor &&
+      (isInaccessibleMethod(tree) || !symbol.owner.isStatic)
 
     private def getCapturer(variable: TermSymbol)(using
         Context
@@ -237,8 +237,7 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
         .drop(1)
         .take(target)
         .foldLeft(ths) { (innerObj, outerSym) =>
-          if innerObj == ths && exprCtx.localVariables.contains("$outer") then
-            getLocalOuter(tree)(outerSym)
+          if innerObj == ths && exprCtx.localVariables.contains("$outer") then getLocalOuter(tree)(outerSym)
           else getOuter(tree)(innerObj, outerSym)
         }
     else nullLiteral
@@ -419,7 +418,6 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
       !symbol.isStatic &&
       !symbol.isRoot &&
       !isOwnedByExpression(symbol)
-
 
   private def isLocalVariable(symbol: Symbol)(using Context): Boolean =
     !symbol.is(Method) && symbol.isLocalToBlock && !isOwnedByExpression(symbol)
