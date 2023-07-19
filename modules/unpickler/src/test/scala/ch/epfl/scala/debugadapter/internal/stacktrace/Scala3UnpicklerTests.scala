@@ -208,6 +208,20 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     unpickler.assertFormat("example.B", javaSig("java.lang.String"), "B.m(): String")
   }
 
+  test("using and implicit parameters") {
+    val source =
+      """|package example
+         |object Main{
+         |  def m1(using x : Int , y : Int) = x+y
+         |  def m2(implicit x : Int) = x+1
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val unpickler = getUnpickler(debuggee)
+    unpickler.assertFormat("example.Main$", "int m1(int x, int y)", "Main.m1(using x: Int, y: Int): Int")
+    unpickler.assertFormat("example.Main$", "int m2(int x)", "Main.m2(implicit x: Int): Int")
+  }
+
   test("extension method of value classes") {
     val source =
       """|package example
@@ -620,11 +634,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
-    // TODO print String* instead of <repeated>[String]
     unpickler.assertFormat(
       "example.A",
       "java.lang.String m(scala.collection.immutable.Seq as)",
-      "A.m(as: <repeated>[String]): String"
+      "A.m(as: String*): String"
     )
   }
 

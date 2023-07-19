@@ -1000,12 +1000,12 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(8),
-      StepIn.method(if (isScala3) "A.<init>(as: <repeated>[String]): Unit" else "A.<init>(Seq): void"),
+      StepIn.method(if (isScala3) "A.<init>(as: String*): Unit" else "A.<init>(Seq): void"),
       Breakpoint(9),
       StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void"),
       Breakpoint(10),
       StepIn.method(
-        if (isScala3) "StringContext.<init>(parts: <repeated>[String]): Unit"
+        if (isScala3) "StringContext.<init>(parts: String*): Unit"
         else "StringContext.<init>(Seq): void"
       ),
       Breakpoint(11),

@@ -26,6 +26,8 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 import scala.util.matching.Regex
+import tastyquery.Modifiers.TermSymbolKind
+import tastyquery.SourceLanguage
 
 class Scala3Unpickler(
     classpaths: Array[Path],
@@ -98,7 +100,7 @@ class Scala3Unpickler(
       throw new Exception(s"Cannot find local symbol $name$$$index in ${declaringClass.name}")
     matchingSymbols(index - 1)
 
-  def formatType(t: Type): String =
+  def formatType(t: TermType | TypeOrWildcard): String =
     t match
       case t: MethodType =>
         val params = t.paramNames
@@ -107,7 +109,11 @@ class Scala3Unpickler(
           .mkString(", ")
         val sep = if t.resultType.isInstanceOf[MethodicType] then "" else ": "
         val result = formatType(t.resultType)
-        s"($params)$sep$result"
+        val prefix =
+          if t.isContextual then "using "
+          else if t.isImplicit then "implicit "
+          else ""
+        s"($prefix$params)$sep$result"
       case t: TypeRef => formatPrefix(t.prefix) + t.name
       case t: AppliedType if isFunction(t.tycon) =>
         val args = t.args.init.map(formatType).mkString(",")
@@ -124,6 +130,8 @@ class Scala3Unpickler(
               case ref: TypeRef => s" ${ref.name} "
           )
         operatorLikeTypeFormat
+      case t: AppliedType if isVarArg(t.tycon) =>
+        s"${t.args.map(formatType).head}*"
       case t: AppliedType =>
         val tycon = formatType(t.tycon)
         val args = t.args.map(formatType).mkString(", ")
@@ -156,8 +164,8 @@ class Scala3Unpickler(
           case v => v.toString
       case t: ByNameType => s"=> " + formatType(t.resultType)
       case t: TypeRefinement => formatType(t.parent) + " {...}"
-      case _: WildcardTypeBounds => "?"
       case t: RecType => formatType(t.parent)
+      case _: WildcardTypeArg => "?"
       case t: TypeLambda =>
         val args = t.paramNames.map(t => t.toString).mkString(", ")
         val result = formatType(t.resultType)
@@ -208,6 +216,11 @@ class Scala3Unpickler(
       case ref: TypeRef =>
         isScalaPackage(ref.prefix) && ref.name.toString.startsWith("Tuple")
       case _ => false
+  private def isVarArg(tpe: Type): Boolean =
+    tpe match
+      case ref: TypeRef =>
+        isScalaPackage(ref.prefix) && ref.name.toString == "<repeated>"
+      case _ => false
 
   private def isOperatorLike(tpe: Type): Boolean =
     tpe match
@@ -231,8 +244,8 @@ class Scala3Unpickler(
       else ctx.defn.EmptyPackage
     val className = javaParts.last
     val clsSymbols = findSymbolsRecursively(packageSym, className)
-    val obj = clsSymbols.filter(_.is(Flags.Module))
-    val cls = clsSymbols.filter(!_.is(Flags.Module))
+    val obj = clsSymbols.filter(_.isModuleClass)
+    val cls = clsSymbols.filter(!_.isModuleClass)
     assert(obj.size <= 1 && cls.size <= 1)
     if method.declaringType.isObject && !method.isExtensionMethod then obj.headOption else cls.headOption
 
@@ -269,7 +282,7 @@ class Scala3Unpickler(
     val expectedName = method.name.stripPrefix(javaPrefix)
     val symbolName = symbol.targetName.toString
     val encodedScalaName = symbolName match
-      case "<init>" if symbol.owner.is(Flags.Trait) => "$init$"
+      case "<init>" if symbol.owner.asClass.isTrait => "$init$"
       case "<init>" => "<init>"
       case _ => NameTransformer.encode(symbolName)
     if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
@@ -340,7 +353,13 @@ class Scala3Unpickler(
     rec(scalaType.toString, javaType.name)
 
   private def skip(symbol: TermSymbol): Boolean =
+    // TODO : remove in next TASTy query version
+    def isScala2GetterWorkaround: Boolean =
+      symbol.sourceLanguage == SourceLanguage.Scala2
+        && symbol.declaredType.isInstanceOf[Type]
+        && symbol.owner.isClass
+        && symbol.owner.asClass.getDecl(termName(symbol.name.toString + " ")).isDefined
+
     val isNonLazyGetterOrSetter =
-      (!symbol.flags.is(Flags.Method) || symbol.is(Flags.Accessor)) &&
-        !symbol.is(Flags.Lazy)
-    isNonLazyGetterOrSetter || symbol.is(Flags.Synthetic)
+      (!symbol.isMethod || isScala2GetterWorkaround || symbol.isSetter) && symbol.kind != TermSymbolKind.LazyVal
+    isNonLazyGetterOrSetter || symbol.isSynthetic
