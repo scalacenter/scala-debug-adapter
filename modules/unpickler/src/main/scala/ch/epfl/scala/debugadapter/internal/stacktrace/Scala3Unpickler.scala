@@ -1,23 +1,19 @@
 package ch.epfl.scala.debugadapter.internal.stacktrace
 
-import ch.epfl.scala.debugadapter.internal.jdi
+import ch.epfl.scala.debugadapter.internal.binary
+import ch.epfl.scala.debugadapter.internal.jdi.JdiMethod
 import tastyquery.Contexts
 import tastyquery.Contexts.Context
 import tastyquery.Definitions
 import tastyquery.Flags
 import tastyquery.Names.*
 import tastyquery.Signatures.*
-import tastyquery.Signatures.*
 import tastyquery.Symbols.*
-import tastyquery.Trees.DefDef
-import tastyquery.Trees.Tree
-import tastyquery.Trees.ValDef
-import tastyquery.Types.*
+import tastyquery.Trees.*
 import tastyquery.Types.*
 import tastyquery.jdk.ClasspathLoaders
 import tastyquery.jdk.ClasspathLoaders.FileKind
 
-import java.lang.reflect.Method
 import java.nio.file.Path
 import java.util.Optional
 import java.util.function.Consumer
@@ -47,17 +43,24 @@ class Scala3Unpickler(
     else exception.getMessage
 
   def skipMethod(obj: Any): Boolean =
-    findSymbol(obj).forall(skip)
+    skipMethod(JdiMethod(obj): binary.Method)
+
+  def skipMethod(method: binary.Method): Boolean =
+    findSymbol(method).forall(skip)
 
   def formatMethod(obj: Any): Optional[String] =
-    findSymbol(obj) match
-      case None => Optional.empty
-      case Some(symbol) =>
-        val sep = if !symbol.declaredType.isInstanceOf[MethodicType] then ": " else ""
-        Optional.of(s"${formatSymbol(symbol)}$sep${formatType(symbol.declaredType)}")
+    formatMethod(JdiMethod(obj)).toJava
+
+  def formatMethod(method: binary.Method): Option[String] =
+    findSymbol(method).map { symbol =>
+      val sep = if !symbol.declaredType.isInstanceOf[MethodicType] then ": " else ""
+      s"${formatSymbol(symbol)}$sep${formatType(symbol.declaredType)}"
+    }
 
   private[stacktrace] def findSymbol(obj: Any): Option[TermSymbol] =
-    val method = jdi.Method(obj)
+    findSymbol(JdiMethod(obj))
+
+  private[stacktrace] def findSymbol(method: binary.Method): Option[TermSymbol] =
     findDeclaringClass(method) match
       case None => throw new Exception(s"Cannot find Scala symbol of ${method.declaringType.name}")
       case Some(declaringClass) =>
@@ -240,7 +243,7 @@ class Scala3Unpickler(
       case p: PackageRef => p.fullyQualifiedName.toString == "scala"
       case _ => false
 
-  private def findDeclaringClass(method: jdi.Method): Option[ClassSymbol] =
+  private def findDeclaringClass(method: binary.Method): Option[ClassSymbol] =
     val javaParts = method.declaringType.name.split('.')
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
@@ -267,10 +270,10 @@ class Scala3Unpickler(
           case _ => None
       }
 
-  private def matchSymbol(method: jdi.Method, symbol: TermSymbol): Boolean =
+  private def matchSymbol(method: binary.Method, symbol: TermSymbol): Boolean =
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
 
-  private def matchesLocalMethodOrLazyVal(method: jdi.Method): Option[(String, Int)] =
+  private def matchesLocalMethodOrLazyVal(method: binary.Method): Option[(String, Int)] =
     val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
     val expectedName = method.name.stripPrefix(javaPrefix)
     val pattern = """^(.+)[$](\d+)$""".r
@@ -279,7 +282,7 @@ class Scala3Unpickler(
         Some((stringPart, numberPart.toInt))
       case _ => None
 
-  private def matchTargetName(method: jdi.Method, symbol: TermSymbol): Boolean =
+  private def matchTargetName(method: binary.Method, symbol: TermSymbol): Boolean =
     val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
     // if an inner accesses a private method, the backend makes the method public
     // and prefixes its name with the full class name.
@@ -297,13 +300,13 @@ class Scala3Unpickler(
     val symbolName = symbol.targetName.toString
     expectedName == NameTransformer.encode(symbolName)
 
-  private def matchSignature(method: jdi.Method, symbol: TermSymbol): Boolean =
+  private def matchSignature(method: binary.Method, symbol: TermSymbol): Boolean =
     symbol.signedName match
       case SignedName(_, sig, _) =>
-        val javaArgs = method.arguments.headOption.map(_.name) match
-          case Some("$this") if method.isExtensionMethod => method.arguments.tail
-          case Some("$outer") if method.isClassInitializer => method.arguments.tail
-          case _ => method.arguments
+        val javaArgs = method.parameters.headOption.map(_.name) match
+          case Some("$this") if method.isExtensionMethod => method.parameters.tail
+          case Some("$outer") if method.isClassInitializer => method.parameters.tail
+          case _ => method.parameters
         matchArguments(sig.paramsSig, javaArgs) &&
         method.returnType.forall { returnType =>
           val javaRetType =
@@ -311,11 +314,11 @@ class Scala3Unpickler(
           matchType(sig.resSig, javaRetType)
         }
       case _ =>
-        method.arguments.isEmpty || (method.arguments.size == 1 && method.argumentTypes.head.name == "scala.runtime.LazyRef")
+        method.parameters.isEmpty || (method.parameters.size == 1 && method.parameters.head.name == "scala.runtime.LazyRef")
 
       // TODO compare symbol.declaredType
 
-  private def matchArguments(scalaArgs: Seq[ParamSig], javaArgs: Seq[jdi.LocalVariable]): Boolean =
+  private def matchArguments(scalaArgs: Seq[ParamSig], javaArgs: Seq[binary.Parameter]): Boolean =
     scalaArgs
       .collect { case termSig: ParamSig.Term => termSig }
       .corresponds(javaArgs)((scalaArg, javaArg) => matchType(scalaArg.typ, javaArg.`type`))
@@ -337,7 +340,7 @@ class Scala3Unpickler(
 
   private def matchType(
       scalaType: FullyQualifiedName,
-      javaType: jdi.Type
+      javaType: binary.Type
   ): Boolean =
     def rec(scalaType: String, javaType: String): Boolean =
       scalaType match

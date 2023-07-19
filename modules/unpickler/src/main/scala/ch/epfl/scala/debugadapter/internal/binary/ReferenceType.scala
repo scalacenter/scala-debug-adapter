@@ -1,5 +1,6 @@
-package ch.epfl.scala.debugadapter.internal.jdi
+package ch.epfl.scala.debugadapter.internal.binary
 
-class ReferenceType(obj: Any) extends Type(obj, "com.sun.jdi.ReferenceType"):
+trait ReferenceType extends Type:
+  def name: String
   def isObject = isPackageObject || name.endsWith("$")
   def isPackageObject = name.endsWith(".package") || name.endsWith("$package")

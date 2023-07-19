@@ -1,24 +1,31 @@
 package ch.epfl.scala.debugadapter.testfmk
 
+import ch.epfl.scala.debugadapter.CancelableFuture
+import ch.epfl.scala.debugadapter.Debuggee
+import ch.epfl.scala.debugadapter.DebuggeeListener
+import ch.epfl.scala.debugadapter.JavaRuntime
+import ch.epfl.scala.debugadapter.Library
+import ch.epfl.scala.debugadapter.ManagedEntry
+import ch.epfl.scala.debugadapter.Module
+import ch.epfl.scala.debugadapter.ScalaVersion
+import ch.epfl.scala.debugadapter.SourceDirectory
+import ch.epfl.scala.debugadapter.StandaloneSourceFile
+import ch.epfl.scala.debugadapter.UnmanagedEntry
 import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee._
 
-import java.io.{BufferedReader, File, InputStream, InputStreamReader}
-import java.nio.file.{Files, Path, Paths}
-import scala.concurrent.{Future, Promise}
+import java.io.BufferedReader
+import java.io.File
+import java.io.InputStream
+import java.io.InputStreamReader
+import java.net.InetSocketAddress
+import java.net.URLClassLoader
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import scala.concurrent.Future
+import scala.concurrent.Promise
 import scala.util.Properties
 import scala.util.control.NonFatal
-import java.net.InetSocketAddress
-import ch.epfl.scala.debugadapter.ScalaVersion
-import ch.epfl.scala.debugadapter.Module
-import ch.epfl.scala.debugadapter.ManagedEntry
-import ch.epfl.scala.debugadapter.Debuggee
-import ch.epfl.scala.debugadapter.Library
-import ch.epfl.scala.debugadapter.UnmanagedEntry
-import ch.epfl.scala.debugadapter.DebuggeeListener
-import ch.epfl.scala.debugadapter.CancelableFuture
-import ch.epfl.scala.debugadapter.JavaRuntime
-import ch.epfl.scala.debugadapter.StandaloneSourceFile
-import ch.epfl.scala.debugadapter.SourceDirectory
 
 case class TestingDebuggee(
     scalaVersion: ScalaVersion,
@@ -43,6 +50,9 @@ case class TestingDebuggee(
     val process = builder.start()
     new MainProcess(process, listener)
   }
+
+  lazy val classLoader: ClassLoader =
+    new URLClassLoader(classPathEntries.map(_.absolutePath.toUri.toURL).toArray)
 }
 
 object TestingDebuggee {

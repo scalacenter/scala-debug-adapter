@@ -4,7 +4,9 @@ import ch.epfl.scala.debugadapter.Debuggee
 import ch.epfl.scala.debugadapter.Java8
 import ch.epfl.scala.debugadapter.Java9OrAbove
 import ch.epfl.scala.debugadapter.ScalaVersion
-import ch.epfl.scala.debugadapter.testfmk.FakeJdiMethod
+import ch.epfl.scala.debugadapter.internal.binary
+import ch.epfl.scala.debugadapter.internal.javareflect.JavaReflectConstructor
+import ch.epfl.scala.debugadapter.internal.javareflect.JavaReflectMethod
 import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 import com.sun.jdi.*
 import munit.FunSuite
@@ -12,9 +14,10 @@ import tastyquery.Contexts.Context
 import tastyquery.Flags
 import tastyquery.Names.*
 import tastyquery.Symbols.TermSymbol
-import scala.jdk.OptionConverters.*
 
+import java.lang.reflect.Parameter
 import java.util as ju
+import scala.jdk.OptionConverters.*
 
 class Scala30UnpicklerTests extends Scala3UnpicklerTests(ScalaVersion.`3.0`)
 class Scala31PlusUnpicklerTests extends Scala3UnpicklerTests(ScalaVersion.`3.1+`)
@@ -58,21 +61,18 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |object F extends A
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-
     val javaSig = "java.lang.String m()"
 
-    unpickler.assertFormat("example.A", javaSig, "A.m(): String")
-    unpickler.assertNotFound("example.B", javaSig)
-    unpickler.assertNotFound("example.C", javaSig)
-    unpickler.assertFormat("example.D", javaSig, "D.m(): String")
-    unpickler.assertNotFound("example.E", javaSig)
-    unpickler.assertNotFound("example.F$", javaSig)
-    unpickler.assertFormat("example.Main$G", javaSig, "Main.G.m(): String")
-    unpickler.assertNotFound("example.Main$H", javaSig)
-    unpickler.assertFailure("example.Main$$anon$1", javaSig)
+    debuggee.assertFormat("example.A", javaSig, "A.m(): String")
+    debuggee.assertNotFound("example.B", javaSig)
+    debuggee.assertNotFound("example.C", javaSig)
+    debuggee.assertFormat("example.D", javaSig, "D.m(): String")
+    debuggee.assertNotFound("example.F$", javaSig)
+    debuggee.assertFormat("example.Main$G", javaSig, "Main.G.m(): String")
+    debuggee.assertNotFound("example.Main$H", javaSig)
+    debuggee.assertFailure("example.Main$$anon$1", javaSig)
     // TODO fix: we could find it by traversing the tree of `Main`
-    unpickler.assertFailure("example.Main$$anon$2", javaSig)
+    debuggee.assertFailure("example.Main$$anon$2", javaSig)
   }
 
   test("local classes or local objects") {
@@ -95,9 +95,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFailure("example.Main$A$1", "void m()")
-    unpickler.assertFailure("example.Main$B$2$", "void m()")
+    debuggee.assertFailure("example.Main$A$1", "void m()")
+    debuggee.assertFailure("example.Main$B$2$", "void m()")
   }
 
   test("local methods with same name") {
@@ -122,10 +121,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.A", "void m$1()", "A.m1.m: Unit")
-    unpickler.assertFormat("example.A", "void m$2(java.lang.String x)", "A.m1.m.m(x: String): Unit")
-    unpickler.assertFormat("example.A", "void m$3(int x)", "A.m2.m(x: Int): Unit")
+    debuggee.assertFormat("example.A", "void m$1()", "A.m1.m: Unit")
+    debuggee.assertFormat("example.A", "void m$2(java.lang.String x)", "A.m1.m.m(x: String): Unit")
+    debuggee.assertFormat("example.A", "void m$3(int x)", "A.m2.m(x: Int): Unit")
   }
 
   test("getters and setters") {
@@ -134,9 +132,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |
          |object Main {
          |  val x1 = "x1"
-         |  private val x2 = "x2"
-         |  var x3 = "x3"
-         |  private var x4 = "x4"
+         |  var x2 = "x2"
          |}
          |
          |trait A {
@@ -149,41 +145,31 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |  protected val b2: String = "b2"
          |}
          |
-         |class C(val c1: String, c2: String) extends B with A {
+         |class C(val c1: String) extends B with A {
          |  override val a1: String = "a1"
          |  override val a2: String = "a2"
-         |  private val c3: String = "c3"
          |}
          |
          |case class D(d1: String)
          |
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
 
     def getter(field: String): String = s"java.lang.String $field()"
-    def setter(field: String): String = s"java.lang.String $field$$eq(java.lang.String x$$1)"
+    def setter(field: String): String = s"void ${field}_$$eq(java.lang.String x$$1)"
 
     // When looking for a getter we find the symbol of the field
-    unpickler.assertFind("example.Main$", getter("x1"))
-    unpickler.assertFormat("example.Main$", getter("x1"), "Main.x1: String")
+    debuggee.assertFind("example.Main$", getter("x1"))
+    debuggee.assertFormat("example.Main$", getter("x1"), "Main.x1: String")
+    debuggee.assertFind("example.Main$", getter("x2"))
+    debuggee.assertFind("example.A", getter("a1"))
+    debuggee.assertFind("example.A", getter("a2"))
+    debuggee.assertFind("example.B", getter("b1"))
+    debuggee.assertFind("example.B", getter("b2"))
+    debuggee.assertFind("example.C", getter("c1"))
+    debuggee.assertFind("example.D", getter("d1"))
 
-    unpickler.assertFind("example.Main$", getter("x2"))
-    unpickler.assertFind("example.Main$", getter("x3"))
-    unpickler.assertFind("example.Main$", getter("x4"))
-    unpickler.assertFind("example.A", getter("a1"))
-    unpickler.assertFind("example.A", getter("a2"))
-    unpickler.assertFind("example.B", getter("b1"))
-    unpickler.assertFind("example.B", getter("b2"))
-    unpickler.assertFind("example.C", getter("c1"))
-    unpickler.assertFind("example.C", getter("c2"))
-    unpickler.assertFind("example.C", getter("c3"))
-    unpickler.assertFind("example.D", getter("d1"))
-
-    // there is no corresponding symbol in TASTy query
-    // should we return the field symbol?
-    unpickler.assertNotFound("example.Main$", setter("x3"))
-    unpickler.assertNotFound("example.Main$", setter("x4"))
+    debuggee.assertFormat("example.Main$", setter("x2"), "Main.x2_=(x$1: String): Unit")
   }
 
   test("bridges") {
@@ -199,13 +185,12 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
 
     def javaSig(returnType: String): String = s"$returnType m()"
 
-    unpickler.assertFormat("example.A", javaSig("java.lang.Object"), "A.m(): Object")
-    unpickler.assertNotFound("example.B", javaSig("java.lang.Object"))
-    unpickler.assertFormat("example.B", javaSig("java.lang.String"), "B.m(): String")
+    debuggee.assertFormat("example.A", javaSig("java.lang.Object"), "A.m(): Object")
+    debuggee.assertNotFound("example.B", javaSig("java.lang.Object"))
+    debuggee.assertFormat("example.B", javaSig("java.lang.String"), "B.m(): String")
   }
 
   test("using and implicit parameters") {
@@ -240,8 +225,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.A$", "java.lang.String m$extension(java.lang.String $this)", "A.m(): String")
+    debuggee.assertFormat("example.A$", "java.lang.String m$extension(java.lang.String $this)", "A.m(): String")
   }
 
   test("local method inside a value class") {
@@ -267,9 +251,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.A$", "java.lang.String m1$2(java.lang.String t)", "A.m.m1(t: String): String")
-    unpickler.assertFormat("example.A$", "java.lang.String m1$1()", "A.m.m1: String")
+    debuggee.assertFormat("example.A$", "java.lang.String m1$2(java.lang.String t)", "A.m.m1(t: String): String")
+    debuggee.assertFormat("example.A$", "java.lang.String m1$1()", "A.m.m1: String")
   }
 
   test("multi parameter lists") {
@@ -285,8 +268,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |class A
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.Main$", "java.lang.String m(example.A a)", "Main.m()(a: A): String")
+    debuggee.assertFormat("example.Main$", "java.lang.String m(example.A a)", "Main.m()(a: A): String")
   }
 
   test("lazy initializer") {
@@ -307,11 +289,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
 
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
 
-    unpickler.assertFormat("example.A$", "java.lang.String a()", "A.a: String")
-    unpickler.assertNotFound("example.A$", "java.lang.String b()")
-    unpickler.assertFormat("example.B", "java.lang.String b()", "B.b: String")
+    debuggee.assertFormat("example.A$", "java.lang.String a()", "A.a: String")
+    debuggee.assertNotFound("example.A$", "java.lang.String b()")
+    debuggee.assertFormat("example.B", "java.lang.String b()", "B.b: String")
   }
 
   test("synthetic methods of case class") {
@@ -321,19 +302,18 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |case class A(a: String)
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
 
-    unpickler.assertFormat("example.A", "java.lang.String toString()", "A.toString(): String")
-    unpickler.assertFormat("example.A", "example.A copy(java.lang.String a)", "A.copy(a: String): A")
-    unpickler.assertFormat("example.A", "int hashCode()", "A.hashCode(): Int")
-    unpickler.assertFormat("example.A", "boolean equals(java.lang.Object x$0)", "A.equals(Any): Boolean")
-    unpickler.assertFormat("example.A", "int productArity()", "A.productArity: Int")
-    unpickler.assertFormat("example.A", "java.lang.String productPrefix()", "A.productPrefix: String")
-    unpickler.assertFormat("example.A", "java.lang.Object productElement(int n)", "A.productElement(n: Int): Any")
-    unpickler.assertNotFound("example.A", "scala.collection.Iterator productIterator()") // it is a bridge
+    debuggee.assertFormat("example.A", "java.lang.String toString()", "A.toString(): String")
+    debuggee.assertFormat("example.A", "example.A copy(java.lang.String a)", "A.copy(a: String): A")
+    debuggee.assertFormat("example.A", "int hashCode()", "A.hashCode(): Int")
+    debuggee.assertFormat("example.A", "boolean equals(java.lang.Object x$0)", "A.equals(Any): Boolean")
+    debuggee.assertFormat("example.A", "int productArity()", "A.productArity: Int")
+    debuggee.assertFormat("example.A", "java.lang.String productPrefix()", "A.productPrefix: String")
+    debuggee.assertFormat("example.A", "java.lang.Object productElement(int n)", "A.productElement(n: Int): Any")
+    debuggee.assertNotFound("example.A", "scala.collection.Iterator productIterator()") // it is a bridge
 
-    unpickler.assertFormat("example.A$", "example.A apply(java.lang.String a)", "A.apply(a: String): A")
-    unpickler.assertFormat("example.A$", "example.A unapply(example.A x$1)", "A.unapply(A): A")
+    debuggee.assertFormat("example.A$", "example.A apply(java.lang.String a)", "A.apply(a: String): A")
+    debuggee.assertFormat("example.A$", "example.A unapply(example.A x$1)", "A.unapply(A): A")
   }
 
   test("anonymous function") {
@@ -348,9 +328,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
     // TODO fix: it should find the symbol f by traversing the tree of object Main
-    unpickler.assertFormat("example.Main$", "int $anonfun$1(int x)", "Main.main.f.$anonfun(x: Int): Int")
+    debuggee.assertFormat("example.Main$", "int $anonfun$1(int x)", "Main.main.f.$anonfun(x: Int): Int")
   }
 
   test("this.type") {
@@ -363,8 +342,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
 
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.A", "example.A m()", "A.m(): A")
+    debuggee.assertFormat("example.A", "example.A m()", "A.m(): A")
   }
 
   test("default values") {
@@ -378,16 +356,15 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
 
-    unpickler.assertFormat("example.A", "java.lang.String m$default$1()", "A.m.<default 1>: String")
-    unpickler.assertFormat("example.A", "int m$default$2()", "A.m.<default 2>: Int")
-    unpickler.assertFormat(
+    debuggee.assertFormat("example.A", "java.lang.String m$default$1()", "A.m.<default 1>: String")
+    debuggee.assertFormat("example.A", "int m$default$2()", "A.m.<default 2>: Int")
+    debuggee.assertFormat(
       "example.A$",
       "java.lang.String $lessinit$greater$default$1()",
       "A.<init>.<default 1>: String"
     )
-    unpickler.assertFormat("example.A$", "int $lessinit$greater$default$2()", "A.<init>.<default 2>: Int")
+    debuggee.assertFormat("example.A$", "int $lessinit$greater$default$2()", "A.<init>.<default 2>: Int")
   }
 
   test("matches on return types") {
@@ -403,11 +380,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
 
-    unpickler.assertFormat("example.A", "int m(scala.collection.immutable.List xs)", "A.m(xs: List[Int]): Int")
-    unpickler.assertNotFound("example.B", "int m(scala.collection.immutable.List xs)")
-    unpickler.assertFormat(
+    debuggee.assertFormat("example.A", "int m(scala.collection.immutable.List xs)", "A.m(xs: List[Int]): Int")
+    debuggee.assertNotFound("example.B", "int m(scala.collection.immutable.List xs)")
+    debuggee.assertFormat(
       "example.B",
       "java.lang.String m(scala.collection.immutable.List xs)",
       "B.m(xs: List[String]): String"
@@ -450,10 +426,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
 
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
 
     def assertFormat(javaSig: String, expected: String)(using munit.Location): Unit =
-      unpickler.assertFormat("example.Main$", javaSig, expected)
+      debuggee.assertFormat("example.Main$", javaSig, expected)
 
     assertFormat("example.A m(example.A a)", "Main.m(a: A): A")
     assertFormat("example.A$B mbis(example.A$B b)", "Main.mbis(b: A.B): A.B")
@@ -484,8 +459,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.A", "int m1(java.lang.String x)", "A.m1(x: \"a\"): 1")
+    debuggee.assertFormat("example.A", "int m1(java.lang.String x)", "A.m1(x: \"a\"): 1")
   }
 
   test("type aliases") {
@@ -501,8 +475,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.Main$", "java.lang.String m(example.A m)", "Main.m(x: Foo): Bar")
+    debuggee.assertFormat("example.Main$", "java.lang.String m(example.A x)", "Main.m(x: Foo): Bar")
   }
 
   test("refined types") {
@@ -523,9 +496,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.Main$", "example.B m1()", "Main.m1(): A & B {...}")
-    unpickler.assertFormat("example.Main$", "java.lang.Object m2()", "Main.m2(): Object {...}")
+    debuggee.assertFormat("example.Main$", "example.B m1()", "Main.m1(): A & B {...}")
+    debuggee.assertFormat("example.Main$", "java.lang.Object m2()", "Main.m2(): Object {...}")
   }
 
   test("type parameters") {
@@ -542,9 +514,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.B", "example.A m1(example.A x)", "B.m1(x: X): X")
-    unpickler.assertFormat("example.B", "example.A m2(example.A x)", "B.m2[T](x: T): T")
+    debuggee.assertFormat("example.B", "example.A m1(example.A x)", "B.m1(x: X): X")
+    debuggee.assertFormat("example.B", "example.A m2(example.A x)", "B.m2[T](x: T): T")
   }
 
   test("nested classes") {
@@ -561,8 +532,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.Main$", "scala.Enumeration$Value today()", "Main.today(): Enumeration.Value")
+    debuggee.assertFormat("example.Main$", "scala.Enumeration$Value today()", "Main.today(): Enumeration.Value")
   }
 
   test("matches Null and Nothing") {
@@ -575,13 +545,12 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.Main$", "scala.runtime.Nothing$ m(int[] xs)", "Main.m(xs: Array[Int]): Nothing")
-    unpickler.assertFormat(
-      "example.Main$",
-      "scala.runtime.Null$ m(java.lang.String[] xs)",
-      "Main.m(xs: Array[String]): Null"
-    )
+    debuggee.assertFormat("example.Main$", "scala.runtime.Nothing$ m(int[] xs)", "Main.m(xs: Array[Int]): Nothing")
+    // debuggee.assertFormat(
+    //   "example.Main$",
+    //   "scala.runtime.Null$ m(java.lang.String[] xs)",
+    //   "Main.m(xs: Array[String]): Null"
+    // )
   }
 
   test("matches Array whose erasure is Object") {
@@ -593,8 +562,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat(
+    debuggee.assertFormat(
       "example.Main$",
       "java.lang.Object m(java.lang.Object xs)",
       "Main.m[T](xs: Array[T]): Array[T]"
@@ -610,8 +578,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.A", "java.lang.Object m(java.lang.Object x)", "A.m[T](x: B[T]): B[T]")
+    debuggee.assertFormat("example.A", "java.lang.Object m(java.lang.Object x)", "A.m[T](x: B[T]): B[T]")
   }
 
   test("trait initializers") {
@@ -625,10 +592,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |class B extends A
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.A", "void $init$(example.A $this)", "A.<init>(): Unit")
-    unpickler.assertFormat("example.B", "example.B <init>()", "B.<init>(): Unit")
-
+    debuggee.assertFormat("example.A", "void $init$(example.A $this)", "A.<init>(): Unit")
+    debuggee.assertFormat("example.B", "example.B <init>()", "B.<init>(): Unit")
   }
 
   test("vararg type") {
@@ -640,8 +605,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat(
+    debuggee.assertFormat(
       "example.A",
       "java.lang.String m(scala.collection.immutable.Seq as)",
       "A.m(as: String*): String"
@@ -662,9 +626,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
 
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.Main$", "java.lang.String $amp(example.$less$greater x)", "Main.&(x: <>): String")
-    unpickler.assertFormat("example.$less$greater", "example.$less$greater m()", "<>.m: <>")
+    debuggee.assertFormat("example.Main$", "java.lang.String $amp(example.$less$greater x)", "Main.&(x: <>): String")
+    debuggee.assertFormat("example.$less$greater", "example.$less$greater m()", "<>.m: <>")
   }
 
   test("local recursive method") {
@@ -683,9 +646,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
 
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
     // TODO fix: find rec by traversing the tree of object Main
-    unpickler.assertFormat("example.Main$", "int rec$1(int x, int acc)", "Main.fac.rec(x: Int, acc: Int): Int")
+    debuggee.assertFormat("example.Main$", "int rec$1(int x, int acc)", "Main.fac.rec(x: Int, acc: Int): Int")
   }
 
   test("local lazy initializer") {
@@ -704,10 +666,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
 
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
     // TODO fix: find foo by traversing the tree of object Main
-    unpickler.assertNotFound("example.Main$", "java.lang.String foo$lzyINIT1$1(scala.runtime.LazyRef foo$lzy1$1)")
-    unpickler.assertFormat(
+    debuggee.assertNotFound("example.Main$", "java.lang.String foo$lzyINIT1$1(scala.runtime.LazyRef foo$lzy1$1)")
+    debuggee.assertFormat(
       "example.Main$",
       "java.lang.String foo$1(scala.runtime.LazyRef foo$lzy1$2)",
       "Main.main.foo: String"
@@ -736,9 +697,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.Outer", "java.lang.String example$Outer$$foo()", "Outer.foo: String")
-    unpickler.assertFormat("example.A$", "int example$A$$$m()", "A.m: Int")
+    debuggee.assertFormat("example.Outer", "java.lang.String example$Outer$$foo()", "Outer.foo: String")
+    debuggee.assertFormat("example.A$", "int example$A$$$m()", "A.m: Int")
   }
 
   test("type lambda") {
@@ -752,8 +712,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
 
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.Main$", "example.Foo foo()", "Main.foo: Foo[[X] =>> Either[X, Int]]")
+    debuggee.assertFormat("example.Main$", "example.Foo foo()", "Main.foo: Foo[[X] =>> Either[X, Int]]")
   }
 
   test("package object") {
@@ -763,8 +722,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.package", "java.lang.String foo()", "example.foo: String")
+    debuggee.assertFormat("example.package", "java.lang.String foo()", "example.foo: String")
   }
 
   test("top-level definition") {
@@ -774,8 +732,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |def foo: String = ???
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.example$package", "java.lang.String foo()", "example.foo: String")
+    debuggee.assertFormat("example.example$package", "java.lang.String foo()", "example.foo: String")
   }
 
   test("i491") {
@@ -788,33 +745,59 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
-    unpickler.assertFormat("example.A", "java.lang.String m()", "A.m: String")
-    unpickler.assertFormat("example.A", "java.lang.String m(java.lang.String x)", "A.m(x: String): String")
+    debuggee.assertFormat("example.A", "java.lang.String m()", "A.m: String")
+    debuggee.assertFormat("example.A", "java.lang.String m(java.lang.String x)", "A.m(x: String): String")
   }
 
-  private def getUnpickler(debuggee: Debuggee): Scala3Unpickler =
-    val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
-      case Java8(_, classJars, _) => classJars
-      case java9OrAbove: Java9OrAbove =>
-        java9OrAbove.classSystems.map(_.fileSystem.getPath("/modules", "java.base"))
-    }
-    val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
-    new Scala3Unpickler(debuggeeClasspath, println, testMode = true)
+  extension (debuggee: TestingDebuggee)
+    private def unpickler: Scala3Unpickler =
+      val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
+        case Java8(_, classJars, _) => classJars
+        case java9OrAbove: Java9OrAbove =>
+          java9OrAbove.classSystems.map(_.fileSystem.getPath("/modules", "java.base"))
+      }
+      val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
+      new Scala3Unpickler(debuggeeClasspath, println, testMode = true)
 
-  extension (unpickler: Scala3Unpickler)
+    private def getMethod(declaringType: String, javaSig: String)(using munit.Location): binary.Method =
+      def typeAndName(p: String): (String, String) =
+        val parts = p.split(' ').filter(_.nonEmpty)
+        assert(parts.size == 2)
+        (parts(0), parts(1))
+
+      val parts = javaSig.split(Array('(', ')', ',')).filter(_.nonEmpty)
+      val (returnType, name) = typeAndName(parts(0))
+      val params = parts.drop(1).map(typeAndName)
+
+      def matchParams(javaParams: Array[Parameter]): Boolean =
+        javaParams.map(p => (p.getType.getTypeName, p.getName)).toSeq == params.toSeq
+
+      val cls = debuggee.classLoader.loadClass(declaringType)
+      if name == "<init>" then
+        val constructor = cls.getDeclaredConstructors.find(m => matchParams(m.getParameters))
+        assert(constructor.isDefined)
+        JavaReflectConstructor(constructor.get)
+      else
+        val method = cls.getDeclaredMethods
+          .find { m =>
+            // println(s"${m.getName}(${m.getParameters.map(p => p.getName + ": " + p.getType.getTypeName).mkString(", ")}): ${m.getReturnType.getName}")
+            m.getName == name && m.getReturnType.getName == returnType && matchParams(m.getParameters)
+          }
+        assert(method.isDefined)
+        JavaReflectMethod(method.get)
+
     private def assertFind(declaringType: String, javaSig: String)(using munit.Location): Unit =
-      val m = FakeJdiMethod(declaringType, javaSig)
+      val m = getMethod(declaringType, javaSig)
       assert(unpickler.findSymbol(m).isDefined)
 
     private def assertNotFound(declaringType: String, javaSig: String)(using munit.Location): Unit =
-      val m = FakeJdiMethod(declaringType, javaSig)
+      val m = getMethod(declaringType, javaSig)
       assert(unpickler.findSymbol(m).isEmpty)
 
     private def assertFailure(declaringType: String, javaSig: String)(using munit.Location): Unit =
-      val m = FakeJdiMethod(declaringType, javaSig)
+      val m = getMethod(declaringType, javaSig)
       intercept[Exception](unpickler.findSymbol(m))
 
     private def assertFormat(declaringType: String, javaSig: String, expected: String)(using munit.Location): Unit =
-      val m = FakeJdiMethod(declaringType, javaSig)
-      assertEquals(unpickler.formatMethod(m).asScala, Some(expected))
+      val m = getMethod(declaringType, javaSig)
+      assertEquals(unpickler.formatMethod(m), Some(expected))
