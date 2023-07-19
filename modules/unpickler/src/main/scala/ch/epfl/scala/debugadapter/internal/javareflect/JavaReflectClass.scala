@@ -1,6 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.javareflect
 
 import ch.epfl.scala.debugadapter.internal.binary
+import scala.util.matching.Regex
 
-class JavaReflectType(cls: Class[?]) extends binary.Type:
+class JavaReflectClass(cls: Class[?]) extends binary.ClassType:
   override def name: String = cls.getTypeName

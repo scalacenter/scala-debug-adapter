@@ -1,9 +1,8 @@
 package ch.epfl.scala.debugadapter.internal.binary
-import ch.epfl.scala.debugadapter.internal.binary.Parameter
 
 trait Method:
   def name: String
-  def declaringType: ReferenceType
+  def declaringClass: ClassType
   def parameters: Seq[Parameter]
   // return None if the class of the return type is not yet loaded
   def returnType: Option[Type]

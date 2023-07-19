@@ -8,4 +8,4 @@ class JavaReflectParameter(parameter: Parameter) extends binary.Parameter:
 
   override def name: String = parameter.getName
 
-  override def `type`: binary.Type = JavaReflectType(parameter.getType)
+  override def `type`: binary.Type = JavaReflectClass(parameter.getType)

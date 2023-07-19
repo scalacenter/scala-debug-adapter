@@ -62,7 +62,7 @@ class Scala3Unpickler(
 
   private[stacktrace] def findSymbol(method: binary.Method): Option[TermSymbol] =
     findDeclaringClass(method) match
-      case None => throw new Exception(s"Cannot find Scala symbol of ${method.declaringType.name}")
+      case None => throw new Exception(s"Cannot find Scala symbol of ${method.declaringClass.name}")
       case Some(declaringClass) =>
         matchesLocalMethodOrLazyVal(method) match
           case Some((name, index)) =>
@@ -244,7 +244,7 @@ class Scala3Unpickler(
       case _ => false
 
   private def findDeclaringClass(method: binary.Method): Option[ClassSymbol] =
-    val javaParts = method.declaringType.name.split('.')
+    val javaParts = method.declaringClass.name.split('.')
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
       if packageNames.nonEmpty
@@ -255,7 +255,7 @@ class Scala3Unpickler(
     val obj = clsSymbols.filter(_.isModuleClass)
     val cls = clsSymbols.filter(!_.isModuleClass)
     assert(obj.size <= 1 && cls.size <= 1)
-    if method.declaringType.isObject && !method.isExtensionMethod then obj.headOption else cls.headOption
+    if method.declaringClass.isObject && !method.isExtensionMethod then obj.headOption else cls.headOption
 
   private def findSymbolsRecursively(owner: DeclaringSymbol, encodedName: String): Seq[ClassSymbol] =
     owner.declarations
@@ -274,7 +274,7 @@ class Scala3Unpickler(
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
 
   private def matchesLocalMethodOrLazyVal(method: binary.Method): Option[(String, Int)] =
-    val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
+    val javaPrefix = method.declaringClass.name.replace('.', '$') + "$$"
     val expectedName = method.name.stripPrefix(javaPrefix)
     val pattern = """^(.+)[$](\d+)$""".r
     expectedName match
@@ -283,7 +283,7 @@ class Scala3Unpickler(
       case _ => None
 
   private def matchTargetName(method: binary.Method, symbol: TermSymbol): Boolean =
-    val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
+    val javaPrefix = method.declaringClass.name.replace('.', '$') + "$$"
     // if an inner accesses a private method, the backend makes the method public
     // and prefixes its name with the full class name.
     // Example: method foo in class example.Inner becomes example$Inner$$foo
@@ -310,7 +310,7 @@ class Scala3Unpickler(
         matchArguments(sig.paramsSig, javaArgs) &&
         method.returnType.forall { returnType =>
           val javaRetType =
-            if method.isClassInitializer then method.declaringType else returnType
+            if method.isClassInitializer then method.declaringClass else returnType
           matchType(sig.resSig, javaRetType)
         }
       case _ =>

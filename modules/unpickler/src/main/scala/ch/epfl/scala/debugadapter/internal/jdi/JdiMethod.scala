@@ -8,7 +8,7 @@ import scala.jdk.CollectionConverters.*
 class JdiMethod(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method") with Method:
   override def name: String = invokeMethod("name")
 
-  override def declaringType: ReferenceType =
+  override def declaringClass: ClassType =
     JdiReferenceType(invokeMethod("declaringType"))
 
   override def parameters: Seq[Parameter] =
