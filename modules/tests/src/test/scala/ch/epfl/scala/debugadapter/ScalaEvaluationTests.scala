@@ -2038,6 +2038,83 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Evaluation.success("patch.span", 1)
     )
   }
+
+  test("i485: public members from private subclass") {
+    val source = 
+      """|package example
+         |
+         |class A {
+         |  val a1 = "a1"
+         |  var a2 = 1
+         |  def m = "m"
+         |  class D
+         |  object D
+         |}
+         |
+         |object Main {
+         |  private class B extends A
+         |  
+         |  def main(args: Array[String]): Unit = {
+         |    val b = new B
+         |    println("foo")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(16),
+      Evaluation.success("b.a1", "a1"),
+      Evaluation.success("b.a2 = 2", ()),
+      Evaluation.success("b.a2", 2),
+      Evaluation.success("b.m", "m"),
+      Evaluation.success("new b.D")(result => assert(result.startsWith("A$D@"))),
+      Evaluation.success("b.D")(result => assert(result.startsWith("A$D$@")))
+    )
+  }
+
+  test("i485: $outer from contstructor") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  val x = "x"
+         |  class B {
+         |    println(x)
+         |    class C {
+         |      println(x)
+         |    }
+         |    new C
+         |  }
+         |  new B
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    new A
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    if (isScala2) {
+      check(
+        Breakpoint(6),
+        Evaluation.success("x", "x"),
+        Breakpoint(8),
+        Evaluation.success("x", "x"),
+      )
+    } else {
+      check(
+        Breakpoint(6),
+        Evaluation.success("x", "x"),
+        Breakpoint(6),
+        Evaluation.success("x", "x"),
+        Breakpoint(8),
+        Evaluation.success("x", "x"),
+        Breakpoint(8),
+        Evaluation.success("x", "x")
+      )
+    }
+  }
 }
 
 abstract class Scala2EvaluationTests(val scalaVersion: ScalaVersion) extends ScalaEvaluationTests(scalaVersion) {

@@ -12,6 +12,7 @@ import dotty.tools.dotc.util.Property.*
 enum EvaluationStrategy:
   case This(cls: ClassSymbol)
   case Outer(outerCls: ClassSymbol)
+  case LocalOuter(outerCls: ClassSymbol) // the $outer param in a constructor
   case LocalValue(variable: TermSymbol, isByName: Boolean)
   case LocalValueAssign(variable: TermSymbol)
   case MethodCapture(variable: TermSymbol, method: TermSymbol, isByName: Boolean)
