@@ -171,12 +171,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.success("B.b3", "b3"),
         Evaluation.success("A.B.b3", "b3"),
         Evaluation.success("B.b4", "b4"),
-        Evaluation.success("C")(result => assert(result.startsWith("A$C$@"))),
-        Evaluation.success("D")(result => assert(result.startsWith("A$D$@"))),
+        Evaluation.success("C", ObjectRef("A$C$")),
+        Evaluation.success("D", ObjectRef("A$D$")),
         Evaluation.success("F.f1", "f1"),
         Evaluation.success("F.f2", "f2"),
-        Evaluation.success("F.G")(result => assert(result.startsWith("F$G$@"))),
-        Evaluation.success("F.H")(result => assert(result.startsWith("F$H$@")))
+        Evaluation.success("F.G", ObjectRef("F$G$")),
+        Evaluation.success("F.H", ObjectRef("F$H$"))
       )
     )
   }
@@ -2041,7 +2041,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
   }
 
   test("i485: public members from private subclass") {
-    val source = 
+    val source =
       """|package example
          |
          |class A {
@@ -2068,8 +2068,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Evaluation.success("b.a2 = 2", ()),
       Evaluation.success("b.a2", 2),
       Evaluation.success("b.m", "m"),
-      Evaluation.success("new b.D")(result => assert(result.startsWith("A$D@"))),
-      Evaluation.success("b.D")(result => assert(result.startsWith("A$D$@")))
+      Evaluation.success("new b.D", ObjectRef("A$D")),
+      Evaluation.success("b.D", ObjectRef("A$D$"))
     )
   }
 
@@ -2101,7 +2101,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Breakpoint(6),
         Evaluation.success("x", "x"),
         Breakpoint(8),
-        Evaluation.success("x", "x"),
+        Evaluation.success("x", "x")
       )
     } else {
       check(
