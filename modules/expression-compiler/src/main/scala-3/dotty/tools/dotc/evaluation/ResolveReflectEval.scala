@@ -48,6 +48,8 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
                 // but we expect an instance of the value class instead
                 gen.boxValueClass(cls, gen.getLocalValue("$this"))
               else gen.getLocalValue("$this")
+            case EvaluationStrategy.LocalOuter(cls) =>
+              gen.getLocalValue("$outer")
             case EvaluationStrategy.Outer(outerCls) =>
               gen.getOuter(qualifier, outerCls)
             case EvaluationStrategy.LocalValue(variable, isByName) =>
