@@ -2156,7 +2156,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |  }
          |  inline def m(): Int = 42
          |  inline def n(inline x: Int): Int = x
-         |  inline val x = 1
+         |  private inline val x = 1
          |  inline def test(inline x: Int) = Test(x)
          |  inline def t = test(42).x
          |  case class Test(x: Int)
@@ -2167,11 +2167,11 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
       Breakpoint(6),
       Evaluation.success("m()", 42),
       Evaluation.success("n(1)", 1),
-      Evaluation.success("x", 1),
+      Evaluation.success("x + 1", 2),
       Evaluation.success("test(42)", ObjectRef("Main$Test")),
       Evaluation.success("t", 42),
       Evaluation.success("n(x)", 1),
-      Evaluation.success("y", 2),
+      Evaluation.success("y + 1", 3),
       Evaluation.success("n(y)", 2),
       Evaluation.success("n(m())", 42)
     )
