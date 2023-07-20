@@ -219,7 +219,6 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    val unpickler = getUnpickler(debuggee)
     unpickler.assertFormat("example.Main$", "int m1(int x, int y)", "Main.m1(using x: Int, y: Int): Int")
     unpickler.assertFormat("example.Main$", "int m2(int x)", "Main.m2(implicit x: Int): Int")
     unpickler.assertFormat(
