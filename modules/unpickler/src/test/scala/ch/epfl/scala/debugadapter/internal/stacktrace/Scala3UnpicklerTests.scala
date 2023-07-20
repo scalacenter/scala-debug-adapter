@@ -208,6 +208,27 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     unpickler.assertFormat("example.B", javaSig("java.lang.String"), "B.m(): String")
   }
 
+  test("using and implicit parameters") {
+    val source =
+      """|package example
+         |object Main{
+         |  def m1(using x : Int , y : Int) = x+y
+         |  def m2(implicit x : Int) = x+1
+         |  def m3(using String , Int): Unit = ()
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val unpickler = getUnpickler(debuggee)
+    unpickler.assertFormat("example.Main$", "int m1(int x, int y)", "Main.m1(using x: Int, y: Int): Int")
+    unpickler.assertFormat("example.Main$", "int m2(int x)", "Main.m2(implicit x: Int): Int")
+    unpickler.assertFormat(
+      "example.Main$",
+      "void m3(java.lang.String x$1, int x$2)",
+      "Main.m3(using String, Int): Unit"
+    )
+
+  }
+
   test("extension method of value classes") {
     val source =
       """|package example
@@ -305,14 +326,14 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     unpickler.assertFormat("example.A", "java.lang.String toString()", "A.toString(): String")
     unpickler.assertFormat("example.A", "example.A copy(java.lang.String a)", "A.copy(a: String): A")
     unpickler.assertFormat("example.A", "int hashCode()", "A.hashCode(): Int")
-    unpickler.assertFormat("example.A", "boolean equals(java.lang.Object x$0)", "A.equals(x$0: Any): Boolean")
+    unpickler.assertFormat("example.A", "boolean equals(java.lang.Object x$0)", "A.equals(Any): Boolean")
     unpickler.assertFormat("example.A", "int productArity()", "A.productArity: Int")
     unpickler.assertFormat("example.A", "java.lang.String productPrefix()", "A.productPrefix: String")
     unpickler.assertFormat("example.A", "java.lang.Object productElement(int n)", "A.productElement(n: Int): Any")
     unpickler.assertNotFound("example.A", "scala.collection.Iterator productIterator()") // it is a bridge
 
     unpickler.assertFormat("example.A$", "example.A apply(java.lang.String a)", "A.apply(a: String): A")
-    unpickler.assertFormat("example.A$", "example.A unapply(example.A x$1)", "A.unapply(x$1: A): A")
+    unpickler.assertFormat("example.A$", "example.A unapply(example.A x$1)", "A.unapply(A): A")
   }
 
   test("anonymous function") {
@@ -620,11 +641,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val unpickler = getUnpickler(debuggee)
-    // TODO print String* instead of <repeated>[String]
     unpickler.assertFormat(
       "example.A",
       "java.lang.String m(scala.collection.immutable.Seq as)",
-      "A.m(as: <repeated>[String]): String"
+      "A.m(as: String*): String"
     )
   }
 
