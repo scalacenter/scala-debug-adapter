@@ -70,7 +70,7 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
 
         case tree if tree.symbol.is(Inline) =>
           tree.symbol.info match
-            case ConstantType(value) => Literal(value)
+            case tpe: ConstantType => cpy.Literal(tree)(tpe.value)
             case _ =>
               report.error(s"Cannot evaluate inlined expression with non constant type", tree.srcPos)
               tree
