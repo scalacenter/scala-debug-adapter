@@ -19,3 +19,5 @@ class JavaReflectConstructor(constructor: Constructor[?]) extends binary.Method:
     constructor.getParameters.map(JavaReflectParameter.apply(_))
 
   override def name: String = "<init>"
+
+  override def toString: String = constructor.toString

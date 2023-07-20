@@ -8,3 +8,5 @@ private[jdi] class JavaReflection(obj: Any, className: String):
   protected def invokeMethod[T](name: String): T =
     val method = cls.getMethod(name)
     method.invoke(obj).asInstanceOf[T]
+
+  override def toString: String = obj.toString

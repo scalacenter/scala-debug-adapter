@@ -84,10 +84,13 @@ class Scala3Unpickler(
       else symbols.headOption
 
   def localMethodsAndLazyVals(declaringClass: ClassSymbol, name: String): Seq[TermSymbol] =
+    def matchName(symbol: Symbol): Boolean = symbol.name.toString == name
+    def isLocal(symbol: Symbol): Boolean = symbol.owner.isTerm
+
     def findLocalSymbol(tree: Tree): Seq[TermSymbol] =
       tree.walkTree {
-        case DefDef(_, _, _, _, symbol) if matchTargetName(name, symbol) => Seq(symbol)
-        case ValDef(_, _, _, symbol) if matchTargetName(name, symbol) => Seq(symbol)
+        case DefDef(_, _, _, _, symbol) if matchName(symbol) && isLocal(symbol) => Seq(symbol)
+        case ValDef(_, _, _, symbol) if matchName(symbol) && isLocal(symbol) => Seq(symbol)
         case _ => Seq.empty
       }(_ ++ _, Seq.empty)
 
@@ -296,10 +299,6 @@ class Scala3Unpickler(
       case _ => NameTransformer.encode(symbolName)
     if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
     else encodedScalaName == expectedName
-
-  private def matchTargetName(expectedName: String, symbol: TermSymbol): Boolean =
-    val symbolName = symbol.targetName.toString
-    expectedName == NameTransformer.encode(symbolName)
 
   private def matchSignature(method: binary.Method, symbol: TermSymbol): Boolean =
     symbol.signedName match

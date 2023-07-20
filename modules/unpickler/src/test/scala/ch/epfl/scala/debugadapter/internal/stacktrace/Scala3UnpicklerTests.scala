@@ -249,26 +249,24 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       """|package example
          |
          |class A(val x: String) extends AnyVal {
-         |  def m(): String = {
-         |    def m1(t : String) : String = {
+         |  def m: String = {
+         |    def m(t : String) : String = {
          |      t
          |    }
-         |    m1("")
+         |    m("")
          |  }
          |}
          |
          |object A {
-         |  def m(): String = {
-         |    def m1 : String = {
-         |      "m1"
-         |    }
-         |    m1
+         |  def m: String = {
+         |    def m : String = "m"
+         |    m
          |  }
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.A$", "java.lang.String m1$2(java.lang.String t)", "A.m.m1(t: String): String")
-    debuggee.assertFormat("example.A$", "java.lang.String m1$1()", "A.m.m1: String")
+    debuggee.assertFormat("example.A$", "java.lang.String m$2(java.lang.String t)", "A.m.m(t: String): String")
+    debuggee.assertFormat("example.A$", "java.lang.String m$1()", "A.m.m: String")
   }
 
   test("multi parameter lists") {

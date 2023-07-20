@@ -18,3 +18,5 @@ class JavaReflectMethod(method: Method) extends binary.Method:
     method.getParameters.map(JavaReflectParameter.apply(_))
 
   override def name: String = method.getName
+
+  override def toString: String = method.toString

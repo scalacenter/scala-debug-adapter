@@ -21,5 +21,3 @@ class JdiMethod(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method") 
         None
 
   override def returnTypeName: String = invokeMethod("returnTypeName")
-
-  override def toString: String = invokeMethod("toString")
