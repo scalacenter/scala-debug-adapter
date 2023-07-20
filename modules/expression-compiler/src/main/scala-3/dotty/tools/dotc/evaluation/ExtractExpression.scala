@@ -68,7 +68,12 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
       desugaredIdent match
         case tree: ImportOrExport => tree
 
-        case tree if tree.symbol.is(Inline) => tree
+        case tree if tree.symbol.is(Inline) =>
+          tree.symbol.info match
+            case ConstantType(value) => Literal(value)
+            case _ =>
+              report.error(s"Cannot evaluate inlined expression with non constant type", tree.srcPos)
+              tree
 
         // static object
         case tree: (Ident | Select) if isStaticObject(tree.symbol) =>
