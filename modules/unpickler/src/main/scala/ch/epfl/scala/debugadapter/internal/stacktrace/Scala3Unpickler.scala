@@ -65,19 +65,25 @@ class Scala3Unpickler(
       case None => throw new Exception(s"Cannot find Scala symbol of ${method.declaringClass.name}")
       case Some(declaringClass) =>
         matchesLocalMethodOrLazyVal(method) match
-          case Some((name, index)) =>
-            Some(findLocalMethodOrLazyVal(declaringClass, name, index))
+          case Some((name, _)) =>
+            localMethodsAndLazyVals(declaringClass, name)
+              .filter(matchSignature(method, _))
+              .singleOrThrow(method)
           case None =>
-            val matchingSymbols = declaringClass.declarations
+            declaringClass.declarations
               .collect { case sym: TermSymbol if sym.isTerm => sym }
               .filter(matchSymbol(method, _))
-            if matchingSymbols.size > 1 then
-              val message = s"Found ${matchingSymbols.size} matching symbols for $method:" +
-                matchingSymbols.mkString("\n")
-              throw new Exception(message)
-            else matchingSymbols.headOption
+              .singleOrThrow(method)
 
-  def findLocalMethodOrLazyVal(declaringClass: ClassSymbol, name: String, index: Int): TermSymbol =
+  extension (symbols: Seq[TermSymbol])
+    def singleOrThrow(method: binary.Method): Option[TermSymbol] =
+      if symbols.size > 1 then
+        val message = s"Found ${symbols.size} matching symbols for $method:" +
+          symbols.mkString("\n")
+        throw new Exception(message)
+      else symbols.headOption
+
+  def localMethodsAndLazyVals(declaringClass: ClassSymbol, name: String): Seq[TermSymbol] =
     def findLocalSymbol(tree: Tree): Seq[TermSymbol] =
       tree.walkTree {
         case DefDef(_, _, _, _, symbol) if matchTargetName(name, symbol) => Seq(symbol)
@@ -90,18 +96,12 @@ class Scala3Unpickler(
         Seq(declaringClass, companionClass)
       case _ => Seq(declaringClass)
 
-    val matchingSymbols =
-      for
-        declaringSym <- declaringClasses
-        decl <- declaringSym.declarations
-        tree <- decl.tree.toSeq
-        localSym <- findLocalSymbol(tree)
-      yield localSym
-    if matchingSymbols.size < index
-    then
-      // TODO we cannot find the local symbol of Scala 2.13 classes, it should not throw
-      throw new Exception(s"Cannot find local symbol $name$$$index in ${declaringClass.name}")
-    matchingSymbols(index - 1)
+    for
+      declaringSym <- declaringClasses
+      decl <- declaringSym.declarations
+      tree <- decl.tree.toSeq
+      localSym <- findLocalSymbol(tree)
+    yield localSym
 
   def formatType(t: TermType | TypeOrWildcard): String =
     t match
@@ -303,25 +303,18 @@ class Scala3Unpickler(
   private def matchSignature(method: binary.Method, symbol: TermSymbol): Boolean =
     symbol.signedName match
       case SignedName(_, sig, _) =>
-        val javaArgs = method.parameters.headOption.map(_.name) match
-          case Some("$this") if method.isExtensionMethod => method.parameters.tail
-          case Some("$outer") if method.isClassInitializer => method.parameters.tail
-          case _ => method.parameters
-        matchArguments(sig.paramsSig, javaArgs) &&
-        method.returnType.forall { returnType =>
-          val javaRetType =
-            if method.isClassInitializer then method.declaringClass else returnType
-          matchType(sig.resSig, javaRetType)
-        }
+        matchArguments(sig.paramsSig, method.declaredParams)
+        && method.declaredReturnType.forall(matchType(sig.resSig, _))
       case _ =>
-        method.parameters.isEmpty || (method.parameters.size == 1 && method.parameters.head.name == "scala.runtime.LazyRef")
+        // TODO compare symbol.declaredType
+        method.declaredParams.isEmpty
+        // TODO move this logic to binary.Method
+        || (method.declaredParams.size == 1 && method.declaredParams.head.name == "scala.runtime.LazyRef")
 
-      // TODO compare symbol.declaredType
-
-  private def matchArguments(scalaArgs: Seq[ParamSig], javaArgs: Seq[binary.Parameter]): Boolean =
-    scalaArgs
+  private def matchArguments(scalaParams: Seq[ParamSig], javaParams: Seq[binary.Parameter]): Boolean =
+    scalaParams
       .collect { case termSig: ParamSig.Term => termSig }
-      .corresponds(javaArgs)((scalaArg, javaArg) => matchType(scalaArg.typ, javaArg.`type`))
+      .corresponds(javaParams)((scalaParam, javaParam) => matchType(scalaParam.typ, javaParam.`type`))
 
   private val javaToScala: Map[String, String] = Map(
     "scala.Boolean" -> "boolean",

@@ -14,7 +14,7 @@ class JavaReflectMethod(method: Method) extends binary.Method:
   override def declaringClass: binary.ClassType =
     JavaReflectClass(method.getDeclaringClass)
 
-  override def parameters: Seq[binary.Parameter] =
+  override def allParameters: Seq[binary.Parameter] =
     method.getParameters.map(JavaReflectParameter.apply(_))
 
   override def name: String = method.getName

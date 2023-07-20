@@ -11,7 +11,7 @@ class JdiMethod(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method") 
   override def declaringClass: ClassType =
     JdiReferenceType(invokeMethod("declaringType"))
 
-  override def parameters: Seq[Parameter] =
+  override def allParameters: Seq[Parameter] =
     invokeMethod[java.util.List[Object]]("arguments").asScala.toSeq.map(JdiLocalVariable.apply(_))
 
   override def returnType: Option[Type] =

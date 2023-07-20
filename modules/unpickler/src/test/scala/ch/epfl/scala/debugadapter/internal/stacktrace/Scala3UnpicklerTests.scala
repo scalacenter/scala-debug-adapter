@@ -18,11 +18,14 @@ import tastyquery.Symbols.TermSymbol
 import java.lang.reflect.Parameter
 import java.util as ju
 import scala.jdk.OptionConverters.*
+import java.net.URLClassLoader
 
 class Scala30UnpicklerTests extends Scala3UnpicklerTests(ScalaVersion.`3.0`)
 class Scala31PlusUnpicklerTests extends Scala3UnpicklerTests(ScalaVersion.`3.1+`)
 
 abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunSuite:
+  def isScala30 = scalaVersion.isScala30
+
   test("mixin-forwarders") {
     val source =
       """|package example
@@ -96,41 +99,47 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     debuggee.assertFailure("example.Main$A$1", "void m()")
-    if scalaVersion.isScala30 then debuggee.assertFailure("example.Main$B$1$", "void m()")
+    if isScala30 then debuggee.assertFailure("example.Main$B$1$", "void m()")
     else debuggee.assertFailure("example.Main$B$2$", "void m()")
   }
 
-  test("local methods with same name".only) {
+  test("local methods with same name") {
     val source =
       """|package example
          |
          |class A {
+         |  val x = "x"
          |  def m1: Unit = {
-         |    def m: Unit = { // m$1
-         |      println(1)
-         |      def m(x: String): Unit = // m$2
-         |        println(2)
-         |      m("hello")
+         |    val y = "y"
+         |    def m: Unit = {
+         |      def m(z: String): Unit =
+         |        println(x + y + z)
+         |      m("z")
          |    }
          |    m
          |  }
          |
          |  def m2: Unit = {
-         |    def m(x: Int): Unit = println(3) // m$3
+         |    def m(i: Int): Unit = println(i)
          |    m(1)
+         |  }
+         |
+         |  def m3: Unit = {
+         |    def m(i: Int): Unit = println(i)
+         |    m(2)
          |  }
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    // debuggee.assertFormat("example.A", "void m$1()", "A.m1.m: Unit")
-    if scalaVersion.isScala30 then
-      // TODO fix:
-      // debuggee.assertFormat("example.A", "void m$3(java.lang.String x)", "A.m1.m.m(x: String): Unit")
-      // debuggee.assertFormat("example.A", "void m$2(int x)", "A.m2.m(x: Int): Unit")
-      ()
-    else
-      debuggee.assertFormat("example.A", "void m$2(java.lang.String x)", "A.m1.m.m(x: String): Unit")
-      debuggee.assertFormat("example.A", "void m$3(int x)", "A.m2.m(x: Int): Unit")
+    debuggee.assertFormat("example.A", "void m$1(java.lang.String y$1)", "A.m1.m: Unit")
+    debuggee.assertFormat(
+      "example.A",
+      if isScala30 then "void m$4(java.lang.String y$2, java.lang.String z)"
+      else "void m$2(java.lang.String y$2, java.lang.String z)",
+      "A.m1.m.m(z: String): Unit"
+    )
+    // TODO fix
+    debuggee.assertFailure("example.A", if isScala30 then "void m$2(int i)" else "void m$3(int i)")
   }
 
   test("getters and setters") {

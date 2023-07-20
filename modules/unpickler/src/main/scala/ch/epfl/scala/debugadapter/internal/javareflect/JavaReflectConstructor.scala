@@ -15,7 +15,7 @@ class JavaReflectConstructor(constructor: Constructor[?]) extends binary.Method:
   override def declaringClass: binary.ClassType =
     JavaReflectClass(constructor.getDeclaringClass)
 
-  override def parameters: Seq[binary.Parameter] =
+  override def allParameters: Seq[binary.Parameter] =
     constructor.getParameters.map(JavaReflectParameter.apply(_))
 
   override def name: String = "<init>"
