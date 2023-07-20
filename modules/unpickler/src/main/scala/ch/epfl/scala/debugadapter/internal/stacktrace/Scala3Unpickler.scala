@@ -276,10 +276,11 @@ class Scala3Unpickler(
   private def matchesLocalMethodOrLazyVal(method: binary.Method): Option[(String, Int)] =
     val javaPrefix = method.declaringClass.name.replace('.', '$') + "$$"
     val expectedName = method.name.stripPrefix(javaPrefix)
-    val pattern = """^(.+)[$](\d+)$""".r
+    val localMethod = "(.+)\\$(\\d+)".r
+    val lazyInit = "(.+)\\$lzyINIT\\d+\\$(\\d+)".r
     expectedName match
-      case pattern(stringPart, numberPart) if (!stringPart.endsWith("$lzyINIT1") && !stringPart.endsWith("$default")) =>
-        Some((stringPart, numberPart.toInt))
+      case lazyInit(name, index) => Some((name, index.toInt))
+      case localMethod(name, index) if !name.endsWith("$default") => Some((name, index.toInt))
       case _ => None
 
   private def matchTargetName(method: binary.Method, symbol: TermSymbol): Boolean =
@@ -308,8 +309,6 @@ class Scala3Unpickler(
       case _ =>
         // TODO compare symbol.declaredType
         method.declaredParams.isEmpty
-        // TODO move this logic to binary.Method
-        || (method.declaredParams.size == 1 && method.declaredParams.head.name == "scala.runtime.LazyRef")
 
   private def matchArguments(scalaParams: Seq[ParamSig], javaParams: Seq[binary.Parameter]): Boolean =
     scalaParams

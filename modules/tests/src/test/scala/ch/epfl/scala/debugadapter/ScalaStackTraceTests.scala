@@ -121,22 +121,17 @@ class ScalaStackTraceTests extends DebugTestSuite {
     )
   }
 
-  test("lazy val") {
+  test("local method and lazy val") {
     val source =
       """|package example
          |object Main {
          |  def main(args: Array[String]): Unit = {
-         |
-         |    def m(t: Int) = {
-         |      lazy val m1 : Int = {
-         |        def m(t: Int): Int = {
-         |          t + 1
-         |        }
-         |        m(2)
-         |      }
-         |      m1
+         |    val x = 1
+         |    lazy val y : Int = {
+         |      x + 1
          |    }
-         |    m(4)
+         |    def m(z: Int) = x + y + z
+         |    m(1)
          |  }
          |}
          |""".stripMargin
@@ -144,11 +139,11 @@ class ScalaStackTraceTests extends DebugTestSuite {
 
     check(
       Breakpoint(
-        8,
+        6,
         List(
-          "Main.main.m.m1.m(t: Int): Int",
-          "Main.main.m.m1: Int",
-          "Main.main.m(t: Int): Int",
+          "Main.main.y: Int", // initializer
+          "Main.main.y: Int", // getter
+          "Main.main.m(z: Int): Int",
           "Main.main(args: Array[String]): Unit"
         )
       )

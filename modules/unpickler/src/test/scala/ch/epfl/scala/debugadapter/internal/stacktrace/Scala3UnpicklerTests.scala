@@ -670,24 +670,27 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val source =
       """|package example
          |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    lazy val foo = {
-         |      println("foo")
-         |      "foo"
+         |class A {
+         |  def m: Unit = {
+         |    val x: String = "x"
+         |    lazy val y = {
+         |      x + "y"
          |    }
-         |    println(foo)
+         |    println(y)
          |  }
          |}
          |""".stripMargin
 
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    // TODO fix: find foo by traversing the tree of object Main
-    debuggee.assertNotFound("example.Main$", "java.lang.String foo$lzyINIT1$1(scala.runtime.LazyRef foo$lzy1$1)")
     debuggee.assertFormat(
-      "example.Main$",
-      "java.lang.String foo$1(scala.runtime.LazyRef foo$lzy1$2)",
-      "Main.main.foo: String"
+      "example.A",
+      "java.lang.String y$1(java.lang.String x$2, scala.runtime.LazyRef y$lzy1$2)",
+      "A.m.y: String"
+    )
+    debuggee.assertFormat(
+      "example.A",
+      "java.lang.String y$lzyINIT1$1(java.lang.String x$1, scala.runtime.LazyRef y$lzy1$1)",
+      "A.m.y: String"
     )
   }
 
@@ -796,7 +799,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       else
         val method = cls.getDeclaredMethods
           .find { m =>
-            // println(s"${m.getName}(${m.getParameters.map(p => p.getName + ": " + p.getType.getTypeName).mkString(", ")}): ${m.getReturnType.getName}")
+            // println(s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})")
             m.getName == name && m.getReturnType.getName == returnType && matchParams(m.getParameters)
           }
         assert(method.isDefined)

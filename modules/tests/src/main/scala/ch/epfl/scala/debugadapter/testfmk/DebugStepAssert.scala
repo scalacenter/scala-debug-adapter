@@ -36,13 +36,10 @@ object DebugStepAssert {
   )(implicit location: Location): Unit = {
     assertEquals(frames.head.source.path, expectedSource.toString)
     assertEquals(frames.head.line, expectedLine)
-    expectedStackTrace match {
-      case None =>
-      case Some(expectedStackTrace) =>
-        assertEquals(expectedStackTrace, frames.map(frame => frame.name))
-
+    expectedStackTrace.foreach { expected =>
+      val obtained = frames.map(frame => frame.name)
+      assertEquals(obtained, expected)
     }
-
   }
 
   def assertOnFrame(expectedName: String)(frames: List[StackFrame])(implicit loc: Location): Unit =
