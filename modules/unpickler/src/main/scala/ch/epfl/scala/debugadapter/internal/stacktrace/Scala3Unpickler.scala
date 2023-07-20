@@ -107,7 +107,7 @@ class Scala3Unpickler(
           .map(paramName =>
             val pattern: Regex = """.+\$\d+$""".r
             if pattern.matches(paramName.toString) then ""
-            else s"${paramName.toString()}: "
+            else s"$paramName: "
           )
           .zip(t.paramTypes)
           .map((n, t) => s"$n${formatType(t)}")
@@ -136,7 +136,7 @@ class Scala3Unpickler(
           )
         operatorLikeTypeFormat
       case t: AppliedType if isVarArg(t.tycon) =>
-        s"${t.args.map(formatType).head}*"
+        s"${formatType(t.args.head)}*"
       case t: AppliedType =>
         val tycon = formatType(t.tycon)
         val args = t.args.map(formatType).mkString(", ")
