@@ -2145,6 +2145,37 @@ abstract class Scala2EvaluationTests(val scalaVersion: ScalaVersion) extends Sca
 }
 
 abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEvaluationTests(scalaVersion) {
+  test("evaluate inline elements") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    inline val y = 2
+         |    println("ok")
+         |  }
+         |  inline def m(): Int = 42
+         |  inline def n(inline x: Int): Int = x
+         |  inline val x = 1
+         |  inline def test(inline x: Int) = Test(x)
+         |  inline def t = test(42).x
+         |  case class Test(x: Int)
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(6),
+      Evaluation.success("m()", 42),
+      Evaluation.success("n(1)", 1),
+      Evaluation.success("x", 1),
+      Evaluation.success("test(42)", ObjectRef("Main$Test")),
+      Evaluation.success("t", 42),
+      Evaluation.success("n(x)", 1),
+      Evaluation.success("y", 2),
+      Evaluation.success("n(y)", 2),
+      Evaluation.success("n(m())", 42)
+    )
+  }
   test("evaluate shadowed variable") {
     val source =
       """|package example
