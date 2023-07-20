@@ -63,8 +63,8 @@ object Scala3UnpicklerBridge {
         warnLogger,
         testMode: java.lang.Boolean
       )
-      val skipMethod = cls.getMethods.find(m => m.getName == "skipMethod").get
-      val formatMethod = cls.getMethods.find(m => m.getName == "formatMethod").get
+      val skipMethod = cls.getMethod("skipMethod", classOf[Any])
+      val formatMethod = cls.getMethod("formatMethod", classOf[Any])
 
       new Scala3UnpicklerBridge(debuggee.scalaVersion, bridge, skipMethod, formatMethod, testMode)
     }

@@ -1030,22 +1030,22 @@ class Scala31RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`3
          |object Main {
          |  def main(args: Array[String]): Unit = {
          |    val x = "x1"
-         |    def m(): String = {
+         |    def m1(): String = {
          |      println(x) // captures x = "x1"
          |      val y = {
          |        val x = "x2"
          |        val z = {
          |          val x = "x3"
-         |          def m(): String = {
+         |          def m2(): String = {
          |            x // captures x = "x3"
          |          }
-         |          m()
+         |          m2()
          |        }
          |        z
          |      }
          |      y
          |    }
-         |    println(m())
+         |    println(m1())
          |  }
          |}
          |""".stripMargin

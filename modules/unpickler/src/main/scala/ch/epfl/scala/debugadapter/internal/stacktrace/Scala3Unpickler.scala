@@ -1,23 +1,19 @@
 package ch.epfl.scala.debugadapter.internal.stacktrace
 
-import ch.epfl.scala.debugadapter.internal.jdi
+import ch.epfl.scala.debugadapter.internal.binary
+import ch.epfl.scala.debugadapter.internal.jdi.JdiMethod
 import tastyquery.Contexts
 import tastyquery.Contexts.Context
 import tastyquery.Definitions
 import tastyquery.Flags
 import tastyquery.Names.*
 import tastyquery.Signatures.*
-import tastyquery.Signatures.*
 import tastyquery.Symbols.*
-import tastyquery.Trees.DefDef
-import tastyquery.Trees.Tree
-import tastyquery.Trees.ValDef
-import tastyquery.Types.*
+import tastyquery.Trees.*
 import tastyquery.Types.*
 import tastyquery.jdk.ClasspathLoaders
 import tastyquery.jdk.ClasspathLoaders.FileKind
 
-import java.lang.reflect.Method
 import java.nio.file.Path
 import java.util.Optional
 import java.util.function.Consumer
@@ -47,38 +43,54 @@ class Scala3Unpickler(
     else exception.getMessage
 
   def skipMethod(obj: Any): Boolean =
-    findSymbol(obj).forall(skip)
+    skipMethod(JdiMethod(obj): binary.Method)
+
+  def skipMethod(method: binary.Method): Boolean =
+    findSymbol(method).forall(skip)
 
   def formatMethod(obj: Any): Optional[String] =
-    findSymbol(obj) match
-      case None => Optional.empty
-      case Some(symbol) =>
-        val sep = if !symbol.declaredType.isInstanceOf[MethodicType] then ": " else ""
-        Optional.of(s"${formatSymbol(symbol)}$sep${formatType(symbol.declaredType)}")
+    formatMethod(JdiMethod(obj)).toJava
+
+  def formatMethod(method: binary.Method): Option[String] =
+    findSymbol(method).map { symbol =>
+      val sep = if !symbol.declaredType.isInstanceOf[MethodicType] then ": " else ""
+      s"${formatSymbol(symbol)}$sep${formatType(symbol.declaredType)}"
+    }
 
   private[stacktrace] def findSymbol(obj: Any): Option[TermSymbol] =
-    val method = jdi.Method(obj)
+    findSymbol(JdiMethod(obj))
+
+  private[stacktrace] def findSymbol(method: binary.Method): Option[TermSymbol] =
     findDeclaringClass(method) match
-      case None => throw new Exception(s"Cannot find Scala symbol of ${method.declaringType.name}")
+      case None => throw new Exception(s"Cannot find Scala symbol of ${method.declaringClass.name}")
       case Some(declaringClass) =>
         matchesLocalMethodOrLazyVal(method) match
-          case Some((name, index)) =>
-            Some(findLocalMethodOrLazyVal(declaringClass, name, index))
+          case Some((name, _)) =>
+            localMethodsAndLazyVals(declaringClass, name)
+              .filter(matchSignature(method, _))
+              .singleOrThrow(method)
           case None =>
-            val matchingSymbols = declaringClass.declarations
+            declaringClass.declarations
               .collect { case sym: TermSymbol if sym.isTerm => sym }
               .filter(matchSymbol(method, _))
-            if matchingSymbols.size > 1 then
-              val message = s"Found ${matchingSymbols.size} matching symbols for $method:" +
-                matchingSymbols.mkString("\n")
-              throw new Exception(message)
-            else matchingSymbols.headOption
+              .singleOrThrow(method)
 
-  def findLocalMethodOrLazyVal(declaringClass: ClassSymbol, name: String, index: Int): TermSymbol =
+  extension (symbols: Seq[TermSymbol])
+    def singleOrThrow(method: binary.Method): Option[TermSymbol] =
+      if symbols.size > 1 then
+        val message = s"Found ${symbols.size} matching symbols for $method:" +
+          symbols.mkString("\n")
+        throw new Exception(message)
+      else symbols.headOption
+
+  def localMethodsAndLazyVals(declaringClass: ClassSymbol, name: String): Seq[TermSymbol] =
+    def matchName(symbol: Symbol): Boolean = symbol.name.toString == name
+    def isLocal(symbol: Symbol): Boolean = symbol.owner.isTerm
+
     def findLocalSymbol(tree: Tree): Seq[TermSymbol] =
       tree.walkTree {
-        case DefDef(_, _, _, _, symbol) if matchTargetName(name, symbol) => Seq(symbol)
-        case ValDef(_, _, _, symbol) if matchTargetName(name, symbol) => Seq(symbol)
+        case DefDef(_, _, _, _, symbol) if matchName(symbol) && isLocal(symbol) => Seq(symbol)
+        case ValDef(_, _, _, symbol) if matchName(symbol) && isLocal(symbol) => Seq(symbol)
         case _ => Seq.empty
       }(_ ++ _, Seq.empty)
 
@@ -87,18 +99,12 @@ class Scala3Unpickler(
         Seq(declaringClass, companionClass)
       case _ => Seq(declaringClass)
 
-    val matchingSymbols =
-      for
-        declaringSym <- declaringClasses
-        decl <- declaringSym.declarations
-        tree <- decl.tree.toSeq
-        localSym <- findLocalSymbol(tree)
-      yield localSym
-    if matchingSymbols.size < index
-    then
-      // TODO we cannot find the local symbol of Scala 2.13 classes, it should not throw
-      throw new Exception(s"Cannot find local symbol $name$$$index in ${declaringClass.name}")
-    matchingSymbols(index - 1)
+    for
+      declaringSym <- declaringClasses
+      decl <- declaringSym.declarations
+      tree <- decl.tree.toSeq
+      localSym <- findLocalSymbol(tree)
+    yield localSym
 
   def formatType(t: TermType | TypeOrWildcard): String =
     t match
@@ -240,8 +246,8 @@ class Scala3Unpickler(
       case p: PackageRef => p.fullyQualifiedName.toString == "scala"
       case _ => false
 
-  private def findDeclaringClass(method: jdi.Method): Option[ClassSymbol] =
-    val javaParts = method.declaringType.name.split('.')
+  private def findDeclaringClass(method: binary.Method): Option[ClassSymbol] =
+    val javaParts = method.declaringClass.name.split('.')
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
       if packageNames.nonEmpty
@@ -252,7 +258,7 @@ class Scala3Unpickler(
     val obj = clsSymbols.filter(_.isModuleClass)
     val cls = clsSymbols.filter(!_.isModuleClass)
     assert(obj.size <= 1 && cls.size <= 1)
-    if method.declaringType.isObject && !method.isExtensionMethod then obj.headOption else cls.headOption
+    if method.declaringClass.isObject && !method.isExtensionMethod then obj.headOption else cls.headOption
 
   private def findSymbolsRecursively(owner: DeclaringSymbol, encodedName: String): Seq[ClassSymbol] =
     owner.declarations
@@ -267,20 +273,21 @@ class Scala3Unpickler(
           case _ => None
       }
 
-  private def matchSymbol(method: jdi.Method, symbol: TermSymbol): Boolean =
+  private def matchSymbol(method: binary.Method, symbol: TermSymbol): Boolean =
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
 
-  private def matchesLocalMethodOrLazyVal(method: jdi.Method): Option[(String, Int)] =
-    val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
+  private def matchesLocalMethodOrLazyVal(method: binary.Method): Option[(String, Int)] =
+    val javaPrefix = method.declaringClass.name.replace('.', '$') + "$$"
     val expectedName = method.name.stripPrefix(javaPrefix)
-    val pattern = """^(.+)[$](\d+)$""".r
+    val localMethod = "(.+)\\$(\\d+)".r
+    val lazyInit = "(.+)\\$lzyINIT\\d+\\$(\\d+)".r
     expectedName match
-      case pattern(stringPart, numberPart) if (!stringPart.endsWith("$lzyINIT1") && !stringPart.endsWith("$default")) =>
-        Some((stringPart, numberPart.toInt))
+      case lazyInit(name, index) => Some((name, index.toInt))
+      case localMethod(name, index) if !name.endsWith("$default") => Some((name, index.toInt))
       case _ => None
 
-  private def matchTargetName(method: jdi.Method, symbol: TermSymbol): Boolean =
-    val javaPrefix = method.declaringType.name.replace('.', '$') + "$$"
+  private def matchTargetName(method: binary.Method, symbol: TermSymbol): Boolean =
+    val javaPrefix = method.declaringClass.name.replace('.', '$') + "$$"
     // if an inner accesses a private method, the backend makes the method public
     // and prefixes its name with the full class name.
     // Example: method foo in class example.Inner becomes example$Inner$$foo
@@ -293,32 +300,19 @@ class Scala3Unpickler(
     if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
     else encodedScalaName == expectedName
 
-  private def matchTargetName(expectedName: String, symbol: TermSymbol): Boolean =
-    val symbolName = symbol.targetName.toString
-    expectedName == NameTransformer.encode(symbolName)
-
-  private def matchSignature(method: jdi.Method, symbol: TermSymbol): Boolean =
+  private def matchSignature(method: binary.Method, symbol: TermSymbol): Boolean =
     symbol.signedName match
       case SignedName(_, sig, _) =>
-        val javaArgs = method.arguments.headOption.map(_.name) match
-          case Some("$this") if method.isExtensionMethod => method.arguments.tail
-          case Some("$outer") if method.isClassInitializer => method.arguments.tail
-          case _ => method.arguments
-        matchArguments(sig.paramsSig, javaArgs) &&
-        method.returnType.forall { returnType =>
-          val javaRetType =
-            if method.isClassInitializer then method.declaringType else returnType
-          matchType(sig.resSig, javaRetType)
-        }
+        matchArguments(sig.paramsSig, method.declaredParams)
+        && method.declaredReturnType.forall(matchType(sig.resSig, _))
       case _ =>
-        method.arguments.isEmpty || (method.arguments.size == 1 && method.argumentTypes.head.name == "scala.runtime.LazyRef")
+        // TODO compare symbol.declaredType
+        method.declaredParams.isEmpty
 
-      // TODO compare symbol.declaredType
-
-  private def matchArguments(scalaArgs: Seq[ParamSig], javaArgs: Seq[jdi.LocalVariable]): Boolean =
-    scalaArgs
+  private def matchArguments(scalaParams: Seq[ParamSig], javaParams: Seq[binary.Parameter]): Boolean =
+    scalaParams
       .collect { case termSig: ParamSig.Term => termSig }
-      .corresponds(javaArgs)((scalaArg, javaArg) => matchType(scalaArg.typ, javaArg.`type`))
+      .corresponds(javaParams)((scalaParam, javaParam) => matchType(scalaParam.typ, javaParam.`type`))
 
   private val javaToScala: Map[String, String] = Map(
     "scala.Boolean" -> "boolean",
@@ -337,7 +331,7 @@ class Scala3Unpickler(
 
   private def matchType(
       scalaType: FullyQualifiedName,
-      javaType: jdi.Type
+      javaType: binary.Type
   ): Boolean =
     def rec(scalaType: String, javaType: String): Boolean =
       scalaType match

@@ -947,27 +947,27 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |object Main {
          |  def main(args: Array[String]): Unit = {
          |    val x = "x1"
-         |    def m(): String = {
+         |    def m1(): String = {
          |      println(x) // captures x = "x1"
          |      val y = {
          |        val x = "x2"
          |        val z = {
          |          val x = "x3"
-         |          def m(): String = {
+         |          def m2(): String = {
          |            x // captures x = "x3"
          |          }
-         |          m()
+         |          m2()
          |        }
          |        z
          |      }
          |      y
          |    }
-         |    println(m())
+         |    println(m1())
          |  }
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(15), Evaluation.success("x", "x3"), Evaluation.success("m()", "x3"))
+    check(Breakpoint(15), Evaluation.success("x", "x3"), Evaluation.success("m2()", "x3"))
   }
 
   test("read and write mutable variables whose type is a value class") {
