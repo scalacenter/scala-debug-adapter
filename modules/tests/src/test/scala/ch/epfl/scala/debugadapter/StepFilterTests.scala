@@ -25,6 +25,26 @@ class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1+`) {
 
 class Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
 class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`) {
+  test("skip package-private accessors".only) {
+    val source =
+      """|package example
+         |
+         |case class Test[A](private[example] var test: A)
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val test = Test(42)
+         |    println(test.test)
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(8),
+      Evaluation.success("test.test", 42)
+    )
+  }
+
   test("should match all kinds of Scala 2 types (not valid in Scala 3)") {
     val source =
       """|package example

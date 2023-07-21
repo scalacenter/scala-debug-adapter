@@ -24,6 +24,7 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
   override def shouldSkipOver(method: Method): Boolean = {
     if (method.isBridge) true
     else if (isDynamicClass(method.declaringType)) true
+    // else if (scalaVersion.isScala2 && isPackagePrivateAccessor(method)) true
     else if (isJava(method)) false
     else if (isConstructor(method)) false
     else if (isStaticConstructor(method)) false
@@ -143,6 +144,12 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
 
   private def skipTraitInitializer(method: Method): Boolean =
     method.bytecodes.toSeq == Seq(ByteCodes.RETURN)
+
+  private def isPackagePrivateAccessor(method: Method): Boolean = {
+    val name = method.name
+    val regex = """\$access\$\d+""".r
+    regex.findFirstIn(name.take(name.indexOf('('))).isDefined
+  }
 }
 
 object ScalaUnpickler {

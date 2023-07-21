@@ -361,4 +361,6 @@ class Scala3Unpickler(
 
     val isNonLazyGetterOrSetter =
       (!symbol.isMethod || isScala2GetterWorkaround || symbol.isSetter) && symbol.kind != TermSymbolKind.LazyVal
-    isNonLazyGetterOrSetter || symbol.isSynthetic
+    def isNonPublicAccessor = !symbol.isPublic && symbol.isParamAccessor
+    // def isGivenValGetter = (symbol.isGivenOrUsing || symbol.isImplicit) && symbol.kind == TermSymbolKind.Val
+    isNonLazyGetterOrSetter || symbol.isSynthetic || isNonPublicAccessor // || isGivenValGetter
