@@ -124,7 +124,7 @@ class Scala2Unpickler(
       .foldRight(Option(javaClass.name)) { (sym, acc) =>
         for (javaName <- acc if javaName.contains(sym.name))
           yield javaName
-            .split(sym.name)
+            .split(sym.name.replaceAll("\\$", "\\\\\\$"))
             .drop(1)
             .mkString(sym.name)
       }
