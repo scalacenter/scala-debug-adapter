@@ -22,6 +22,27 @@ class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1+`) {
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(7), StepIn.method(if (isScala3) "Main.m(message: String): Unit" else "Main$.mTarget(String)"))
   }
+
+  test("should skip given lazy val initialize") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  given List[Int] = List(1,2,3)
+         |  def main(args: Array[String]): Unit = {
+         |    sum
+         |    println("ok")
+         |  }
+         |
+         |  def sum(using list: List[Int]): Int = list.sum
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(6),
+      StepIn.method("ScalaRunTime.wrapIntArray(xs: Array[Int]): ArraySeq[Int]")
+    )
+  }
 }
 
 class Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
