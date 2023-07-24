@@ -5,5 +5,5 @@ trait ClassType extends Type:
 
   def isObject = isPackageObject || name.endsWith("$")
   def isPackageObject = name.endsWith(".package") || name.endsWith("$package")
-  def getSuperclass: ClassType
-  def getImplementedInterfaces: List[ClassType]
+  def superclass: ClassType
+  def interfaces: Seq[ClassType]

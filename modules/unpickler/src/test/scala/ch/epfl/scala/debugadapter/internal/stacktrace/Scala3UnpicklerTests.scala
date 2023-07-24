@@ -98,7 +98,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$A$1", "void m()","Main.main.A.m(): Unit")
+    debuggee.assertFormat("example.Main$A$1", "void m()", "Main.main.A.m(): Unit")
     if isScala30 then debuggee.assertFailure("example.Main$B$1$", "void m()")
     else debuggee.assertFailure("example.Main$B$2$", "void m()")
   }
@@ -229,7 +229,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
 
   }
 
-  test("local classes".only) {
+  test("local classes") {
     val source =
       """|package example
          |class A 
@@ -244,6 +244,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |    class E :
          |      class F :
          |        def m() = ()
+         |    class G extends A :
+         |      def m() = ()
          |     
          |
          |  }
@@ -252,13 +254,16 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |      def m () = 1
          |    class  D extends C :
          |      def m1(t : Int) = ()
+         |    class G extends A :
+         |      def m() = ()
          |  }
          |  }
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-  //  debuggee.assertFormat("example.Main$C$1", "int m()", "Main.m.C.m(): Int")
-    //debuggee.assertFormat("example.Main$E$1$F", "void m()", "Main.m.E.F.m(): Unit")
-    debuggee.assertFormat("example.Main$D$1", "void m1()","Main.m.D.m1: Unit")
+    debuggee.assertFormat("example.Main$C$1", "int m()", "Main.m.C.m(): Int")
+    debuggee.assertFormat("example.Main$E$1$F", "void m()", "Main.m.E.F.m(): Unit")
+    debuggee.assertFormat("example.Main$D$1", "void m1()", "Main.m.D.m1: Unit")
+    debuggee.assertFailure("example.Main$G$1", "void m()")
 
   }
 
@@ -850,7 +855,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
 
     private def assertFailure(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
-      intercept[Exception](unpickler.findSymbol(m))
+      intercept[Exception | AssertionError](unpickler.findSymbol(m))
 
     private def assertFormat(declaringType: String, javaSig: String, expected: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)

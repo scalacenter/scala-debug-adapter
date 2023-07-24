@@ -45,7 +45,6 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
   }
 
   def format(method: Method): Option[String] = {
-    // method.declaringType.asInstanceOf[ClassType].
     if (method.isBridge) None
     else if (isDynamicClass(method.declaringType)) None
     else if (isJava(method)) Some(formatJava(method))
@@ -56,7 +55,6 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
     else if (isAnonFunction(method)) Some(formatJava(method))
     else if (isAnonClass(method.declaringType)) Some(formatJava(method))
     // TODO in Scala 3 we should be able to find the symbol of a local class using TASTy Query
-        else if (isLocalClass(method.declaringType)) Some(formatJava(method))
     else if (scalaVersion.isScala2 && isNestedClass(method.declaringType)) Some(formatJava(method))
     else
       try formatScala(method)
