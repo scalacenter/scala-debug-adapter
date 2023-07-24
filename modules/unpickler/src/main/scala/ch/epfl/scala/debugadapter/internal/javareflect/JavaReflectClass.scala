@@ -5,5 +5,6 @@ import scala.util.matching.Regex
 
 class JavaReflectClass(cls: Class[?]) extends binary.ClassType:
   override def name: String = cls.getTypeName
-
+  override def getSuperclass = JavaReflectClass(cls.getSuperclass())
+  override def getImplementedInterfaces = cls.getInterfaces().toList.map(JavaReflectClass(_))
   override def toString: String = cls.toString

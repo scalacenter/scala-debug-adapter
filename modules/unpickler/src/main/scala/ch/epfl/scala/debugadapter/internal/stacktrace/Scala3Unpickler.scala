@@ -24,6 +24,7 @@ import scala.util.Try
 import scala.util.matching.Regex
 import tastyquery.Modifiers.TermSymbolKind
 import tastyquery.SourceLanguage
+import ch.epfl.scala.debugadapter.internal.binary.ClassType
 
 class Scala3Unpickler(
     classpaths: Array[Path],
@@ -61,7 +62,7 @@ class Scala3Unpickler(
     findSymbol(JdiMethod(obj))
 
   private[stacktrace] def findSymbol(method: binary.Method): Option[TermSymbol] =
-    findDeclaringClass(method) match
+    findDeclaringClass(method.declaringClass,method.isExtensionMethod) match
       case None => throw new Exception(s"Cannot find Scala symbol of ${method.declaringClass.name}")
       case Some(declaringClass) =>
         matchesLocalMethodOrLazyVal(method) match
@@ -161,7 +162,10 @@ class Scala3Unpickler(
         val second = formatType(t.second)
         s"$first & $second"
       case t: ThisType => formatType(t.tref)
-      case t: TermRefinement => formatType(t.parent) + " {...}"
+      case t: TermRefinement =>
+        val parentType = formatType(t.parent)
+        if parentType == "PolyFunction" then formatPolymorphicFunction(t.refinedType)
+        else parentType + " {...}"
       case t: AnnotatedType => formatType(t.typ)
       case t: TypeParamRef => t.paramName.toString
       case t: TermParamRef => formatPrefix(t) + "type"
@@ -185,6 +189,16 @@ class Scala3Unpickler(
           _: PackageRef) =>
         throwOrWarn(s"Cannot format type ${t.getClass.getName}")
         "<unsupported>"
+  private def formatPolymorphicFunction(t: TermType): String =
+    t match
+      case t: PolyType =>
+        val args = t.paramNames.mkString(", ")
+        val result = formatPolymorphicFunction(t.resultType)
+        s"[$args] => $result"
+      case t: MethodType =>
+        val params = t.paramTypes.map(formatType(_)).mkString(", ")
+        if t.paramTypes.size > 1 then s"($params) => ${formatType(t.resultType)}"
+        else s"$params => ${formatType(t.resultType)}"
 
   private def formatPrefix(p: Prefix): String =
     val prefix = p match
@@ -246,20 +260,31 @@ class Scala3Unpickler(
       case p: PackageRef => p.fullyQualifiedName.toString == "scala"
       case _ => false
 
-  private def findDeclaringClass(method: binary.Method): Option[ClassSymbol] =
-    val javaParts = method.declaringClass.name.split('.')
+  private def findDeclaringClass(declClass: ClassType, isExtensionMethod : Boolean): Option[ClassSymbol] =
+    val javaParts = declClass.name.split('.')
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
       if packageNames.nonEmpty
       then ctx.findSymbolFromRoot(packageNames).asInstanceOf[PackageSymbol]
       else ctx.defn.EmptyPackage
     val className = javaParts.last
-    val clsSymbols = findSymbolsRecursively(packageSym, className)
+    val clsSymbols = matchesLocalClass(className) match
+      case Some(s1, s2, s3) =>
+        val sym = findLocalClasses(findSymbolsRecursively(packageSym, s1), s2, declClass)
+        if s3.isEmpty then sym
+        else sym.flatMap(findSymbolsRecursively(_, s3))
+      case _ => findSymbolsRecursively(packageSym, className)
     val obj = clsSymbols.filter(_.isModuleClass)
     val cls = clsSymbols.filter(!_.isModuleClass)
     assert(obj.size <= 1 && cls.size <= 1)
-    if method.declaringClass.isObject && !method.isExtensionMethod then obj.headOption else cls.headOption
+    if declClass.isObject && !isExtensionMethod then obj.headOption else cls.headOption
 
+  private def matchesLocalClass(encodedName: String): Option[(String, String, String)] =
+    val localMethod = "(.+)\\$([^$]+)\\$\\d+$?(.*?)".r
+    encodedName match
+      case localMethod(s1, s2, s3) =>
+        Some(s1, s2, s3)
+      case _ => None
   private def findSymbolsRecursively(owner: DeclaringSymbol, encodedName: String): Seq[ClassSymbol] =
     owner.declarations
       .collect { case sym: ClassSymbol => sym }
@@ -272,6 +297,29 @@ class Scala3Unpickler(
             else findSymbolsRecursively(sym, remaining)
           case _ => None
       }
+
+  private def findLocalClasses(owners: Seq[ClassSymbol], name: String, declClass : ClassType): Seq[ClassSymbol] =
+    def matchName(symbol: Symbol): Boolean = symbol.name.toString == name
+    def isLocal(symbol: Symbol): Boolean = symbol.owner.isTerm
+    def matchesParents(classSymbol: ClassSymbol): Boolean =
+      val superClass = declClass.getSuperclass
+      val x = declClass.getImplementedInterfaces
+      val y = findDeclaringClass(superClass,false)
+      val superClassAndInterfaces = (superClass :: declClass.getImplementedInterfaces).flatMap(findDeclaringClass(_,false))
+      val symbolParents = classSymbol.parentClasses
+      symbolParents.forall(superClassAndInterfaces.contains) &&
+      superClassAndInterfaces.forall(symbolParents.contains)
+    def findLocalClass(tree: Tree): Seq[ClassSymbol] =
+      tree.walkTree {
+        case ClassDef(_, _, symbol) if matchName(symbol) && isLocal(symbol) && matchesParents(symbol) => Seq(symbol)
+        case _ => Seq.empty
+      }(_ ++ _, Seq.empty)
+
+    for
+      owner <- owners
+      tree <- owner.tree.toSeq
+      localClass <- findLocalClass(tree)
+    yield localClass
 
   private def matchSymbol(method: binary.Method, symbol: TermSymbol): Boolean =
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
@@ -337,6 +385,8 @@ class Scala3Unpickler(
       scalaType match
         case "scala.Any[]" =>
           javaType == "java.lang.Object[]" || javaType == "java.lang.Object"
+        case "scala.PolyFunction" =>
+          javaType == "scala.Function1"
         case s"$scalaType[]" => rec(scalaType, javaType.stripSuffix("[]"))
         case _ =>
           val regex = scalaType
