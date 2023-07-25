@@ -24,12 +24,12 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
   override def shouldSkipOver(method: Method): Boolean = {
     if (method.isBridge) true
     else if (isDynamicClass(method.declaringType)) true
-    // else if (scalaVersion.isScala2 && isPackagePrivateAccessor(method)) true
     else if (isJava(method)) false
     else if (isConstructor(method)) false
     else if (isStaticConstructor(method)) false
     else if (isAdaptedMethod(method)) true
     else if (isAnonFunction(method)) false
+    else if (scalaVersion.isScala2 && isPrivateAccessor(method)) true
     else if (isLiftedMethod(method)) !isLazyInitializer(method) && isLazyGetter(method)
     else if (isAnonClass(method.declaringType)) false
     // TODO in Scala 3 we should be able to find the symbol of a local class using TASTy Query
@@ -145,11 +145,8 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
   private def skipTraitInitializer(method: Method): Boolean =
     method.bytecodes.toSeq == Seq(ByteCodes.RETURN)
 
-  private def isPackagePrivateAccessor(method: Method): Boolean = {
-    val name = method.name
-    val regex = """\$access\$\d+""".r
-    regex.findFirstIn(name.take(name.indexOf('('))).isDefined
-  }
+  private def isPrivateAccessor(method: Method): Boolean =
+    method.name.matches(""".+\$access\$\d+""")
 }
 
 object ScalaUnpickler {

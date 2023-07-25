@@ -332,7 +332,7 @@ class AbstractDebugClient(
       timeout: Duration
   )(f: Messages.Event => Boolean): Messages.Event = {
     Iterator
-      .continually(events.poll(timeout.toMillis, TimeUnit.DAYS))
+      .continually(events.poll(timeout.toMillis, TimeUnit.MILLISECONDS))
       .map(e => if (e == null) throw new TimeoutException() else e)
       .filter(f)
       .next()
