@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter
 import ch.epfl.scala.debugadapter.testfmk.*
 
 class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1+`) {
+
   test("step into method with @targetName") {
     val source =
       """|package example
@@ -25,6 +26,7 @@ class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1+`) {
 
 class Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
 class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`) {
+
   test("should match all kinds of Scala 2 types (not valid in Scala 3)") {
     val source =
       """|package example
@@ -52,6 +54,8 @@ class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`) {
 }
 
 abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends DebugTestSuite {
+  private val printlnMethod =
+    if (scalaVersion.isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void"
   test("should not step into mixin forwarder") {
     val source =
       """|package example
@@ -410,19 +414,19 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
         StepIn.method("String.toString(): String"),
         StepIn.line(4),
         StepIn.line(9),
-        StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object)"),
+        StepIn.method(printlnMethod),
         Breakpoint(10),
         StepIn.line(4),
         StepOut.line(10),
-        StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object)"),
+        StepIn.method(printlnMethod),
         Breakpoint(11),
         StepIn.line(18),
         StepIn.method("String.toString(): String"),
         StepIn.line(18),
         StepIn.line(11),
-        StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object)"),
+        StepIn.method(printlnMethod),
         Breakpoint(12),
-        StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object)")
+        StepIn.method(printlnMethod)
       )
     } else if (isScala3) {
       check(
@@ -435,20 +439,20 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
         StepIn.line(6),
         StepIn.line(5),
         StepOut.line(9),
-        StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object)"),
+        StepIn.method(printlnMethod),
         Breakpoint(10),
         StepIn.line(4),
         StepIn.line(6),
         StepIn.line(4),
         StepIn.line(6),
         StepOut.line(10),
-        StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object)"),
+        StepIn.method(printlnMethod),
         Breakpoint(11),
         StepIn.line(18),
         StepOut.line(11),
-        StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object)"),
+        StepIn.method(printlnMethod),
         Breakpoint(12),
-        StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object)")
+        StepIn.method(printlnMethod)
       )
     } else {
       check(
@@ -456,15 +460,15 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
         StepIn.line(4),
         StepIn.line(5),
         StepOut.line(9),
-        StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void"),
+        StepIn.method(printlnMethod),
         Breakpoint(10),
-        StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void"),
+        StepIn.method(printlnMethod),
         Breakpoint(11),
         StepIn.line(18),
         StepOut.line(11),
-        StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void"),
+        StepIn.method(printlnMethod),
         Breakpoint(12),
-        StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void")
+        StepIn.method(printlnMethod)
       )
     }
   }
@@ -1002,14 +1006,14 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       Breakpoint(8),
       StepIn.method(if (isScala3) "A.<init>(as: String*): Unit" else "A.<init>(Seq): void"),
       Breakpoint(9),
-      StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void"),
+      StepIn.method(printlnMethod),
       Breakpoint(10),
       StepIn.method(
         if (isScala3) "StringContext.<init>(parts: String*): Unit"
         else "StringContext.<init>(Seq): void"
       ),
       Breakpoint(11),
-      StepIn.method(if (isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void")
+      StepIn.method(printlnMethod)
     )
   }
 
@@ -1170,5 +1174,23 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(8), Evaluation.success("foo", 42))
+  }
+
+  test("skip private accessor") {
+    val source =
+      """|package example
+         |
+         |final case class A(private val x: String)
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val a1 = new A("a1")
+         |    val a2 = new A("a2")
+         |    a1 == a2
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(9), StepIn.method("String.equals(Object): boolean"))
   }
 }

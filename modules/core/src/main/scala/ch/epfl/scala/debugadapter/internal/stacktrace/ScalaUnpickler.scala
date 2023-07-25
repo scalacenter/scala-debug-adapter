@@ -29,6 +29,7 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
     else if (isStaticConstructor(method)) false
     else if (isAdaptedMethod(method)) true
     else if (isAnonFunction(method)) false
+    else if (scalaVersion.isScala2 && isPrivateAccessor(method)) true
     else if (isLiftedMethod(method)) !isLazyInitializer(method) && isLazyGetter(method)
     else if (isAnonClass(method.declaringType)) false
     // TODO in Scala 3 we should be able to find the symbol of a local class using TASTy Query
@@ -143,6 +144,9 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
 
   private def skipTraitInitializer(method: Method): Boolean =
     method.bytecodes.toSeq == Seq(ByteCodes.RETURN)
+
+  private def isPrivateAccessor(method: Method): Boolean =
+    method.name.matches(""".+\$access\$\d+""")
 }
 
 object ScalaUnpickler {

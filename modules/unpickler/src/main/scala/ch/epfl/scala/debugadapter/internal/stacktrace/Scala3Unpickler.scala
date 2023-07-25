@@ -352,13 +352,6 @@ class Scala3Unpickler(
     rec(scalaType.toString, javaType.name)
 
   private def skip(symbol: TermSymbol): Boolean =
-    // TODO : remove in next TASTy query version
-    def isScala2GetterWorkaround: Boolean =
-      symbol.sourceLanguage == SourceLanguage.Scala2
-        && symbol.declaredType.isInstanceOf[Type]
-        && symbol.owner.isClass
-        && symbol.owner.asClass.getDecl(termName(symbol.name.toString + " ")).isDefined
-
     val isNonLazyGetterOrSetter =
-      (!symbol.isMethod || isScala2GetterWorkaround || symbol.isSetter) && symbol.kind != TermSymbolKind.LazyVal
+      (!symbol.isMethod || symbol.isSetter) && symbol.kind != TermSymbolKind.LazyVal
     isNonLazyGetterOrSetter || symbol.isSynthetic
