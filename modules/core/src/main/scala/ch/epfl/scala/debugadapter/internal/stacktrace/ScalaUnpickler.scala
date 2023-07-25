@@ -9,8 +9,6 @@ import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
 import com.sun.jdi.AbsentInformationException
 import com.sun.jdi.Method
 import com.sun.jdi.ReferenceType
-import com.sun.jdi.ClassType
-
 import scala.jdk.CollectionConverters.*
 import scala.util.control.NonFatal
 

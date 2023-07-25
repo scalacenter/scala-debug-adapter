@@ -102,6 +102,30 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     if isScala30 then debuggee.assertFailure("example.Main$B$1$", "void m()")
     else debuggee.assertFailure("example.Main$B$2$", "void m()")
   }
+  test("local class and trait") {
+    val source =
+      """|package example
+         |object Main :
+         |  class A
+         |  def main(args: Array[String]): Unit = 
+         |    trait D extends A :
+         |      def m() = 
+         |        println("hello")
+         |      
+         |    trait E
+         |    class B extends E:
+         |      def l() = () 
+         |    class C extends D :
+         |      def n() = ()
+         |     
+         |  
+         |
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    debuggee.assertFormat("example.Main$D$1", "void m()", "Main.main.D.m(): Unit")
+    debuggee.assertFormat("example.Main$B$1", "void l()", "Main.main.B.l(): Unit")
+    debuggee.assertFormat("example.Main$C$1", "void n()", "Main.main.C.n(): Unit")
+  }
 
   test("local methods with same name") {
     val source =
@@ -265,6 +289,23 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.Main$D$1", "void m1()", "Main.m.D.m1: Unit")
     debuggee.assertFailure("example.Main$G$1", "void m()")
 
+  }
+
+  test("local class with encoded name") {
+    val source =
+      """|package example 
+         |class ++ {
+         |  def m = {
+         |    def ++ = 1
+         |    class ++ {
+         |      def m: Unit = ()
+         |    }
+         |  }
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    debuggee.assertFormat("example.$plus$plus", "int $plus$plus$1()", "++.m.++: Int")
+    debuggee.assertFormat("example.$plus$plus$$plus$plus$2", "void m()", "++.m.++.m: Unit")
   }
 
   test("extension method of value classes") {

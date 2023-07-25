@@ -62,12 +62,12 @@ class Scala3Unpickler(
     findSymbol(JdiMethod(obj))
 
   private[stacktrace] def findSymbol(method: binary.Method): Option[TermSymbol] =
-    findDeclaringClass(method.declaringClass, method.isExtensionMethod) match
+    findClass(method.declaringClass, method.isExtensionMethod) match
       case None => throw new Exception(s"Cannot find Scala symbol of ${method.declaringClass.name}")
       case Some(declaringClass) =>
         matchesLocalMethodOrLazyVal(method) match
           case Some((name, _)) =>
-            localMethodsAndLazyVals(declaringClass, name)
+            localMethodsAndLazyVals(declaringClass, NameTransformer.decode(name))
               .filter(matchSignature(method, _))
               .singleOrThrow(method)
           case None =>
@@ -260,36 +260,37 @@ class Scala3Unpickler(
       case p: PackageRef => p.fullyQualifiedName.toString == "scala"
       case _ => false
 
-  private def findDeclaringClass(declClass: ClassType, isExtensionMethod: Boolean): Option[ClassSymbol] =
-    val javaParts = declClass.name.split('.')
+  private def findClass(cls: ClassType, isExtensionMethod: Boolean = false): Option[ClassSymbol] =
+    val javaParts = cls.name.split('.')
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
       if packageNames.nonEmpty
       then ctx.findSymbolFromRoot(packageNames).asInstanceOf[PackageSymbol]
       else ctx.defn.EmptyPackage
-    val className = javaParts.last
-    val clsSymbols = matchesLocalClass(className) match
-      case Some(s1, s2, s3) =>
-        val sym = findLocalClasses(findSymbolsRecursively(packageSym, s1), s2, declClass)
-        if s3.isEmpty || s3 == "$" then sym
-        else sym.flatMap(findSymbolsRecursively(_, s3.substring(1)))
+    val className = NameTransformer.decode(javaParts.last)
+    val clsSymbols = className match
+      case LocalClass(declCls, localCls, remaining) =>
+        val sym = findLocalClasses(findSymbolsRecursively(packageSym, declCls), localCls, cls)
+        remaining match
+          case None => sym
+          case Some(remaining) => sym.flatMap(findSymbolsRecursively(_, remaining))
       case _ => findSymbolsRecursively(packageSym, className)
-    val obj = clsSymbols.filter(_.isModuleClass)
-    val cls = clsSymbols.filter(!_.isModuleClass)
-    assert(obj.size <= 1 && cls.size <= 1)
-    if declClass.isObject && !isExtensionMethod then obj.headOption else cls.headOption
+    val objSym = clsSymbols.filter(_.isModuleClass)
+    val clsSym = clsSymbols.filter(!_.isModuleClass)
+    assert(objSym.size <= 1 && clsSym.size <= 1)
+    if cls.isObject && !isExtensionMethod then objSym.headOption else clsSym.headOption
 
-  private def matchesLocalClass(encodedName: String): Option[(String, String, String)] =
-    val localMethod = "(.+)\\$([^$]+)\\$\\d+(.*?)".r
-    encodedName match
-      case localMethod(s1, s2, s3) =>
-        Some(s1, s2, s3)
-      case _ => None
+  object LocalClass:
+    def unapply(name: String): Option[(String, String, Option[String])] =
+      "([^$]+)\\$([^$]+)\\$\\d+(\\$.*)?".r
+        .unapplySeq(name)
+        .map(xs => (xs(0), xs(1), Option(xs(2)).map(_.stripPrefix("$")).filter(_.nonEmpty)))
+
   private def findSymbolsRecursively(owner: DeclaringSymbol, encodedName: String): Seq[ClassSymbol] =
     owner.declarations
       .collect { case sym: ClassSymbol => sym }
       .flatMap { sym =>
-        val encodedSymName = NameTransformer.encode(sym.name.toString)
+        val encodedSymName = sym.name.toString
         val Symbol = s"${Regex.quote(encodedSymName)}\\$$?(.*)".r
         encodedName match
           case Symbol(remaining) =>
@@ -298,16 +299,19 @@ class Scala3Unpickler(
           case _ => None
       }
 
-  private def findLocalClasses(owners: Seq[ClassSymbol], name: String, declClass: ClassType): Seq[ClassSymbol] =
+  private def findLocalClasses(owners: Seq[ClassSymbol], name: String, cls: ClassType): Seq[ClassSymbol] =
     def matchName(symbol: Symbol): Boolean = symbol.name.toString == name
     def isLocal(symbol: Symbol): Boolean = symbol.owner.isTerm
+    val superClassAndInterfaces =
+      (cls.superclass.toSeq ++ cls.interfaces)
+        .map(p => findClass(p).getOrElse(throw Exception(s"Cannot find symbol for parent $p")))
+        .toSet
+
     def matchesParents(classSymbol: ClassSymbol): Boolean =
-      val superClass = declClass.superclass
-      val superClassAndInterfaces =
-        (superClass +: declClass.interfaces).flatMap(findDeclaringClass(_, false))
-      val symbolParents = classSymbol.parentClasses
-      symbolParents.forall(superClassAndInterfaces.contains) &&
-      superClassAndInterfaces.forall(symbolParents.contains)
+      val symbolParents =
+        if !cls.isInterface then classSymbol.parentClasses
+        else classSymbol.parentClasses.filter(_.isTrait)
+      superClassAndInterfaces == symbolParents.toSet
     def findLocalClass(tree: Tree): Seq[ClassSymbol] =
       tree.walkTree {
         case ClassDef(_, _, symbol) if matchName(symbol) && isLocal(symbol) && matchesParents(symbol) => Seq(symbol)

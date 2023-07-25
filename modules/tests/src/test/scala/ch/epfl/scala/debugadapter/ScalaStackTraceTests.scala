@@ -155,12 +155,13 @@ class ScalaStackTraceTests extends DebugTestSuite {
       """|package example
          |object Main {
          |  def main(args: Array[String]): Unit = {
-         |    class A :
+         |    class B :
          |      def m() = {
-         |        println("test")
-         |
-         |      }
-         |    A().m()
+         |        println("hello")
+         |}
+         |    class C  extends B 
+         |    C().m()
+         |    
          |
          |  }
          |}
@@ -171,7 +172,7 @@ class ScalaStackTraceTests extends DebugTestSuite {
       Breakpoint(
         6,
         List(
-          "Main.main.A.m(): Unit",
+          "Main.main.B.m(): Unit",
           "Main.main(args: Array[String]): Unit"
         )
       )
