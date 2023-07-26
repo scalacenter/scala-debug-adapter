@@ -142,7 +142,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$", "void example$Main$Bar$1$$_$A$3()", "Main.m.Bar.m.A(): Unit")
+    if(isScala30) 
+      debuggee.assertFormat("example.Main$", "void example$Main$Bar$1$$_$A$1()", "Main.m.Bar.m.A(): Unit")
+    else
+      debuggee.assertFormat("example.Main$", "void example$Main$Bar$1$$_$A$3()", "Main.m.Bar.m.A(): Unit")
   }
 
   test("local methods with same name") {
@@ -325,7 +328,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     debuggee.assertFormat("example.Main$", "example.Main$D$1 m$1(example.Main$D$1 t)", "Main.A.m.B.C.m.m(t: D): D")
-    debuggee.assertFormat("example.Main$A$B$1", "example.Main$A$B$1 <init>()", "Main.A.m.B.<init>(): Unit")
+    if (isScala30)
+      debuggee.assertFormat("example.Main$B$1", "example.Main$A$B$1 <init>()", "Main.A.m.B.<init>(): Unit")
+    else 
+      debuggee.assertFormat("example.Main$A$B$1", "example.Main$A$B$1 <init>()", "Main.A.m.B.<init>(): Unit")
   }
 
   test("local class with encoded name") {
@@ -342,7 +348,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     debuggee.assertFormat("example.$plus$plus", "int $plus$plus$1()", "++.m.++: Int")
-    debuggee.assertFormat("example.$plus$plus$$plus$plus$2", "++.m.++.m: Unit")
+    if(isScala30)
+      debuggee.assertFormat("example.$plus$plus$$plus$plus$1", "++.m.++.m: Unit")
+    else 
+      debuggee.assertFormat("example.$plus$plus$$plus$plus$2", "++.m.++.m: Unit")
   }
 
   test("extension method of value classes") {
