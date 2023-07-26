@@ -56,6 +56,8 @@ class Scala3Unpickler(
       val sep = if !symbol.declaredType.isInstanceOf[MethodicType] then ": " else ""
       s"${formatSymbol(symbol)}$sep${formatType(symbol.declaredType)}"
     }
+  def formatClass(cls: binary.ClassType): Option[String] =
+    findClass(cls).map(formatSymbol(_))
 
   private[stacktrace] def findSymbol(obj: Any): Option[TermSymbol] =
     findSymbol(JdiMethod(obj))
@@ -259,7 +261,7 @@ class Scala3Unpickler(
       case p: PackageRef => p.fullyQualifiedName.toString == "scala"
       case _ => false
 
-  private def findClass(cls: binary.ClassType, isExtensionMethod: Boolean = false): Option[ClassSymbol] =
+  def findClass(cls: binary.ClassType, isExtensionMethod: Boolean = false): Option[ClassSymbol] =
     val javaParts = cls.name.split('.')
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
@@ -276,7 +278,7 @@ class Scala3Unpickler(
       case _ => findSymbolsRecursively(packageSym, className)
     val objSym = clsSymbols.filter(_.isModuleClass)
     val clsSym = clsSymbols.filter(!_.isModuleClass)
-    assert(objSym.size <= 1 && clsSym.size <= 1)
+    if objSym.size > 1 || clsSym.size > 1 then throw Exception("more than one")
     if cls.isObject && !isExtensionMethod then objSym.headOption else clsSym.headOption
 
   object LocalClass:
@@ -285,12 +287,12 @@ class Scala3Unpickler(
         .unapplySeq(name)
         .map(xs => (xs(0), xs(1), Option(xs(2)).map(_.stripPrefix("$")).filter(_.nonEmpty)))
 
-  private def findSymbolsRecursively(owner: DeclaringSymbol, encodedName: String): Seq[ClassSymbol] =
+  private def findSymbolsRecursively(owner: DeclaringSymbol, decodedName: String): Seq[ClassSymbol] =
     owner.declarations
       .collect { case sym: ClassSymbol => sym }
       .flatMap { sym =>
         val Symbol = s"${Regex.quote(sym.name.toString)}\\$$?(.*)".r
-        encodedName match
+        decodedName match
           case Symbol(remaining) =>
             if remaining.isEmpty then Some(sym)
             else findSymbolsRecursively(sym, remaining)

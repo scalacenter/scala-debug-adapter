@@ -5,8 +5,7 @@ import ch.epfl.scala.debugadapter.Java8
 import ch.epfl.scala.debugadapter.Java9OrAbove
 import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.internal.binary
-import ch.epfl.scala.debugadapter.internal.javareflect.JavaReflectConstructor
-import ch.epfl.scala.debugadapter.internal.javareflect.JavaReflectMethod
+import ch.epfl.scala.debugadapter.internal.javareflect.*
 import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 import com.sun.jdi.*
 import munit.FunSuite
@@ -78,53 +77,35 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFailure("example.Main$$anon$2", javaSig)
   }
 
-  test("local classes or local objects") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]) = {
-         |    class A {
-         |      def m(): Unit = {
-         |        println("A.m")
-         |      }
-         |    }
-         |    object B {
-         |      def m(): Unit = {
-         |        println("B.m")
-         |      }
-         |    }
-         |  }
-         |}
-         |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$A$1", "Main.main.A.m(): Unit")
-    if isScala30 then debuggee.assertFailure("example.Main$B$1$", "void m()")
-    else debuggee.assertFailure("example.Main$B$2$", "void m()")
-  }
-  test("local class and trait") {
+  test("find local class, trait and object by parents") {
     val source =
       """|package example
          |object Main :
          |  class A
          |  def main(args: Array[String]): Unit = 
-         |    trait D extends A :
-         |      def m() = 
-         |        println("hello")
-         |      
-         |    trait E
-         |    class B extends E:
-         |      def m() = () 
-         |    class C extends D :
-         |      override def m() = ()
-         |     
-         |  
-         |
+         |    trait D extends A
+         |    class C extends D
+         |    object F extends D
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$D$1", "Main.main.D.m(): Unit")
-    debuggee.assertFormat("example.Main$B$1", "Main.main.B.m(): Unit")
-    debuggee.assertFormat("example.Main$C$1", "Main.main.C.m(): Unit")
+    debuggee.assertFormat("example.Main$D$1", "Main.main.D")
+    debuggee.assertFormat("example.Main$C$1", "Main.main.C")
+    if isScala30 then
+      debuggee.assertFormat("example.Main$F$1$", "Main.main.F")
+      debuggee.assertFormat("example.Main$", "example.Main$F$1$ F$1(scala.runtime.LazyRef F$lzy1$2)", "Main.main.F: F")
+      debuggee.assertFormat(
+        "example.Main$",
+        "example.Main$F$1$ F$lzyINIT1$1(scala.runtime.LazyRef F$lzy1$1)",
+        "Main.main.F: F"
+      )
+    else
+      debuggee.assertFormat("example.Main$F$2$", "Main.main.F")
+      debuggee.assertFormat("example.Main$", "example.Main$F$2$ F$1(scala.runtime.LazyRef F$lzy1$2)", "Main.main.F: F")
+      debuggee.assertFormat(
+        "example.Main$",
+        "example.Main$F$2$ F$lzyINIT1$1(scala.runtime.LazyRef F$lzy1$1)",
+        "Main.main.F: F"
+      )
   }
 
   test("local class and local method in a local class") {
@@ -273,45 +254,29 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
 
   }
 
-  test("local classes") {
+  test("find local classes") {
     val source =
       """|package example
          |class A 
          |trait B         
-         |object Main {
-         |  def m() = {
-         |    class C extends A,B :
-         |      def m() = ()
-         |    class D extends C :
-         |      override def m() = ()
+         |object Main:
+         |  def m() = 
+         |    class C extends A,B 
          |    ()
          |    class E :
-         |      class F :
-         |        def m() = ()
-         |    class G extends A :
-         |      def m() = ()
-         |     
-         |
-         |  }
-         |  def l () = {
-         |    class C extends A : 
-         |      def m () = ()
-         |    class  D extends C :
-         |      def m1(t : Int) = ()
-         |    class G extends A :
-         |      def m() = ()
-         |  }
-         |  }
+         |      class F 
+         |    class G extends A
+         |  def l () = 
+         |    class C extends A 
+         |    class G extends A
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$C$1", "Main.m.C.m(): Unit")
-    debuggee.assertFormat("example.Main$E$1$F", "Main.m.E.F.m(): Unit")
-    debuggee.assertFormat("example.Main$D$1", "Main.m.D.m(): Unit")
-    debuggee.assertFailure("example.Main$G$1", "void m()")
-
+    debuggee.assertFormat("example.Main$C$1", "Main.m.C")
+    debuggee.assertFormat("example.Main$E$1$F", "Main.m.E.F")
+    debuggee.assertFailure("example.Main$G$1")
   }
 
-  test("local class") {
+  test("local class in signature") {
     val source =
       """|package example
          |object Main :
@@ -335,19 +300,15 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
   test("local class with encoded name") {
     val source =
       """|package example 
-         |class ++ {
-         |  def m = {
+         |class ++ :
+         |  def m = 
          |    def ++ = 1
-         |    class ++ {
-         |      def m: Unit = ()
-         |    }
-         |  }
-         |}
+         |    class ++ 
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     debuggee.assertFormat("example.$plus$plus", "int $plus$plus$1()", "++.m.++: Int")
-    if isScala30 then debuggee.assertFormat("example.$plus$plus$$plus$plus$1", "++.m.++.m: Unit")
-    else debuggee.assertFormat("example.$plus$plus$$plus$plus$2", "++.m.++.m: Unit")
+    if isScala30 then debuggee.assertFormat("example.$plus$plus$$plus$plus$1", "++.m.++")
+    else debuggee.assertFormat("example.$plus$plus$$plus$plus$2", "++.m.++")
   }
 
   test("extension method of value classes") {
@@ -902,6 +863,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
       new Scala3Unpickler(debuggeeClasspath, println, testMode = true)
 
+    private def getClass(declaringType: String): binary.ClassType =
+      JavaReflectClass(debuggee.classLoader.loadClass(declaringType))
+
     private def getMethod(declaringType: String, javaSig: String)(using munit.Location): binary.Method =
       def typeAndName(p: String): (String, String) =
         val parts = p.split(' ').filter(_.nonEmpty)
@@ -937,14 +901,22 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       val m = getMethod(declaringType, javaSig)
       assert(unpickler.findSymbol(m).isEmpty)
 
+    private def assertNotFound(declaringType: String)(using munit.Location): Unit =
+      val cls = getClass(declaringType)
+      assert(unpickler.findSymbol(cls).isEmpty)
+
     private def assertFailure(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
-      intercept[Exception | AssertionError](unpickler.findSymbol(m))
+      intercept[Exception](unpickler.findSymbol(m))
+
+    private def assertFailure(declaringType: String)(using munit.Location): Unit =
+      val cls = getClass(declaringType)
+      intercept[Exception](unpickler.findClass(cls))
 
     private def assertFormat(declaringType: String, javaSig: String, expected: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
       assertEquals(unpickler.formatMethod(m), Some(expected))
 
     private def assertFormat(declaringType: String, expected: String)(using munit.Location): Unit =
-      val m = getMethod(declaringType, "void m()")
-      assertEquals(unpickler.formatMethod(m), Some(expected))
+      val cls = getClass(declaringType)
+      assertEquals(unpickler.formatClass(cls), Some(expected))
