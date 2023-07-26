@@ -1,5 +1,4 @@
 package ch.epfl.scala.debugadapter.internal.binary
-import java.lang.Class
 trait ClassType extends Type:
   def name: String
 

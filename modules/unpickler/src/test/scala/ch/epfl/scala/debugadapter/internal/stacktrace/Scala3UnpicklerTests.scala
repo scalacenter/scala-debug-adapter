@@ -98,7 +98,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$A$1", "void m()", "Main.main.A.m(): Unit")
+    debuggee.assertFormat("example.Main$A$1", "Main.main.A.m(): Unit")
     if isScala30 then debuggee.assertFailure("example.Main$B$1$", "void m()")
     else debuggee.assertFailure("example.Main$B$2$", "void m()")
   }
@@ -114,17 +114,35 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |      
          |    trait E
          |    class B extends E:
-         |      def l() = () 
+         |      def m() = () 
          |    class C extends D :
-         |      def n() = ()
+         |      override def m() = ()
          |     
          |  
          |
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$D$1", "void m()", "Main.main.D.m(): Unit")
-    debuggee.assertFormat("example.Main$B$1", "void l()", "Main.main.B.l(): Unit")
-    debuggee.assertFormat("example.Main$C$1", "void n()", "Main.main.C.n(): Unit")
+    debuggee.assertFormat("example.Main$D$1", "Main.main.D.m(): Unit")
+    debuggee.assertFormat("example.Main$B$1", "Main.main.B.m(): Unit")
+    debuggee.assertFormat("example.Main$C$1", "Main.main.C.m(): Unit")
+  }
+
+  test("local class and local method in a local class") {
+    val source =
+      """|package example
+         |object Main {
+         |  def m =
+         |    class A // Main$A$1
+         |    class Bar :
+         |      def A = ()
+         |      def m =
+         |        class A  // Main$A$2
+         |        def A() = () // Main.example$Main$Bar$1$$_$A$3()
+         |        A()
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    debuggee.assertFormat("example.Main$", "void example$Main$Bar$1$$_$A$3()", "Main.m.Bar.m.A(): Unit")
   }
 
   test("local methods with same name") {
@@ -261,9 +279,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |object Main {
          |  def m() = {
          |    class C extends A,B :
-         |      def m() = 1
+         |      def m() = ()
          |    class D extends C :
-         |      def m1 = ()
+         |      override def m() = ()
          |    ()
          |    class E :
          |      class F :
@@ -275,7 +293,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |  }
          |  def l () = {
          |    class C extends A : 
-         |      def m () = 1
+         |      def m () = ()
          |    class  D extends C :
          |      def m1(t : Int) = ()
          |    class G extends A :
@@ -284,11 +302,30 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |  }
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$C$1", "int m()", "Main.m.C.m(): Int")
-    debuggee.assertFormat("example.Main$E$1$F", "void m()", "Main.m.E.F.m(): Unit")
-    debuggee.assertFormat("example.Main$D$1", "void m1()", "Main.m.D.m1: Unit")
+    debuggee.assertFormat("example.Main$C$1", "Main.m.C.m(): Unit")
+    debuggee.assertFormat("example.Main$E$1$F", "Main.m.E.F.m(): Unit")
+    debuggee.assertFormat("example.Main$D$1", "Main.m.D.m(): Unit")
     debuggee.assertFailure("example.Main$G$1", "void m()")
 
+  }
+
+  test("local class") {
+    val source =
+      """|package example
+         |object Main :
+         |  class A :
+         |    def m =
+         |      class B :
+         |        println("B")
+         |        class C :
+         |          def m =
+         |            class D 
+         |            def m(t : D) : D = 
+         |              t
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    debuggee.assertFormat("example.Main$", "example.Main$D$1 m$1(example.Main$D$1 t)", "Main.A.m.B.C.m.m(t: D): D")
+    debuggee.assertFormat("example.Main$A$B$1", "example.Main$A$B$1 <init>()", "Main.A.m.B.<init>(): Unit")
   }
 
   test("local class with encoded name") {
@@ -305,7 +342,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     debuggee.assertFormat("example.$plus$plus", "int $plus$plus$1()", "++.m.++: Int")
-    debuggee.assertFormat("example.$plus$plus$$plus$plus$2", "void m()", "++.m.++.m: Unit")
+    debuggee.assertFormat("example.$plus$plus$$plus$plus$2", "++.m.++.m: Unit")
   }
 
   test("extension method of value classes") {
@@ -493,9 +530,6 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |trait A {
          |  class B
          |}
-         |class Foo
-         |
-         |class Bar 
          |
          |case class !:[A, B](left: A, right: B)
          |
@@ -517,7 +551,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |  val x: A = new A {}
          |  def m(a: x.type)(b: x.B): A = a
          |  def m(t: Int !: Int) = 1
-         |  def m4() : [T] => Foo => Bar = ???
+         |  def m() : [T] => List[T] => Option[T] = ???
+         |  def mbis() : [T] => (List[T],List[T]) => Option[T] = ???
+         |
          |}
          |""".stripMargin
 
@@ -544,7 +580,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     assertFormat("scala.Option m(int x)", "Main.m(x: Int): Option[?]")
     assertFormat("example.A$B m(example.A a, example.A b)", "Main.m(a: A {...})(b: a.type): b.B")
     assertFormat("example.A m(example.A a, example.A$B b)", "Main.m(a: x.type)(b: x.B): A")
-    assertFormat("scala.Function1 m4()", "Main.m4(): [T] => Foo => Bar")
+    assertFormat("scala.Function1 m()", "Main.m(): [T] => List[T] => Option[T]")
+    assertFormat("scala.Function2 mbis()", "Main.mbis(): [T] => (List[T], List[T]) => Option[T]")
+
   }
 
   test("constant type") {
@@ -900,4 +938,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
 
     private def assertFormat(declaringType: String, javaSig: String, expected: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
+      assertEquals(unpickler.formatMethod(m), Some(expected))
+
+    private def assertFormat(declaringType: String, expected: String)(using munit.Location): Unit =
+      val m = getMethod(declaringType, "void m()")
       assertEquals(unpickler.formatMethod(m), Some(expected))
