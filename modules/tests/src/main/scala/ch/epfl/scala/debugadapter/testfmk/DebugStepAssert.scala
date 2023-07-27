@@ -47,7 +47,7 @@ object DebugStepAssert {
 }
 
 object Breakpoint {
-  def apply(line: Int)(implicit ctx: TestingContext): SingleStepAssert[List[StackFrame]] = {
+  def apply(line: Int)(implicit ctx: TestingContext, location: Location): SingleStepAssert[List[StackFrame]] = {
     val breakpoint = Breakpoint(ctx.mainSource, line, None)
     SingleStepAssert(breakpoint, assertOnFrame(ctx.mainSource, line, None))
   }

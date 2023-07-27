@@ -882,7 +882,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |  }
          |}""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
+    // ambiguity on symbol example.A$B$1.m$1(java.lang.String)
+    check(config = defaultConfig.copy(testMode = false))(
       Breakpoint(30), // in A#m
       DebugStepAssert.inParallel(
         Evaluation.success("new B")(result => assert(result.startsWith("A$B$1@"))), // captures x1

@@ -149,4 +149,28 @@ class ScalaStackTraceTests extends DebugTestSuite {
       )
     )
   }
+
+  test("local class") {
+    val source =
+      """|package example
+         |object Main :
+         |  def main(args: Array[String]): Unit = 
+         |    class B :
+         |      def m() = 
+         |        println("hello")
+         |
+         |    class C  extends B 
+         |    C().m()
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(
+        6,
+        List(
+          "Main.main.B.m(): Unit",
+          "Main.main(args: Array[String]): Unit"
+        )
+      )
+    )
+  }
 }
