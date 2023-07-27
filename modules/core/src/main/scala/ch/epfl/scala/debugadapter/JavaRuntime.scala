@@ -18,7 +18,7 @@ final case class Java8(javaHome: Path, classJars: Seq[Path], sourceZip: Option[P
 final case class Java9OrAbove(javaHome: Path, fsJar: Path, sourceZip: Option[Path]) extends JavaRuntime {
   override def sourceEntries: Seq[SourceEntry] = sourceZip.map(SourceJar.apply).toSeq
   override def classSystems: Seq[JavaRuntimeSystem] = {
-    val classLoader = new URLClassLoader(Array(fsJar.toUri.toURL))
+    val classLoader = new URLClassLoader(Array(fsJar.toUri.toURL), null)
     Seq(JavaRuntimeSystem(classLoader, javaHome))
   }
 }

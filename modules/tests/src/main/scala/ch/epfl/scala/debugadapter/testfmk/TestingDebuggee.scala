@@ -52,7 +52,7 @@ case class TestingDebuggee(
   }
 
   lazy val classLoader: ClassLoader =
-    new URLClassLoader(classPathEntries.map(_.absolutePath.toUri.toURL).toArray)
+    new URLClassLoader(classPathEntries.map(_.absolutePath.toUri.toURL).toArray, null)
 }
 
 object TestingDebuggee {

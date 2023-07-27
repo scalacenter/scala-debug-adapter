@@ -388,6 +388,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.A$", "java.lang.String a()", "A.a: String")
     debuggee.assertNotFound("example.A$", "java.lang.String b()")
     debuggee.assertFormat("example.B", "java.lang.String b()", "B.b: String")
+
+    if !isScala30 then // new in Scala 3.3.0
+      debuggee.assertNotSkipped("example.A$", "java.lang.Object a$lzyINIT1()")
+      debuggee.assertSkip("example.A$", "java.lang.Object b$lzyINIT1()") // it's a forwarder
   }
 
   test("synthetic methods of case class") {
@@ -897,13 +901,17 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       val m = getMethod(declaringType, javaSig)
       assert(unpickler.findSymbol(m).isDefined)
 
+    private def assertSkip(declaringType: String, javaSig: String)(using munit.Location): Unit =
+      val m = getMethod(declaringType, javaSig)
+      assert(unpickler.skipMethod(m))
+
+    private def assertNotSkipped(declaringType: String, javaSig: String)(using munit.Location): Unit =
+      val m = getMethod(declaringType, javaSig)
+      assert(!unpickler.skipMethod(m))
+
     private def assertNotFound(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
       assert(unpickler.findSymbol(m).isEmpty)
-
-    private def assertNotFound(declaringType: String)(using munit.Location): Unit =
-      val cls = getClass(declaringType)
-      assert(unpickler.findSymbol(cls).isEmpty)
 
     private def assertFailure(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
@@ -919,4 +927,4 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
 
     private def assertFormat(declaringType: String, expected: String)(using munit.Location): Unit =
       val cls = getClass(declaringType)
-      assertEquals(unpickler.formatClass(cls), Some(expected))
+      assertEquals(unpickler.formatClass(cls), expected)
