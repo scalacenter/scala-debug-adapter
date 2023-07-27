@@ -23,24 +23,67 @@ class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1+`) {
     check(Breakpoint(7), StepIn.method(if (isScala3) "Main.m(message: String): Unit" else "Main$.mTarget(String)"))
   }
 
-  test("should skip given lazy val initialize") {
+  test("given lazy val") {
     val source =
       """|package example
          |
+         |trait Msg {
+         |  def value: String
+         |}
+         |
+         |object Msg {
+         |  val default = new Msg {
+         |    def value: String = "Hello"
+         |  }
+         |  def greet(using msg: Msg): Unit = println(msg.value)
+         |}
+         |
          |object Main {
-         |  given List[Int] = List(1,2,3)
          |  def main(args: Array[String]): Unit = {
-         |    sum
-         |    println("ok")
+         |    m
+         |    A.m
+         |    B.m
          |  }
          |
-         |  def sum(using list: List[Int]): Int = list.sum
+         |  def m: Unit =
+         |    given Msg = Msg.default
+         |    Msg.greet
+         |    Msg.greet
+         |}
+         |
+         |object A {
+         |  given Msg = Msg.default
+         |  def m =
+         |    Msg.greet
+         |    Msg.greet
+         |}
+         |
+         |object B {
+         |  given Msg with
+         |    def value: String = "Hello"
+         |  def m =
+         |    Msg.greet
+         |    Msg.greet
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
-      Breakpoint(6),
-      StepIn.method("ScalaRunTime.wrapIntArray(xs: Array[Int]): ArraySeq[Int]")
+      Breakpoint(23),
+      StepIn.line(22),
+      StepIn.line(23),
+      StepIn.line(11),
+      StepOut.line(24),
+      StepIn.line(11),
+      Breakpoint(30),
+      StepIn.line(28),
+      StepIn.line(30),
+      StepIn.line(11),
+      StepOut.line(31),
+      StepIn.line(11),
+      Breakpoint(38),
+      StepIn.line(11),
+      StepOut.line(39),
+      StepIn.line(11)
     )
   }
 }
@@ -428,49 +471,27 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |""".stripMargin
 
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
-    if (isScala33) {
+    if (isScala3) {
+      // This only works since Scala 3.3.0: in previous versions, there is a single method for
+      // getting and initializing the lazy field. We skip it.
       check(
         Breakpoint(9),
         StepIn.line(4),
+        StepIn.line(6),
+        StepIn.line(4),
+        StepIn.line(5),
         StepIn.method("String.toString(): String"),
         StepIn.line(4),
+        StepIn.line(6),
         StepIn.line(9),
         StepIn.method(printlnMethod),
         Breakpoint(10),
-        StepIn.line(4),
-        StepOut.line(10),
         StepIn.method(printlnMethod),
         Breakpoint(11),
         StepIn.line(18),
         StepIn.method("String.toString(): String"),
         StepIn.line(18),
         StepIn.line(11),
-        StepIn.method(printlnMethod),
-        Breakpoint(12),
-        StepIn.method(printlnMethod)
-      )
-    } else if (isScala3) {
-      check(
-        // TODO: clean debug line table in Scala 3 compiler
-        // TODO: introduce $lazyinit$ to isolate user code
-        Breakpoint(9),
-        StepIn.line(4),
-        StepIn.line(6),
-        StepIn.line(4),
-        StepIn.line(6),
-        StepIn.line(5),
-        StepOut.line(9),
-        StepIn.method(printlnMethod),
-        Breakpoint(10),
-        StepIn.line(4),
-        StepIn.line(6),
-        StepIn.line(4),
-        StepIn.line(6),
-        StepOut.line(10),
-        StepIn.method(printlnMethod),
-        Breakpoint(11),
-        StepIn.line(18),
-        StepOut.line(11),
         StepIn.method(printlnMethod),
         Breakpoint(12),
         StepIn.method(printlnMethod)
@@ -1118,16 +1139,10 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(9),
-      StepIn.method(if (isScala3) "LazyRef.initialized: Boolean" else "LazyRef.initialized(): boolean"),
-      StepIn.method(
-        if (isScala3) "Main.main.foo: String"
-        else "Main$.foo$lzycompute$1(LazyRef): String"
-      ),
+      StepIn.method(if (isScala3) "Main.main.foo: String" else "Main$.foo$lzycompute$1(LazyRef): String"),
       StepOut.line(9),
       Breakpoint(10),
-      StepIn.method(if (isScala3) "LazyRef.initialized: Boolean" else "LazyRef.initialized(): boolean"),
-      StepIn.method(if (isScala3) "LazyRef.value: T" else "LazyRef.value(): Object"),
-      StepIn.line(10)
+      StepIn.method(printlnMethod)
     )
   }
 

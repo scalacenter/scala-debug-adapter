@@ -5,13 +5,10 @@ import com.sun.jdi.Location
 import ch.epfl.scala.debugadapter.ScalaVersion
 
 private[internal] class RuntimeStepFilter(classesToSkip: Set[String], methodsToSkip: Set[String]) extends StepFilter {
-  override def shouldSkipOver(method: Method): Boolean =
-    classesToSkip.contains(method.declaringType.name) ||
-      methodsToSkip.contains(method.toString)
-
-  override def shouldSkipOut(upperLocation: Location, method: Method): Boolean =
-    classesToSkip.contains(method.declaringType.name) ||
-      methodsToSkip.contains(method.toString)
+  override def shouldSkipOver(method: Method): Boolean = shouldSkipOut(method)
+  override def shouldSkipOut(upperLocation: Location, method: Method): Boolean = shouldSkipOut(method)
+  private def shouldSkipOut(method: Method): Boolean =
+    classesToSkip.contains(method.declaringType.name) || methodsToSkip.contains(method.toString)
 }
 
 private[internal] object RuntimeStepFilter {
@@ -21,8 +18,19 @@ private[internal] object RuntimeStepFilter {
     "java.lang.invoke.DirectMethodHandle.allocateInstance(java.lang.Object)",
     "java.lang.invoke.DirectMethodHandle.constructorMethod(java.lang.Object)"
   )
-  private val scala3ClassesToSkip = Set("scala.runtime.LazyVals$")
-  private val scala2ClassesToSkip = Set.empty[String]
+  private val scalaClassesToSkip = Set(
+    "scala.runtime.LazyRef",
+    "scala.runtime.LazyBoolean",
+    "scala.runtime.LazyChar",
+    "scala.runtime.LazyShort",
+    "scala.runtime.LazyInt",
+    "scala.runtime.LazyLong",
+    "scala.runtime.LazyFloat",
+    "scala.runtime.LazyDouble",
+    "scala.runtime.LazyUnit"
+  )
+  private val scala3ClassesToSkip = scalaClassesToSkip ++ Set("scala.runtime.LazyVals$")
+  private val scala2ClassesToSkip = scalaClassesToSkip
 
   def apply(scalaVersion: ScalaVersion): RuntimeStepFilter = {
     if (scalaVersion.isScala2)
