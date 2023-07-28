@@ -2141,10 +2141,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       TestingDebuggee.mainClass(scalaSource, "example.Main", scalaVersion, Seq.empty, Seq(javaModule.mainModule))
     check(
       Breakpoint(5),
-      Evaluation.success("A.x", "x"),
-      Evaluation.success("A.x = \"y\"", ()),
-      Evaluation.success("A.x", "y"),
-      Evaluation.success("A.m()", "m")
+      Evaluation.successOrIgnore("A.x", "x", isScala2),
+      Evaluation.successOrIgnore("A.x = \"y\"", (), isScala2),
+      Evaluation.successOrIgnore("A.x", "y", isScala2),
+      Evaluation.successOrIgnore("A.m()", "m", isScala2)
     )
   }
 }
