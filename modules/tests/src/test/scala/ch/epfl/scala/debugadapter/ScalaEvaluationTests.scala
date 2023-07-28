@@ -2115,6 +2115,38 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       )
     }
   }
+
+  test("java static members") {
+    val javaSource =
+      """|package example;
+         |
+         |class A {
+         |  protected static String x = "x";
+         |  protected static String m() {
+         |    return "m";
+         |  }
+         |}
+         |""".stripMargin
+    val javaModule = TestingDebuggee.fromJavaSource(javaSource, "example.A", scalaVersion)
+    val scalaSource =
+      """|package example
+         |
+         |object Main extends A {
+         |  def main(args: Array[String]): Unit = {
+         |    println("Hello, World!")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClass(scalaSource, "example.Main", scalaVersion, Seq.empty, Seq(javaModule.mainModule))
+    check(
+      Breakpoint(5),
+      Evaluation.success("A.x", "x"),
+      Evaluation.success("A.x = \"y\"", ()),
+      Evaluation.success("A.x", "y"),
+      Evaluation.success("A.m()", "m")
+    )
+  }
 }
 
 abstract class Scala2EvaluationTests(val scalaVersion: ScalaVersion) extends ScalaEvaluationTests(scalaVersion) {
