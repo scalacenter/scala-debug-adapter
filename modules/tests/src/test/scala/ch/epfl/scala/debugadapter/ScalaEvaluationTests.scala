@@ -2147,6 +2147,30 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Evaluation.successOrIgnore("A.m()", "m", isScala2)
     )
   }
+
+  test("tuple extractor") {
+    val source =
+      """|package example
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val tuple = (1, 2)
+         |    val (x, y) = tuple
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(5),
+      Evaluation.success("tuple._1", 1),
+      Evaluation.success(
+        """|val (x, y) = tuple
+           |y
+           |""".stripMargin,
+        2
+      )
+    )
+  }
 }
 
 abstract class Scala2EvaluationTests(val scalaVersion: ScalaVersion) extends ScalaEvaluationTests(scalaVersion) {
