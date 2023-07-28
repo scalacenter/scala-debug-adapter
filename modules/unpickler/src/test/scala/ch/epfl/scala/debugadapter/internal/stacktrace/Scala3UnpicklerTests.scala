@@ -823,6 +823,20 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.Main$", "example.Foo foo()", "Main.foo: Foo[[X] =>> Either[X, Int]]")
   }
 
+  test("local enum") {
+    val source =
+      """|package example
+         |object Main :
+         |  def m =
+         |    enum A:
+         |      case B
+         |    ()
+         |""".stripMargin
+
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    debuggee.assertFormat("example.Main$A$1", "Main.m.A")
+  }
+
   test("package object") {
     val source =
       """|package object example {

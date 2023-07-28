@@ -291,11 +291,14 @@ class Scala3Unpickler(
   private def findLocalClasses(owner: ClassSymbol, name: String, cls: binary.ClassType): Seq[ClassSymbol] =
     val superClassAndInterfaces = (cls.superclass.toSeq ++ cls.interfaces).map(findClass(_)).toSet
 
-    def matchesParents(classSymbol: ClassSymbol): Boolean =
-      val symbolParents =
-        if !cls.isInterface then classSymbol.parentClasses
-        else classSymbol.parentClasses.filter(_.isTrait)
-      superClassAndInterfaces == symbolParents.toSet
+    def matchesParents(classSymbol: ClassSymbol): Boolean =      
+      if classSymbol.isEnum then
+          superClassAndInterfaces == classSymbol.parentClasses.toSet + ctx.defn.ProductClass
+      else if cls.isInterface then
+        superClassAndInterfaces == classSymbol.parentClasses.filter(_.isTrait).toSet
+      else
+        superClassAndInterfaces == classSymbol.parentClasses.toSet
+        
 
     collectLocalSymbols(owner) { case cls: ClassSymbol if cls.matchName(name) && matchesParents(cls) => cls }
 
@@ -399,8 +402,11 @@ class Scala3Unpickler(
   extension [T <: Symbol](symbols: Seq[T])
     def singleOrThrow(binaryName: String): T =
       singleOptOrThrow(binaryName)
-        .getOrElse(throw new Exception(s"Cannot find Scala symbol of $binaryName"))
+        .getOrElse(throw new NotFoundException(s"Cannot find Scala symbol of $binaryName"))
 
     def singleOptOrThrow(binaryName: String): Option[T] =
-      if symbols.size > 1 then throw new Exception(s"Found ${symbols.size} matching symbols for $binaryName")
+      if symbols.size > 1 then throw new AmbiguousException(s"Found ${symbols.size} matching symbols for $binaryName")
       else symbols.headOption
+
+case class AmbiguousException(m : String) extends Exception
+case class NotFoundException(m : String) extends Exception
