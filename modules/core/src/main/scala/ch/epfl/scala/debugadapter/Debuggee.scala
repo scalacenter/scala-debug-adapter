@@ -1,6 +1,7 @@
 package ch.epfl.scala.debugadapter
 
 import java.nio.file.Path
+import java.io.File
 
 trait Debuggee {
   def name: String
@@ -15,4 +16,5 @@ trait Debuggee {
   def classPathEntries: Seq[ClassPathEntry] = managedEntries ++ unmanagedEntries
   def classPath: Seq[Path] = classPathEntries.map(_.absolutePath)
   def classEntries: Seq[ClassEntry] = classPathEntries ++ javaRuntime
+  def classPathString: String = classPath.mkString(File.pathSeparator)
 }

@@ -28,6 +28,7 @@ import scala.util.Properties
 import scala.util.control.NonFatal
 
 case class TestingDebuggee(
+    tempDir: Path,
     scalaVersion: ScalaVersion,
     sourceFiles: Seq[Path],
     mainModule: Module,
@@ -45,7 +46,7 @@ case class TestingDebuggee(
   override def libraries: Seq[Library] = dependencies.collect { case m: Library => m }
   override def unmanagedEntries: Seq[UnmanagedEntry] = Seq.empty
   override def run(listener: DebuggeeListener): CancelableFuture[Unit] = {
-    val cmd = Seq("java", DebugInterface, "-cp", classPath.mkString(File.pathSeparator), mainClass)
+    val cmd = Seq("java", DebugInterface, "-cp", classPathString, mainClass)
     val builder = new ProcessBuilder(cmd: _*)
     val process = builder.start()
     new MainProcess(process, listener)
@@ -147,7 +148,7 @@ object TestingDebuggee {
   ): TestingDebuggee = {
     val className = mainClassName.split('.').last
     val sourceName = s"$className.scala"
-    mainClass(Seq(sourceName -> source), mainClassName, scalaVersion, Seq.empty, dependencies)
+    mainClass(Seq(sourceName -> source), mainClassName, scalaVersion, scalacOptions, dependencies)
   }
 
   def mainClass(
@@ -197,7 +198,7 @@ object TestingDebuggee {
     }
 
     val mainModule = Module(mainClassName, Some(scalaVersion), scalacOptions, classDir, sourceEntries)
-    TestingDebuggee(scalaVersion, sourceFiles, mainModule, allDependencies, mainClassName, javaRuntime)
+    TestingDebuggee(tempDir, scalaVersion, sourceFiles, mainModule, allDependencies, mainClassName, javaRuntime)
   }
 
   def munitTestSuite(
@@ -246,7 +247,7 @@ object TestingDebuggee {
 
     val sourceEntry = SourceDirectory(srcDir)
     val mainModule = Module(testSuite, Some(scalaVersion), Seq.empty, classDir, Seq(sourceEntry))
-    TestingDebuggee(scalaVersion, Seq(sourceFile), mainModule, classPath, "TestRunner", getRuntime())
+    TestingDebuggee(tempDir, scalaVersion, Seq(sourceFile), mainModule, classPath, "TestRunner", getRuntime())
   }
 
   private def getResource(name: String): Path =
@@ -288,7 +289,7 @@ object TestingDebuggee {
 
     val sourceEntry = SourceDirectory(srcDir)
     val mainModule = Module(mainClassName, None, Seq.empty, classDir, Seq(sourceEntry))
-    TestingDebuggee(scalaVersion, Seq(srcFile), mainModule, Seq.empty, mainClassName, getRuntime())
+    TestingDebuggee(tempDir, scalaVersion, Seq(srcFile), mainModule, Seq.empty, mainClassName, getRuntime())
   }
 
   private def startCrawling(input: InputStream)(f: String => Unit): Unit = {
