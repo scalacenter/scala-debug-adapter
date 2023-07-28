@@ -3,9 +3,14 @@ package ch.epfl.scala.debugadapter.internal.stacktrace
 import ch.epfl.scala.debugadapter.internal.binary
 
 object LocalClass:
+  def unapply(cls: binary.ClassType): Option[(String, String, Option[String])] =
+    val decodedClassName = NameTransformer.decode(cls.name.split('.').last)
+    unapply(decodedClassName)
+
   def unapply(decodedClassName: String): Option[(String, String, Option[String])] =
     "(.+)\\$([^$]+)\\$\\d+(\\$.*)?".r
       .unapplySeq(NameTransformer.decode(decodedClassName))
+      .filter(xs => xs(1) != "anon")
       .map(xs => (xs(0), xs(1), Option(xs(2)).map(_.stripPrefix("$")).filter(_.nonEmpty)))
 
 object LazyInit:
