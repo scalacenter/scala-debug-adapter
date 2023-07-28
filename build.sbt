@@ -91,7 +91,7 @@ lazy val core = projectMatrix
     buildInfoKeys := Seq[BuildInfoKey](
       BuildInfoKey.action("organization")(organization.value),
       BuildInfoKey.action("version")(version.value),
-      BuildInfoKey.action("expressionCompilerName")((expressionCompiler212 / name).value),
+      BuildInfoKey.action("expressionCompilerName")((LocalProject("expressionCompiler2_12") / name).value),
       BuildInfoKey.action("unpicklerName")((LocalProject("unpickler3") / name).value),
       BuildInfoKey.action("scala212")(Dependencies.scala212),
       BuildInfoKey.action("scala213")(Dependencies.scala213),
@@ -102,6 +102,7 @@ lazy val core = projectMatrix
   )
 
 lazy val tests212 = tests.jvm(Dependencies.scala212)
+lazy val tests213 = tests.jvm(Dependencies.scala213)
 lazy val tests3 = tests.jvm(Dependencies.scala31Plus)
 lazy val tests = projectMatrix
   .in(file("modules/tests"))
@@ -123,11 +124,11 @@ lazy val tests = projectMatrix
     Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "+l"),
     Test / testOptions := (Test / testOptions)
       .dependsOn(
-        expressionCompiler212 / publishLocal,
-        expressionCompiler213 / publishLocal,
-        expressionCompiler30 / publishLocal,
-        expressionCompiler3 / publishLocal,
         // break cyclic reference
+        LocalProject("expressionCompiler2_12") / publishLocal,
+        LocalProject("expressionCompiler2_13") / publishLocal,
+        LocalProject("expressionCompiler3_0") / publishLocal,
+        LocalProject("expressionCompiler3") / publishLocal,
         LocalProject("unpickler3") / publishLocal
       )
       .value
@@ -158,10 +159,10 @@ lazy val expressionCompiler30 = expressionCompiler.finder(scala30Axis)(true)
 lazy val expressionCompiler3 = expressionCompiler.finder(scala3Axis)(true)
 lazy val expressionCompiler = projectMatrix
   .in(file("modules/expression-compiler"))
-  .customRow(true, Seq(scala212Axis, VirtualAxis.jvm), identity[Project] _)
-  .customRow(true, Seq(scala213Axis, VirtualAxis.jvm), identity[Project] _)
-  .customRow(true, Seq(scala30Axis, VirtualAxis.jvm), identity[Project] _)
-  .customRow(true, Seq(scala3Axis, VirtualAxis.jvm), identity[Project] _)
+  .customRow(true, Seq(scala212Axis, VirtualAxis.jvm), p => p.dependsOn(tests212 % Test))
+  .customRow(true, Seq(scala213Axis, VirtualAxis.jvm), p => p.dependsOn(tests213 % Test))
+  .customRow(true, Seq(scala30Axis, VirtualAxis.jvm), p => p)
+  .customRow(true, Seq(scala3Axis, VirtualAxis.jvm), p => p.dependsOn(tests3 % Test))
   .settings(
     name := "scala-expression-compiler",
     crossScalaVersions ++= CrossVersion
@@ -175,7 +176,7 @@ lazy val expressionCompiler = projectMatrix
       .toSeq
       .flatten,
     crossScalaVersions := crossScalaVersions.value.distinct,
-    libraryDependencies ++= onScalaVersion(
+    libraryDependencies ++= Seq(Dependencies.munit % Test) ++ onScalaVersion(
       scala212 = Some(Dependencies.scalaCollectionCompat),
       scala213 = None,
       scala3 = None
@@ -188,6 +189,11 @@ lazy val expressionCompiler = projectMatrix
         case (3, 0) => sourceDir / s"scala-3.0"
         case (3, minor) => sourceDir / s"scala-3.1+"
       }
+    },
+    Test / unmanagedSourceDirectories ++= {
+      val sourceDir = (Test / sourceDirectory).value
+      if (scalaVersion.value == Dependencies.scala31Plus) Seq(sourceDir / "scala-3.latest")
+      else Seq.empty
     },
     Compile / doc / sources := Seq.empty,
     libraryDependencies += Dependencies.scalaCompiler(scalaVersion.value),

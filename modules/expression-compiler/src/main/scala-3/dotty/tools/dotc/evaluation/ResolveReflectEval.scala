@@ -119,9 +119,7 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
               // if the field is lazy, if it is private in a value class or a trait
               // then we must call the getter method
               val fieldValue =
-                if field.is(Lazy) ||
-                  field.owner.isValueClass ||
-                  field.owner.is(Trait)
+                if field.is(Lazy) || field.owner.isValueClass || field.owner.is(Trait)
                 then gen.callMethod(qualifier, field.getter.asTerm, Nil)
                 else
                   val rawValue = gen.getField(qualifier, field)
@@ -236,24 +234,22 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
       )
 
     def getField(qualifier: Tree, field: TermSymbol): Tree =
-      val fieldName = JavaEncoding.encode(field.name)
       Apply(
         Select(expressionThis, termName("getField")),
         List(
           qualifier,
           Literal(Constant(JavaEncoding.encode(field.owner.asType))),
-          Literal(Constant(fieldName))
+          Literal(Constant(JavaEncoding.encode(field.name)))
         )
       )
 
     def setField(qualifier: Tree, field: TermSymbol, value: Tree): Tree =
-      val fieldName = JavaEncoding.encode(field.name)
       Apply(
         Select(expressionThis, termName("setField")),
         List(
           qualifier,
           Literal(Constant(JavaEncoding.encode(field.owner.asType))),
-          Literal(Constant(fieldName)),
+          Literal(Constant(JavaEncoding.encode(field.name))),
           value
         )
       )

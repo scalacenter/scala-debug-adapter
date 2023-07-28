@@ -69,11 +69,8 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
         case tree: ImportOrExport => tree
 
         case tree if tree.symbol.is(Inline) =>
-          tree.symbol.info match
-            case tpe: ConstantType => cpy.Literal(tree)(tpe.value)
-            case _ =>
-              report.error(s"Cannot evaluate inlined expression with non constant type", tree.srcPos)
-              tree
+          val tpe = tree.symbol.info.asInstanceOf[ConstantType]
+          cpy.Literal(tree)(tpe.value)
 
         // static object
         case tree: (Ident | Select) if isStaticObject(tree.symbol) =>
@@ -108,16 +105,20 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
 
         // inaccessible fields
         case tree: Select if isInaccessibleField(tree) =>
-          val qualifier = getTransformedQualifier(tree)
-          getField(tree)(qualifier, tree.symbol.asTerm)
+          if tree.symbol.is(JavaStatic) then getField(tree)(nullLiteral, tree.symbol.asTerm)
+          else
+            val qualifier = getTransformedQualifier(tree)
+            getField(tree)(qualifier, tree.symbol.asTerm)
 
         // assignment to inaccessible fields
         case tree @ Assign(lhs, rhs) if isInaccessibleField(lhs) =>
-          val qualifier = getTransformedQualifier(lhs)
-          setField(tree)(qualifier, lhs.symbol.asTerm, transform(rhs))
+          if lhs.symbol.is(JavaStatic) then setField(tree)(nullLiteral, lhs.symbol.asTerm, transform(rhs))
+          else
+            val qualifier = getTransformedQualifier(lhs)
+            setField(tree)(qualifier, lhs.symbol.asTerm, transform(rhs))
 
         // this or outer this
-        case tree @ This(Ident(name)) if !isOwnedByExpression(tree.symbol) =>
+        case tree @ This(Ident(name)) if !tree.symbol.is(Package) && !isOwnedByExpression(tree.symbol) =>
           thisOrOuterValue(tree)(tree.symbol.enclosingClass.asClass)
 
         // inaccessible constructors
@@ -129,8 +130,10 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
         // inaccessible methods
         case tree: (Ident | Select | Apply | TypeApply) if isInaccessibleMethod(tree) =>
           val args = getTransformedArgs(tree)
-          val qualifier = getTransformedQualifier(tree)
-          callMethod(tree)(qualifier, tree.symbol.asTerm, args)
+          if tree.symbol.is(JavaStatic) then callMethod(tree)(nullLiteral, tree.symbol.asTerm, args)
+          else
+            val qualifier = getTransformedQualifier(tree)
+            callMethod(tree)(qualifier, tree.symbol.asTerm, args)
 
         case Typed(tree, tpt) if tpt.symbol.isType && !isTypeAccessible(tpt.symbol.asType) =>
           transform(tree)
@@ -143,9 +146,9 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
      */
     private def isInaccessibleField(tree: Tree)(using Context): Boolean =
       val symbol = tree.symbol
-      symbol.isField &&
-      symbol.owner.isType &&
-      !isTermAccessible(symbol.asTerm, getQualifierTypeSymbol(tree))
+      symbol.isField
+      && symbol.owner.isType
+      && !isTermAccessible(symbol.asTerm, getQualifierTypeSymbol(tree))
 
     /**
      * The symbol is a real method and the expression class cannot access it
@@ -153,9 +156,9 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
      */
     private def isInaccessibleMethod(tree: Tree)(using Context): Boolean =
       val symbol = tree.symbol
-      !isOwnedByExpression(symbol) &&
-      symbol.isRealMethod &&
-      (!symbol.owner.isType || !isTermAccessible(symbol.asTerm, getQualifierTypeSymbol(tree)))
+      !isOwnedByExpression(symbol)
+      && symbol.isRealMethod
+      && (!symbol.owner.isType || !isTermAccessible(symbol.asTerm, getQualifierTypeSymbol(tree)))
 
     /**
      * The symbol is a constructor and the expression class cannot access it
@@ -329,11 +332,7 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
     val strategy = EvaluationStrategy.StaticObject(obj.asClass)
     reflectEval(tree)(nullLiteral, strategy, List.empty, obj.typeRef)
 
-  private def getField(
-      tree: Tree
-  )(qualifier: Tree, field: TermSymbol)(using
-      Context
-  ): Tree =
+  private def getField(tree: Tree)(qualifier: Tree, field: TermSymbol)(using Context): Tree =
     reportErrorIfLocalInsideValueClass(field, tree.srcPos)
     val byName = isByNameParam(field.info)
     val strategy = EvaluationStrategy.Field(field, byName)
@@ -433,9 +432,8 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
   private def isTermAccessible(symbol: TermSymbol, owner: TypeSymbol)(using
       Context
   ): Boolean =
-    isOwnedByExpression(symbol) || (
-      !symbol.isPrivate && isTypeAccessible(owner)
-    )
+    isOwnedByExpression(symbol)
+      || (!symbol.isPrivate && !symbol.is(Protected) && isTypeAccessible(owner))
 
     // Check if a type is accessible from the expression class
   private def isTypeAccessible(symbol: TypeSymbol)(using Context): Boolean =
