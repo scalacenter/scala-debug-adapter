@@ -17,6 +17,7 @@ import ch.epfl.scala.debugadapter.DebugConfig
 import scala.concurrent.Future
 import scala.concurrent.Await
 import com.microsoft.java.debug.core.protocol.Types.Variable
+import scala.util.Properties
 
 abstract class DebugTestSuite extends FunSuite with DebugTest {
   override def munitTimeout: Duration = 120.seconds
@@ -29,6 +30,9 @@ trait DebugTest {
 
   protected def defaultConfig: DebugConfig = DebugConfig.default.copy(autoCloseSession = false, testMode = true)
 
+  def javaVersion: String = Properties.javaVersion
+
+  def isJava8 = javaVersion.contains("1.8")
   def isScala3(implicit ctx: TestingContext) = ctx.scalaVersion.isScala3
   def isScala2(implicit ctx: TestingContext) = ctx.scalaVersion.isScala2
   def isScala213(implicit ctx: TestingContext) = ctx.scalaVersion.isScala213
@@ -141,13 +145,12 @@ trait DebugTest {
       }
     }
 
-    def evaluateWatchExpression(watch: Watch, assertion: Array[Variable] => Unit): Unit = {
-      println(s"(watch)$$ ${watch.variable}")
-      val localScopeRef = client.scopes(topFrame.id).find(_.name == "Local").map(_.variablesReference)
-      val variable =
-        localScopeRef.flatMap(i => client.variables(i).find(_.name == watch.variable).map(_.variablesReference))
-      val body = variable.map(i => client.variables(i)).getOrElse(Array[Variable]())
-      assertion(body)
+    def inspect(variable: LocalVariable, assertion: Array[Variable] => Unit): Unit = {
+      val values = for {
+        localScopeRef <- client.scopes(topFrame.id).find(_.name == "Local").map(_.variablesReference)
+        variableRef <- client.variables(localScopeRef).find(_.name == variable.name).map(_.variablesReference)
+      } yield client.variables(variableRef)
+      assertion(values.getOrElse(throw new NoSuchElementException(variable.name)))
     }
 
     def assertStop(assertion: List[StackFrame] => Unit): Unit = {
@@ -169,24 +172,26 @@ trait DebugTest {
         val event = client.outputed(m => m.category == Category.stdout, 16.seconds)
         print(s"> ${event.output}")
         assertion(event.output.trim)
-      case SingleStepAssert(_: StepIn, assertion) =>
+      case SingleStepAssert(StepIn, assertion) =>
         println(s"Stepping in, at ${formatFrame(topFrame)}")
         client.stepIn(threadId)
         assertStop(assertion)
-      case SingleStepAssert(_: StepOut, assertion) =>
+      case SingleStepAssert(StepOut, assertion) =>
         println(s"Stepping out, at ${formatFrame(topFrame)}")
         client.stepOut(threadId)
         assertStop(assertion)
-      case SingleStepAssert(_: StepOver, assertion) =>
-        ???
+      case SingleStepAssert(StepOver, assertion) =>
+        println(s"Stepping over, at ${formatFrame(topFrame)}")
+        client.stepOver(threadId)
+        assertStop(assertion)
       case SingleStepAssert(eval: Evaluation, assertion) =>
         Await.result(evaluateExpression(eval, assertion), 16.seconds)
-      case SingleStepAssert(Outputed(), assertion) =>
+      case SingleStepAssert(Outputed, assertion) =>
         continueIfPaused()
         val event = client.outputed(m => m.category == Category.stdout)
         print(s"> ${event.output}")
         assertion(event.output.trim)
-      case SingleStepAssert(_: NoStep, _) => ()
+      case SingleStepAssert(NoStep, _) => ()
       case ParallelStepsAsserts(steps) =>
         val evaluations = steps.map { step =>
           evaluateExpression(
@@ -195,8 +200,8 @@ trait DebugTest {
           )
         }
         Await.result(Future.sequence(evaluations), 64.seconds)
-      case SingleStepAssert(watch: Watch, assertion) =>
-        evaluateWatchExpression(watch, assertion)
+      case SingleStepAssert(localVariable: LocalVariable, assertion) =>
+        inspect(localVariable, assertion)
     }
     continueIfPaused()
 

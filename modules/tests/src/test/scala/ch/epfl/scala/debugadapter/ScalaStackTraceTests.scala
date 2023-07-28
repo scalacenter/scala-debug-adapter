@@ -173,4 +173,26 @@ class ScalaStackTraceTests extends DebugTestSuite {
       )
     )
   }
+
+  test("i535") {
+    assume(isJava8)
+    val source =
+      """|package example
+         |
+         |import java.lang.ref.ReferenceQueue
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    new ReferenceQueue[Any]()
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(7),
+      StepIn.method("ReferenceQueue.<init>(): void"),
+      StepOver.method("ReferenceQueue.<init>(): void"),
+      StepIn.method("ReferenceQueue$Lock.<init>(ReferenceQueue$1): void")
+    )
+  }
 }
