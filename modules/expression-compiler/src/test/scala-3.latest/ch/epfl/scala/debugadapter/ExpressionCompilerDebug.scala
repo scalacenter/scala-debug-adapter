@@ -19,31 +19,19 @@ class ExpressionCompilerDebug extends munit.FunSuite:
 
   override def munitTimeout: Duration = 1.hour
 
-  test("debug expression compiler".ignore) {
-    val javaSource =
-      """|package example;
-         |
-         |class A {
-         |  protected static String x = "x";
-         |  protected static String m() {
-         |    return "m";
-         |  }
-         |}
-         |""".stripMargin
-    val javaModule = TestingDebuggee.fromJavaSource(javaSource, "example.A", scalaVersion)
-    val scalaSource =
+  test("tuple extractor") {
+    val source =
       """|package example
-         |
-         |object Main extends A {
+         |object Main {
          |  def main(args: Array[String]): Unit = {
-         |    println("Hello, World!")
+         |    val tuple = (1, 2)
+         |    val (x, y) = tuple
+         |    println("ok")
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee: TestingDebuggee =
-      TestingDebuggee.mainClass(scalaSource, "example.Main", scalaVersion, Seq.empty, Seq(javaModule.mainModule))
-    evaluate(5, "A.x")
-    evaluate(5, "A.m")
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    evaluate(5, "tuple._1", localVariables = Set("tuple"))
   }
 
   def evaluate(line: Int, expression: String, localVariables: Set[String] = Set.empty)(using
