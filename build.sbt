@@ -49,7 +49,7 @@ lazy val javaDebug = project
     autoScalaLibrary := false,
     compile / javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
     libraryDependencies ++= Seq(
-      "org.apache.commons" % "commons-lang3" % "3.12.0",
+      "org.apache.commons" % "commons-lang3" % "3.13.0",
       "com.google.code.gson" % "gson" % "2.10.1",
       "io.reactivex.rxjava2" % "rxjava" % "2.2.21",
       "org.reactivestreams" % "reactive-streams" % "1.0.4",
