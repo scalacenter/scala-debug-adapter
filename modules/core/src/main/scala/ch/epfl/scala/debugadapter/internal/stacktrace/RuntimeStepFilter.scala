@@ -31,11 +31,28 @@ private[internal] object RuntimeStepFilter {
   )
   private val scala3ClassesToSkip = scalaClassesToSkip ++ Set("scala.runtime.LazyVals$")
   private val scala2ClassesToSkip = scalaClassesToSkip
+  private val arrayWrappers = Set(
+    "wrapRefArray(java.lang.Object[])",
+    "wrapIntArray(int[])",
+    "wrapDoubleArray(double[])",
+    "wrapLongArray(long[])",
+    "wrapFloatArray(float[])",
+    "wrapShortArray(short[])",
+    "wrapByteArray(byte[])",
+    "wrapBooleanArray(boolean[])",
+    "wrapUnitArray(scala.runtime.BoxedUnit[])"
+  )
+
+  private val scalaMethodsToSkip =
+    arrayWrappers.map("scala.runtime.ScalaRunTime$." + _) ++ 
+      arrayWrappers.map("scala.LowPriorityImplicits." + _)
+
+  private val methodsToSkip = javaMethodsToSkip ++ scalaMethodsToSkip
 
   def apply(scalaVersion: ScalaVersion): RuntimeStepFilter = {
     if (scalaVersion.isScala2)
-      new RuntimeStepFilter(scala2ClassesToSkip ++ javaClassesToSkip, javaMethodsToSkip)
+      new RuntimeStepFilter(scala2ClassesToSkip ++ javaClassesToSkip, methodsToSkip)
     else
-      new RuntimeStepFilter(scala3ClassesToSkip ++ scala2ClassesToSkip ++ javaClassesToSkip, javaMethodsToSkip)
+      new RuntimeStepFilter(scala3ClassesToSkip ++ scala2ClassesToSkip ++ javaClassesToSkip, methodsToSkip)
   }
 }

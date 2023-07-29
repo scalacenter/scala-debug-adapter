@@ -1146,20 +1146,44 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
     )
   }
 
-  test("step out of class loader and into constructor") {
+  test("skip class loader") {
     val source =
       """|package example
          |
          |class A
+         |class B
+         |class C
+         |class D
          |
          |object Main {
          |  def main(args: Array[String]): Unit = {
          |    new A
+         |    new Array[B](1)
+         |    Array.ofDim[C](1, 2)
+         |    println(classOf[D])
          |  }
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(7), StepIn.method(if (isScala3) "A.<init>(): Unit" else "A.<init>(): void"))
+    if (isScala3)
+      check(
+        Breakpoint(10),
+        StepIn.method("A.<init>(): Unit"),
+        Breakpoint(11),
+        StepIn.line(12),
+        StepIn.line(13),
+        StepIn.method(printlnMethod)
+      )
+    else
+      check(
+        Breakpoint(10),
+        StepIn.method("A.<init>(): void"),
+        Breakpoint(11),
+        StepIn.line(12),
+        StepIn.method("ClassTag$.apply(Class): ClassTag"),
+        Breakpoint(13),
+        StepIn.method(printlnMethod)
+      )
   }
 
   test("step in private method of outer class") {
@@ -1228,5 +1252,32 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(9), StepIn.method("String.equals(Object): boolean"))
+  }
+
+  test("skip wrapRefArray") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def m1(xs: String*) = println(xs.mkString)
+         |  def m2(xs: Int*) = println(xs.mkString)
+         |  def m3(xs: Unit*) = println(xs.mkString)
+         | 
+         |  def main(args: Array[String]): Unit = {
+         |    m1("a", "b")
+         |    m2(1, 2)
+         |    m3((), ())
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(9),
+      StepIn.line(4),
+      Breakpoint(10),
+      StepIn.line(5),
+      Breakpoint(11),
+      StepIn.line(6)
+    )
   }
 }
