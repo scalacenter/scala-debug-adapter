@@ -163,6 +163,14 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     Await.result(response, timeout)
   }
 
+  def stepOver(threadId: Long, timeout: Duration = 1.second): Unit = {
+    val args = new NextArguments()
+    args.threadId = threadId
+    val request = createRequest(Command.NEXT, args)
+    val response = sendRequest(request)
+    Await.result(response, timeout)
+  }
+
   def evaluate(
       expression: String,
       frameId: Int

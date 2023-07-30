@@ -62,13 +62,12 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
   }
 
   private def formatJava(method: Method): String = {
-    val declaringType = method.declaringType().name.split("\\.").last
-    val methodName = method.name()
-    val argumentTypes = method.argumentTypes.asScala.toList
-      .map(t => t.name().split("\\.").last)
+    val declaringType = method.declaringType.name.split("\\.").last
+    val argumentTypes = method.argumentTypeNames.asScala
+      .map(arg => arg.split("\\.").last)
       .mkString(",")
-    val returnType = method.returnTypeName().split("\\.").last
-    s"$declaringType.$methodName(${if (argumentTypes.nonEmpty) argumentTypes else ""}): $returnType"
+    val returnType = method.returnTypeName.split("\\.").last
+    s"$declaringType.${method.name}($argumentTypes): $returnType"
   }
 
   private def isStaticMain(m: Method): Boolean =
