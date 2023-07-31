@@ -1154,35 +1154,50 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |class B
          |class C
          |class D
+         |class E
+         |class F
          |
          |object Main {
          |  def main(args: Array[String]): Unit = {
-         |    new A
+         |    val a: Any = new A
          |    new Array[B](1)
          |    Array.ofDim[C](1, 2)
          |    println(classOf[D])
+         |    a match {
+         |      case e: E => ???
+         |      case _ => println("ok")
+         |    }
+         |    a.asInstanceOf[F]
          |  }
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     if (isScala3)
       check(
-        Breakpoint(10),
+        Breakpoint(12),
         StepIn.method("A.<init>(): Unit"),
-        Breakpoint(11),
-        StepIn.line(12),
-        StepIn.line(13),
-        StepIn.method(printlnMethod)
+        Breakpoint(13),
+        StepIn.line(14),
+        StepIn.line(15),
+        StepIn.method(printlnMethod),
+        Breakpoint(17),
+        StepIn.line(18),
+        Breakpoint(20),
+        StepIn.method("ClassCastException.<init>(String): void")
       )
     else
       check(
-        Breakpoint(10),
+        Breakpoint(12),
         StepIn.method("A.<init>(): void"),
-        Breakpoint(11),
-        StepIn.line(12),
-        StepIn.method("ClassTag$.apply(Class): ClassTag"),
         Breakpoint(13),
-        StepIn.method(printlnMethod)
+        StepIn.line(14),
+        StepIn.method("ClassTag$.apply(Class): ClassTag"),
+        Breakpoint(15),
+        StepIn.method(printlnMethod),
+        Breakpoint(17),
+        StepIn.line(18),
+        Breakpoint(20),
+        StepIn.method("ClassCastException.<init>(String): void")
       )
   }
 

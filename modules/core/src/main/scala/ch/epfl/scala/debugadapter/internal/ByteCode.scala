@@ -7,4 +7,6 @@ object ByteCode {
   val ANEWARRAY: Byte = 0xbd.toByte
   val MULTIANEWARRAY: Byte = 0xc5.toByte
   val LDC: Byte = 0x12.toByte
+  val INSTANCEOF: Byte = 0xc1.toByte
+  val CHECKCAST: Byte = 0xc0.toByte
 }

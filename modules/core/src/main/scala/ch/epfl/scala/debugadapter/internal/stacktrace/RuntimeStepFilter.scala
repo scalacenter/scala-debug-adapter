@@ -44,7 +44,7 @@ private[internal] object RuntimeStepFilter {
   )
 
   private val scalaMethodsToSkip =
-    arrayWrappers.map("scala.runtime.ScalaRunTime$." + _) ++ 
+    arrayWrappers.map("scala.runtime.ScalaRunTime$." + _) ++
       arrayWrappers.map("scala.LowPriorityImplicits." + _)
 
   private val methodsToSkip = javaMethodsToSkip ++ scalaMethodsToSkip
