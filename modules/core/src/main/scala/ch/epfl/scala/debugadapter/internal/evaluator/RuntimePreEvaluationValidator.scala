@@ -63,6 +63,14 @@ class RuntimePreEvaluationValidator(
         }
       case tree => tree
     }
+
+  // ? We mustn't pre-evaluate the lhs of an assignment, because we need its 'declaration' and not its value
+  override def validateAssign(
+      tree: Term.Assign,
+      localVarValidation: String => Validation[RuntimeEvaluableTree] = localVarTreeByName,
+      fieldValidation: (Validation[RuntimeTree], String) => Validation[RuntimeEvaluableTree] = fieldTreeByName
+  ): Validation[RuntimeEvaluableTree] =
+    super.validateAssign(tree, super.localVarTreeByName, super.fieldTreeByName)
 }
 
 object RuntimePreEvaluationValidator {

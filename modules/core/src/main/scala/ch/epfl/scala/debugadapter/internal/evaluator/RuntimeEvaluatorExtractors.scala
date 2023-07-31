@@ -45,6 +45,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
         case mt: NestedModuleTree => unapply(mt.init.qual)
         case ft: InstanceFieldTree => unapply(ft.qual)
         case IfTree(p, t, f, _) => unapply(p) || unapply(t) || unapply(f)
+        case AssignTree(lhs, rhs, _) => unapply(lhs) || unapply(rhs)
         case _: MethodTree | _: NewInstanceTree => true
         case _: LiteralTree | _: LocalVarTree | _: PreEvaluatedTree | _: ThisTree | UnitTree => false
         case _: StaticFieldTree | _: ClassTree | _: TopLevelModuleTree => false

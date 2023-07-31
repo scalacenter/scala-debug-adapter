@@ -22,6 +22,7 @@ class RuntimeDefaultEvaluator(val frame: JdiFrame, implicit val logger: Logger) 
       case array: ArrayElemTree => evaluateArrayElement(array)
       case branching: IfTree => evaluateIf(branching)
       case staticMethod: StaticMethodTree => invokeStatic(staticMethod)
+      case assign: AssignTree => evaluateAssign(assign)
       case UnitTree => Safe(JdiValue(frame.thread.virtualMachine.mirrorOfVoid, frame.thread))
     }
 
@@ -118,6 +119,26 @@ class RuntimeDefaultEvaluator(val frame: JdiFrame, implicit val logger: Logger) 
       predicate <- eval(tree.p).flatMap(_.unboxIfPrimitive).flatMap(_.toBoolean)
       value <- if (predicate) eval(tree.thenp) else eval(tree.elsep)
     } yield value
+
+  /* -------------------------------------------------------------------------- */
+  /*                              Assign evaluation                             */
+  /* -------------------------------------------------------------------------- */
+  def evaluateAssign(tree: AssignTree): Safe[JdiValue] = {
+    eval(tree.rhs)
+      .flatMap { rhsValue =>
+        tree.lhs match {
+          case field: InstanceFieldTree =>
+            eval(field.qual).flatMap { qualValue =>
+              Safe(qualValue.asObject.reference.setValue(field.field, rhsValue.value))
+            }
+          case field: StaticFieldTree => Safe(field.on.setValue(field.field, rhsValue.value))
+          case localVar: LocalVarTree =>
+            val localVarRef = frame.variableByName(localVar.name)
+            Safe(localVarRef.map(frame.setVariable(_, rhsValue)).get)
+        }
+      }
+      .map(_ => JdiValue(frame.thread.virtualMachine.mirrorOfVoid, frame.thread))
+  }
 }
 
 object RuntimeDefaultEvaluator {

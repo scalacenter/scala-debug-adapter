@@ -43,6 +43,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
       case branch: Term.If => validateIf(branch)
       case instance: Term.New => validateNew(instance)
       case block: Term.Block => validateBlock(block)
+      case assign: Term.Assign => validateAssign(assign)
       case _ => Recoverable("Expression not supported at runtime")
     }
 
@@ -205,13 +206,6 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
       result <- validateApply(intermediate, args)
     } yield result
 
-  /*
-   * validateIndirectApply MUST be called before methodTreeByNameAndArgs
-   * That's because at runtime, a inner module is accessible as a 0-arg method,
-   * and if its associated class has not attribute either, when calling the
-   * constructor of the class, methodTreeByNameAndArgs would return its companion
-   * object instead. Look at the test about multiple layers for an example
-   */
   def findMethod(
       tree: RuntimeTree,
       name: String,
@@ -280,7 +274,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
   }
 
   /* -------------------------------------------------------------------------- */
-  /*                             Looking for $outer                             */
+  /*                              Outer validation                              */
   /* -------------------------------------------------------------------------- */
   def validateOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree] =
     outerLookup(tree)
@@ -288,7 +282,6 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
   /* -------------------------------------------------------------------------- */
   /*                           Flow control validation                          */
   /* -------------------------------------------------------------------------- */
-
   def validateIf(tree: Term.If): Validation[RuntimeEvaluableTree] = {
     lazy val objType = loadClass("java.lang.Object").get
     for {
@@ -303,6 +296,39 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
         extractCommonSuperClass(thenp.`type`, elsep.`type`).getOrElse(objType)
       )
     } yield ifTree
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /*                              Assign validation                             */
+  /* -------------------------------------------------------------------------- */
+  def isMutable(tree: RuntimeEvaluableTree): Boolean =
+    tree match {
+      case field: FieldTree => !field.immutable
+      case localVar: LocalVarTree => true
+      case _ => false
+    }
+
+  def validateAssign(
+      tree: Term.Assign,
+      localVarValidation: String => Validation[RuntimeEvaluableTree] = localVarTreeByName,
+      fieldValidation: (Validation[RuntimeTree], String) => Validation[RuntimeEvaluableTree] = fieldTreeByName
+  ): Validation[RuntimeEvaluableTree] = {
+    val lhs = tree.lhs match {
+      case select: Term.Select =>
+        fieldValidation(validateWithClass(select.qual), select.name.value)
+      case name: Term.Name =>
+        localVarValidation(name.value).orElse(fieldValidation(thisTree, name.value))
+      case _ => Recoverable("Unsupported assignment")
+    }
+
+    for {
+      lhsValue <- lhs
+      if isMutable(lhsValue)
+      rhs <- validate(tree.rhs)
+      if isAssignableFrom(rhs.`type`, lhsValue.`type`)
+      unit = frame.thread.virtualMachine().mirrorOfVoid().`type`()
+      assign <- AssignTree(lhsValue, rhs, unit)
+    } yield assign
   }
 }
 

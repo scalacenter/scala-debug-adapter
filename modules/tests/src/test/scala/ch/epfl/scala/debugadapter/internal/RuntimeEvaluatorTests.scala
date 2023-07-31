@@ -963,6 +963,56 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Evaluation.success("bar.Baz(42).Bizz.x", 43)
     )
   }
+
+  test("should assign values to local var and fields") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  var a = 0
+         |  var l = new B
+         |  def f = this
+         |}
+         |
+         |class B
+         |class C extends B {
+         |  var c = 41
+         |}
+         |
+         |object Main {
+         |  var b = 0
+         |  var c = 0 
+         |  def main(args: Array[String]): Unit = {
+         |    val a = new A
+         |    var b = 0
+         |    var bc: B = new C
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    def assignSuccess(expr: String) = Evaluation.success(expr)(res => res == "<void value>")
+    check(
+      Breakpoint(21),
+      assignSuccess("a.a = 42"),
+      Evaluation.success("a.a", 42),
+      assignSuccess("a.f.a = 64"),
+      Evaluation.success("a.f.a", 64),
+      assignSuccess("b = 42"),
+      Evaluation.success("Main.b", 0),
+      Evaluation.successOrIgnore("b", 42, true), // ? works in a debug session but not in tests ???
+      assignSuccess("c = 42"),
+      Evaluation.success("c", 42),
+      assignSuccess("a.l = new C"),
+      Evaluation.success("a.l", ObjectRef("C")),
+      assignSuccess("bc.c = 42"),
+      Evaluation.success("bc.c", 42),
+      Evaluation.failed("a.a = \"str\""),
+      Evaluation.failed("a.f.a = \"str\""),
+      Evaluation.failed("b = \"str\""),
+      Evaluation.failed("Main.b = \"str\"")
+    )
+  }
 }
 
 /* -------------------------------------------------------------------------- */
