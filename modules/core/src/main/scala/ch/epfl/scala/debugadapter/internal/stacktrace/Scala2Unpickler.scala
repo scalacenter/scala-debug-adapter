@@ -93,10 +93,7 @@ class Scala2Unpickler(
     (scalaMethod.isAccessor && (!scalaMethod.isLazy || !scalaMethod.parent.get.isTrait))
   }
 
-  private def matchSymbol(
-      javaMethod: jdi.Method,
-      scalaMethod: MethodSymbol
-  ): Boolean = {
+  private def matchSymbol(javaMethod: jdi.Method, scalaMethod: MethodSymbol): Boolean = {
     // TODO find what is an aliasRef
     if (scalaMethod.aliasRef.nonEmpty)
       logger.debug(
@@ -117,10 +114,7 @@ class Scala2Unpickler(
     scalaMethod.name == expectedName
   }
 
-  private def matchOwner(
-      javaClass: jdi.ReferenceType,
-      scalaClass: Symbol
-  ): Boolean = {
+  private def matchOwner(javaClass: jdi.ReferenceType, scalaClass: Symbol): Boolean = {
     // TODO try use tryEncode
     getOwners(scalaClass)
       .foldRight(Option(javaClass.name)) { (sym, acc) =>
@@ -148,9 +142,7 @@ class Scala2Unpickler(
       javaMethod: jdi.Method,
       methodType: Type
   ): Boolean = {
-    val (scalaArgs, scalaReturnType) = extractParametersAndReturnType(
-      methodType
-    )
+    val (scalaArgs, scalaReturnType) = extractParametersAndReturnType(methodType)
     def matchAllArguments: Boolean = {
       val javaArgs = javaMethod.arguments.asScala.toSeq
       javaArgs.corresponds(scalaArgs) { (javaArg, scalaArg) =>
@@ -158,12 +150,7 @@ class Scala2Unpickler(
       }
     }
     def matchReturnType: Boolean = {
-      try
-        matchType(
-          javaMethod.returnType,
-          scalaReturnType,
-          javaMethod.declaringType
-        )
+      try matchType(javaMethod.returnType, scalaReturnType, javaMethod.declaringType)
       catch {
         // javaMethod.returnType can throw ClassNotLoadedException
         case cause: jdi.ClassNotLoadedException => true
@@ -172,9 +159,7 @@ class Scala2Unpickler(
     matchAllArguments && matchReturnType
   }
 
-  private[internal] def extractParametersAndReturnType(
-      methodType: Type
-  ): (Seq[Symbol], Type) = {
+  private[internal] def extractParametersAndReturnType(methodType: Type): (Seq[Symbol], Type) = {
     methodType match {
       case m: FunctionType =>
         val (params, returnType) = extractParametersAndReturnType(
@@ -193,19 +178,13 @@ class Scala2Unpickler(
       declaringType: jdi.Type
   ): Boolean = {
     val scalaType = scalaArg.asInstanceOf[MethodSymbol].infoType
-    javaArg.name == scalaArg.name &&
-    (
+    javaArg.name == scalaArg.name && (
       // we cannot check the type of the `this` argument in methods of value classes
-      scalaArg.name == "$this" ||
-        matchType(javaArg.`type`, scalaType, declaringType)
+      scalaArg.name == "$this" || matchType(javaArg.`type`, scalaType, declaringType)
     )
   }
 
-  private def matchType(
-      javaType: jdi.Type,
-      scalaType: Type,
-      declaringType: jdi.Type
-  ): Boolean = {
+  private def matchType(javaType: jdi.Type, scalaType: Type, declaringType: jdi.Type): Boolean = {
     scalaType match {
       case ThisType(sym) => javaType == declaringType
       case SingleType(typeRef, sym) =>
@@ -309,14 +288,14 @@ class Scala2Unpickler(
       "scala.package.Either" -> "scala.util.Either",
       "scala.package.Left" -> "scala.util.Left",
       "scala.package.Right" -> "scala.util.Right",
-      "scala.<repeated>" -> "scala.collection.immutable.Seq",
       "scala.<byname>" -> "scala.Function0"
     ) ++ (
       if (scalaVersion.isScala212)
         Map(
           "scala.Predef.ClassManifest" -> "scala.reflect.ClassTag",
           "scala.package.TraversableOnce" -> "scala.collection.TraversableOnce",
-          "scala.package.Traversable" -> "scala.collection.Traversable"
+          "scala.package.Traversable" -> "scala.collection.Traversable",
+          "scala.<repeated>" -> "scala.collection.Seq"
         )
       else
         Map(
@@ -325,7 +304,8 @@ class Scala2Unpickler(
           "scala.package.TraversableOnce" -> "scala.collection.IterableOnce",
           "scala.package.IterableOnce" -> "scala.collection.IterableOnce",
           "scala.package.Traversable" -> "scala.collection.Iterable",
-          "scala.package.LazyList" -> "scala.collection.immutable.LazyList"
+          "scala.package.LazyList" -> "scala.collection.immutable.LazyList",
+          "scala.<repeated>" -> "scala.collection.immutable.Seq"
         )
     )
   }

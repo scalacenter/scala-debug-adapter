@@ -3,7 +3,7 @@ package ch.epfl.scala.debugadapter.internal.stacktrace
 import ch.epfl.scala.debugadapter.Debuggee
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.ScalaVersion
-import ch.epfl.scala.debugadapter.internal.ByteCodes
+import ch.epfl.scala.debugadapter.internal.ByteCode
 import ch.epfl.scala.debugadapter.internal.DebugTools
 import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
 import com.sun.jdi.AbsentInformationException
@@ -139,7 +139,7 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
     method.name == "$init$"
 
   private def skipTraitInitializer(method: Method): Boolean =
-    method.bytecodes.toSeq == Seq(ByteCodes.RETURN)
+    method.bytecodes.toSeq == Seq(ByteCode.RETURN)
 
   private def isPrivateAccessor(method: Method): Boolean =
     method.name.matches(""".+\$access\$\d+""")
