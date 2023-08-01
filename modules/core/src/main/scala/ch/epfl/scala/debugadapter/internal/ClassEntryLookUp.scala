@@ -160,13 +160,13 @@ private class ClassEntryLookUp(
 
 private object ClassEntryLookUp {
   private[internal] def apply(entry: ClassEntry, logger: Logger): ClassEntryLookUp = {
-    val sourceFiles = entry.sourceEntries.flatMap(SourceEntryLookUp.getAllSourceFiles(_, logger))
-    ClassEntryLookUp(entry, sourceFiles, logger)
+    val sourceLookUps = entry.sourceEntries.flatMap(SourceEntryLookUp(_, logger))
+    ClassEntryLookUp(entry, sourceLookUps, logger)
   }
 
   def apply(
       entry: ClassEntry,
-      sourceFiles: Seq[SourceFile],
+      sourceLookUps: Seq[SourceEntryLookUp],
       logger: Logger
   ): ClassEntryLookUp = {
     val classFiles = entry.classSystems.flatMap { classSystem =>
@@ -179,8 +179,9 @@ private object ClassEntryLookUp {
     val classNameToClassFile =
       classFiles.map(c => (c.fullyQualifiedName, c)).toMap
 
-    val sourceUriToSourceFile = sourceFiles.map(f => (f.uri, f)).toMap
-    val sourceNameToSourceFile = sourceFiles.groupBy(f => f.fileName)
+    val sourceFileToRoot = sourceLookUps.flatMap(l => l.sourceFiles.map(f => (f -> l.root))).toMap
+    val sourceUriToSourceFile = sourceLookUps.flatMap(_.sourceFiles).map(f => (f.uri, f)).toMap
+    val sourceNameToSourceFile = sourceLookUps.flatMap(_.sourceFiles).groupBy(f => f.fileName)
 
     val classNameToSourceFile = mutable.Map[String, SourceFile]()
     val sourceUriToClassFiles = mutable.Map[URI, Seq[ClassFile]]()
@@ -233,11 +234,11 @@ private object ClassEntryLookUp {
                   // so we try to find the right package declaration in each file
                   // it would be very unfortunate that 2 sources file with the same name
                   // declare the same package.
-                  manySourceFiles.filter(s => findPackage(s, classFile.fullPackage, logger)) match {
-                    case sourceFile :: Nil =>
-                      recordSourceFile(sourceFile)
-                    case _ =>
-                      orphanClassFiles.append(classFile)
+                  manySourceFiles.filter { f =>
+                    findPackage(f, sourceFileToRoot(f), classFile.fullPackage, logger)
+                  } match {
+                    case sourceFile :: Nil => recordSourceFile(sourceFile)
+                    case _ => orphanClassFiles.append(classFile)
                   }
               }
           }
@@ -247,6 +248,7 @@ private object ClassEntryLookUp {
     if (orphanClassFiles.size > 0)
       logger.debug(s"Found ${orphanClassFiles.size} orphan class files in ${entry.name}")
 
+    sourceLookUps.foreach(_.close())
     new ClassEntryLookUp(
       entry,
       classNameToClassFile,
@@ -316,17 +318,13 @@ private object ClassEntryLookUp {
     } finally inputStream.close()
   }
 
-  private def findPackage(
-      sourceFile: SourceFile,
-      fullPackage: String,
-      logger: Logger
-  ): Boolean = {
+  private def findPackage(sourceFile: SourceFile, root: Path, fullPackage: String, logger: Logger): Boolean = {
     // for "a.b.c" it returns Seq("a.b.c", "b.c", "c")
     // so that we can match on "package a.b.c" or "package b.c" or "package c"
     val nestedPackages = fullPackage.split('.').foldLeft(Seq.empty[String]) { (nestedParts, newPart) =>
       nestedParts.map(outer => s"$outer.$newPart") :+ newPart
     }
-    val sourceContent = readSourceContent(sourceFile, logger)
+    val sourceContent = readSourceContent(sourceFile, root, logger)
     nestedPackages.exists { `package` =>
       val quotedPackage = Regex.quote(`package`)
       val matcher = s"package\\s+(object\\s+)?$quotedPackage(\\{|:|;|\\s+)".r
@@ -335,7 +333,13 @@ private object ClassEntryLookUp {
   }
 
   private def readSourceContent(sourceFile: SourceFile, logger: Logger): Option[String] = {
-    withinSourceEntry(sourceFile.entry) { root =>
+    withinSourceEntry(sourceFile.entry)(readSourceContent(sourceFile, _, logger))
+      .warnFailure(logger, s"Cannot read content of ${sourceFile.uri}")
+      .flatten
+  }
+
+  private def readSourceContent(sourceFile: SourceFile, root: Path, logger: Logger): Option[String] = {
+    Try {
       val sourcePath = root.resolve(sourceFile.relativePath)
       new String(Files.readAllBytes(sourcePath))
     }
