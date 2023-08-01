@@ -128,8 +128,8 @@ class RuntimeDefaultEvaluator(val frame: JdiFrame, implicit val logger: Logger) 
       .flatMap { rhsValue =>
         tree.lhs match {
           case field: InstanceFieldTree =>
-            eval(field.qual).flatMap { qualValue =>
-              Safe(qualValue.asObject.reference.setValue(field.field, rhsValue.value))
+            eval(field.qual).map { qualValue =>
+              qualValue.asObject.reference.setValue(field.field, rhsValue.value)
             }
           case field: StaticFieldTree => Safe(field.on.setValue(field.field, rhsValue.value))
           case localVar: LocalVarTree =>

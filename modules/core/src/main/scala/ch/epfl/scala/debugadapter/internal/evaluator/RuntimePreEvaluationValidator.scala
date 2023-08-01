@@ -22,11 +22,19 @@ class RuntimePreEvaluationValidator(
   override def validateLiteral(lit: Lit): Validation[RuntimeEvaluableTree] =
     super.validateLiteral(lit).flatMap(preEvaluate)
 
-  override def localVarTreeByName(name: String): Validation[PreEvaluatedTree] =
-    super.localVarTreeByName(name).flatMap(preEvaluate)
+  override def localVarTreeByName(name: String, preevaluate: Boolean = true): Validation[RuntimeEvaluableTree] =
+    super.localVarTreeByName(name).transform {
+      case Valid(tree) if preevaluate => preEvaluate(tree)
+      case tree => tree
+    }
 
-  override def fieldTreeByName(of: Validation[RuntimeTree], name: String): Validation[RuntimeEvaluableTree] =
+  override def fieldTreeByName(
+      of: Validation[RuntimeTree],
+      name: String,
+      preevaluate: Boolean = true
+  ): Validation[RuntimeEvaluableTree] =
     super.fieldTreeByName(of, name).transform {
+      case tree if !preevaluate => tree
       case Valid(tree @ (_: StaticFieldTree | InstanceFieldTree(_, _: PreEvaluatedTree))) =>
         preEvaluate(tree)
       case Valid(tree @ (_: TopLevelModuleTree | NestedModuleTree(_, InstanceMethodTree(_, _, _: PreEvaluatedTree)))) =>
@@ -63,14 +71,6 @@ class RuntimePreEvaluationValidator(
         }
       case tree => tree
     }
-
-  // ? We mustn't pre-evaluate the lhs of an assignment, because we need its 'declaration' and not its value
-  override def validateAssign(
-      tree: Term.Assign,
-      localVarValidation: String => Validation[RuntimeEvaluableTree] = localVarTreeByName,
-      fieldValidation: (Validation[RuntimeTree], String) => Validation[RuntimeEvaluableTree] = fieldTreeByName
-  ): Validation[RuntimeEvaluableTree] =
-    super.validateAssign(tree, super.localVarTreeByName, super.fieldTreeByName)
 }
 
 object RuntimePreEvaluationValidator {

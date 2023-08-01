@@ -91,7 +91,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
   /* -------------------------------------------------------------------------- */
   /*                               Name validation                              */
   /* -------------------------------------------------------------------------- */
-  def localVarTreeByName(name: String): Validation[RuntimeEvaluableTree] =
+  def localVarTreeByName(name: String, preevaluate: Boolean = true): Validation[RuntimeEvaluableTree] =
     Validation
       .fromOption(frame.variableByName(name))
       .filter(_.`type`.name() != "scala.Function0", runtimeFatal = true)
@@ -104,7 +104,8 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
 
   def fieldTreeByName(
       of: Validation[RuntimeTree],
-      name: String
+      name: String,
+      preevaluate: Boolean = true
   ): Validation[RuntimeEvaluableTree] =
     of match {
       case ReferenceTree(ref) =>
@@ -308,16 +309,12 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
       case _ => false
     }
 
-  def validateAssign(
-      tree: Term.Assign,
-      localVarValidation: String => Validation[RuntimeEvaluableTree] = localVarTreeByName,
-      fieldValidation: (Validation[RuntimeTree], String) => Validation[RuntimeEvaluableTree] = fieldTreeByName
-  ): Validation[RuntimeEvaluableTree] = {
+  def validateAssign(tree: Term.Assign): Validation[RuntimeEvaluableTree] = {
     val lhs = tree.lhs match {
       case select: Term.Select =>
-        fieldValidation(validateWithClass(select.qual), select.name.value)
+        fieldTreeByName(validateWithClass(select.qual), select.name.value, false)
       case name: Term.Name =>
-        localVarValidation(name.value).orElse(fieldValidation(thisTree, name.value))
+        localVarTreeByName(name.value, false).orElse(fieldTreeByName(thisTree, name.value, false))
       case _ => Recoverable("Unsupported assignment")
     }
 
