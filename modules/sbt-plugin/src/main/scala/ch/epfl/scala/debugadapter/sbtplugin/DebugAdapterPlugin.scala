@@ -123,6 +123,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
    * }}}
    */
   def testSettings: Seq[Def.Setting[_]] = Seq(
+    startMainClassDebugSession := mainClassSessionTask.evaluated,
     startTestSuitesDebugSession := testSuitesSessionTask(convertFromArrayToTestSuites).evaluated,
     startTestSuitesSelectionDebugSession := testSuitesSessionTask(convertToTestSuites).evaluated,
     startRemoteDebugSession := remoteSessionTask.evaluated,
