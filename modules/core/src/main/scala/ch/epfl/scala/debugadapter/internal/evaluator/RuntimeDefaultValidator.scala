@@ -49,7 +49,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
 
   protected def validateWithClass(expression: Stat): Validation[RuntimeTree] =
     expression match {
-      case value: Term.Name => validateName(value.value, false).orElse(validateClass(value.value, thisTree))
+      case value: Term.Name => validateName(value.value, false).orElse(validateClass(value.value, currentLocation))
       case Term.Select(qual, name) =>
         validateWithClass(qual).transform {
           case qual @ Valid(q) =>
@@ -87,6 +87,12 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
       frame.thisObject
         .map(ths => ThisTree(ths.reference.referenceType().asInstanceOf[ClassType]))
     }
+  lazy val currentLocation: Validation[RuntimeTree] = thisTree.orElse {
+    frame.current().location().declaringType() match {
+      case ct: ClassType => Valid(ClassTree(ct))
+      case _ => Recoverable("Cannot get current location")
+    }
+  }
 
   /* -------------------------------------------------------------------------- */
   /*                               Name validation                              */
@@ -150,7 +156,8 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
         of match {
           case Valid(_: RuntimeEvaluableTree) | _: Invalid => Valid(ClassTree(cls))
           case Valid(ct: ClassTree) =>
-            if (cls.isStatic()) Valid(ClassTree(cls))
+            if (cls.isStatic() || cls.name == ct.`type`.name || !cls.name().startsWith(ct.`type`.name))
+              Valid(ClassTree(cls))
             else CompilerRecoverable(s"Cannot access non-static class ${cls.name} from ${ct.`type`.name()}")
         }
       }
@@ -161,7 +168,6 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
         }
       }
 
-  // ! Does not work as expected inside a static context
   def validateMember(
       name: String,
       of: RuntimeTree,
@@ -181,7 +187,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
 
   def validateName(name: String, methodFirst: Boolean): Validation[RuntimeEvaluableTree] =
     localVarTreeByName(NameTransformer.encode(name))
-      .orElse(thisTree.flatMap(validateMember(name, _, methodFirst)))
+      .orElse(currentLocation.flatMap(validateMember(name, _, methodFirst)))
 
   /* -------------------------------------------------------------------------- */
   /*                              Apply validation                              */
@@ -222,7 +228,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
           searchClassesQCN(qual.toString + "$")
         }
         PreparedCall(qualTree, name.value)
-      case name: Term.Name => PreparedCall(thisTree, name.value)
+      case name: Term.Name => PreparedCall(currentLocation, name.value)
     }
 
     val validatedArgs = call.argClause.map(validate).traverse
@@ -310,7 +316,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
       case select: Term.Select =>
         validateWithClass(select.qual).flatMap(fieldTreeByName(_, select.name.value, false))
       case name: Term.Name =>
-        localVarTreeByName(name.value, false).orElse(thisTree.flatMap(fieldTreeByName(_, name.value, false)))
+        localVarTreeByName(name.value, false).orElse(currentLocation.flatMap(fieldTreeByName(_, name.value, false)))
       case _ => Recoverable("Unsupported assignment")
     }
 

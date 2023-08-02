@@ -208,9 +208,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
   protected override def defaultConfig: DebugConfig =
     super.defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly)
 
-  // TODO: fix bug when trying to evaluate 'l'
-  // TODO: operations on primitive types (+...)
-  test("should retrieve the value of a local variable from jdi --- java") {
+  test("should retrieve the value of a local variable from jdi") {
     implicit val debuggee = localVar
     check(
       Breakpoint(10),
@@ -223,7 +221,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should retrieve the value of a field, should it be private or not --- java") {
+  test("Should retrieve the value of a field, should it be private or not") {
     implicit val debuggee = fieldMethod
     check(
       Breakpoint(13),
@@ -235,14 +233,14 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
         Evaluation.success("foo.superfoo", "hello super"),
         Evaluation.success("Foo.foofoo", "foofoo"),
         Evaluation.success("SuperFoo.foofoo", "superfoofoo"),
-        Evaluation.failed("coucou"),
+        Evaluation.success("coucou", "coucou"),
         Evaluation.failed("lapin"),
         Evaluation.failed("love")
       )
     )
   }
 
-  test("Should retrieve the value of a field without selector --- java") {
+  test("Should retrieve the value of a field without selector") {
     implicit val debuggee = fieldMethod
     check(
       Breakpoint(17),
@@ -254,7 +252,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should call static method --- java") {
+  test("Should call static method") {
     implicit val debuggee = fieldMethod
     check(
       Breakpoint(17),
@@ -266,7 +264,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should get the value of a field in a nested type --- java") {
+  test("Should get the value of a field in a nested type") {
     implicit val debuggee = nested
     check(
       Breakpoint(11),
@@ -299,7 +297,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
 
   }
 
-  test("Should call a method on an instance of a nested type --- java") {
+  test("Should call a method on an instance of a nested type") {
     implicit val debuggee = nested
     check(
       Breakpoint(11),
@@ -310,7 +308,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should call a static method on nested & inner types --- java") {
+  test("Should call a static method on nested & inner types") {
     implicit val debuggee = nested
     check(
       Breakpoint(11),
@@ -323,7 +321,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should pre evaluate method and resolve most precise method --- java") {
+  test("Should pre evaluate method and resolve most precise method") {
     implicit val debuggee = preEvaluation
     check(
       Breakpoint(8),
@@ -339,7 +337,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should instantiate inner classes --- java") {
+  test("Should instantiate inner classes") {
     implicit val debuggee = nested
     check(
       Breakpoint(15),
@@ -349,6 +347,33 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
         Evaluation.success("new main.Inner(2)", ObjectRef("Main$Inner")),
         Evaluation.success("new foo.FriendFoo(foo)", ObjectRef("Foo$FriendFoo"))
       )
+    )
+  }
+
+  test("Should evaluate static members from a static context") {
+    val source =
+      """|package example;
+         |
+         |public class Main {
+         |  public static int i = 5;
+         |  public static void main(String[] args) {
+         |    System.out.println(i);
+         |  }
+         |  public static String foo() { return "foo"; }
+         |  static class Bar {
+         |    public int x = 42;
+         |    public static String bar() { return "bar"; }
+         |    public Bar(int x) { this.x = x; }
+         |  } 
+         |}""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(6),
+      Evaluation.success("i", 5),
+      Evaluation.success("foo()", "foo"),
+      Evaluation.success("new Bar(42)", ObjectRef("Main$Bar")),
+      Evaluation.success("new Bar(42).x", 42),
+      Evaluation.success("Bar.bar()", "bar")
     )
   }
 }
