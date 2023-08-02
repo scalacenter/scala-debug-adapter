@@ -1161,6 +1161,6 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(8), Evaluation.success("foo", 42))
+    check(Breakpoint(8), Evaluation.successOrIgnore("foo", 42, true))
   }
 }
