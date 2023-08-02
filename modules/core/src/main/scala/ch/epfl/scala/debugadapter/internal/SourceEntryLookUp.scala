@@ -12,6 +12,7 @@ import scala.jdk.CollectionConverters.*
 import java.net.URI
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
+import scala.util.control.NonFatal
 
 private case class SourceFile(
     entry: SourceEntry,
@@ -22,20 +23,44 @@ private case class SourceFile(
   def folderPath: String = relativePath.stripSuffix(s"/$fileName")
 }
 
+private case class SourceEntryLookUp(
+    entry: SourceEntry,
+    sourceFiles: Seq[SourceFile],
+    fileSystem: FileSystem,
+    root: Path
+) {
+  def close(): Unit =
+    try
+      entry match {
+        case SourceJar(jar) => fileSystem.close()
+        case SourceDirectory(directory) => ()
+        case StandaloneSourceFile(absolutePath, relativePath) => ()
+      }
+    catch {
+      case NonFatal(_) => ()
+    }
+}
+
 private object SourceEntryLookUp {
-  def getAllSourceFiles(entry: SourceEntry, logger: Logger): Seq[SourceFile] = {
+  def apply(entry: SourceEntry, logger: Logger): Option[SourceEntryLookUp] = {
     entry match {
       case SourceJar(jar) =>
-        IO
-          .withinJarFile(jar) { fileSystem =>
-            getAllSourceFiles(entry, fileSystem, fileSystem.getPath("/")).toVector
+        IO.getJarFileSystem(jar)
+          .map { fs =>
+            val root = fs.getPath("/")
+            val sourceFiles = getAllSourceFiles(entry, fs, root).toVector
+            SourceEntryLookUp(entry, sourceFiles, fs, root)
           }
           .warnFailure(logger, s"Cannot list the source files in ${entry.name}")
-          .getOrElse(Vector.empty)
       case SourceDirectory(directory) =>
-        getAllSourceFiles(entry, FileSystems.getDefault, directory).toSeq
+        val fs = FileSystems.getDefault
+        val sourceFiles = getAllSourceFiles(entry, fs, directory).toVector
+        Some(SourceEntryLookUp(entry, sourceFiles, fs, directory))
       case StandaloneSourceFile(absolutePath, relativePath) =>
-        Seq(SourceFile(entry, relativePath, absolutePath.toUri))
+        val fs = FileSystems.getDefault
+        val sourceFile = SourceFile(entry, relativePath, absolutePath.toUri)
+        val root = fs.getPath(sourceFile.folderPath)
+        Some(SourceEntryLookUp(entry, Seq(sourceFile), FileSystems.getDefault, root))
     }
   }
 
