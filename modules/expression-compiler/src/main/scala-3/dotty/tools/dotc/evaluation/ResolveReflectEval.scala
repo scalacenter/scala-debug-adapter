@@ -48,6 +48,8 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
                 // but we expect an instance of the value class instead
                 gen.boxValueClass(cls, gen.getLocalValue("$this"))
               else gen.getLocalValue("$this")
+            case EvaluationStrategy.LocalOuter(cls) =>
+              gen.getLocalValue("$outer")
             case EvaluationStrategy.Outer(outerCls) =>
               gen.getOuter(qualifier, outerCls)
             case EvaluationStrategy.LocalValue(variable, isByName) =>
@@ -117,9 +119,7 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
               // if the field is lazy, if it is private in a value class or a trait
               // then we must call the getter method
               val fieldValue =
-                if field.is(Lazy) ||
-                  field.owner.isValueClass ||
-                  field.owner.is(Trait)
+                if field.is(Lazy) || field.owner.isValueClass || field.owner.is(Trait)
                 then gen.callMethod(qualifier, field.getter.asTerm, Nil)
                 else
                   val rawValue = gen.getField(qualifier, field)
@@ -151,10 +151,10 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
         case _ => tree
 
     def boxIfValueClass(term: TermSymbol, tree: Tree): Tree =
-      atPhase(Phases.elimErasedValueTypePhase)(term.info) match
-        case tpe: ErasedValueType =>
-          boxValueClass(tpe.tycon.typeSymbol.asClass, tree)
-        case tpe => tree
+      getErasedValueType(atPhase(Phases.elimErasedValueTypePhase)(term.info)) match
+        case Some(erasedValueType) =>
+          boxValueClass(erasedValueType.tycon.typeSymbol.asClass, tree)
+        case None => tree
 
     def boxValueClass(valueClass: ClassSymbol, tree: Tree): Tree =
       // qualifier is null: a value class cannot be nested into a class
@@ -162,9 +162,14 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
       callConstructor(nullLiteral, ctor, List(tree))
 
     def unboxIfValueClass(term: TermSymbol, tree: Tree): Tree =
-      atPhase(Phases.elimErasedValueTypePhase)(term.info) match
-        case tpe: ErasedValueType => unboxValueClass(tree, tpe)
-        case tpe => tree
+      getErasedValueType(atPhase(Phases.elimErasedValueTypePhase)(term.info)) match
+        case Some(erasedValueType) => unboxValueClass(tree, erasedValueType)
+        case None => tree
+
+    private def getErasedValueType(tpe: Type): Option[ErasedValueType] = tpe match
+      case tpe: ErasedValueType => Some(tpe)
+      case tpe: MethodOrPoly => getErasedValueType(tpe.resultType)
+      case tpe => None
 
     private def unboxValueClass(tree: Tree, tpe: ErasedValueType): Tree =
       val cls = tpe.tycon.typeSymbol.asClass
@@ -229,24 +234,22 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
       )
 
     def getField(qualifier: Tree, field: TermSymbol): Tree =
-      val fieldName = JavaEncoding.encode(field.name)
       Apply(
         Select(expressionThis, termName("getField")),
         List(
           qualifier,
           Literal(Constant(JavaEncoding.encode(field.owner.asType))),
-          Literal(Constant(fieldName))
+          Literal(Constant(JavaEncoding.encode(field.name)))
         )
       )
 
     def setField(qualifier: Tree, field: TermSymbol, value: Tree): Tree =
-      val fieldName = JavaEncoding.encode(field.name)
       Apply(
         Select(expressionThis, termName("setField")),
         List(
           qualifier,
           Literal(Constant(JavaEncoding.encode(field.owner.asType))),
-          Literal(Constant(fieldName)),
+          Literal(Constant(JavaEncoding.encode(field.name))),
           value
         )
       )

@@ -11,6 +11,7 @@ import scala.concurrent.duration.*
 import ch.epfl.scala.debugadapter.Library
 import java.nio.file.Paths
 import ch.epfl.scala.debugadapter.SourceJar
+import munit.Location
 
 /**
  * This is a test class that also
@@ -178,10 +179,14 @@ class ClassEntryLookUpStats extends FunSuite {
     printAndCheck(org, "semanticdb-scalac-core_2.13.6", "4.4.23")(113, 0)
   }
 
+  test("gradle") {
+    printAndCheck("gradleplugins", "gradle-api", "5.0")(34067, 234)
+  }
+
   private def printAndCheck(jvm: String)(
       classCountAssertion: Int => Unit,
       orphanAssertion: Int => Unit
-  ): Unit = {
+  )(implicit loc: Location): Unit = {
     import scala.concurrent.ExecutionContext.Implicits.global
     val javaHome = jvmCache.get(jvm).unsafeRun()
     val javaRuntime = JavaRuntime(javaHome.toPath).get
@@ -191,7 +196,7 @@ class ClassEntryLookUpStats extends FunSuite {
   private def printAndCheck(org: String, name: String, version: String)(
       expectedClasses: Int,
       expectedOrphans: Int
-  ): Unit = {
+  )(implicit loc: Location): Unit = {
     val entry = TestingResolver.fetchOnly(org, name, version)
     printAndCheck(name, entry)(
       classCount => assertEquals(classCount, expectedClasses),

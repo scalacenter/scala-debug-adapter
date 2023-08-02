@@ -2,12 +2,12 @@ import sbt._
 
 object Dependencies {
   val scalaEnvVersion = Option(System.getenv("SCALA_VERSION"))
-  val scala212 = scalaEnvVersion.filter(isScala212).getOrElse("2.12.17")
-  val scala213 = scalaEnvVersion.filter(isScala213).getOrElse("2.13.10")
+  val scala212 = scalaEnvVersion.filter(isScala212).getOrElse("2.12.18")
+  val scala213 = scalaEnvVersion.filter(isScala213).getOrElse("2.13.11")
   val scala30 = scalaEnvVersion.filter(isScala30).getOrElse("3.0.2")
-  val scala31Plus = scalaEnvVersion.filter(isScala31Plus).getOrElse("3.2.2")
+  val scala31Plus = scalaEnvVersion.filter(isScala31Plus).getOrElse("3.3.0")
   val asmVersion = "9.5"
-  val coursierVersion = "2.1.4"
+  val coursierVersion = "2.1.5"
 
   def isScala212(version: String): Boolean = version.startsWith("2.12")
   def isScala213(version: String): Boolean = version.startsWith("2.13")
@@ -32,7 +32,7 @@ object Dependencies {
   }
 
   val scalaParallelCollection = "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4"
-  val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.10.0"
+  val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.11.0"
   val sbtTestAgent = "org.scala-sbt" % "test-agent" % "1.8.3"
 
   // test dependencies

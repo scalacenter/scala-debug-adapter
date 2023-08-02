@@ -1,12 +1,14 @@
 package ch.epfl.scala.debugadapter.internal.stepfilter
 
-import com.sun.jdi
-import ch.epfl.scala.debugadapter.internal.scalasig._
-import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
-import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSigPrinter
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.ScalaVersion
+import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
+import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSigPrinter
+import ch.epfl.scala.debugadapter.internal.scalasig._
+import com.sun.jdi
+
 import scala.jdk.CollectionConverters.*
+import scala.util.matching.Regex
 
 class Scala2StepFilter(
     sourceLookUp: SourceLookUpProvider,
@@ -122,12 +124,11 @@ class Scala2StepFilter(
     // TODO try use tryEncode
     getOwners(scalaClass)
       .foldRight(Option(javaClass.name)) { (sym, acc) =>
-        for (javaName <- acc if javaName.contains(sym.name)) yield {
-          javaName
-            .split(sym.name)
+        for (javaName <- acc if javaName.contains(sym.name))
+          yield javaName
+            .split(Regex.quote(sym.name))
             .drop(1)
             .mkString(sym.name)
-        }
       }
       .exists { remainder =>
         remainder.forall(c => c.isDigit || c == '$')

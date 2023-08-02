@@ -171,12 +171,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.success("B.b3", "b3"),
         Evaluation.success("A.B.b3", "b3"),
         Evaluation.success("B.b4", "b4"),
-        Evaluation.success("C")(result => assert(result.startsWith("A$C$@"))),
-        Evaluation.success("D")(result => assert(result.startsWith("A$D$@"))),
+        Evaluation.success("C", ObjectRef("A$C$")),
+        Evaluation.success("D", ObjectRef("A$D$")),
         Evaluation.success("F.f1", "f1"),
         Evaluation.success("F.f2", "f2"),
-        Evaluation.success("F.G")(result => assert(result.startsWith("F$G$@"))),
-        Evaluation.success("F.H")(result => assert(result.startsWith("F$H$@")))
+        Evaluation.success("F.G", ObjectRef("F$G$")),
+        Evaluation.success("F.H", ObjectRef("F$H$"))
       )
     )
   }
@@ -2011,6 +2011,166 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     // a pure expression does nothing in statement position
     check(Breakpoint(8), Evaluation.successOrIgnore("m", 1, ignore = isScala2))
   }
+
+  test("i425") {
+    val source =
+      """|package example
+         |
+         |object Rewrites {
+         |  private class Patch(var span: Span)
+         |  
+         |  def main(args: Array[String]): Unit = {
+         |    val patch = new Patch(new Span(0))
+         |    println("ok")
+         |  }
+         |}
+         |
+         |class Span(val start: Int) extends AnyVal {
+         |  def end = start + 1
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClass(source, "example.Rewrites", scalaVersion)
+    check(
+      Breakpoint(8),
+      Evaluation.success("patch.span", 0),
+      Evaluation.success("patch.span = new Span(1)", ()),
+      Evaluation.success("patch.span", 1)
+    )
+  }
+
+  test("i485: public members from private subclass") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  val a1 = "a1"
+         |  var a2 = 1
+         |  def m = "m"
+         |  class D
+         |  object D
+         |}
+         |
+         |object Main {
+         |  private class B extends A
+         |  
+         |  def main(args: Array[String]): Unit = {
+         |    val b = new B
+         |    println("foo")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(16),
+      Evaluation.success("b.a1", "a1"),
+      Evaluation.success("b.a2 = 2", ()),
+      Evaluation.success("b.a2", 2),
+      Evaluation.success("b.m", "m"),
+      Evaluation.success("new b.D", ObjectRef("A$D")),
+      Evaluation.success("b.D", ObjectRef("A$D$"))
+    )
+  }
+
+  test("i485: $outer from contstructor") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  val x = "x"
+         |  class B {
+         |    println(x)
+         |    class C {
+         |      println(x)
+         |    }
+         |    new C
+         |  }
+         |  new B
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    new A
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    if (isScala2) {
+      check(
+        Breakpoint(6),
+        Evaluation.success("x", "x"),
+        Breakpoint(8),
+        Evaluation.success("x", "x")
+      )
+    } else {
+      check(
+        Breakpoint(6),
+        Evaluation.success("x", "x"),
+        Breakpoint(6),
+        Evaluation.success("x", "x"),
+        Breakpoint(8),
+        Evaluation.success("x", "x"),
+        Breakpoint(8),
+        Evaluation.success("x", "x")
+      )
+    }
+  }
+
+  test("java static members") {
+    val javaSource =
+      """|package example;
+         |
+         |class A {
+         |  protected static String x = "x";
+         |  protected static String m() {
+         |    return "m";
+         |  }
+         |}
+         |""".stripMargin
+    val javaModule = TestingDebuggee.fromJavaSource(javaSource, "example.A", scalaVersion)
+    val scalaSource =
+      """|package example
+         |
+         |object Main extends A {
+         |  def main(args: Array[String]): Unit = {
+         |    println("Hello, World!")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClass(scalaSource, "example.Main", scalaVersion, Seq.empty, Seq(javaModule.mainModule))
+    check(
+      Breakpoint(5),
+      Evaluation.successOrIgnore("A.x", "x", isScala2),
+      Evaluation.successOrIgnore("A.x = \"y\"", (), isScala2),
+      Evaluation.successOrIgnore("A.x", "y", isScala2),
+      Evaluation.successOrIgnore("A.m()", "m", isScala2)
+    )
+  }
+
+  test("tuple extractor") {
+    val source =
+      """|package example
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val tuple = (1, 2)
+         |    val (x, y) = tuple
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(5),
+      Evaluation.success("tuple._1", 1),
+      Evaluation.success(
+        """|val (x, y) = tuple
+           |y
+           |""".stripMargin,
+        2
+      )
+    )
+  }
 }
 
 abstract class Scala2EvaluationTests(val scalaVersion: ScalaVersion) extends ScalaEvaluationTests(scalaVersion) {
@@ -2041,6 +2201,37 @@ abstract class Scala2EvaluationTests(val scalaVersion: ScalaVersion) extends Sca
 }
 
 abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEvaluationTests(scalaVersion) {
+  test("evaluate inline elements") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    inline val y = 2
+         |    println("ok")
+         |  }
+         |  inline def m(): Int = 42
+         |  inline def n(inline x: Int): Int = x
+         |  private inline val x = 1
+         |  inline def test(inline x: Int) = Test(x)
+         |  inline def t = test(42).x
+         |  case class Test(x: Int)
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(6),
+      Evaluation.success("m()", 42),
+      Evaluation.success("n(1)", 1),
+      Evaluation.success("x + 1", 2),
+      Evaluation.success("test(42)", ObjectRef("Main$Test")),
+      Evaluation.success("t", 42),
+      Evaluation.success("n(x)", 1),
+      Evaluation.success("y + 1", 3),
+      Evaluation.success("n(y)", 2),
+      Evaluation.success("n(m())", 42)
+    )
+  }
   test("evaluate shadowed variable") {
     val source =
       """|package example
@@ -2132,7 +2323,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("brace-less syntax: evaluate on method definition") {
+  test("brace-less syntax: on method definition") {
     val source =
       """|package example
          |class Foo:
@@ -2191,7 +2382,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("brace-less syntax: evaluate in default arguments") {
+  test("brace-less syntax: on default argument") {
     val source =
       """|package example
          |object Main:
@@ -2207,7 +2398,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     check(Breakpoint(7), Evaluation.success("x + 1", 4))
   }
 
-  test("brace-less syntax: evaluate nested method") {
+  test("brace-less syntax: nested method") {
     val source =
       """|package example
          |class Foo:
@@ -2238,7 +2429,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("brace-less syntax: evaluate tail-rec function") {
+  test("brace-less syntax: tail-rec function") {
     val source =
       """|package example
          |object Main:
@@ -2255,7 +2446,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     check(Breakpoint(6), Evaluation.success("f(x)", 2))
   }
 
-  test("evaluate inline def") {
+  test("inline def") {
     val source =
       """|package example
          |
@@ -2282,7 +2473,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("evaluate macro def") {
+  test("macro def") {
     val mainSource =
       """|package example
          |
@@ -2334,7 +2525,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("evaluate expression involving enums") {
+  test("enums") {
     val source =
       """|package example
          |
@@ -2381,7 +2572,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("evaluate instance of local class in method of value class") {
+  test("instance of local class in method of value class") {
     // only Scala 3 because:
     // "implementation restriction: nested class is not allowed in value class
     // This restriction is planned to be removed in subsequent releases."
@@ -2421,7 +2612,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("should use explicit nulls") {
+  test("support for -Yexplicit-nulls") {
     val source =
       """|package example
          |
@@ -2437,6 +2628,25 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
       Evaluation.failed(
         "classLoader.loadClass(\"java.lang.String\")",
         "not a member of ClassLoader | Null"
+      )
+    )
+  }
+
+  test("support for -language:strictEquality") {
+    val source =
+      """|package example
+         |
+         |@main def app =
+         |  val msg = "Hello, World!"
+         |  println(msg)
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClass(source, "example.app", scalaVersion, Seq("-language:strictEquality"))
+    check(
+      Breakpoint(5),
+      DebugStepAssert.inParallel(
+        Evaluation.success("msg == \"\"", false),
+        Evaluation.failed("msg == 5", "cannot be compared")
       )
     )
   }

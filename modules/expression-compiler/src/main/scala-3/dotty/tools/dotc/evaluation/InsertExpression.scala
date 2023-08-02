@@ -107,9 +107,7 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
         |      case e: InvocationTargetException => throw e.getCause.nn
         |
         |  extension [T] (x: T | Null)
-        |    private def nn: T = 
-        |      assert(x != null)
-        |      x.asInstanceOf[T]
+        |    private def nn: T = x.asInstanceOf[T]
         |""".stripMargin
 
   override def run(using Context): Unit =
@@ -126,26 +124,21 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
             expressionInserted = false
             cpy.PackageDef(transformed)(
               transformed.pid,
-              transformed.stats ++ expressionClass.map(
-                _.withSpan(tree.span)
-              )
+              transformed.stats ++ expressionClass.map(_.withSpan(tree.span))
             )
           else transformed
         case tree @ DefDef(name, paramss, tpt, rhs) if rhs != EmptyTree && isOnBreakpoint(tree) =>
-          cpy.DefDef(tree)(
-            name,
-            paramss,
-            tpt,
-            mkExprBlock(expression, tree.rhs)
-          )
+          cpy.DefDef(tree)(name, paramss, tpt, mkExprBlock(expression, tree.rhs))
         case tree @ Match(selector, caseDefs) if isOnBreakpoint(tree) || caseDefs.exists(isOnBreakpoint) =>
           // the expression is on the match or a case of the match
           // if it is on the case of the match the program could pause on the pattern, the guard or the body
           // we assume it pauses on the pattern because that is the first instruction
           // in that case we cannot compile the expression val in the pattern, but we can compile it in the selector
           cpy.Match(tree)(mkExprBlock(expression, selector), caseDefs)
-        case tree @ ValDef(name, tpt, rhs) if isOnBreakpoint(tree) =>
+        case tree @ ValDef(name, tpt, _) if isOnBreakpoint(tree) =>
           cpy.ValDef(tree)(name, tpt, mkExprBlock(expression, tree.rhs))
+        case tree @ PatDef(mods, pat, tpt, rhs) if isOnBreakpoint(tree) =>
+          PatDef(mods, pat, tpt, mkExprBlock(expression, rhs))
         case tree: (Ident | Select | GenericApply | Literal | This | New | InterpolatedString | OpTree | Tuple |
               Assign | Block) if isOnBreakpoint(tree) =>
           mkExprBlock(expression, tree)
@@ -209,9 +202,7 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
       if tree.span.exists then tree.sourcePos.startLine + 1 else -1
     startLine == exprCtx.breakpointLine
 
-  private def mkExprBlock(expr: Tree, tree: Tree)(using
-      Context
-  ): Tree =
+  private def mkExprBlock(expr: Tree, tree: Tree)(using Context): Tree =
     if expressionInserted then
       warnOrError("expression already inserted", tree.srcPos)
       tree

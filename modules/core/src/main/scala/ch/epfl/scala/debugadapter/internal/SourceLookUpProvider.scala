@@ -83,13 +83,14 @@ private[debugadapter] object SourceLookUpProvider {
 
   def apply(entries: Seq[ClassEntry], logger: Logger): SourceLookUpProvider = {
     val parrallelEntries = ParVector(entries*)
-    val sourceFilesByEntry = parrallelEntries
-      .flatMap(_.sourceEntries)
-      .distinct
-      .map(entry => entry -> SourceEntryLookUp.getAllSourceFiles(entry, logger))
-      .toMap
+    val sourceLookUps =
+      parrallelEntries
+        .flatMap(_.sourceEntries)
+        .distinct
+        .map(entry => entry -> SourceEntryLookUp(entry, logger))
+        .toMap
     val allLookUps = parrallelEntries
-      .map(entry => ClassEntryLookUp(entry, entry.sourceEntries.flatMap(sourceFilesByEntry.apply), logger))
+      .map(entry => ClassEntryLookUp(entry, entry.sourceEntries.flatMap(sourceLookUps.apply), logger))
       .seq
     val sourceUriToClassPathEntry = allLookUps
       .flatMap(lookup => lookup.sources.map(uri => (uri, lookup)))

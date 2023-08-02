@@ -49,11 +49,11 @@ lazy val javaDebug = project
     autoScalaLibrary := false,
     compile / javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
     libraryDependencies ++= Seq(
-      "org.apache.commons" % "commons-lang3" % "3.12.0",
+      "org.apache.commons" % "commons-lang3" % "3.13.0",
       "com.google.code.gson" % "gson" % "2.10.1",
       "io.reactivex.rxjava2" % "rxjava" % "2.2.21",
       "org.reactivestreams" % "reactive-streams" % "1.0.4",
-      "commons-io" % "commons-io" % "2.12.0",
+      "commons-io" % "commons-io" % "2.13.0",
       "junit" % "junit" % "4.13.2" % Test,
       "org.easymock" % "easymock" % "5.1.0" % Test,
       "com.github.sbt" % "junit-interface" % "0.13.3" % Test
@@ -166,10 +166,10 @@ lazy val expressionCompiler = projectMatrix
     crossScalaVersions ++= CrossVersion
       .partialVersion(scalaVersion.value)
       .collect {
-        case (2, 12) => Seq("2.12.17", "2.12.16", "2.12.15", "2.12.14", "2.12.13", "2.12.12", "2.12.11", "2.12.10")
-        case (2, 13) => Seq("2.13.10", "2.13.9", "2.13.8", "2.13.7", "2.13.6", "2.13.5", "2.13.4", "2.13.3")
+        case (2, 12) => Seq("2.12.18", "2.12.17", "2.12.16", "2.12.15", "2.12.14", "2.12.13", "2.12.12", "2.12.11")
+        case (2, 13) => Seq("2.13.11", "2.13.10", "2.13.9", "2.13.8", "2.13.7", "2.13.6", "2.13.5", "2.13.4", "2.13.3")
         case (3, 0) => Seq("3.0.2", "3.0.1", "3.0.0")
-        case (3, _) => Seq("3.2.2", "3.2.1", "3.2.0", "3.1.3", "3.1.2", "3.1.1", "3.1.0")
+        case (3, _) => Seq("3.3.0", "3.2.2", "3.2.1", "3.2.0", "3.1.3", "3.1.2", "3.1.1", "3.1.0")
       }
       .toSeq
       .flatten,
@@ -202,7 +202,7 @@ lazy val scala3StepFilter: Project = project
     scalaVersion := Dependencies.scala31Plus,
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
-      "ch.epfl.scala" %% "tasty-query" % "0.7.9",
+      "ch.epfl.scala" %% "tasty-query" % "0.8.4",
       "org.scala-lang" %% "tasty-core" % scalaVersion.value,
       Dependencies.munit % Test
     ),
