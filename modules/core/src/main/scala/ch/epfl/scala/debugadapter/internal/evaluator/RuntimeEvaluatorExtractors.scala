@@ -2,7 +2,6 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 
 import scala.meta.Term
 import com.sun.jdi._
-import ch.epfl.scala.debugadapter.Logger
 
 protected[internal] object RuntimeEvaluatorExtractors {
   object ColonEndingInfix {
@@ -19,8 +18,6 @@ protected[internal] object RuntimeEvaluatorExtractors {
         case ref: ClassType if ref.fieldByName("MODULE$") != null => Some(ref)
         case _ => None
       }
-
-    def unapply(cls: JdiClass): Option[ClassType] = unapply(cls.cls)
 
     def unapply(tree: RuntimeTree): Option[RuntimeEvaluableTree] =
       tree match {
@@ -45,6 +42,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
         case mt: NestedModuleTree => unapply(mt.init.qual)
         case ft: InstanceFieldTree => unapply(ft.qual)
         case IfTree(p, t, f, _) => unapply(p) || unapply(t) || unapply(f)
+        case AssignTree(lhs, rhs, _) => unapply(lhs) || unapply(rhs)
         case _: MethodTree | _: NewInstanceTree => true
         case _: LiteralTree | _: LocalVarTree | _: PreEvaluatedTree | _: ThisTree | UnitTree => false
         case _: StaticFieldTree | _: ClassTree | _: TopLevelModuleTree => false
@@ -61,9 +59,6 @@ protected[internal] object RuntimeEvaluatorExtractors {
         case _ => Recoverable(s"$tree is not a reference type")
       }
     }
-
-    def unapply(tree: Validation[RuntimeTree])(implicit logger: Logger): Validation[ReferenceType] =
-      tree.flatMap(unapply)
   }
 
   object IsAnyVal {
@@ -75,9 +70,6 @@ protected[internal] object RuntimeEvaluatorExtractors {
   }
 
   object BooleanTree {
-    def unapply(p: Validation[RuntimeEvaluableTree])(implicit logger: Logger): Validation[RuntimeEvaluableTree] =
-      p.flatMap(unapply)
-
     def unapply(p: RuntimeEvaluableTree): Validation[RuntimeEvaluableTree] = p.`type` match {
       case bt: BooleanType => Valid(p)
       case rt: ReferenceType if rt.name() == "java.lang.Boolean" =>

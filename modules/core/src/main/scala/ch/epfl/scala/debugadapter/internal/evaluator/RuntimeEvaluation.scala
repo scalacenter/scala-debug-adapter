@@ -3,32 +3,6 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import ch.epfl.scala.debugadapter.Logger
 import scala.meta.{Type => _, _}
 
-class RuntimeEvaluation private (
-    evaluator: RuntimeEvaluator,
-    validator: RuntimeValidator,
-    logger: Logger
-) {
-  def validate(expression: String): Validation[RuntimeEvaluableTree] =
-    validator.validate(expression)
-
-  def evaluate(expression: RuntimeEvaluableTree): Safe[JdiValue] =
-    evaluator.evaluate(expression)
-}
-
-object RuntimeEvaluation {
-  def apply(
-      frame: JdiFrame,
-      logger: Logger,
-      evaluator: RuntimeEvaluator,
-      validator: RuntimeValidator
-  ): RuntimeEvaluation =
-    new RuntimeEvaluation(
-      evaluator,
-      validator,
-      logger
-    )
-}
-
 trait RuntimeValidator {
   def frame: JdiFrame
   def logger: Logger
@@ -37,11 +11,11 @@ trait RuntimeValidator {
 
   def validate(expression: Stat): Validation[RuntimeEvaluableTree]
 
-  def validateName(
-      value: String,
-      of: Validation[RuntimeTree],
-      methodFirst: Boolean = false
-  ): Validation[RuntimeEvaluableTree]
+  def validateBlock(block: Term.Block): Validation[RuntimeEvaluableTree]
+
+  def validateLiteral(lit: Lit): Validation[RuntimeEvaluableTree]
+
+  def validateName(value: String, methodFirst: Boolean): Validation[RuntimeEvaluableTree]
 
   def validateMethod(call: Call): Validation[RuntimeEvaluableTree]
 
@@ -52,6 +26,8 @@ trait RuntimeValidator {
   def validateOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree]
 
   def validateIf(tree: Term.If): Validation[RuntimeEvaluableTree]
+
+  def validateAssign(tree: Term.Assign): Validation[RuntimeEvaluableTree]
 }
 
 trait RuntimeEvaluator {
@@ -85,4 +61,10 @@ trait RuntimeEvaluator {
   def evaluateModule(tree: ModuleTree): Safe[JdiValue]
 
   def instantiate(tree: NewInstanceTree): Safe[JdiObject]
+
+  def evaluateArrayElement(tree: ArrayElemTree): Safe[JdiValue]
+
+  def evaluateIf(tree: IfTree): Safe[JdiValue]
+
+  def evaluateAssign(tree: AssignTree): Safe[JdiValue]
 }

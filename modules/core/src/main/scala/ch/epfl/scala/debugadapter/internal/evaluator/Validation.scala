@@ -1,9 +1,6 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import java.util.NoSuchElementException
-import scala.util.Try
-import scala.util.Success
-import scala.util.Failure
 
 import com.sun.jdi.VMDisconnectedException
 import com.sun.jdi.ObjectCollectedException
@@ -24,12 +21,6 @@ sealed abstract class Validation[+A] {
 
   def map[B](f: A => B)(implicit logger: Logger): Validation[B]
   def flatMap[B](f: A => Validation[B])(implicit logger: Logger): Validation[B]
-  def flatten[B](implicit ev: A <:< Validation[B]): Validation[B] = this match {
-    case Valid(value) => ev(this.get)
-    case Recoverable(message) => Recoverable(message)
-    case Fatal(e) => Fatal(e)
-    case CompilerRecoverable(message) => CompilerRecoverable(message)
-  }
 
   def transform[B](f: Validation[A] => Validation[B]): Validation[B] = f(this)
 
@@ -38,14 +29,12 @@ sealed abstract class Validation[+A] {
   def orElse[B >: A](f: => Validation[B]): Validation[B]
 
   def toOption: Option[A]
-  def toTry: Try[A]
 }
 
 final case class Valid[+A](value: A) extends Validation[A]() {
   override val isValid: Boolean = true
   override def map[B](f: A => B)(implicit logger: Logger): Validation[B] = Validation(f(value))
-  override def flatMap[B](f: A => Validation[B])(implicit logger: Logger): Validation[B] =
-    f(value).map(Validation(_)).flatten
+  override def flatMap[B](f: A => Validation[B])(implicit logger: Logger): Validation[B] = f(value)
   override def get = value
   override def getOrElse[B >: A](f: => B): B = value
   override def orElse[B >: A](f: => Validation[B]): Validation[B] = this
@@ -56,7 +45,6 @@ final case class Valid[+A](value: A) extends Validation[A]() {
     else Recoverable(s"Predicate does not hold for $value")
 
   override def toOption: Option[A] = Some(value)
-  override def toTry: Try[A] = Success(value)
 }
 
 sealed abstract class Invalid(val exception: Exception) extends Validation[Nothing]() {
@@ -69,7 +57,6 @@ sealed abstract class Invalid(val exception: Exception) extends Validation[Nothi
   override def filter(p: Nothing => Boolean, fatal: Boolean): Validation[Nothing] = this
 
   override def toOption: Option[Nothing] = None
-  override def toTry: Try[Nothing] = Failure(exception)
 }
 
 final case class Recoverable(override val exception: Exception) extends Invalid(exception) {

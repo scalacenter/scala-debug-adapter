@@ -27,9 +27,12 @@ sealed trait MethodTree extends RuntimeEvaluableTree {
   def args: Seq[RuntimeEvaluableTree]
 }
 
-sealed trait FieldTree extends RuntimeEvaluableTree {
+sealed trait FieldTree extends AssignableTree {
   def field: Field
+  def immutable: Boolean = field.isFinal
 }
+
+sealed trait AssignableTree extends RuntimeEvaluableTree
 
 /* -------------------------------------------------------------------------- */
 /*                                Simple trees                                */
@@ -61,7 +64,7 @@ object LiteralTree {
 case class LocalVarTree(
     name: String,
     `type`: Type
-) extends RuntimeEvaluableTree {
+) extends AssignableTree {
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|LocalVarTree(
@@ -344,4 +347,30 @@ object IfTree {
       case _ => CompilerRecoverable("A predicate must be a boolean")
     }
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 Assign tree                                */
+/* -------------------------------------------------------------------------- */
+case class AssignTree(
+    lhs: AssignableTree,
+    rhs: RuntimeEvaluableTree,
+    `type`: Type
+) extends RuntimeEvaluableTree {
+  override def prettyPrint(depth: Int): String = {
+    val indent = "\t" * (depth + 1)
+    s"""|AssignTree(
+        |${indent}lhs= ${lhs.prettyPrint(depth + 1)},
+        |${indent}rhs= ${rhs.prettyPrint(depth + 1)},
+        |${indent}t= ${`type`}
+        |${indent.dropRight(1)})""".stripMargin
+  }
+}
+
+object AssignTree {
+  def apply(lhs: RuntimeEvaluableTree, rhs: RuntimeEvaluableTree, tpe: Type): Validation[AssignTree] =
+    lhs match {
+      case lhs: AssignableTree => Valid(AssignTree(lhs, rhs, tpe))
+      case _ => CompilerRecoverable("Left hand side of an assignment must be assignable")
+    }
 }
