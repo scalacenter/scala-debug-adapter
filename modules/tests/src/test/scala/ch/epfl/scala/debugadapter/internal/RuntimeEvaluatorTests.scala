@@ -415,7 +415,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     check(Breakpoint(10), Evaluation.failed("x"), Breakpoint(13), Evaluation.failed("x"))
   }
 
-  test("should retrieve the value of a local variable from jdi --- scala") {
+  test("should retrieve the value of a local variable from jdi") {
     implicit val debuggee = localVar
     check(
       Breakpoint(6),
@@ -428,7 +428,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   test("""|Should retrieve the value of a field
           | -> From the current class
           | -> From an instance of class
-          | -> From a static field --- scala""".stripMargin) {
+          | -> From a static field""".stripMargin) {
     implicit val debuggee = field
     check(
       Breakpoint(8),
@@ -442,7 +442,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should access a field defined in super class --- scala") {
+  test("Should access a field defined in super class") {
     val source =
       """|package example
          |
@@ -463,7 +463,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should resolve non-generic overloads --- scala") {
+  test("Should resolve non-generic overloads") {
     implicit val debuggee = method
     check(
       Breakpoint(10),
@@ -474,7 +474,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should compute a method call on the current class --- scala") {
+  test("Should compute a method call on the current class") {
     implicit val debuggee = method
     check(
       Breakpoint(38),
@@ -484,7 +484,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should compute a method on a superclass --- scala") {
+  test("Should compute a method on a superclass") {
     implicit val debuggee = field
     check(
       Breakpoint(8),
@@ -492,7 +492,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should compute a method call on an instance of a class --- scala") {
+  test("Should compute a method call on an instance of a class") {
     implicit val debuggee = method
     check(
       Breakpoint(10),
@@ -509,7 +509,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should compute an unary method --- scala") {
+  test("Should compute an unary method") {
     implicit val debuggee = method
     check(
       Breakpoint(10),
@@ -517,7 +517,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should fail if the method doest not exists or arguments aren't correct (in count & types) --- scala") {
+  test("Should fail if the method doest not exists or arguments aren't correct (in count & types)") {
     implicit val debuggee = method
     check(
       Breakpoint(10),
@@ -549,7 +549,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should compute an implicit .apply() call --- scala") {
+  test("Should compute an indirect .apply() call") {
     implicit val debuggee = method
     check(
       Breakpoint(10),
@@ -616,7 +616,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should find the right inner type among the same-name inner types --- scala") {
+  test("Should find the right inner type among the same-name inner types") {
     implicit val debuggee = method
     check(
       Breakpoint(10),
@@ -627,7 +627,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should be able to unbox arguments --- scala") {
+  test("Should be able to unbox arguments") {
     implicit val debuggee = method
     check(
       Breakpoint(10),
@@ -638,7 +638,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should compute a static method call --- scala") {
+  test("Should compute a static method call") {
     implicit val debuggee = method
     check(
       Breakpoint(10),
@@ -649,7 +649,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   }
 
   test(
-    "Should fail when method overloaded with the same types after erasure are present. Should successfully compute a method overloaded with different types after erasure --- scala"
+    "Should fail when method overloaded with the same types after erasure are present. Should successfully compute a method overloaded with different types after erasure"
   ) {
     implicit val debuggee = method
     check(
@@ -672,7 +672,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should get the value of a field in a nested type --- scala") {
+  test("Should get the value of a field in a nested type") {
     implicit val debuggee = nested
     check(
       Breakpoint(11),
@@ -686,7 +686,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should compute a method call on a nested type --- scala") {
+  test("Should compute a method call on a nested type") {
     implicit val debuggee = nested
     check(
       Breakpoint(11),
@@ -1000,7 +1000,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Evaluation.success("a.f.a", 64),
       assignSuccess("b = 42"),
       Evaluation.success("Main.b", 0),
-      Evaluation.successOrIgnore("b", 42, true), // ? works in a debug session but not in tests ???
+      Evaluation.success("b", 42),
       assignSuccess("c = 42"),
       Evaluation.success("c", 42),
       assignSuccess("a.l = new C"),
@@ -1011,6 +1011,35 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Evaluation.failed("a.f.a = \"str\""),
       Evaluation.failed("b = \"str\""),
       Evaluation.failed("Main.b = \"str\"")
+    )
+  }
+
+  test("a field should not shadow a local variable") {
+    val source =
+      """|package example
+         |
+         |case class TestM(val a: Int)
+         |case class Test(val t: TestM)
+         |
+         |object Main {
+         |  val a = 0
+         |  val test = Test(TestM(42))
+         |  def main(args: Array[String]): Unit = {
+         |    val a = 42
+         |    val test = new Test(TestM(64))
+         |    println(a)
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(12),
+      Evaluation.success("a", 42),
+      Evaluation.success("this.a", 0),
+      Evaluation.success("Main.a", 0),
+      Evaluation.success("test.t.a", 64),
+      Evaluation.success("this.test.t.a", 42),
+      Evaluation.success("Main.test.t.a", 42)
     )
   }
 }

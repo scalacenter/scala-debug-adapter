@@ -2,7 +2,6 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 
 import scala.meta.Term
 import com.sun.jdi._
-import ch.epfl.scala.debugadapter.Logger
 
 protected[internal] object RuntimeEvaluatorExtractors {
   object ColonEndingInfix {
@@ -62,9 +61,6 @@ protected[internal] object RuntimeEvaluatorExtractors {
         case _ => Recoverable(s"$tree is not a reference type")
       }
     }
-
-    def unapply(tree: Validation[RuntimeTree])(implicit logger: Logger): Validation[ReferenceType] =
-      tree.flatMap(unapply)
   }
 
   object IsAnyVal {
@@ -76,9 +72,6 @@ protected[internal] object RuntimeEvaluatorExtractors {
   }
 
   object BooleanTree {
-    def unapply(p: Validation[RuntimeEvaluableTree])(implicit logger: Logger): Validation[RuntimeEvaluableTree] =
-      p.flatMap(unapply)
-
     def unapply(p: RuntimeEvaluableTree): Validation[RuntimeEvaluableTree] = p.`type` match {
       case bt: BooleanType => Valid(p)
       case rt: ReferenceType if rt.name() == "java.lang.Boolean" =>

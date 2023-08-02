@@ -15,11 +15,7 @@ trait RuntimeValidator {
 
   def validateLiteral(lit: Lit): Validation[RuntimeEvaluableTree]
 
-  def validateName(
-      value: String,
-      of: Validation[RuntimeTree],
-      methodFirst: Boolean = false
-  ): Validation[RuntimeEvaluableTree]
+  def validateName(value: String, methodFirst: Boolean): Validation[RuntimeEvaluableTree]
 
   def validateMethod(call: Call): Validation[RuntimeEvaluableTree]
 

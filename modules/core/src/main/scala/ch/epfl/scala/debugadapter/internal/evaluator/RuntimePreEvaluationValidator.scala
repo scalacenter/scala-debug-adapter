@@ -29,7 +29,7 @@ class RuntimePreEvaluationValidator(
     }
 
   override def fieldTreeByName(
-      of: Validation[RuntimeTree],
+      of: RuntimeTree,
       name: String,
       preevaluate: Boolean = true
   ): Validation[RuntimeEvaluableTree] =
