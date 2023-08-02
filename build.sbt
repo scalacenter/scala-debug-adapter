@@ -148,7 +148,7 @@ lazy val sbtPlugin = project
     scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
     scriptedBufferLog := false,
     scriptedDependencies := scriptedDependencies
-      .dependsOn(publishLocal, core212 / publishLocal, tests212 / publishLocal)
+      .dependsOn(publishLocal, core212 / publishLocal, tests212 / publishLocal, expressionCompiler212 / publishLocal)
       .value
   )
   .dependsOn(core212)
