@@ -49,6 +49,31 @@ class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`) {
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`2.13`)
     check(Breakpoint(14), StepIn.line(9), Breakpoint(16), StepIn.line(10))
   }
+
+  test("should step into method of local class") {
+    val source =
+      """|package example
+         |
+         |class `A+B` {
+         |  val foo = 42
+         |  object && {
+         |    def x = {
+         |      println(foo)
+         |      42
+         |    }
+         |  }
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val ab = new `A+B`
+         |    println(ab.&&.x)
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`2.13`)
+    check(Breakpoint(8), Evaluation.success("foo", 42))
+  }
 }
 
 abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends DebugTestSuite {

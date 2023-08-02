@@ -122,12 +122,11 @@ class Scala2StepFilter(
     // TODO try use tryEncode
     getOwners(scalaClass)
       .foldRight(Option(javaClass.name)) { (sym, acc) =>
-        for (javaName <- acc if javaName.contains(sym.name)) yield {
-          javaName
-            .split(sym.name)
+        for (javaName <- acc if javaName.contains(sym.name))
+          yield javaName
+            .split(sym.name.replaceAll("\\$", "\\\\\\$"))
             .drop(1)
             .mkString(sym.name)
-        }
       }
       .exists { remainder =>
         remainder.forall(c => c.isDigit || c == '$')
