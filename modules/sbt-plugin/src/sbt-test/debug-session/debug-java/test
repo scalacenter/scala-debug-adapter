@@ -1,0 +1,2 @@
+> 'debugJavaWithG / checkDebugJava {"class":"example.Main","arguments":[],"jvmOptions":[]}'
+> 'debugJavaWithoutG / checkDebugJava {"class":"example.Main","arguments":[],"jvmOptions":[]}'
