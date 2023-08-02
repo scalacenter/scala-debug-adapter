@@ -26,12 +26,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
-        jvm: ['adoptium:1.8.0-372', 'adoptium:1.11.0.19', 'adoptium:1.17.0.7']
         include:
           - os: ubuntu-latest
+            jvm: 'adoptium:1.8.0-372'
+          - os: window-latest
+            jvm: 'adoptium:1.11.0.19'
+          - os: macOS-latest
+            jvm: 'adoptium:1.17.0.7'
+          - os: ubuntu-latest
             jvm: 'adoptium:1.20.0.1'
-    name: Test on ${{ matrix.os }} -- ${{ matrix.jvm }}
+    name: Unit Tests on ${{ matrix.os }} -- ${{ matrix.jvm }}
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
@@ -44,7 +48,27 @@ jobs:
     - name: Unit tests
       run: sbt test
       shell: bash
-    - name: Scripted sbt tests
+  scripted-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            jvm: 'adoptium:1.8.0-372'
+          - os: unbutu-latest
+            jvm: 'adoptium:1.11.0.19'
+          - os: macOS-latest
+            jvm: 'adoptium:1.17.0.7'
+    name: Scripted Tests on ${{ matrix.os }} -- ${{ matrix.jvm }}
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - uses: coursier/setup-action@v1.3.3
+      with:
+        jvm: ${{ matrix.jvm }}
+        apps: sbt
+    - name: Scripted tests
       run: sbt sbtPlugin/scripted
       shell: bash
-      if: ${{ matrix.jvm != 'adoptium:1.20.0.1' && (matrix.jvm != 'adoptium:1.17.0.7' || matrix.os != 'windows-latest' ) }}
