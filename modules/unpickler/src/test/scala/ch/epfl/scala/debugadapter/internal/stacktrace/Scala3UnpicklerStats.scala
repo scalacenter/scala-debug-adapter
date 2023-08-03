@@ -25,6 +25,7 @@ object Scala3UnpicklerStats:
 
   def main(args: Array[String]): Unit =
 
+    val topLevelAndInnerClassCounter = new Counter()
     val localClassCounter = new Counter()
     val localMethodCounter = new Counter()
 
@@ -34,8 +35,8 @@ object Scala3UnpicklerStats:
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
       clsSym <- cls match
-        case LocalClass(_, _, _) => processLocalClass(unpickler, cls, localClassCounter)
-        case _ => processClass(unpickler, cls)
+        case LocalClass(_, _, _) => processClass(unpickler, cls, localClassCounter)
+        case _ => processClass(unpickler, cls, topLevelAndInnerClassCounter)
         // case AnonClass(_, _, _) => process(cls, anonClassCounter)
         // case InnerClass(_, _) => process(cls, innerClassCounter)
         // case _ => process(cls, topLevelClassCounter)
@@ -46,6 +47,7 @@ object Scala3UnpicklerStats:
         case _ => None
     do ()
     localClassCounter.printStatus("Local classes")
+    localMethodCounter.printStatus("Top level and inner classes")
     localMethodCounter.printStatus("Local methods")
 
   def loadClasses(jars: Seq[Library], jarName: String) =
@@ -72,7 +74,7 @@ object Scala3UnpicklerStats:
     println(s"classNames: ${classes.size}")
     classes
 
-  def processLocalClass(unpickler: Scala3Unpickler, cls: ClassType, counter: Counter): Option[ClassSymbol] =
+  def processClass(unpickler: Scala3Unpickler, cls: ClassType, counter: Counter): Option[ClassSymbol] =
     try
       val sym = unpickler.findClass(cls)
       counter.addSuccess(cls.name)
@@ -84,14 +86,6 @@ object Scala3UnpicklerStats:
       case NotFoundException(e) =>
         counter.addNotFound(cls.name)
         None
-      case _ =>
-        None
-
-  def processClass(unpickler: Scala3Unpickler, cls: ClassType): Option[ClassSymbol] =
-    try
-      val sym = unpickler.findClass(cls)
-      Some(sym)
-    catch
       case _ =>
         None
 

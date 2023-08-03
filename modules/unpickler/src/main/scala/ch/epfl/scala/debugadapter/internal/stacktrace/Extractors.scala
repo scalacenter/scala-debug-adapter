@@ -20,7 +20,7 @@ object LazyInit:
 
 object LocalMethod:
   def unapply(method: binary.Method): Option[(String, Int)] =
-    if method.name.contains("$default$") || method.name.contains("proxy") then None
+    if method.name.contains("$default") || method.name.contains("$anonfun") || method.name.contains("$proxy") then None
     else
       val javaPrefix = method.declaringClass.name.replace('.', '$') + "$$"
       val decodedName = NameTransformer.decode(method.name.stripPrefix(javaPrefix).split("_\\$").last)

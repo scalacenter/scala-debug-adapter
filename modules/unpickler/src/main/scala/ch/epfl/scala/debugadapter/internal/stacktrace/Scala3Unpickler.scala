@@ -335,20 +335,18 @@ class Scala3Unpickler(
       ) || (method.isExtensionMethod && paramName == "$this") || (method.isClassInitializer && paramName == "$outer")
 
     val paramNames: List[String] = parametersName(symbol.declaredType)
-    val capturedParams = method.allParameters.size - paramNames.size
-    if !method.allParameters.take(capturedParams).map(_.name).forall(matchesCapture) then false
-    else
-      symbol.signedName match
-        case SignedName(_, sig, _) =>
-          val declaredParameters = method.allParameters.takeRight(method.allParameters.size - capturedParams)
-          matchArgumentsTypes(sig.paramsSig, declaredParameters)
-          && declaredParameters.map(_.name).zip(paramNames).forall((s1, s2) => s1 == s2)
-          && method.declaredReturnType.forall(matchType(sig.resSig, _))
-
-        case _ =>
-          // TODO compare symbol.declaredType
-          val declaredParameters = method.allParameters.takeRight(method.allParameters.size - capturedParams)
-          declaredParameters.isEmpty
+    val capturedParams = method.allParameters.dropRight(paramNames.size)
+    val declaredParams = method.allParameters.drop(capturedParams.size)
+    capturedParams.map(_.name).forall(matchesCapture) &&
+    declaredParams.map(_.name).corresponds(paramNames)((n1, n2) => n1 == n2) &&
+    (symbol.signedName match
+      case SignedName(_, sig, _) =>
+        matchArgumentsTypes(sig.paramsSig, declaredParams)
+        && method.declaredReturnType.forall(matchType(sig.resSig, _))
+      case _ =>
+        // TODO compare symbol.declaredType
+        declaredParams.isEmpty
+    )
 
   private def matchArgumentsTypes(scalaParams: Seq[ParamSig], javaParams: Seq[binary.Parameter]): Boolean =
     scalaParams
