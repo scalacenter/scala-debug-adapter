@@ -389,7 +389,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
          |  }
          |
          |  class B {
-         |    static String bar = "bar";
+         |    static final String bar = "bar";
          |  }
          |}""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.fromJavaSource(source, "example.Test", scalaVersion)
