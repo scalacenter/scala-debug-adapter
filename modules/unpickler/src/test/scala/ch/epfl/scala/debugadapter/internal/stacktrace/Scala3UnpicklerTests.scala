@@ -415,20 +415,43 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.A$", "example.A unapply(example.A x$1)", "A.unapply(A): A")
   }
 
-  test("anonymous function") {
+  test("anonymous functions") {
     val source =
       """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val f = (x: Int) => x + 3
-         |    f(3)
-         |  }
-         |}
+         |class A :
+         |  class B : 
+         |      def m =
+         |        List(true).map(x => x.toString + 1)
+         |        val f: Int => String = x => ""
+         |  def m =
+         |    List("").map(x => x + 1)
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     // TODO fix: it should find the symbol f by traversing the tree of object Main
-    debuggee.assertNotFound("example.Main$", "int $anonfun$1(int x)")
+    if isScala30 then
+      debuggee.assertFormat(
+        "example.A",
+        "java.lang.String m$$anonfun$2(boolean x)",
+        "A.B.m.$anonfun(x: Boolean): String"
+      )
+      debuggee.assertFormat("example.A", "java.lang.String $anonfun$1(int x)", "A.B.m.f.$anonfun(x: Int): String")
+      debuggee.assertFormat(
+        "example.A",
+        "java.lang.String m$$anonfun$1(java.lang.String x)",
+        "A.m.$anonfun(x: String): String"
+      )
+    else
+      debuggee.assertFormat(
+        "example.A",
+        "java.lang.String m$$anonfun$1(boolean x)",
+        "A.B.m.$anonfun(x: Boolean): String"
+      )
+      debuggee.assertFormat("example.A", "java.lang.String $anonfun$1(int x)", "A.B.m.f.$anonfun(x: Int): String")
+      debuggee.assertFormat(
+        "example.A",
+        "java.lang.String m$$anonfun$2(java.lang.String x)",
+        "A.m.$anonfun(x: String): String"
+      )
   }
 
   test("this.type") {

@@ -418,7 +418,8 @@ class Scala3Unpickler(
 
   extension (symbol: Symbol)
     private def isTrait = symbol.isClass && symbol.asClass.isTrait
-    private def matchName(name: String) = symbol.name.toString == name
+    private def matchName(name: String) =
+      symbol.name.toString == name || (name.endsWith("$anonfun") && symbol.name.toString == "$anonfun")
     private def isLocal = symbol.owner.isTerm
 
   extension [T <: Symbol](symbols: Seq[T])
