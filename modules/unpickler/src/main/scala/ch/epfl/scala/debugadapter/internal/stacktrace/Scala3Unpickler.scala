@@ -92,15 +92,19 @@ class Scala3Unpickler(
 
   def collectLocalSymbols[S <: Symbol](cls: ClassSymbol)(partialF: PartialFunction[Symbol, S]): Seq[S] =
     val f = partialF.lift.andThen(_.toSeq)
-    for
-      decl <- cls.declarations
-      tree <- decl.tree.toSeq
-      localSym <- tree.walkTree {
+
+    def collectSymbols(tree: Tree): Seq[S] =
+      tree.walkTree {
         case ValDef(_, _, _, symbol) if symbol.isLocal && (symbol.isLazyVal || symbol.isModuleVal) => f(symbol)
         case DefDef(_, _, _, _, symbol) if symbol.isLocal => f(symbol)
         case ClassDef(_, _, symbol) if symbol.isLocal => f(symbol)
         case _ => Seq.empty
       }(_ ++ _, Seq.empty)
+
+    for
+      decl <- cls.declarations
+      tree <- decl.tree.toSeq
+      localSym <- collectSymbols(tree)
     yield localSym
 
   def formatType(t: TermType | TypeOrWildcard): String =
@@ -316,15 +320,37 @@ class Scala3Unpickler(
     else encodedScalaName == expectedName
 
   private def matchSignature(method: binary.Method, symbol: TermSymbol): Boolean =
-    symbol.signedName match
-      case SignedName(_, sig, _) =>
-        matchArguments(sig.paramsSig, method.declaredParams)
-        && method.declaredReturnType.forall(matchType(sig.resSig, _))
-      case _ =>
-        // TODO compare symbol.declaredType
-        method.declaredParams.isEmpty
+    def parametersName(tpe: TypeOrMethodic): List[String] =
+      tpe match
+        case t: MethodType =>
+          t.paramNames.map(_.toString()) ++ parametersName(t.resultType)
+        case t: PolyType =>
+          parametersName(t.resultType)
+        case _ => List()
 
-  private def matchArguments(scalaParams: Seq[ParamSig], javaParams: Seq[binary.Parameter]): Boolean =
+    def matchesCapture(paramName: String) =
+      val pattern = ".+\\$\\d+".r
+      pattern.matches(
+        paramName
+      ) || (method.isExtensionMethod && paramName == "$this") || (method.isClassInitializer && paramName == "$outer")
+
+    val paramNames: List[String] = parametersName(symbol.declaredType)
+    val capturedParams = method.allParameters.size - paramNames.size
+    if !method.allParameters.take(capturedParams).map(_.name).forall(matchesCapture) then false
+    else
+      symbol.signedName match
+        case SignedName(_, sig, _) =>
+          val declaredParameters = method.allParameters.takeRight(method.allParameters.size - capturedParams)
+          matchArgumentsTypes(sig.paramsSig, declaredParameters)
+          && declaredParameters.map(_.name).zip(paramNames).forall((s1, s2) => s1 == s2)
+          && method.declaredReturnType.forall(matchType(sig.resSig, _))
+
+        case _ =>
+          // TODO compare symbol.declaredType
+          val declaredParameters = method.allParameters.takeRight(method.allParameters.size - capturedParams)
+          declaredParameters.isEmpty
+
+  private def matchArgumentsTypes(scalaParams: Seq[ParamSig], javaParams: Seq[binary.Parameter]): Boolean =
     scalaParams
       .collect { case termSig: ParamSig.Term => termSig }
       .corresponds(javaParams)((scalaParam, javaParam) => matchType(scalaParam.typ, javaParam.`type`))
