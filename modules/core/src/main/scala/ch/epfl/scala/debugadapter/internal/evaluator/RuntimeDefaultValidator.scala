@@ -89,7 +89,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
     }
   lazy val currentLocation: Validation[RuntimeTree] = thisTree.orElse {
     frame.current().location().declaringType() match {
-      case ct: ClassType => Valid(ClassTree(ct))
+      case ct: ClassType => Valid(StaticTree(ct))
       case _ => Recoverable("Cannot get current location")
     }
   }
@@ -154,10 +154,9 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
     searchClasses(name.stripSuffix("$"), of.map(_.`type`.name()).toOption)
       .flatMap { cls =>
         of match {
-          case Valid(_: RuntimeEvaluableTree) | _: Invalid => Valid(ClassTree(cls))
+          case Valid(_: RuntimeEvaluableTree | _: StaticTree) | _: Invalid => Valid(ClassTree(cls))
           case Valid(ct: ClassTree) =>
-            if (cls.isStatic() || cls.name == ct.`type`.name || !cls.name().startsWith(ct.`type`.name))
-              Valid(ClassTree(cls))
+            if (cls.isStatic()) Valid(ClassTree(cls))
             else CompilerRecoverable(s"Cannot access non-static class ${cls.name} from ${ct.`type`.name()}")
         }
       }

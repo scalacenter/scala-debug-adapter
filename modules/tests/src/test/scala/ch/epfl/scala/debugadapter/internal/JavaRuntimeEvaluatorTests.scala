@@ -282,7 +282,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should not call static members from instance") {
+  test("Should not call static members from instance or instance member from static") {
     implicit val debuggee = fieldMethod
     check(
       Breakpoint(13),
@@ -291,7 +291,9 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
         Evaluation.failed("hiddenFoo.foofoo"),
         Evaluation.failed("foo.foofoo"),
         Evaluation.failed("superfoo.foofoo"),
-        Evaluation.failed("main.staticMethod()")
+        Evaluation.failed("main.staticMethod()"),
+        Evaluation.failed("foo()"),
+        Evaluation.failed("lapin")
       )
     )
 
@@ -374,6 +376,26 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
       Evaluation.success("new Bar(42)", ObjectRef("Main$Bar")),
       Evaluation.success("new Bar(42).x", 42),
       Evaluation.success("Bar.bar()", "bar")
+    )
+  }
+
+  test("should call nested type in static context") {
+    val source =
+      """|package example;
+         |
+         |class Test {
+         |  public static void main(String[] args) {
+         |    System.out.println(B.bar);
+         |  }
+         |
+         |  class B {
+         |    static String bar = "bar";
+         |  }
+         |}""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.fromJavaSource(source, "example.Test", scalaVersion)
+    check(
+      Breakpoint(5),
+      Evaluation.success("B.bar", "bar")
     )
   }
 }
