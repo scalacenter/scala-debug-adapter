@@ -69,6 +69,18 @@ class Scala3Unpickler(
             case t: TermSymbol if (t.isLazyVal || t.isModuleVal) && t.matchName(name) => t
           }
         yield term
+      case AnonFun(prefix) =>
+        val x =
+          for
+            owner <- withCompanionIfExtendsAnyVal(cls)
+            term <- collectLocalSymbols(owner) {
+              case t: TermSymbol if t.isAnonFun && matchSignature(method, t) => t
+            }
+          yield term
+        if x.size != 1 && prefix.nonEmpty then
+          val y = x.filter(s => matchPrefix(prefix, s.owner))
+          if y.size == 0 then x else y
+        else x
       case LocalMethod(name, _) =>
         for
           owner <- withCompanionIfExtendsAnyVal(cls)
@@ -83,6 +95,18 @@ class Scala3Unpickler(
           .collect { case sym: TermSymbol => sym }
           .filter(matchSymbol(method, _))
     candidates.singleOptOrThrow(method.name)
+
+  def matchPrefix(prefix: String, owner: Symbol): Boolean =
+    if prefix.isEmpty then true
+    else if prefix.endsWith("$_") then matchPrefix(prefix.stripSuffix("$$_"), owner)
+    else
+      val regex = NameTransformer.encode(owner.name.toString) match
+        case "$anonfun" => "\\$anonfun\\$\\d+$".r
+        case name if owner.isModuleClass => (name + "\\$$").r
+        case name => (name + "$").r
+      regex.findFirstIn(prefix) match
+        case Some(suffix) => matchPrefix(prefix.stripSuffix(suffix).stripSuffix("$"), owner.owner)
+        case None => false
 
   def withCompanionIfExtendsAnyVal(cls: ClassSymbol): Seq[ClassSymbol] =
     cls.companionClass match
@@ -418,9 +442,11 @@ class Scala3Unpickler(
 
   extension (symbol: Symbol)
     private def isTrait = symbol.isClass && symbol.asClass.isTrait
+    private def isAnonFun = symbol.name.toString() == "$anonfun"
     private def matchName(name: String) =
-      symbol.name.toString == name || (name.endsWith("$anonfun") && symbol.name.toString == "$anonfun")
+      symbol.name.toString == name
     private def isLocal = symbol.owner.isTerm
+    private def isModuleClass = symbol.isClass && symbol.asClass.isModuleClass
 
   extension [T <: Symbol](symbols: Seq[T])
     def singleOrThrow(binaryName: String): T =

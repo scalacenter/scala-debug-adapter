@@ -21,11 +21,11 @@ object LazyInit:
 object AnonFun:
   def unapply(method: binary.Method): Option[String] =
     val anonFun = "(.*)\\$anonfun\\$\\d+".r
-    anonFun.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0))
+    anonFun.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0).stripSuffix("$"))
 
 object LocalMethod:
   def unapply(method: binary.Method): Option[(String, Int)] =
-    if method.name.contains("$default") || method.name.contains("$proxy") then None
+    if method.name.contains("$default") || method.name.contains("$proxy") || method.name.contains("$anonfun") then None
     else
       val javaPrefix = method.declaringClass.name.replace('.', '$') + "$$"
       val decodedName = NameTransformer.decode(method.name.stripPrefix(javaPrefix).split("_\\$").last)
