@@ -30,7 +30,7 @@ jobs:
           - os: ubuntu-latest
             jvm: 'adoptium:1.8.0-372'
           - os: window-latest
-            jvm: 'adoptium:1.11.0.19'
+            jvm: 'adoptium:1.11.0.20+8'
           - os: macOS-latest
             jvm: 'adoptium:1.17.0.7'
           - os: ubuntu-latest
@@ -56,7 +56,7 @@ jobs:
           - os: windows-latest
             jvm: 'adoptium:1.8.0-372'
           - os: unbutu-latest
-            jvm: 'adoptium:1.11.0.19'
+            jvm: 'adoptium:1.11.0.20+8'
           - os: macOS-latest
             jvm: 'adoptium:1.17.0.7'
     name: Scripted Tests on ${{ matrix.os }} -- ${{ matrix.jvm }}
