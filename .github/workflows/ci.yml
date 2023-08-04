@@ -29,7 +29,7 @@ jobs:
         include:
           - os: ubuntu-latest
             jvm: 'adoptium:1.8.0-372'
-          - os: window-latest
+          - os: windows-latest
             jvm: 'adoptium:1.11.0.19'
           - os: macOS-latest
             jvm: 'adoptium:1.17.0.7'
@@ -55,7 +55,7 @@ jobs:
         include:
           - os: windows-latest
             jvm: 'adoptium:1.8.0-372'
-          - os: unbutu-latest
+          - os: ubuntu-latest
             jvm: 'adoptium:1.11.0.19'
           - os: macOS-latest
             jvm: 'adoptium:1.17.0.7'
