@@ -18,6 +18,11 @@ object LazyInit:
     val lazyInit = "(.*)\\$lzyINIT\\d+".r
     lazyInit.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0))
 
+object AnonFun:
+  def unapply(method: binary.Method): Option[String] =
+    val anonFun = "(.*)\\$anonfun\\$\\d+".r
+    anonFun.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0).stripSuffix("$"))
+
 object LocalMethod:
   def unapply(method: binary.Method): Option[(String, Int)] =
     if method.name.contains("$default") || method.name.contains("$proxy") then None

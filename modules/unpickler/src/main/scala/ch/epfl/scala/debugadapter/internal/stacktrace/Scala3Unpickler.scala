@@ -69,6 +69,19 @@ class Scala3Unpickler(
             case t: TermSymbol if (t.isLazyVal || t.isModuleVal) && t.matchName(name) => t
           }
         yield term
+      case AnonFun(prefix) =>
+        val symbols =
+          for
+            owner <- withCompanionIfExtendsAnyVal(cls)
+            term <- collectLocalSymbols(owner) {
+              case t: TermSymbol if t.isAnonFun && matchSignature(method, t) => t
+            }
+          yield term
+        if symbols.size > 1 && prefix.nonEmpty then
+          val filteredSymbols = symbols.filter(s => matchPrefix(prefix, s.owner))
+          if filteredSymbols.size == 0 then symbols
+          else filteredSymbols
+        else symbols
       case LocalMethod(name, _) =>
         for
           owner <- withCompanionIfExtendsAnyVal(cls)
@@ -83,6 +96,30 @@ class Scala3Unpickler(
           .collect { case sym: TermSymbol => sym }
           .filter(matchSymbol(method, _))
     candidates.singleOptOrThrow(method.name)
+
+  def matchPrefix(prefix: String, owner: Symbol): Boolean =
+    if prefix.isEmpty then true
+    else if prefix.endsWith("$_") then
+      val stripped = prefix.stripSuffix("$$_")
+      matchPrefix(stripped, owner)
+    else if prefix.endsWith("$init$") then owner.isTerm && !owner.asTerm.isMethod
+    else
+      val regex = owner.name.toString match
+        case "$anonfun" => "\\$anonfun\\$\\d+$"
+        case name =>
+          Regex.quote(name)
+            + (if owner.isLocal then "\\$\\d+" else "")
+            + (if owner.isModuleClass then "\\$" else "")
+            + "$"
+      regex.r.findFirstIn(prefix) match
+        case Some(suffix) =>
+          def enclosingDecl(owner: Symbol): DeclaringSymbol =
+            if owner.isInstanceOf[DeclaringSymbol] then owner.asInstanceOf[DeclaringSymbol]
+            else enclosingDecl(owner.owner)
+          val superOwner =
+            if owner.isLocal && !owner.isAnonFun then enclosingDecl(owner) else owner.owner
+          matchPrefix(prefix.stripSuffix(suffix).stripSuffix("$"), superOwner)
+        case None => false
 
   def withCompanionIfExtendsAnyVal(cls: ClassSymbol): Seq[ClassSymbol] =
     cls.companionClass match
@@ -416,8 +453,11 @@ class Scala3Unpickler(
 
   extension (symbol: Symbol)
     private def isTrait = symbol.isClass && symbol.asClass.isTrait
-    private def matchName(name: String) = symbol.name.toString == name
+    private def isAnonFun = symbol.name.toString() == "$anonfun"
+    private def matchName(name: String) =
+      symbol.name.toString == name
     private def isLocal = symbol.owner.isTerm
+    private def isModuleClass = symbol.isClass && symbol.asClass.isModuleClass
 
   extension [T <: Symbol](symbols: Seq[T])
     def singleOrThrow(binaryName: String): T =
