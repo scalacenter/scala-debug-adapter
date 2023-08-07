@@ -48,6 +48,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         // case LocalLazyInit(_, _, _) => process(method, localClassCounter)
     do ()
     localClassCounter.printStatus("Local classes")
+    localMethodCounter.printStatus("Top level and inner classes")
     localMethodCounter.printStatus("Local methods")
     anonFunCounter.printStatus("anon fun")
     topLevelOrInnerclassCounter.printStatus("topLevelOrInnerClass")

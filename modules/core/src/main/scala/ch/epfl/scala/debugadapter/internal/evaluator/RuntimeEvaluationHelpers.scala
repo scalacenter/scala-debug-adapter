@@ -403,13 +403,13 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
   def toStaticIfNeeded(field: Field, on: RuntimeTree): Validation[RuntimeEvaluableTree] =
     (field.`type`, on) match {
       case (Module(module), _) => Valid(TopLevelModuleTree(module))
-      case (_, cls: ClassTree) => Valid(StaticFieldTree(field, cls.`type`))
+      case (_, cls: RuntimeValidationTree) =>
+        if (field.isStatic) Valid(StaticFieldTree(field, cls.`type`))
+        else Fatal(s"Accessing instance field $field from static context ${cls.`type`} is not allowed")
       case (_, Module(mod)) => Valid(InstanceFieldTree(field, mod))
       case (_, eval: RuntimeEvaluableTree) =>
         if (field.isStatic())
-          CompilerRecoverable(
-            s"Accessing static field $field from instance ${eval.`type`} can lead to unexpected behavior"
-          )
+          Fatal(s"Accessing static field $field from instance ${eval.`type`} can lead to unexpected behavior")
         else Valid(InstanceFieldTree(field, eval))
     }
 
@@ -418,13 +418,13 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
       args: Seq[RuntimeEvaluableTree],
       on: RuntimeTree
   ): Validation[MethodTree] = on match {
-    case cls: ClassTree => Valid(StaticMethodTree(method, args, cls.`type`))
+    case cls: RuntimeValidationTree =>
+      if (method.isStatic()) Valid(StaticMethodTree(method, args, cls.`type`))
+      else Fatal(s"Accessing instance method $method from static context ${cls.`type`} is not allowed")
     case Module(mod) => Valid(InstanceMethodTree(method, args, mod))
     case eval: RuntimeEvaluableTree =>
       if (method.isStatic())
-        CompilerRecoverable(
-          s"Accessing static method $method from instance ${eval.`type`} can lead to unexpected behavior"
-        )
+        Fatal(s"Accessing static method $method from instance ${eval.`type`} can lead to unexpected behavior")
       else Valid(InstanceMethodTree(method, args, eval))
   }
 }

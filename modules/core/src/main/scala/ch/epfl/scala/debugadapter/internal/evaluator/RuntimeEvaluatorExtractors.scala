@@ -21,7 +21,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
 
     def unapply(tree: RuntimeTree): Option[RuntimeEvaluableTree] =
       tree match {
-        case cls: ClassTree => unapply(cls.`type`).map(TopLevelModuleTree(_))
+        case cls: RuntimeValidationTree => unapply(cls.`type`).map(TopLevelModuleTree(_))
         case tree: RuntimeEvaluableTree => unapply(tree.`type`).map(_ => tree)
       }
   }
@@ -45,7 +45,7 @@ protected[internal] object RuntimeEvaluatorExtractors {
         case AssignTree(lhs, rhs, _) => unapply(lhs) || unapply(rhs)
         case _: MethodTree | _: NewInstanceTree => true
         case _: LiteralTree | _: LocalVarTree | _: PreEvaluatedTree | _: ThisTree | UnitTree => false
-        case _: StaticFieldTree | _: ClassTree | _: TopLevelModuleTree => false
+        case _: StaticFieldTree | _: ClassTree | _: StaticTree | _: TopLevelModuleTree => false
         case _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree | _: ArrayElemTree => false
       }
     def unapply(tree: Validation[RuntimeTree]): Validation[RuntimeTree] =

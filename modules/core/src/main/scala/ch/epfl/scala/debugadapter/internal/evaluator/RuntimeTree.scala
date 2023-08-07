@@ -13,14 +13,12 @@ sealed trait RuntimeTree {
   override def toString(): String = prettyPrint(0)
   def prettyPrint(depth: Int): String
 }
-sealed trait RuntimeValidationTree extends RuntimeTree
-sealed trait RuntimeEvaluableTree extends RuntimeTree
-
-sealed trait TypeTree extends RuntimeTree {
+sealed trait RuntimeValidationTree extends RuntimeTree {
   override def `type`: ClassType
 }
+sealed trait RuntimeEvaluableTree extends RuntimeTree
 
-sealed trait ModuleTree extends RuntimeEvaluableTree with TypeTree
+sealed trait ModuleTree extends RuntimeEvaluableTree
 
 sealed trait MethodTree extends RuntimeEvaluableTree {
   def method: Method
@@ -266,11 +264,21 @@ case class NestedModuleTree(
 
 case class ClassTree(
     `type`: ClassType
-) extends RuntimeValidationTree
-    with TypeTree {
+) extends RuntimeValidationTree {
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|ClassTree(
+        |${indent}t= ${`type`},
+        |${indent.dropRight(1)})""".stripMargin
+  }
+}
+
+case class StaticTree(
+    `type`: ClassType
+) extends RuntimeValidationTree {
+  override def prettyPrint(depth: Int): String = {
+    val indent = "\t" * (depth + 1)
+    s"""|StaticTree(
         |${indent}t= ${`type`},
         |${indent.dropRight(1)})""".stripMargin
   }
