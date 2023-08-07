@@ -30,6 +30,9 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     val topLevelOrInnerclassCounter = new Counter[ClassType]()
     val localMethodCounter = new Counter[Method]()
     val anonFunCounter = new Counter[Method]()
+    val topLevelOrInnerClassCounter = new Counter[ClassType]()
+    val anonClassCounter = new Counter[ClassType]()
+
 
     val jars = TestingResolver.fetch("org.scala-lang", "scala3-compiler_3", "3.3.0")
     val unpickler = new Scala3Unpickler(jars.map(_.absolutePath).toArray ++ javaRuntimeJars, println, testMode = true)
@@ -38,8 +41,8 @@ class Scala3UnpicklerStats extends munit.FunSuite:
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
       clsSym <- cls match
         case LocalClass(_, _, _) => processClass(unpickler, cls, localClassCounter)
-        case _ => processClass(unpickler, cls, topLevelOrInnerclassCounter)
-        // case AnonClass(_, _, _) => process(cls, anonClassCounter)
+        case AnonClass(_,_) => processClass(unpickler,cls,anonClassCounter)
+        case _ => processClass(unpickler, cls,topLevelOrInnerClassCounter)
         // case InnerClass(_, _) => process(cls, innerClassCounter)
         // case _ => process(cls, topLevelClassCounter)
       method <- cls.declaredMethods
@@ -50,10 +53,10 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         // case LocalLazyInit(_, _, _) => process(method, localClassCounter)
     do ()
     localClassCounter.printStatus("Local classes")
-    localMethodCounter.printStatus("Top level and inner classes")
+    topLevelOrInnerclassCounter.printStatus("Top level and inner classes")
     localMethodCounter.printStatus("Local methods")
     anonFunCounter.printStatus("anon fun")
-    topLevelOrInnerclassCounter.printStatus("topLevelOrInnerClass")
+    anonClassCounter.printStatus("anonClass")
 
   def loadClasses(jars: Seq[Library], jarName: String): Seq[JavaReflectClass] =
     val jar = jars.find(_.name == jarName).get

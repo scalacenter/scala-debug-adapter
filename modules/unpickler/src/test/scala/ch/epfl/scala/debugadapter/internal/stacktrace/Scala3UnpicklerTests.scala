@@ -454,6 +454,26 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       )
   }
 
+   test("anonymous class") {
+    val source =
+      """|package example
+         |class B :
+         |  def n = 42
+         |class A :
+         |  def m(t: => Any): Int = 
+         |    val b = new B {
+         |      def m = ()
+         |    }
+         |    b.n
+         |
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    debuggee.assertFormat("example.A$$anon$1","A.m.b.$anon")
+    // TODO fix: it should find the symbol f by traversing the tree of object Main
+  
+  }
+
+
   test("this.type") {
     val source =
       """|package example

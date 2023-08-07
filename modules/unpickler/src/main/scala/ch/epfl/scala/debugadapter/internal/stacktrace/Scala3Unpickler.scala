@@ -127,14 +127,15 @@ class Scala3Unpickler(
         Seq(cls, companionClass)
       case _ => Seq(cls)
 
-  def collectLocalSymbols[S <: Symbol](cls: ClassSymbol)(partialF: PartialFunction[Symbol, S]): Seq[S] =
+  def collectLocalSymbols[S <: Symbol](cls: ClassSymbol)(partialF: PartialFunction[(Symbol, Option[TypeTree]), S]): Seq[S] =
     val f = partialF.lift.andThen(_.toSeq)
 
     def collectSymbols(tree: Tree): Seq[S] =
       tree.walkTree {
-        case ValDef(_, _, _, symbol) if symbol.isLocal && (symbol.isLazyVal || symbol.isModuleVal) => f(symbol)
+        case ValDef(_, _, _, symbol) if symbol.isLocal && (symbol.isLazyVal || symbol.isModuleVal) => f((symbol, None))
         case DefDef(_, _, _, _, symbol) if symbol.isLocal => f(symbol)
         case ClassDef(_, _, symbol) if symbol.isLocal => f(symbol)
+        case Lambda(m, tpt) => ??? 
         case _ => Seq.empty
       }(_ ++ _, Seq.empty)
 
@@ -306,6 +307,12 @@ class Scala3Unpickler(
       else ctx.defn.EmptyPackage
     val decodedClassName = NameTransformer.decode(javaParts.last)
     val allSymbols = decodedClassName match
+      case AnonClass(declaringClassName,remaining) => 
+         val owners = findSymbolsRecursively(packageSym, declaringClassName)
+         val localClasses = owners.flatMap(findLocalClasses(_, "$anon", cls))
+         remaining match
+          case None => localClasses
+          case Some(remaining) => localClasses.flatMap(findSymbolsRecursively(_, remaining))  
       case LocalClass(declaringClassName, localClassName, remaining) =>
         val owners = findSymbolsRecursively(packageSym, declaringClassName)
         val localClasses = owners.flatMap(findLocalClasses(_, localClassName, cls))
@@ -337,7 +344,10 @@ class Scala3Unpickler(
       else if cls.isInterface then superClassAndInterfaces == classSymbol.parentClasses.filter(_.isTrait).toSet
       else superClassAndInterfaces == classSymbol.parentClasses.toSet
 
-    collectLocalSymbols(owner) { case cls: ClassSymbol if cls.matchName(name) && matchesParents(cls) => cls }
+    collectLocalSymbols(owner) { 
+      case (cls: ClassSymbol, None) if cls.matchName(name) && matchesParents(cls) => cls
+      case (lambda: TermSymbol, Some(tpt)) if ??? => lambda
+    }
 
   private def matchSymbol(method: binary.Method, symbol: TermSymbol): Boolean =
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
