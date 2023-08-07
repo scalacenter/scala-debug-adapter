@@ -51,9 +51,6 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     localMethodCounter.printStatus("Local methods")
     anonFunCounter.printStatus("anon fun")
 
-    val (noPrefix, others) = anonFunCounter.ambiguous.partition(_.name.startsWith("$anonfun"))
-    println(s"noPrefix: ${noPrefix.size}")
-    others.foreach(x => println(x.declaringClass.name + " " + x.name))
 
   def loadClasses(jars: Seq[Library], jarName: String) =
     val jar = jars.find(_.name == jarName).get
@@ -91,7 +88,8 @@ class Scala3UnpicklerStats extends munit.FunSuite:
       case NotFoundException(e) =>
         counter.addNotFound(cls)
         None
-      case _ =>
+      case e =>
+        counter.exceptions += e.toString
         None
 
   def processClass(unpickler: Scala3Unpickler, cls: ClassType): Option[ClassSymbol] =
@@ -120,13 +118,15 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         // println(mthd.declaringClass.name)
         counter.addAmbiguous(mthd)
         None
-      case _ =>
+      case e =>
+        counter.exceptions += e.toString
         None
 
   class Counter[T]:
     val success: mutable.Buffer[T] = mutable.Buffer.empty[T]
     var notFound: mutable.Buffer[T] = mutable.Buffer.empty[T]
     var ambiguous: mutable.Buffer[T] = mutable.Buffer.empty[T]
+    var exceptions: mutable.Buffer[String] = mutable.Buffer.empty[String]
 
     def addSuccess(cls: T) = success += cls
 

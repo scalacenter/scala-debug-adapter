@@ -77,9 +77,10 @@ class Scala3Unpickler(
               case t: TermSymbol if t.isAnonFun && matchSignature(method, t) => t
             }
           yield term
-        if x.size != 1 && prefix.nonEmpty then
+        if x.size > 1 && prefix.nonEmpty then
           val y = x.filter(s => matchPrefix(prefix, s.owner))
-          if y.size == 0 then x else y
+          if y.size == 0 then x
+          else y
         else x
       case LocalMethod(name, _) =>
         for
@@ -98,14 +99,26 @@ class Scala3Unpickler(
 
   def matchPrefix(prefix: String, owner: Symbol): Boolean =
     if prefix.isEmpty then true
-    else if prefix.endsWith("$_") then matchPrefix(prefix.stripSuffix("$$_"), owner)
+    else if prefix.endsWith("$_") then
+      val stripped = prefix.stripSuffix("$$_")
+      matchPrefix(stripped, owner)
+    else if prefix.endsWith("$init$") then
+      owner.isTerm && !owner.asTerm.isMethod
     else
-      val regex = NameTransformer.encode(owner.name.toString) match
-        case "$anonfun" => "\\$anonfun\\$\\d+$".r
-        case name if owner.isModuleClass => (name + "\\$$").r
-        case name => (name + "$").r
-      regex.findFirstIn(prefix) match
-        case Some(suffix) => matchPrefix(prefix.stripSuffix(suffix).stripSuffix("$"), owner.owner)
+      val regex = owner.name.toString match
+        case "$anonfun" => "\\$anonfun\\$\\d+$"
+        case name =>
+          Regex.quote(name)
+          + (if owner.isLocal then "\\$\\d+" else "")
+          + (if owner.isModuleClass then "\\$" else "")
+          + "$"
+      regex.r.findFirstIn(prefix) match
+        case Some(suffix) =>
+          def enclosingDecl(owner: Symbol): DeclaringSymbol =
+            if owner.isInstanceOf[DeclaringSymbol] then owner.asInstanceOf[DeclaringSymbol]
+            else enclosingDecl(owner.owner)
+          val superOwner = if owner.isLocal && owner.name.toString != "$anonfun" then enclosingDecl(owner) else owner.owner
+          matchPrefix(prefix.stripSuffix(suffix).stripSuffix("$"), superOwner)
         case None => false
 
   def withCompanionIfExtendsAnyVal(cls: ClassSymbol): Seq[ClassSymbol] =
