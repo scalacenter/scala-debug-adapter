@@ -25,6 +25,7 @@ object Scala3UnpicklerStats:
 
   def main(args: Array[String]): Unit =
 
+    val topLevelAndInnerClassCounter = new Counter()
     val localClassCounter = new Counter()
     val localMethodCounter = new Counter()
 
@@ -35,18 +36,18 @@ object Scala3UnpicklerStats:
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
       clsSym <- cls match
         case LocalClass(_, _, _) => processClass(unpickler, cls, localClassCounter)
-        case _ => None
+        case _ => processClass(unpickler, cls, topLevelAndInnerClassCounter)
         // case AnonClass(_, _, _) => process(cls, anonClassCounter)
         // case InnerClass(_, _) => process(cls, innerClassCounter)
         // case _ => process(cls, topLevelClassCounter)
       method <- cls.declaredMethods
       methSym <- method match
         case LocalMethod(_, _) => processMethod(unpickler, method, localMethodCounter)
+        // case LocalLazyInit(_, _, _) => process(method, localClassCounter)
         case _ => None
-
-    // case LocalLazyInit(_, _, _) => process(method, localClassCounter)
     do ()
     localClassCounter.printStatus("Local classes")
+    localMethodCounter.printStatus("Top level and inner classes")
     localMethodCounter.printStatus("Local methods")
 
   def loadClasses(jars: Seq[Library], jarName: String) =
@@ -83,22 +84,26 @@ object Scala3UnpicklerStats:
         counter.addAmbiguous(cls.name)
         None
       case NotFoundException(e) =>
-        println(cls.name)
         counter.addNotFound(cls.name)
+        None
+      case _ =>
         None
 
   def processMethod(unpickler: Scala3Unpickler, mthd: Method, counter: Counter): Option[TermSymbol] =
     try
       val sym = unpickler.findSymbol(mthd)
-      counter.addSuccess(mthd.name)
-      sym
+      sym match
+        case Some(t) =>
+          counter.addSuccess(mthd.name)
+          sym
+        case None =>
+          counter.addNotFound(mthd.name)
+          None
     catch
       case AmbiguousException(e) =>
         counter.addAmbiguous(mthd.name)
         None
-      case NotFoundException(e) =>
-        println(mthd.name)
-        counter.addNotFound(mthd.name)
+      case _ =>
         None
 
   class Counter:

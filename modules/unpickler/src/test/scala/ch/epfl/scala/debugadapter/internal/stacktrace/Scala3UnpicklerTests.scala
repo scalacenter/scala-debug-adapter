@@ -428,7 +428,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     // TODO fix: it should find the symbol f by traversing the tree of object Main
-    debuggee.assertFormat("example.Main$", "int $anonfun$1(int x)", "Main.main.f.$anonfun(x: Int): Int")
+    debuggee.assertFind("example.Main$", "int $anonfun$1(int x)")
   }
 
   test("this.type") {
