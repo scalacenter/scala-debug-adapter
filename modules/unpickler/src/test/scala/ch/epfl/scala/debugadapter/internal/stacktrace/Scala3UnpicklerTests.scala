@@ -905,7 +905,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       new Scala3Unpickler(debuggeeClasspath, println, testMode = true)
 
     private def getClass(declaringType: String): binary.ClassType =
-      JavaReflectClass(debuggee.classLoader.loadClass(declaringType))
+      JavaReflectClass(debuggee.classLoader.loadClass(declaringType), Map.empty)
 
     private def getMethod(declaringType: String, javaSig: String)(using munit.Location): binary.Method =
       def typeAndName(p: String): (String, String) =
@@ -924,7 +924,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       if name == "<init>" then
         val constructor = cls.getDeclaredConstructors.find(m => matchParams(m.getParameters))
         assert(constructor.isDefined)
-        JavaReflectConstructor(constructor.get)
+        JavaReflectConstructor(constructor.get, Seq.empty)
       else
         val method = cls.getDeclaredMethods
           .find { m =>
@@ -932,7 +932,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
             m.getName == name && m.getReturnType.getName == returnType && matchParams(m.getParameters)
           }
         assert(method.isDefined)
-        JavaReflectMethod(method.get)
+        JavaReflectMethod(method.get, Seq.empty)
 
     private def assertFind(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
