@@ -15,6 +15,8 @@ import java.nio.file.Path
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 import scala.util.Properties
+import scala.concurrent.duration.Duration
+import scala.concurrent.duration.DurationInt
 
 class Scala3UnpicklerStats extends munit.FunSuite:
   private val javaRuntime = JavaRuntime(Properties.jdkHome).get
@@ -110,6 +112,8 @@ class Scala3UnpicklerStats extends munit.FunSuite:
       case e =>
         counter.exceptions += e.toString
         None
+
+  override def munitTimeout: Duration = 2.minutes
 
   class Counter[T]:
     val success: mutable.Buffer[T] = mutable.Buffer.empty[T]

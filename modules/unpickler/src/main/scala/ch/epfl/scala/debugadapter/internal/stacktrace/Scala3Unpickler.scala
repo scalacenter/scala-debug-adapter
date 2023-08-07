@@ -117,7 +117,7 @@ class Scala3Unpickler(
             if owner.isInstanceOf[DeclaringSymbol] then owner.asInstanceOf[DeclaringSymbol]
             else enclosingDecl(owner.owner)
           val superOwner =
-            if owner.isLocal && owner.name.toString != "$anonfun" then enclosingDecl(owner) else owner.owner
+            if owner.isLocal && !owner.isAnonFun then enclosingDecl(owner) else owner.owner
           matchPrefix(prefix.stripSuffix(suffix).stripSuffix("$"), superOwner)
         case None => false
 
