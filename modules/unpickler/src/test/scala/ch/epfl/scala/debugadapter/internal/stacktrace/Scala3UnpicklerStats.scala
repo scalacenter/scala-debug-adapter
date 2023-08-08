@@ -6,7 +6,7 @@ import ch.epfl.scala.debugadapter.internal.binary.*
 import ch.epfl.scala.debugadapter.internal.javareflect.*
 import ch.epfl.scala.debugadapter.internal.stacktrace.LocalClass
 import ch.epfl.scala.debugadapter.testfmk.TestingResolver
-import org.objectweb.asm.ClassReader
+import org.objectweb.asm
 import tastyquery.Symbols.*
 
 import java.net.URLClassLoader
@@ -55,7 +55,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     anonFunCounter.printStatus("anon fun")
     topLevelOrInnerclassCounter.printStatus("topLevelOrInnerClass")
 
-  def loadClasses(jars: Seq[Library], jarName: String) =
+  def loadClasses(jars: Seq[Library], jarName: String): Seq[JavaReflectClass] =
     val jar = jars.find(_.name == jarName).get
     val classLoader = new URLClassLoader(jars.map(_.absolutePath.toUri.toURL).toArray)
     val classes = IO
@@ -69,15 +69,37 @@ class Scala3UnpicklerStats extends munit.FunSuite:
           .asScala
           .map { classFile =>
             val inputStream = Files.newInputStream(classFile)
-            val reader = new ClassReader(inputStream)
-            reader.getClassName.replace('/', '.')
+            val reader = new asm.ClassReader(inputStream)
+            val className = reader.getClassName.replace('/', '.')
+            val lineNumbers = getLineNumbers(reader)
+            JavaReflectClass(classLoader.loadClass(className), lineNumbers)
           }
           .toSeq
       }
       .get
-      .map(name => JavaReflectClass(classLoader.loadClass(name)))
     println(s"classNames: ${classes.size}")
     classes
+
+  def getLineNumbers(reader: asm.ClassReader): Map[MethodSig, Seq[Int]] =
+    var linesMap = Map.empty[MethodSig, Seq[Int]]
+    val visitor =
+      new asm.ClassVisitor(asm.Opcodes.ASM9):
+        override def visitMethod(
+            access: Int,
+            name: String,
+            descriptor: String,
+            signature: String,
+            exceptions: Array[String]
+        ): asm.MethodVisitor =
+          new asm.MethodVisitor(asm.Opcodes.ASM9):
+            val lines = mutable.Set.empty[Int]
+            override def visitLineNumber(line: Int, start: asm.Label): Unit =
+              lines += line
+            override def visitEnd(): Unit =
+              val span = if lines.size > 1 then Seq(lines.min, lines.max) else lines.toSeq
+              linesMap = linesMap + (MethodSig(name, descriptor) -> span)
+    reader.accept(visitor, asm.Opcodes.ASM9)
+    linesMap
 
   def processClass(unpickler: Scala3Unpickler, cls: ClassType, counter: Counter[ClassType]): Option[ClassSymbol] =
     try

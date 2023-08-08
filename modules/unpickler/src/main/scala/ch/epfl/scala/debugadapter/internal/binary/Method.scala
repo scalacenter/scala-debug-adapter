@@ -7,6 +7,7 @@ trait Method:
   // return None if the class of the return type is not yet loaded
   def returnType: Option[Type]
   def returnTypeName: String
+  def sourceLines: Seq[Int]
 
   def isExtensionMethod: Boolean = name.endsWith("$extension")
   def isTraitInitializer: Boolean = name == "$init$"

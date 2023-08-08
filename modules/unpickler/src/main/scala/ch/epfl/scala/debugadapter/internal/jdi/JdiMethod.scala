@@ -4,6 +4,7 @@ import ch.epfl.scala.debugadapter.internal.binary.*
 
 import java.lang.reflect.InvocationTargetException
 import scala.jdk.CollectionConverters.*
+import java.util as ju
 
 class JdiMethod(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method") with Method:
   override def name: String = invokeMethod("name")
@@ -21,3 +22,11 @@ class JdiMethod(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method") 
         None
 
   override def returnTypeName: String = invokeMethod("returnTypeName")
+
+  override def sourceLines: Seq[Int] =
+    val allDistinctLines = allLineLocations.map(_.lineNumber).distinct
+    if allDistinctLines.size > 1 then Seq(allDistinctLines.min, allDistinctLines.max)
+    else allDistinctLines
+
+  private def allLineLocations: Seq[JdiLocation] =
+    invokeMethod[ju.List[Any]]("allLinesLocations").asScala.map(JdiLocation.apply(_)).toSeq
