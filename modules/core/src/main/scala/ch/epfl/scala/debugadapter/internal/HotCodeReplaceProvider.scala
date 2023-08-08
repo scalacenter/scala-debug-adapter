@@ -4,17 +4,15 @@ import com.microsoft.java.debug.core.adapter.IHotCodeReplaceProvider
 import io.reactivex.Observable
 import java.{util => ju}
 import java.util.concurrent.CompletableFuture
-import java.util.Collections
 import java.util.concurrent.atomic.AtomicReference
 import io.reactivex.disposables.Disposable
 import com.microsoft.java.debug.core.adapter.HotCodeReplaceEvent
 import com.microsoft.java.debug.core.adapter.IDebugAdapterContext
-import io.reactivex.functions.Consumer
 import com.microsoft.java.debug.core.IDebugSession
 import com.sun.jdi.*
 import com.microsoft.java.debug.core.DebugException
 import ch.epfl.scala.debugadapter.Logger
-import scala.collection.JavaConverters.*
+import scala.jdk.CollectionConverters.*
 import com.microsoft.java.debug.core.StackFrameUtility
 import scala.collection.mutable
 import com.microsoft.java.debug.core.DebugUtility
@@ -24,13 +22,14 @@ import scala.util.Failure
 import scala.util.Try
 import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
 import scala.util.control.NonFatal
+import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 
 class HotCodeReplaceProvider(
-    sourceLookup: SourceLookUpProvider,
     classesObs: Observable[Seq[String]],
     logger: Logger,
     testMode: Boolean
 ) extends IHotCodeReplaceProvider {
+  private var sourceLookUp: SourceLookUpProvider = null
   private var subscription: Disposable = null
   private var context: IDebugAdapterContext = null
   private var currentDebugSession: IDebugSession = null
@@ -41,6 +40,7 @@ class HotCodeReplaceProvider(
     this.context = context
     this.currentDebugSession = context.getDebugSession
     this.subscription = classesObs.subscribe(classes => classesAccumulator.updateAndGet(_ ++ classes))
+    this.sourceLookUp = context.getProvider(classOf[ISourceLookUpProvider]).asInstanceOf[SourceLookUpProvider]
   }
 
   override def close(): Unit = {
@@ -159,10 +159,10 @@ class HotCodeReplaceProvider(
   private def getStackFrames(thread: ThreadReference, refresh: Boolean): Seq[StackFrame] = {
     val oldValue = threadFrameMap.get(thread)
     val newValue =
-      try {
+      try
         if (oldValue.isEmpty || refresh) Some(thread.frames.asScala.toSeq)
         else oldValue
-      } catch {
+      catch {
         case e: IncompatibleThreadStateException =>
           logger.error(s"Failed to get stack frames: ${e.getMessage}")
           oldValue
@@ -205,22 +205,26 @@ class HotCodeReplaceProvider(
       }
   }
 
-  private def getTypesToBytes(qualifiedNames: Seq[String]): Map[ReferenceType, Array[Byte]] = {
-    qualifiedNames.flatMap { className =>
-      for {
-        classFile <- sourceLookup.getClassFile(className).toSeq
-        bytes = classFile.readBytes()
-        cls <- getJdiClassByName(className)
-      } yield cls -> bytes
-    }.toMap
-  }
+  private def getTypesToBytes(qualifiedNames: Seq[String]): Map[ReferenceType, Array[Byte]] =
+    sourceLookUp match {
+      case null => throw new IllegalAccessException("Source lookup is not available")
+      case sourceLookUp =>
+        {
+          for {
+            className <- qualifiedNames
+            classFile <- sourceLookUp.getClassFile(className).toSeq
+            bytes = classFile.readBytes()
+            cls <- getJdiClassByName(className)
+          } yield cls -> bytes
+        }.toMap
+    }
 
-  private def getJdiClassByName(className: String): Seq[ReferenceType] = {
-    try currentDebugSession.getVM().classesByName(className).asScala.toSeq
+  private def getJdiClassByName(className: String): mutable.Buffer[ReferenceType] = {
+    try currentDebugSession.getVM().classesByName(className).asScala
     catch {
       case NonFatal(e) =>
         warnOrThrow(s"Cannot get JDI class of $className", e)
-        Seq.empty
+        mutable.Buffer.empty
     }
   }
 
@@ -230,7 +234,7 @@ class HotCodeReplaceProvider(
       .exists(StackFrameUtility.isObsolete)
 
   private def stepIntoThread(thread: ThreadReference): Unit = {
-    val request = DebugUtility.createStepIntoRequest(thread, context.getStepFilters.classNameFilters)
+    val request = DebugUtility.createStepIntoRequest(thread, context.getStepFilters.skipClasses)
     currentDebugSession.getEventHub.stepEvents
       .filter(debugEvent => request.equals(debugEvent.event.request))
       .take(1)
@@ -247,10 +251,9 @@ class HotCodeReplaceProvider(
 
 object HotCodeReplaceProvider {
   def apply(
-      sourceLookUp: SourceLookUpProvider,
       classesToUpdate: Observable[Seq[String]],
       logger: Logger,
       testMode: Boolean
   ): IHotCodeReplaceProvider =
-    new HotCodeReplaceProvider(sourceLookUp, classesToUpdate, logger, testMode)
+    new HotCodeReplaceProvider(classesToUpdate, logger, testMode)
 }

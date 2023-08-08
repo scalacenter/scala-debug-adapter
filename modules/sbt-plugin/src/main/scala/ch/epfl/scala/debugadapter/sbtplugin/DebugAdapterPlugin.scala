@@ -1,10 +1,11 @@
 package ch.epfl.scala.debugadapter.sbtplugin
 
+import _root_.io.reactivex.subjects.PublishSubject
+import scala.jdk.CollectionConverters._
 import ch.epfl.scala.debugadapter._
 import ch.epfl.scala.debugadapter.sbtplugin.internal.JsonProtocol._
 import ch.epfl.scala.debugadapter.sbtplugin.internal._
 import sbt.Tests._
-import sbt.{ScalaVersion => _, _}
 import sbt.internal.bsp.BuildTargetIdentifier
 import sbt.internal.protocol.JsonRpcRequestMessage
 import sbt.internal.server.ServerHandler
@@ -13,19 +14,25 @@ import sbt.internal.util.complete.Parser
 import sbt.internal.util.complete.Parsers
 import sbt.testing.Selector
 import sbt.testing.TestSelector
+import sbt.{ScalaVersion => _, _}
 import sjsonnew.shaded.scalajson.ast.unsafe.JValue
 import sjsonnew.support.scalajson.unsafe.CompactPrinter
 import sjsonnew.support.scalajson.unsafe.Converter
 import sjsonnew.support.scalajson.unsafe.{Parser => JsonParser}
+import xsbti.FileConverter
+import xsbti.VirtualFileRef
+import xsbti.compile.CompileAnalysis
+import xsbti.compile.analysis.ReadStamps
+import xsbti.compile.analysis.Stamp
 
 import java.io.File
 import scala.collection.concurrent.TrieMap
+import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.duration.Duration
 import scala.util.Failure
 import scala.util.Success
-import scala.concurrent.Await
-import scala.concurrent.duration.Duration
 import scala.util.control.NonFatal
 
 object DebugAdapterPlugin extends sbt.AutoPlugin {
@@ -60,8 +67,10 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       inputKey[URI]("Start a debug session on a remote process").withRank(KeyRanks.DTask)
     val debugAdapterConfig =
       settingKey[DebugConfig]("Configure the debug session").withRank(KeyRanks.DTask)
-
-    val stopDebugSession = 
+    val debugAdapterClassesObserver =
+      settingKey[PublishSubject[Seq[String]]]("Observe the classes to be reloaded by the debuggee")
+        .withRank(KeyRanks.DTask)
+    val stopDebugSession =
       taskKey[Unit]("Stop the current debug session").withRank(KeyRanks.DTask)
   }
 
@@ -100,12 +109,57 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     startMainClassDebugSession := mainClassSessionTask.evaluated,
     startRemoteDebugSession := remoteSessionTask.evaluated,
     stopDebugSession := stopSessionTask.value,
+    debugAdapterClassesObserver := PublishSubject.create(),
     Keys.compile / Keys.javacOptions := {
       val jo = (Keys.compile / Keys.javacOptions).value
       if (jo.exists(_.startsWith("-g"))) jo
       else jo :+ "-g"
+    },
+    Keys.compile := {
+      val currentAnalysis: CompileAnalysis = Keys.compile.value
+      val previousAnalysis = Keys.previousCompile.value.analysis
+      val observer = debugAdapterClassesObserver.value
+      val fileConverter = Keys.fileConverter.value
+      val classDir = Keys.classDirectory.value
+
+      if (previousAnalysis.isPresent)
+        observer.onNext {
+          getNewerClassFiles(currentAnalysis.readStamps, previousAnalysis.get.readStamps, fileConverter, classDir)
+        }
+
+      currentAnalysis
     }
   )
+
+  def getNewerClassFiles(
+      currentStamps: ReadStamps,
+      previousStamps: ReadStamps,
+      fileConverter: FileConverter,
+      classDir: File
+  ): Seq[String] = {
+    def isNewer(current: Stamp, previous: Stamp) = {
+      val newHash = current.getHash
+      val oldHash = previous.getHash
+
+      if (!newHash.isPresent()) false
+      else if (!oldHash.isPresent()) true
+      else newHash.get() != oldHash.get()
+    }
+
+    object ClassFile {
+      def unapply(vf: VirtualFileRef): Option[String] = {
+        val path: java.nio.file.Path = fileConverter.toPath(vf)
+        if (path.toString.endsWith(".class")) {
+          Some(classDir.toPath().relativize(path).toString.replace(File.separator, ".").stripSuffix(".class"))
+        } else None
+      }
+    }
+
+    val oldStamps = previousStamps.getAllProductStamps()
+    currentStamps.getAllProductStamps.asScala.collect {
+      case (file @ ClassFile(fqcn), stamp) if isNewer(stamp, oldStamps.get(file)) => fqcn
+    }.toSeq
+  }
 
   /**
    * Can be used to add debugSession/start support in the IntegrationTest config
@@ -118,12 +172,9 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
    *   )
    * }}}
    */
-  def testSettings: Seq[Def.Setting[_]] = Seq(
-    startMainClassDebugSession := mainClassSessionTask.evaluated,
+  def testSettings: Seq[Def.Setting[_]] = runSettings ++ Seq(
     startTestSuitesDebugSession := testSuitesSessionTask(convertFromArrayToTestSuites).evaluated,
-    startTestSuitesSelectionDebugSession := testSuitesSessionTask(convertToTestSuites).evaluated,
-    startRemoteDebugSession := remoteSessionTask.evaluated,
-    stopDebugSession := stopSessionTask.value
+    startTestSuitesSelectionDebugSession := testSuitesSessionTask(convertToTestSuites).evaluated
   )
 
   private def assertJDITools(logger: sbt.util.Logger): Unit = {
@@ -241,6 +292,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             InternalTasks.libraries.value,
             InternalTasks.unmanagedEntries.value,
             InternalTasks.javaRuntime.value,
+            debugAdapterClassesObserver.value,
             mainClass.`class`,
             mainClass.arguments,
             new LoggerAdapter(logger)
@@ -346,6 +398,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             InternalTasks.libraries.value,
             InternalTasks.unmanagedEntries.value,
             InternalTasks.javaRuntime.value,
+            debugAdapterClassesObserver.value,
             cleanups,
             parallel,
             testRunners,
@@ -411,6 +464,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           InternalTasks.libraries.value,
           InternalTasks.unmanagedEntries.value,
           InternalTasks.javaRuntime.value,
+          debugAdapterClassesObserver.value,
           new LoggerAdapter(logger)
         )
       startServer(jobService, scope, state, target, debuggee, debugToolsResolver, debugAdapterConfig.value)

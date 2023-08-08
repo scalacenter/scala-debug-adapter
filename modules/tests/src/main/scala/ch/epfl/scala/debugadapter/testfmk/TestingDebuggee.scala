@@ -14,7 +14,6 @@ import ch.epfl.scala.debugadapter.UnmanagedEntry
 import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee._
 
 import java.io.BufferedReader
-import java.io.File
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.InetSocketAddress
@@ -26,6 +25,8 @@ import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.util.Properties
 import scala.util.control.NonFatal
+import io.reactivex.subjects.Subject
+import io.reactivex.subjects.PublishSubject
 
 case class TestingDebuggee(
     tempDir: Path,
@@ -34,10 +35,13 @@ case class TestingDebuggee(
     mainModule: Module,
     dependencies: Seq[ManagedEntry],
     mainClass: String,
-    javaRuntime: Option[JavaRuntime]
+    javaRuntime: Option[JavaRuntime],
+    scalaInstance: ScalaInstance,
+    scalacOptions: Seq[String]
 ) extends Debuggee
     with TestingContext {
 
+  override val classesToUpdate: Subject[Seq[String]] = PublishSubject.create()
   def mainSource: Path = sourceFiles.head
 
   override def name: String = mainClass
@@ -54,6 +58,15 @@ case class TestingDebuggee(
 
   lazy val classLoader: ClassLoader =
     new URLClassLoader(classPathEntries.map(_.absolutePath.toUri.toURL).toArray, null)
+
+  def compileScala(source: String, fileName: String): Unit = {
+    val sourceFile = {
+      val sourceFile = tempDir.resolve("src").resolve(fileName)
+      Files.write(sourceFile, source.getBytes())
+      sourceFile
+    }
+    scalaInstance.compile(mainModule.absolutePath, dependencies, scalacOptions, Seq(sourceFile))
+  }
 }
 
 object TestingDebuggee {
@@ -198,7 +211,17 @@ object TestingDebuggee {
     }
 
     val mainModule = Module(mainClassName, Some(scalaVersion), scalacOptions, classDir, sourceEntries)
-    TestingDebuggee(tempDir, scalaVersion, sourceFiles, mainModule, allDependencies, mainClassName, javaRuntime)
+    TestingDebuggee(
+      tempDir,
+      scalaVersion,
+      sourceFiles,
+      mainModule,
+      allDependencies,
+      mainClassName,
+      javaRuntime,
+      scalaInstance,
+      scalacOptions
+    )
   }
 
   def munitTestSuite(
@@ -247,7 +270,17 @@ object TestingDebuggee {
 
     val sourceEntry = SourceDirectory(srcDir)
     val mainModule = Module(testSuite, Some(scalaVersion), Seq.empty, classDir, Seq(sourceEntry))
-    TestingDebuggee(tempDir, scalaVersion, Seq(sourceFile), mainModule, classPath, "TestRunner", getRuntime())
+    TestingDebuggee(
+      tempDir,
+      scalaVersion,
+      Seq(sourceFile),
+      mainModule,
+      classPath,
+      "TestRunner",
+      getRuntime(),
+      scalaInstance,
+      Seq.empty
+    )
   }
 
   private def getResource(name: String): Path =
@@ -288,8 +321,19 @@ object TestingDebuggee {
       throw new IllegalArgumentException(s"Cannot compile $srcFile")
 
     val sourceEntry = SourceDirectory(srcDir)
+    val scalaInstance = TestingResolver.get(scalaVersion)
     val mainModule = Module(mainClassName, None, Seq.empty, classDir, Seq(sourceEntry))
-    TestingDebuggee(tempDir, scalaVersion, Seq(srcFile), mainModule, Seq.empty, mainClassName, getRuntime())
+    TestingDebuggee(
+      tempDir,
+      scalaVersion,
+      Seq(srcFile),
+      mainModule,
+      Seq.empty,
+      mainClassName,
+      getRuntime(),
+      scalaInstance,
+      Seq.empty
+    )
   }
 
   private def startCrawling(input: InputStream)(f: String => Unit): Unit = {
@@ -343,6 +387,7 @@ object TestingDebuggee {
       exited.future
     }
     override def cancel(): Unit = {
+      thread.interrupt()
       if (process.isAlive) process.destroy()
     }
   }

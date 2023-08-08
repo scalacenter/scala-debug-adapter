@@ -19,6 +19,7 @@ import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
+import scala.jdk.CollectionConverters.*
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
@@ -131,6 +132,9 @@ private[debugadapter] final class DebugSession private (
               s"Communication with debuggee $name is frozen: missing terminated event."
             )
         }
+
+        context.getProviders().asScala.values.foreach(_.close())
+
         DebugSession.Stopped
 
       case _ => DebugSession.Stopped

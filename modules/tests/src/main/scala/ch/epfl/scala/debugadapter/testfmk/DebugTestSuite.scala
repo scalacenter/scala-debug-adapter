@@ -19,6 +19,13 @@ import scala.concurrent.Await
 import com.microsoft.java.debug.core.protocol.Types.Variable
 import scala.util.Properties
 
+case class DebugCheckState(
+    client: TestingDebugClient,
+    threadId: Long,
+    topFrame: StackFrame,
+    paused: Boolean
+)
+
 abstract class DebugTestSuite extends FunSuite with DebugTest {
   override def munitTimeout: Duration = 120.seconds
 }
@@ -57,8 +64,13 @@ trait DebugTest {
 
   def check(uri: URI, attach: Option[Int] = None)(steps: DebugStepAssert*): Unit = {
     val client = TestingDebugClient.connect(uri)
-    try check(client, attach)(steps*)
+    try endDebugSession(check(client, attach)(steps*))
     finally client.close()
+  }
+
+  def init(uri: URI)(steps: DebugStepAssert*): DebugCheckState = {
+    val client = TestingDebugClient.connect(uri)
+    check(client, None)(steps*)
   }
 
   def check(config: DebugConfig)(steps: DebugStepAssert*)(implicit debuggee: TestingDebuggee): Unit = {
@@ -66,7 +78,7 @@ trait DebugTest {
     val client = TestingDebugClient.connect(server.uri)
     try {
       server.connect()
-      check(client, None)(steps*)
+      endDebugSession(check(client, None)(steps*))
     } finally {
       client.close()
       server.close()
@@ -78,14 +90,16 @@ trait DebugTest {
     val client = TestingDebugClient.connect(server.uri)
     try {
       server.connect()
-      check(client, None)(steps*)
+      endDebugSession(check(client, None)(steps*))
     } finally {
       client.close()
       server.close()
     }
   }
 
-  private def check(client: TestingDebugClient, attach: Option[Int])(steps: DebugStepAssert*): Unit = {
+  private def check(client: TestingDebugClient, attach: Option[Int])(
+      steps: DebugStepAssert*
+  ): DebugCheckState = {
     client.initialize()
     attach match {
       case Some(port) => client.attach("localhost", port)
@@ -119,26 +133,22 @@ trait DebugTest {
       }
     client.configurationDone()
 
-    var threadId: Long = -1
-    var topFrame: StackFrame = null
-    var paused = false
-    def continueIfPaused(): Unit = {
-      if (paused) {
-        client.continue(threadId)
-        paused = false
-      }
-    }
+    runChecks(DebugCheckState(client, -1, null, false))(steps)
+  }
+
+  def runChecks(state_in: DebugCheckState)(steps: Seq[DebugStepAssert]) = {
+    var state = state_in
 
     def formatFrame(frame: StackFrame): String = {
       Option(frame.source) match {
-        case None => s"${topFrame.name} ${topFrame.line}"
-        case Some(source) => s"${source.name} ${topFrame.line}"
+        case None => s"${state.topFrame.name} ${state.topFrame.line}"
+        case Some(source) => s"${source.name} ${state.topFrame.line}"
       }
     }
 
     def evaluateExpression(eval: Evaluation, assertion: Either[String, String] => Unit): Future[Unit] = {
       println(s"$$ ${eval.expression}")
-      client.evaluate(eval.expression, topFrame.id).map { resp =>
+      state.client.evaluate(eval.expression, state.topFrame.id).map { resp =>
         resp.foreach(res => println(s"> $res"))
         resp.left.foreach(err => println(s"> $err"))
         assertion(resp)
@@ -147,48 +157,49 @@ trait DebugTest {
 
     def inspect(variable: LocalVariable, assertion: Array[Variable] => Unit): Unit = {
       val values = for {
-        localScopeRef <- client.scopes(topFrame.id).find(_.name == "Local").map(_.variablesReference)
-        variableRef <- client.variables(localScopeRef).find(_.name == variable.name).map(_.variablesReference)
-      } yield client.variables(variableRef)
+        localScopeRef <- state.client.scopes(state.topFrame.id).find(_.name == "Local").map(_.variablesReference)
+        variableRef <- state.client.variables(localScopeRef).find(_.name == variable.name).map(_.variablesReference)
+      } yield state.client.variables(variableRef)
       assertion(values.getOrElse(throw new NoSuchElementException(variable.name)))
     }
 
     def assertStop(assertion: List[StackFrame] => Unit): Unit = {
-      val stopped = client.stopped()
-      paused = true
-      threadId = stopped.threadId
-      val stackTrace = client.stackTrace(threadId)
-      topFrame = stackTrace.stackFrames.head
+      val stopped = state.client.stopped()
+      val paused = true
+      val threadId = stopped.threadId
+      val stackTrace = state.client.stackTrace(threadId)
 
       assertion(stackTrace.stackFrames.toList)
+      state = state.copy(threadId = threadId, topFrame = stackTrace.stackFrames.head, paused = paused)
     }
+
     steps.foreach {
       case SingleStepAssert(_: Breakpoint, assertion) =>
-        continueIfPaused()
+        state = continueIfPaused(state)
         assertStop(assertion)
       case SingleStepAssert(_: Logpoint, assertion) =>
-        continueIfPaused()
+        state = continueIfPaused(state)
         // A log point needs time for evaluation
-        val event = client.outputed(m => m.category == Category.stdout, 16.seconds)
+        val event = state.client.outputed(m => m.category == Category.stdout, 16.seconds)
         print(s"> ${event.output}")
         assertion(event.output.trim)
       case SingleStepAssert(StepIn, assertion) =>
-        println(s"Stepping in, at ${formatFrame(topFrame)}")
-        client.stepIn(threadId)
+        println(s"Stepping in, at ${formatFrame(state.topFrame)}")
+        state.client.stepIn(state.threadId)
         assertStop(assertion)
       case SingleStepAssert(StepOut, assertion) =>
-        println(s"Stepping out, at ${formatFrame(topFrame)}")
-        client.stepOut(threadId)
+        println(s"Stepping out, at ${formatFrame(state.topFrame)}")
+        state.client.stepOut(state.threadId)
         assertStop(assertion)
       case SingleStepAssert(StepOver, assertion) =>
-        println(s"Stepping over, at ${formatFrame(topFrame)}")
-        client.stepOver(threadId)
+        println(s"Stepping over, at ${formatFrame(state.topFrame)}")
+        state.client.stepOver(state.threadId)
         assertStop(assertion)
       case SingleStepAssert(eval: Evaluation, assertion) =>
         Await.result(evaluateExpression(eval, assertion), 16.seconds)
       case SingleStepAssert(Outputed, assertion) =>
-        continueIfPaused()
-        val event = client.outputed(m => m.category == Category.stdout)
+        state = continueIfPaused(state)
+        val event = state.client.outputed(m => m.category == Category.stdout)
         print(s"> ${event.output}")
         assertion(event.output.trim)
       case SingleStepAssert(NoStep, _) => ()
@@ -202,14 +213,27 @@ trait DebugTest {
         Await.result(Future.sequence(evaluations), 64.seconds)
       case SingleStepAssert(localVariable: LocalVariable, assertion) =>
         inspect(localVariable, assertion)
+      case SingleStepAssert(Custom(f), assertion) => f()
+      case SingleStepAssert(RedefineClasses, assertion) => state.client.redefineClasses()
     }
-    continueIfPaused()
 
+    state
+  }
+
+  def continueIfPaused(state: DebugCheckState): DebugCheckState =
+    if (state.paused) {
+      state.client.continue(state.threadId)
+      state.copy(paused = false)
+    } else state
+
+  def endDebugSession(state: DebugCheckState): DebugCheckState = {
+    val newState = continueIfPaused(state)
     // This is flaky, terminated can happen before exited
     if (!GithubUtils.isCI()) {
-      client.exited()
-      client.terminated()
+      state.client.exited()
+      state.client.terminated()
     }
+    newState
   }
 }
 

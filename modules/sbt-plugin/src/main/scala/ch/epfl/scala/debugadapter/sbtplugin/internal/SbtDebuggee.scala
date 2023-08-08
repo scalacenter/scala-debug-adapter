@@ -48,6 +48,7 @@ private[debugadapter] final class TestSuitesDebuggee(
     val libraries: Seq[Library],
     val unmanagedEntries: Seq[UnmanagedEntry],
     val javaRuntime: Option[JavaRuntime],
+    override val classesToUpdate: Observable[Seq[String]],
     cleanups: Seq[Cleanup],
     parallel: Boolean,
     runners: Map[TestFramework, Runner],
@@ -181,6 +182,7 @@ private[debugadapter] final class AttachRemoteDebuggee(
     val libraries: Seq[Library],
     val unmanagedEntries: Seq[UnmanagedEntry],
     val javaRuntime: Option[JavaRuntime],
+    override val classesToUpdate: Observable[Seq[String]],
     val logger: LoggerAdapter
 ) extends SbtDebuggee {
   override def name: String = s"${getClass.getSimpleName}(${target.uri})"
