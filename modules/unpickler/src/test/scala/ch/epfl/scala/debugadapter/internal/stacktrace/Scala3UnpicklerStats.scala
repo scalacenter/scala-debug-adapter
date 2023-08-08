@@ -23,7 +23,12 @@ class Scala3UnpicklerStats extends munit.FunSuite:
   private val javaRuntimeJars = javaRuntime match
     case Java8(_, classJars, _) => classJars
     case java9OrAbove: Java9OrAbove =>
-      java9OrAbove.classSystems.map(_.fileSystem.getPath("/modules", "java.base"))
+      java9OrAbove.classSystems.flatMap { s =>
+        Seq(
+          s.fileSystem.getPath("/modules/java.base"),
+          s.fileSystem.getPath("/modules/java.management")
+        )
+      }
 
   test("dotty stats"):
     val localClassCounter = new Counter[ClassType]()
@@ -33,7 +38,6 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     val topLevelOrInnerClassCounter = new Counter[ClassType]()
     val anonClassCounter = new Counter[ClassType]()
 
-
     val jars = TestingResolver.fetch("org.scala-lang", "scala3-compiler_3", "3.3.0")
     val unpickler = new Scala3Unpickler(jars.map(_.absolutePath).toArray ++ javaRuntimeJars, println, testMode = true)
 
@@ -41,16 +45,16 @@ class Scala3UnpicklerStats extends munit.FunSuite:
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
       clsSym <- cls match
         case LocalClass(_, _, _) => processClass(unpickler, cls, localClassCounter)
-        case AnonClass(_,_) => processClass(unpickler,cls,anonClassCounter)
-        case _ => processClass(unpickler, cls,topLevelOrInnerClassCounter)
+        case AnonClass(_, _) => processClass(unpickler, cls, anonClassCounter)
+        case _ => processClass(unpickler, cls, topLevelOrInnerClassCounter)
         // case InnerClass(_, _) => process(cls, innerClassCounter)
         // case _ => process(cls, topLevelClassCounter)
       method <- cls.declaredMethods
       methSym <- method match
         case AnonFun(_) => processMethod(unpickler, method, anonFunCounter)
-        case LocalMethod(_) => processMethod(unpickler, method, localMethodCounter)
-        case _ => None
+        case LocalMethod(_, _) => processMethod(unpickler, method, localMethodCounter)
         // case LocalLazyInit(_, _, _) => process(method, localClassCounter)
+        case _ => None
     do ()
     localClassCounter.printStatus("Local classes")
     topLevelOrInnerclassCounter.printStatus("Top level and inner classes")
@@ -104,7 +108,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     reader.accept(visitor, asm.Opcodes.ASM9)
     linesMap
 
-  def processClass(unpickler: Scala3Unpickler, cls: ClassType, counter: Counter[ClassType]): Option[ClassSymbol] =
+  def processClass(unpickler: Scala3Unpickler, cls: ClassType, counter: Counter[ClassType]): Option[Symbol] =
     try
       val sym = unpickler.findClass(cls)
       counter.addSuccess(cls)
