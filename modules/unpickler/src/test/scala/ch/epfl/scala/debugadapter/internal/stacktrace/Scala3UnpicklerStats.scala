@@ -32,11 +32,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
   test("dotty stats"):
     val localClassCounter = new Counter[ClassType]()
-    val topLevelOrInnerclassCounter = new Counter[ClassType]()
+    val innerClassCounter = new Counter[ClassType]()
+    val anonClassCounter = new Counter[ClassType]()
+    val topLevelClassCounter = new Counter[ClassType]()
+
     val localMethodCounter = new Counter[Method]()
     val anonFunCounter = new Counter[Method]()
-    val topLevelOrInnerClassCounter = new Counter[ClassType]()
-    val anonClassCounter = new Counter[ClassType]()
+    val localLazyInitCounter = new Counter[Method]()
+    val methodCounter = new Counter[Method]()
 
     val jars = TestingResolver.fetch("org.scala-lang", "scala3-compiler_3", "3.3.0")
     val unpickler = new Scala3Unpickler(jars.map(_.absolutePath).toArray ++ javaRuntimeJars, println, testMode = true)
@@ -44,23 +47,25 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
       clsSym <- cls match
-        case LocalClass(_, _, _) => processClass(unpickler, cls, localClassCounter)
-        case AnonClass(_, _) => processClass(unpickler, cls, anonClassCounter)
-        case _ => processClass(unpickler, cls, topLevelOrInnerClassCounter)
-        // case InnerClass(_, _) => process(cls, innerClassCounter)
-        // case _ => process(cls, topLevelClassCounter)
+        case LocalClass(_, _, _) => unpickler.process(cls, localClassCounter)
+        case AnonClass(_, _) => unpickler.process(cls, anonClassCounter)
+        case InnerClass(_) => unpickler.process(cls, innerClassCounter)
+        case _ => unpickler.process(cls, topLevelClassCounter)
       method <- cls.declaredMethods
       methSym <- method match
-        case AnonFun(_) => processMethod(unpickler, method, anonFunCounter)
-        case LocalMethod(_, _) => processMethod(unpickler, method, localMethodCounter)
-        // case LocalLazyInit(_, _, _) => process(method, localClassCounter)
-        case _ => None
+        case AnonFun(_) => unpickler.process(method, anonFunCounter)
+        case LocalLazyInit(_, _) => unpickler.process(method, localLazyInitCounter)
+        case LocalMethod(_, _) => unpickler.process(method, localMethodCounter)
+        case _ => unpickler.process(method, methodCounter)
     do ()
-    localClassCounter.printStatus("Local classes")
-    topLevelOrInnerclassCounter.printStatus("Top level and inner classes")
-    localMethodCounter.printStatus("Local methods")
+    localClassCounter.printStatus("local classes")
+    anonClassCounter.printStatus("anon classes")
+    innerClassCounter.printStatus("inner classes")
+    topLevelClassCounter.printStatus("top level classes")
+    localMethodCounter.printStatus("local methods")
     anonFunCounter.printStatus("anon fun")
-    anonClassCounter.printStatus("anonClass")
+    localLazyInitCounter.printStatus("local lazy inits")
+    methodCounter.printStatus("other methods")
 
   def loadClasses(jars: Seq[Library], jarName: String): Seq[JavaReflectClass] =
     val jar = jars.find(_.name == jarName).get
@@ -108,39 +113,40 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     reader.accept(visitor, asm.Opcodes.ASM9)
     linesMap
 
-  def processClass(unpickler: Scala3Unpickler, cls: ClassType, counter: Counter[ClassType]): Option[Symbol] =
-    try
-      val sym = unpickler.findClass(cls)
-      counter.addSuccess(cls)
-      Some(sym)
-    catch
-      case AmbiguousException(e) =>
-        counter.addAmbiguous(cls)
-        None
-      case NotFoundException(e) =>
-        counter.addNotFound(cls)
-        None
-      case e =>
-        counter.exceptions += e.toString
-        None
-
-  def processMethod(unpickler: Scala3Unpickler, mthd: Method, counter: Counter[Method]): Option[TermSymbol] =
-    try
-      val sym = unpickler.findSymbol(mthd)
-      sym match
-        case Some(t) =>
-          counter.addSuccess(mthd)
-          sym
-        case None =>
-          counter.addNotFound(mthd)
+  extension (unpickler: Scala3Unpickler)
+    def process(cls: ClassType, counter: Counter[ClassType]): Option[Symbol] =
+      try
+        val sym = unpickler.findClass(cls)
+        counter.addSuccess(cls)
+        Some(sym)
+      catch
+        case AmbiguousException(e) =>
+          counter.addAmbiguous(cls)
           None
-    catch
-      case AmbiguousException(e) =>
-        counter.addAmbiguous(mthd)
-        None
-      case e =>
-        counter.exceptions += e.toString
-        None
+        case NotFoundException(e) =>
+          counter.addNotFound(cls)
+          None
+        case e =>
+          counter.exceptions += e.toString
+          None
+
+    def process(mthd: Method, counter: Counter[Method]): Option[TermSymbol] =
+      try
+        val sym = unpickler.findSymbol(mthd)
+        sym match
+          case Some(t) =>
+            counter.addSuccess(mthd)
+            sym
+          case None =>
+            counter.addNotFound(mthd)
+            None
+      catch
+        case AmbiguousException(e) =>
+          counter.addAmbiguous(mthd)
+          None
+        case e =>
+          counter.exceptions += e.toString
+          None
 
   override def munitTimeout: Duration = 2.minutes
 
@@ -156,8 +162,10 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     def addAmbiguous(cls: T) = ambiguous += cls
 
+    def printExceptions = exceptions.foreach(println(_))
+
     def printStatus(m: String) =
-      println(s"Status $m:")
+      println(s"$m:")
       println(s"  - total is ${ambiguous.size + notFound.size + success.size}")
       println(s"  - success is ${success.size}")
       println(s"  - ambiguous is ${ambiguous.size}")
