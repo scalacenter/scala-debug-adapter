@@ -15,27 +15,41 @@ val checkBreakpoint =
   inputKey[Unit]("Check the breakpoint of a debug session")
 val checkHotCodeReplace =
   taskKey[Unit]("Check the hot code reloading of a debug session")
-def source = Def.task((Compile / sources).value.find(_.getName == "A.scala").get.toPath)
+val source =
+  taskKey[Path]("The source file to be tested")
 
 def checkBreakpointTask = Def.inputTask {
+  println("Starting debug session")
   val uri = (Compile / startMainClassDebugSession).evaluated
+  println(s"Debug session started at $uri")
   implicit val context: TestingContext = TestingContext(source.value, scalaV)
 
-  def runChecks = DebugTest.init(uri) _
-  DebugState.state = runChecks(Seq(Outputed("A"), Breakpoint(6)))
+  DebugState.state = DebugTest.init(uri)(Outputed("A"), Breakpoint(6))
 }
 
 def checkHotCodeReplaceTask = Def.task {
+  val _ = (Compile / compile).value
   DebugTest.runChecks(DebugState.state)(Seq(RedefineClasses(), Outputed("C")))
   DebugTest.endDebugSession(DebugState.state)
 }
 
-lazy val hotCodeReload =
+lazy val hotCodeReloadSingleProject: Project =
   project
     .in(file("."))
-    .enablePlugins(SbtJdiTools)
     .settings(
       scalaVersion := scalaV,
       checkBreakpoint := checkBreakpointTask.evaluated,
-      checkHotCodeReplace := checkHotCodeReplaceTask.value
+      checkHotCodeReplace := checkHotCodeReplaceTask.value,
+      source := (Compile / sources).value.find(_.getName == "A.scala").get.toPath
     )
+
+lazy val hcrMultipleProjects =
+  project
+    .in(file("./hot-reload-multiple"))
+    .settings(
+      scalaVersion := scalaV,
+      checkBreakpoint := checkBreakpointTask.evaluated,
+      checkHotCodeReplace := checkHotCodeReplaceTask.value,
+      source := (hotCodeReloadSingleProject / source).value
+    )
+    .dependsOn(hotCodeReloadSingleProject)

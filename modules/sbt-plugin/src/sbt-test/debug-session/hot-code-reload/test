@@ -1,6 +1,12 @@
 $ copy-file ./src/main/scala/example/A.scala.1 ./src/main/scala/example/A.scala
-> 'hotCodeReload / checkBreakpoint {"class":"example.Main","arguments":[],"jvmOptions":[]}'
+> 'hotCodeReloadSingleProject / checkBreakpoint {"class":"example.Main","arguments":[],"jvmOptions":[]}'
 $ copy-file ./src/main/scala/example/A.scala.2 ./src/main/scala/example/A.scala
-> hotCodeReload / compile
-> hotCodeReload / checkHotCodeReplace
-> stopDebugSession
+> hotCodeReloadSingleProject / checkHotCodeReplace
+> hotCodeReloadSingleProject / stopDebugSession
+
+$ copy-file ./src/main/scala/example/A.scala.1 ./src/main/scala/example/A.scala
+> 'hcrMultipleProjects / checkBreakpoint {"class":"example.Main","arguments":[],"jvmOptions":[]}'
+$ copy-file ./src/main/scala/example/A.scala.2 ./src/main/scala/example/A.scala
+> hcrMultipleProjects / checkHotCodeReplace
+> hcrMultipleProjects / stopDebugSession
+

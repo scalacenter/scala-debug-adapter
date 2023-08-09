@@ -292,7 +292,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             InternalTasks.libraries.value,
             InternalTasks.unmanagedEntries.value,
             InternalTasks.javaRuntime.value,
-            debugAdapterClassesObserver.value,
+            InternalTasks.classesObservable.value,
             mainClass.`class`,
             mainClass.arguments,
             new LoggerAdapter(logger)
