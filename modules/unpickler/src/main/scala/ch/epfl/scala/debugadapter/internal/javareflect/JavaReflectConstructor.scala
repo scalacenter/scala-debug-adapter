@@ -20,4 +20,6 @@ class JavaReflectConstructor(constructor: Constructor[?], val sourceLines: Seq[I
 
   override def name: String = "<init>"
 
+  override def isBridge: Boolean = false
+
   override def toString: String = constructor.toString

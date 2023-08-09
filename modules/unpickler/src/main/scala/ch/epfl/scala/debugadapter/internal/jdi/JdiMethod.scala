@@ -28,5 +28,7 @@ class JdiMethod(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method") 
     if allDistinctLines.size > 1 then Seq(allDistinctLines.min, allDistinctLines.max)
     else allDistinctLines
 
+  override def isBridge: Boolean = invokeMethod("isBridge")
+
   private def allLineLocations: Seq[JdiLocation] =
     invokeMethod[ju.List[Any]]("allLinesLocations").asScala.map(JdiLocation.apply(_)).toSeq

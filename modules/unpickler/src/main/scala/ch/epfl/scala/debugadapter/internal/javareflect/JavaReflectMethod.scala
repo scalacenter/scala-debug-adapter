@@ -20,3 +20,5 @@ class JavaReflectMethod(method: Method, val sourceLines: Seq[Int]) extends binar
   override def name: String = method.getName
 
   override def toString: String = method.toString
+
+  override def isBridge: Boolean = method.isBridge

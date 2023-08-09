@@ -8,6 +8,7 @@ trait Method:
   def returnType: Option[Type]
   def returnTypeName: String
   def sourceLines: Seq[Int]
+  def isBridge: Boolean
 
   def isExtensionMethod: Boolean = name.endsWith("$extension")
   def isTraitInitializer: Boolean = name == "$init$"
