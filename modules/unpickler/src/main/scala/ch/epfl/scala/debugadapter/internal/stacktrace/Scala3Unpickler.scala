@@ -4,7 +4,6 @@ import ch.epfl.scala.debugadapter.internal.binary
 import ch.epfl.scala.debugadapter.internal.jdi.JdiMethod
 import tastyquery.Contexts
 import tastyquery.Contexts.Context
-import tastyquery.Definitions
 import tastyquery.Flags
 import tastyquery.Names.*
 import tastyquery.Signatures.*
@@ -29,6 +28,7 @@ class Scala3Unpickler(
 ):
   private val classpath = ClasspathLoaders.read(classpaths.toList)
   private given ctx: Context = Contexts.init(classpath)
+  private val defn = new Definitions
 
   private def warn(msg: String): Unit = warnLogger.accept(msg)
 
@@ -61,41 +61,48 @@ class Scala3Unpickler(
 
   def findSymbol(method: binary.Method): Option[TermSymbol] =
     val cls = findClass(method.declaringClass, method.isExtensionMethod)
-    val candidates = method match
-      case LocalLazyInit(name, _) =>
-        for
-          owner <- withCompanionIfExtendsAnyVal(cls)
-          term <- collectLocalSymbols(owner) {
-            case t: TermSymbol if (t.isLazyVal || t.isModuleVal) && t.matchName(name) => t
-          }
-        yield term
-      case AnonFun(prefix) =>
-        val symbols =
-          for
-            owner <- withCompanionIfExtendsAnyVal(cls)
-            term <- collectLocalSymbols(owner) {
-              case t: TermSymbol if t.isAnonFun && matchSignature(method, t) => t
-            }
-          yield term
-        if symbols.size > 1 && prefix.nonEmpty then
-          val filteredSymbols = symbols.filter(s => matchPrefix(prefix, s.owner))
-          if filteredSymbols.size == 0 then symbols
-          else filteredSymbols
-        else symbols
-      case LocalMethod(name, _) =>
-        for
-          owner <- withCompanionIfExtendsAnyVal(cls)
-          term <- collectLocalSymbols(owner) {
-            case t: TermSymbol if t.matchName(name) && matchSignature(method, t) => t
-          }
-        yield term
-      case LazyInit(name) =>
-        cls.declarations.collect { case t: TermSymbol if t.isLazyVal && t.matchName(name) => t }
-      case _ =>
-        cls.declarations
-          .collect { case sym: TermSymbol => sym }
-          .filter(matchSymbol(method, _))
-    candidates.singleOptOrThrow(method.name)
+    cls match
+      case term: TermSymbol =>
+        if method.declaringClass.superclass.get.name == "scala.runtime.AbstractPartialFunction" then
+          Option.when(!method.isBridge)(term)
+        else Option.when(!method.isBridge && matchSignature(method, term))(term)
+      case cls: ClassSymbol =>
+        val candidates = method match
+          case LocalLazyInit(name, _) =>
+            for
+              owner <- withCompanionIfExtendsAnyVal(cls)
+              term <- collectLocalSymbols(owner) {
+                case (t: TermSymbol, None) if (t.isLazyVal || t.isModuleVal) && t.matchName(name) => t
+              }
+            yield term
+          case AnonFun(prefix) =>
+            val x =
+              for
+                owner <- withCompanionIfExtendsAnyVal(cls)
+                term <- collectLocalSymbols(owner) {
+                  case (t: TermSymbol, None) if t.isAnonFun && matchSignature(method, t) => t
+                }
+              yield term
+            if x.size > 1 && prefix.nonEmpty then
+              val y = x.filter(s => matchPrefix(prefix, s.owner))
+              if y.size == 0 then x
+              else y
+            else x
+          case LocalMethod(name, _) =>
+            for
+              owner <- withCompanionIfExtendsAnyVal(cls)
+              term <- collectLocalSymbols(owner) {
+                case (t: TermSymbol, None) if t.matchName(name) && matchSignature(method, t) => t
+              }
+            yield term
+          case LazyInit(name) =>
+            cls.declarations.collect { case t: TermSymbol if t.isLazyVal && t.matchName(name) => t }
+          case _ =>
+            cls.declarations
+              .collect { case sym: TermSymbol => sym }
+              .filter(matchSymbol(method, _))
+        candidates.singleOptOrThrow(method.name)
+      case _ => None
 
   def matchPrefix(prefix: String, owner: Symbol): Boolean =
     if prefix.isEmpty then true
@@ -104,7 +111,7 @@ class Scala3Unpickler(
       matchPrefix(stripped, owner)
     else if prefix.endsWith("$init$") then owner.isTerm && !owner.asTerm.isMethod
     else
-      val regex = owner.name.toString match
+      val regex = owner.nameStr match
         case "$anonfun" => "\\$anonfun\\$\\d+$"
         case name =>
           Regex.quote(name)
@@ -127,14 +134,19 @@ class Scala3Unpickler(
         Seq(cls, companionClass)
       case _ => Seq(cls)
 
-  def collectLocalSymbols[S <: Symbol](cls: ClassSymbol)(partialF: PartialFunction[Symbol, S]): Seq[S] =
+  def collectLocalSymbols[S <: Symbol](cls: ClassSymbol)(
+      partialF: PartialFunction[(Symbol, Option[ClassSymbol]), S]
+  ): Seq[S] =
     val f = partialF.lift.andThen(_.toSeq)
 
     def collectSymbols(tree: Tree): Seq[S] =
       tree.walkTree {
-        case ValDef(_, _, _, symbol) if symbol.isLocal && (symbol.isLazyVal || symbol.isModuleVal) => f(symbol)
-        case DefDef(_, _, _, _, symbol) if symbol.isLocal => f(symbol)
-        case ClassDef(_, _, symbol) if symbol.isLocal => f(symbol)
+        case ValDef(_, _, _, symbol) if symbol.isLocal && (symbol.isLazyVal || symbol.isModuleVal) => f((symbol, None))
+        case DefDef(_, _, _, _, symbol) if symbol.isLocal => f(symbol, None)
+        case ClassDef(_, _, symbol) if symbol.isLocal => f(symbol, None)
+        case lambda: Lambda =>
+          val sym = lambda.meth.asInstanceOf[TermReferenceTree].symbol
+          f(sym, Some(lambda.samClassSymbol))
         case _ => Seq.empty
       }(_ ++ _, Seq.empty)
 
@@ -257,7 +269,7 @@ class Scala3Unpickler(
       case owner: PackageSymbol => ""
     val symName = sym.name match
       case DefaultGetterName(termName, num) => s"${termName.toString()}.<default ${num + 1}>"
-      case _ => sym.name.toString()
+      case _ => sym.nameStr
 
     if prefix.isEmpty then symName else s"$prefix.$symName"
 
@@ -297,7 +309,7 @@ class Scala3Unpickler(
       case p: PackageRef => p.fullyQualifiedName.toString == "scala"
       case _ => false
 
-  def findClass(cls: binary.ClassType, isExtensionMethod: Boolean = false): ClassSymbol =
+  def findClass(cls: binary.ClassType, isExtensionMethod: Boolean = false): Symbol =
     val javaParts = cls.name.split('.')
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
@@ -306,22 +318,40 @@ class Scala3Unpickler(
       else ctx.defn.EmptyPackage
     val decodedClassName = NameTransformer.decode(javaParts.last)
     val allSymbols = decodedClassName match
+      case AnonClass(declaringClassName, remaining) =>
+        val WithLocalPart = "(.+)\\$(.+)\\$\\d+".r
+        val decl = declaringClassName match
+          case WithLocalPart(decl, _) => decl.stripSuffix("$")
+          case decl => decl
+        findLocalClasses(cls, packageSym, decl, "$anon", remaining)
       case LocalClass(declaringClassName, localClassName, remaining) =>
-        val owners = findSymbolsRecursively(packageSym, declaringClassName)
-        val localClasses = owners.flatMap(findLocalClasses(_, localClassName, cls))
-        remaining match
-          case None => localClasses
-          case Some(remaining) => localClasses.flatMap(findSymbolsRecursively(_, remaining))
+        findLocalClasses(cls, packageSym, declaringClassName, localClassName, remaining)
       case _ => findSymbolsRecursively(packageSym, decodedClassName)
     if cls.isObject && !isExtensionMethod
     then allSymbols.filter(_.isModuleClass).singleOrThrow(cls.name)
     else allSymbols.filter(!_.isModuleClass).singleOrThrow(cls.name)
 
+  private def findLocalClasses(
+      cls: binary.ClassType,
+      packageSym: PackageSymbol,
+      declaringClassName: String,
+      localClassName: String,
+      remaining: Option[String]
+  ): Seq[Symbol] =
+    val owners = findSymbolsRecursively(packageSym, declaringClassName)
+    remaining match
+      case None => owners.flatMap(findLocalClasses(_, localClassName, Some(cls)))
+      case Some(remaining) =>
+        val localClasses = owners
+          .flatMap(findLocalClasses(_, localClassName, None))
+          .filter(_.isClass)
+        localClasses.flatMap(s => findSymbolsRecursively(s.asClass, remaining))
+
   private def findSymbolsRecursively(owner: DeclaringSymbol, decodedName: String): Seq[ClassSymbol] =
     owner.declarations
       .collect { case sym: ClassSymbol => sym }
       .flatMap { sym =>
-        val Symbol = s"${Regex.quote(sym.name.toString)}\\$$?(.*)".r
+        val Symbol = s"${Regex.quote(sym.nameStr)}\\$$?(.*)".r
         decodedName match
           case Symbol(remaining) =>
             if remaining.isEmpty then Some(sym)
@@ -329,15 +359,33 @@ class Scala3Unpickler(
           case _ => None
       }
 
-  private def findLocalClasses(owner: ClassSymbol, name: String, cls: binary.ClassType): Seq[ClassSymbol] =
-    val superClassAndInterfaces = (cls.superclass.toSeq ++ cls.interfaces).map(findClass(_)).toSet
+  private def findLocalClasses(owner: ClassSymbol, name: String, javaClass: Option[binary.ClassType]): Seq[Symbol] =
+    javaClass match
+      case Some(cls) =>
+        val superClassAndInterfaces = (cls.superclass.toSeq ++ cls.interfaces).map(findClass(_)).toSet
 
-    def matchesParents(classSymbol: ClassSymbol): Boolean =
-      if classSymbol.isEnum then superClassAndInterfaces == classSymbol.parentClasses.toSet + ctx.defn.ProductClass
-      else if cls.isInterface then superClassAndInterfaces == classSymbol.parentClasses.filter(_.isTrait).toSet
-      else superClassAndInterfaces == classSymbol.parentClasses.toSet
+        def matchParents(classSymbol: ClassSymbol): Boolean =
+          if classSymbol.isEnum then superClassAndInterfaces == classSymbol.parentClasses.toSet + ctx.defn.ProductClass
+          else if cls.isInterface then superClassAndInterfaces == classSymbol.parentClasses.filter(_.isTrait).toSet
+          else if classSymbol.isAnonClass then classSymbol.parentClasses.forall(superClassAndInterfaces.contains)
+          else superClassAndInterfaces == classSymbol.parentClasses.toSet
 
-    collectLocalSymbols(owner) { case cls: ClassSymbol if cls.matchName(name) && matchesParents(cls) => cls }
+        def matchSamClass(samClass: ClassSymbol): Boolean =
+          if samClass == defn.partialFunction then
+            superClassAndInterfaces.size == 2 &&
+            superClassAndInterfaces.exists(_ == defn.abstractPartialFunction) &&
+            superClassAndInterfaces.exists(_ == defn.serializable)
+          else superClassAndInterfaces.contains(samClass)
+
+        collectLocalSymbols(owner) {
+          case (cls: ClassSymbol, None) if cls.matchName(name) && matchParents(cls) => cls
+          case (lambda: TermSymbol, Some(tpt)) if matchSamClass(tpt) => lambda
+        }
+      case _ =>
+        collectLocalSymbols(owner) {
+          case (cls: ClassSymbol, None) if cls.matchName(name) => cls
+          case (lambda: TermSymbol, Some(tpt)) => lambda
+        }
 
   private def matchSymbol(method: binary.Method, symbol: TermSymbol): Boolean =
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
@@ -445,28 +493,6 @@ class Scala3Unpickler(
 
   private def skip(symbol: TermSymbol): Boolean =
     (symbol.isGetterOrSetter && !symbol.isLazyValInTrait) || symbol.isSynthetic
-
-  extension (symbol: TermSymbol)
-    private def isGetterOrSetter = !symbol.isMethod || symbol.isSetter
-    private def isLazyValInTrait: Boolean = symbol.owner.isTrait && symbol.isLazyVal
-    private def isLazyVal: Boolean = symbol.kind == TermSymbolKind.LazyVal
-
-  extension (symbol: Symbol)
-    private def isTrait = symbol.isClass && symbol.asClass.isTrait
-    private def isAnonFun = symbol.name.toString() == "$anonfun"
-    private def matchName(name: String) =
-      symbol.name.toString == name
-    private def isLocal = symbol.owner.isTerm
-    private def isModuleClass = symbol.isClass && symbol.asClass.isModuleClass
-
-  extension [T <: Symbol](symbols: Seq[T])
-    def singleOrThrow(binaryName: String): T =
-      singleOptOrThrow(binaryName)
-        .getOrElse(throw new NotFoundException(s"Cannot find Scala symbol of $binaryName"))
-
-    def singleOptOrThrow(binaryName: String): Option[T] =
-      if symbols.size > 1 then throw new AmbiguousException(s"Found ${symbols.size} matching symbols for $binaryName")
-      else symbols.headOption
 
 case class AmbiguousException(m: String) extends Exception
 case class NotFoundException(m: String) extends Exception

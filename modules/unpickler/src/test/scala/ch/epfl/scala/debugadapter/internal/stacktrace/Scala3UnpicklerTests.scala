@@ -454,6 +454,23 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       )
   }
 
+  test("anonymous class") {
+    val source =
+      """|package example
+         |class B :
+         |  def n = 42
+         |class A :
+         |  def m(t: => Any): Int = 
+         |    val b = new B {
+         |      def m = ()
+         |    }
+         |    b.n
+         |
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    debuggee.assertFormat("example.A$$anon$1", "A.m.b.$anon")
+  }
+
   test("this.type") {
     val source =
       """|package example
@@ -465,6 +482,38 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
 
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     debuggee.assertFormat("example.A", "example.A m()", "A.m(): A")
+  }
+
+  test("anonClass from SAM class") {
+    val source =
+      """|package example
+         |object Main {
+         |    val foo: Ordering[String] = (x, y) => x.size - y.size
+         |    val f: PartialFunction[(String), Int] = {
+         |      case ("1") => 1
+         |      case ("2") => 2
+         |      case ("3") => 3
+         |    }    
+         |  }
+         |
+         |""".stripMargin
+
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    debuggee.assertFormat("example.Main$$anon$1", "Main.foo.$anonfun")
+    debuggee.assertFormat(
+      "example.Main$$anon$1",
+      "int compare(java.lang.String x, java.lang.String y)",
+      "Main.foo.$anonfun(x: String, y: String): Int"
+    )
+    debuggee.assertNotFound("example.Main$$anon$1", "int compare(java.lang.Object x, java.lang.Object y)")
+    debuggee.assertFormat("example.Main$$anon$2", "Main.f.$anonfun")
+    debuggee.assertFormat(
+      "example.Main$$anon$2",
+      "boolean isDefinedAt(java.lang.String x)",
+      "Main.f.$anonfun(String): Int"
+    )
+    debuggee.assertNotFound("example.Main$$anon$2", "boolean isDefinedAt(java.lang.Object x)")
+
   }
 
   test("default values") {
@@ -928,7 +977,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       else
         val method = cls.getDeclaredMethods
           .find { m =>
-            // println(s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})")
+            println(
+              s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})"
+            )
             m.getName == name && m.getReturnType.getName == returnType && matchParams(m.getParameters)
           }
         assert(method.isDefined)

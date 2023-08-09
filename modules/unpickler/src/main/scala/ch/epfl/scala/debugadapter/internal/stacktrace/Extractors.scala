@@ -13,6 +13,25 @@ object LocalClass:
       .filter(xs => xs(1) != "anon")
       .map(xs => (xs(0), xs(1), Option(xs(2)).map(_.stripPrefix("$")).filter(_.nonEmpty)))
 
+object AnonClass:
+  def unapply(cls: binary.ClassType): Option[(String, Option[String])] =
+    val decodedClassName = NameTransformer.decode(cls.name.split('.').last)
+    unapply(decodedClassName)
+  def unapply(decodedClassName: String): Option[(String, Option[String])] =
+    "(.+)\\$\\$anon\\$\\d+(\\$.*)?".r
+      .unapplySeq(NameTransformer.decode(decodedClassName))
+      .map(xs => (xs(0), Option(xs(1)).map(_.stripPrefix("$")).filter(_.nonEmpty)))
+
+object InnerClass:
+  def unapply(cls: binary.ClassType): Option[String] =
+    val decodedClassName = NameTransformer.decode(cls.name.split('.').last)
+    unapply(decodedClassName)
+
+  def unapply(decodedClassName: String): Option[String] =
+    "(.+)\\$(.+)".r
+      .unapplySeq(NameTransformer.decode(decodedClassName))
+      .map(_ => decodedClassName)
+
 object LazyInit:
   def unapply(method: binary.Method): Option[String] =
     val lazyInit = "(.*)\\$lzyINIT\\d+".r
