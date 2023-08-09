@@ -318,29 +318,34 @@ class Scala3Unpickler(
       else ctx.defn.EmptyPackage
     val decodedClassName = NameTransformer.decode(javaParts.last)
     val allSymbols = decodedClassName match
-
       case AnonClass(declaringClassName, remaining) =>
         val WithLocalPart = "(.+)\\$(.+)\\$\\d+".r
         val decl = declaringClassName match
           case WithLocalPart(decl, _) => decl.stripSuffix("$")
           case decl => decl
-        val owners = findSymbolsRecursively(packageSym, decl)
-        remaining match
-          case None => owners.flatMap(findLocalClasses(_, "$anon", Some(cls)))
-          case Some(remaining) =>
-            val localClasses = owners.flatMap(findLocalClasses(_, "$anon", None))
-            localClasses.flatMap(s => findSymbolsRecursively(s.asClass, remaining))
+        findLocalClasses(cls, packageSym, decl, "$anon", remaining)
       case LocalClass(declaringClassName, localClassName, remaining) =>
-        val owners = findSymbolsRecursively(packageSym, declaringClassName)
-        remaining match
-          case None => owners.flatMap(findLocalClasses(_, localClassName, Some(cls)))
-          case Some(remaining) =>
-            val localClasses = owners.flatMap(findLocalClasses(_, localClassName, None))
-            localClasses.flatMap(s => findSymbolsRecursively(s.asClass, remaining))
+        findLocalClasses(cls, packageSym, declaringClassName, localClassName, remaining)
       case _ => findSymbolsRecursively(packageSym, decodedClassName)
     if cls.isObject && !isExtensionMethod
     then allSymbols.filter(_.isModuleClass).singleOrThrow(cls.name)
     else allSymbols.filter(!_.isModuleClass).singleOrThrow(cls.name)
+
+  private def findLocalClasses(
+      cls: binary.ClassType,
+      packageSym: PackageSymbol,
+      declaringClassName: String,
+      localClassName: String,
+      remaining: Option[String]
+  ): Seq[Symbol] =
+    val owners = findSymbolsRecursively(packageSym, declaringClassName)
+    remaining match
+      case None => owners.flatMap(findLocalClasses(_, localClassName, Some(cls)))
+      case Some(remaining) =>
+        val localClasses = owners
+          .flatMap(findLocalClasses(_, localClassName, None))
+          .filter(_.isClass)
+        localClasses.flatMap(s => findSymbolsRecursively(s.asClass, remaining))
 
   private def findSymbolsRecursively(owner: DeclaringSymbol, decodedName: String): Seq[ClassSymbol] =
     owner.declarations
