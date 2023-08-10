@@ -2,6 +2,7 @@ package ch.epfl.scala.debugadapter.internal.stacktrace
 
 import ch.epfl.scala.debugadapter.internal.binary
 import ch.epfl.scala.debugadapter.internal.jdi.JdiMethod
+import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryClassSymbol.*
 import tastyquery.Contexts
 import tastyquery.Contexts.Context
 import tastyquery.Flags
@@ -49,10 +50,10 @@ class Scala3Unpickler(
     findSymbol(method).map(formatter.formatSymbolWithType)
 
   def formatClass(cls: binary.ClassType): String =
-    formatter.formatSymbol(findClass(cls))
+    formatter.formatClassSymbol(findClass(cls))
 
   def findSymbol(method: binary.Method): Option[TermSymbol] =
-    val cls = findClass(method.declaringClass, method.isExtensionMethod)
+    val cls = findClass(method.declaringClass, method.isExtensionMethod).symbol
     cls match
       case term: TermSymbol =>
         if method.declaringClass.superclass.get.name == "scala.runtime.AbstractPartialFunction" then
@@ -126,7 +127,7 @@ class Scala3Unpickler(
         Seq(cls, companionClass)
       case _ => Seq(cls)
 
-  def collectLocalSymbols[S <: Symbol](cls: ClassSymbol)(
+  def collectLocalSymbols[S](cls: ClassSymbol)(
       partialF: PartialFunction[(Symbol, Option[ClassSymbol]), S]
   ): Seq[S] =
     val f = partialF.lift.andThen(_.toSeq)
@@ -154,7 +155,7 @@ class Scala3Unpickler(
       localSym <- collectSymbols(tree, Set.empty)
     yield localSym
 
-  def findClass(cls: binary.ClassType, isExtensionMethod: Boolean = false): Symbol =
+  def findClass(cls: binary.ClassType, isExtensionMethod: Boolean = false): BinaryClassSymbol =
     val javaParts = cls.name.split('.')
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
@@ -173,8 +174,8 @@ class Scala3Unpickler(
         findLocalClasses(cls, packageSym, declaringClassName, localClassName, remaining)
       case _ => findSymbolsRecursively(packageSym, decodedClassName)
     if cls.isObject && !isExtensionMethod
-    then allSymbols.filter(_.isModuleClass).singleOrThrow(cls.name)
-    else allSymbols.filter(!_.isModuleClass).singleOrThrow(cls.name)
+    then allSymbols.filter(_.symbol.isModuleClass).singleOrThrow(cls.name)
+    else allSymbols.filter(!_.symbol.isModuleClass).singleOrThrow(cls.name)
 
   private def findLocalClasses(
       cls: binary.ClassType,
@@ -182,33 +183,38 @@ class Scala3Unpickler(
       declaringClassName: String,
       localClassName: String,
       remaining: Option[String]
-  ): Seq[Symbol] =
+  ): Seq[BinaryClassSymbol] =
     val owners = findSymbolsRecursively(packageSym, declaringClassName)
     remaining match
-      case None => owners.flatMap(findLocalClasses(_, localClassName, Some(cls)))
+      case None => owners.flatMap(bcls => findLocalClasses(bcls.symbol, localClassName, Some(cls)))
       case Some(remaining) =>
         val localClasses = owners
-          .flatMap(findLocalClasses(_, localClassName, None))
-          .filter(_.isClass)
-        localClasses.flatMap(s => findSymbolsRecursively(s.asClass, remaining))
+          .flatMap(t => findLocalClasses(t.symbol, localClassName, None))
+          .collect { case BinaryClass(cls, _) => cls }
+        localClasses.flatMap(s => findSymbolsRecursively(s, remaining))
 
-  private def findSymbolsRecursively(owner: DeclaringSymbol, decodedName: String): Seq[ClassSymbol] =
+  private def findSymbolsRecursively(owner: DeclaringSymbol, decodedName: String): Seq[BinaryClass] =
     owner.declarations
       .collect { case sym: ClassSymbol => sym }
       .flatMap { sym =>
         val Symbol = s"${Regex.quote(sym.nameStr)}\\$$?(.*)".r
         decodedName match
           case Symbol(remaining) =>
-            if remaining.isEmpty then Some(sym)
+            if remaining.isEmpty then Some(BinaryClass(sym, BinaryClassKind.TopLevelOrInner))
             else findSymbolsRecursively(sym, remaining)
           case _ => None
       }
 
-  private def findLocalClasses(owner: ClassSymbol, name: String, javaClass: Option[binary.ClassType]): Seq[Symbol] =
+  private def findLocalClasses(
+      owner: ClassSymbol,
+      name: String,
+      javaClass: Option[binary.ClassType]
+  ): Seq[BinaryClassSymbol] =
     javaClass match
       case Some(cls) =>
-        val superClassAndInterfaces = (cls.superclass.toSeq ++ cls.interfaces).map(findClass(_)).toSet
-
+        val superClassAndInterfaces =
+          (cls.superclass.toSeq ++ cls.interfaces).map(findClass(_)).toList.map(_.symbol).toSet
+        val x = 2
         def matchParents(classSymbol: ClassSymbol): Boolean =
           if classSymbol.isEnum then superClassAndInterfaces == classSymbol.parentClasses.toSet + ctx.defn.ProductClass
           else if cls.isInterface then superClassAndInterfaces == classSymbol.parentClasses.filter(_.isTrait).toSet
@@ -223,13 +229,17 @@ class Scala3Unpickler(
           else superClassAndInterfaces.contains(samClass)
 
         collectLocalSymbols(owner) {
-          case (cls: ClassSymbol, None) if cls.matchName(name) && matchParents(cls) => cls
-          case (lambda: TermSymbol, Some(tpt)) if matchSamClass(tpt) => lambda
+          case (cls: ClassSymbol, None) if cls.matchName(name) && matchParents(cls) =>
+            if name == "$anon" then BinaryClass(cls, BinaryClassKind.Anon)
+            else BinaryClass(cls, BinaryClassKind.Local)
+          case (lambda: TermSymbol, Some(tpt)) if matchSamClass(tpt) => BinarySAMClass(lambda)
         }
       case _ =>
         collectLocalSymbols(owner) {
-          case (cls: ClassSymbol, None) if cls.matchName(name) => cls
-          case (lambda: TermSymbol, Some(tpt)) => lambda
+          case (cls: ClassSymbol, None) if cls.matchName(name) =>
+            if name == "$anon" then BinaryClass(cls, BinaryClassKind.Anon)
+            else BinaryClass(cls, BinaryClassKind.Local)
+          case (lambda: TermSymbol, Some(tpt)) => BinarySAMClass(lambda)
         }
 
   private def matchSymbol(method: binary.Method, symbol: TermSymbol): Boolean =

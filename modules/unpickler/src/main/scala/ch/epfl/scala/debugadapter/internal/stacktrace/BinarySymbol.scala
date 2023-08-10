@@ -5,14 +5,14 @@ import tastyquery.Symbols.*
 enum BinaryClassSymbol:
   case BinaryClass(symbol: ClassSymbol, kind: BinaryClassKind)
   case BinarySAMClass(symbol: TermSymbol)
-  
-enum BinaryClassKind:
-  case TopLevel, Inner, Local, Anon
 
-enum BinaryMethodSymbol:  
+enum BinaryClassKind:
+  case TopLevelOrInner, Local, Anon
+
+enum BinaryMethodSymbol:
   case BinaryMethod(binaryOwner: BinaryClassSymbol, symbol: TermSymbol, kind: BinaryMethodKind)
   case BinaryByNameArg(binaryOwner: BinaryClassSymbol)
 
 enum BinaryMethodKind:
-  case InstanceDef, LocalDef, Anon, Getter, Setter, LazyInit, LocalLazyInit, Constructor, TraitConstructor,
-       MixinForwarder, TraitStaticAccessor, SuperAccessor, DefaultParameter
+  case InstanceDef, LocalDef, AnonFun, Getter, Setter, LazyInit, LocalLazyInit, Constructor, TraitConstructor,
+    MixinForwarder, TraitStaticAccessor, SuperAccessor, DefaultParameter

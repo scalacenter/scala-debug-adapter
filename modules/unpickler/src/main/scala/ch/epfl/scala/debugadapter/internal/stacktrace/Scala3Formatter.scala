@@ -9,6 +9,9 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
     val sep = if !symbol.declaredType.isInstanceOf[MethodicType] then ": " else ""
     s"${formatSymbol(symbol)}$sep${formatType(symbol.declaredType)}"
 
+  def formatClassSymbol(bcls: BinaryClassSymbol) =
+    formatSymbol(bcls.symbol)
+
   def formatSymbol(sym: Symbol): String =
     val prefix = sym.owner match
       case owner: ClassSymbol if owner.name.isPackageObject => formatSymbol(owner.owner)

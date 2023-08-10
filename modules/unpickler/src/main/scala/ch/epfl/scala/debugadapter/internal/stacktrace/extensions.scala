@@ -6,6 +6,12 @@ import tastyquery.Names.*
 import tastyquery.Types.*
 import tastyquery.Modifiers.TermSymbolKind
 
+extension (bcls: BinaryClassSymbol)
+  def symbol =
+    bcls match
+      case BinaryClassSymbol.BinaryClass(symbol, kind) => symbol
+      case BinaryClassSymbol.BinarySAMClass(symbol) => symbol
+
 extension (symbol: Symbol)
   def isTrait = symbol.isClass && symbol.asClass.isTrait
   def isAnonFun = symbol.nameStr == "$anonfun"
@@ -21,14 +27,15 @@ extension (symbol: TermSymbol)
   private def isLazyValInTrait: Boolean = symbol.owner.isTrait && symbol.isLazyVal
   private def isLazyVal: Boolean = symbol.kind == TermSymbolKind.LazyVal
 
-extension [T <: Symbol](symbols: Seq[T])
+extension [T](binarySymbols: Seq[T])
   def singleOrThrow(binaryName: String): T =
     singleOptOrThrow(binaryName)
       .getOrElse(throw new NotFoundException(s"Cannot find Scala symbol of $binaryName"))
 
   def singleOptOrThrow(binaryName: String): Option[T] =
-    if symbols.size > 1 then throw new AmbiguousException(s"Found ${symbols.size} matching symbols for $binaryName")
-    else symbols.headOption
+    if binarySymbols.size > 1 then
+      throw new AmbiguousException(s"Found ${binarySymbols.size} matching symbols for $binaryName")
+    else binarySymbols.headOption
 
 extension (name: Name)
   def isPackageObject: Boolean =
