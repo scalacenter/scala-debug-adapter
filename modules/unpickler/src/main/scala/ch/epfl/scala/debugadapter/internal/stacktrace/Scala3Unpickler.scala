@@ -10,6 +10,7 @@ import tastyquery.Signatures.*
 import tastyquery.Symbols.*
 import tastyquery.Trees.*
 import tastyquery.Types.*
+import tastyquery.Spans.*
 import tastyquery.jdk.ClasspathLoaders
 import tastyquery.jdk.ClasspathLoaders.FileKind
 
@@ -26,19 +27,11 @@ class Scala3Unpickler(
     classpaths: Array[Path],
     warnLogger: Consumer[String],
     testMode: Boolean
-):
+) extends ThrowOrWarn(warnLogger.accept, testMode):
   private val classpath = ClasspathLoaders.read(classpaths.toList)
   private given ctx: Context = Contexts.init(classpath)
   private val defn = new Definitions
-
-  private def warn(msg: String): Unit = warnLogger.accept(msg)
-
-  private def throwOrWarn(message: String): Unit =
-    throwOrWarn(new Exception(message))
-
-  private def throwOrWarn(exception: Throwable): Unit =
-    if testMode then throw exception
-    else exception.getMessage
+  private val formatter = new Scala3Formatter(warnLogger.accept, testMode)
 
   def skipMethod(obj: Any): Boolean =
     skipMethod(JdiMethod(obj): binary.Method)
@@ -53,12 +46,10 @@ class Scala3Unpickler(
     formatMethod(JdiMethod(obj)).toJava
 
   def formatMethod(method: binary.Method): Option[String] =
-    findSymbol(method).map { symbol =>
-      val sep = if !symbol.declaredType.isInstanceOf[MethodicType] then ": " else ""
-      s"${formatSymbol(symbol)}$sep${formatType(symbol.declaredType)}"
-    }
+    findSymbol(method).map(formatter.formatSymbolWithType)
+
   def formatClass(cls: binary.ClassType): String =
-    formatSymbol(findClass(cls))
+    formatter.formatSymbol(findClass(cls))
 
   def findSymbol(method: binary.Method): Option[TermSymbol] =
     val cls = findClass(method.declaringClass, method.isExtensionMethod)
@@ -142,11 +133,10 @@ class Scala3Unpickler(
 
     def isInline(tree: Ident): Boolean =
       try tree.symbol.isTerm && tree.symbol.asTerm.isInline
-      catch
-        case NonFatal(e) => false
+      catch case NonFatal(e) => false
 
     def collectSymbols(tree: Tree, inlineSet: Set[Symbol]): Seq[S] =
-        tree.walkTree {
+      tree.walkTreeWithFilter(_ => true) {
         case ValDef(_, _, _, symbol) if symbol.isLocal && (symbol.isLazyVal || symbol.isModuleVal) => f((symbol, None))
         case DefDef(_, _, _, _, symbol) if symbol.isLocal => f(symbol, None)
         case ClassDef(_, _, symbol) if symbol.isLocal => f(symbol, None)
@@ -161,161 +151,8 @@ class Scala3Unpickler(
     for
       decl <- cls.declarations
       tree <- decl.tree.toSeq
-      localSym <- collectSymbols(tree,Set.empty)
+      localSym <- collectSymbols(tree, Set.empty)
     yield localSym
-
-  def formatType(t: TermType | TypeOrWildcard): String =
-    t match
-      case t: MethodType =>
-        val params = t.paramNames
-          .map(paramName =>
-            val pattern: Regex = """.+\$\d+$""".r
-            if pattern.matches(paramName.toString) then ""
-            else s"$paramName: "
-          )
-          .zip(t.paramTypes)
-          .map((n, t) => s"$n${formatType(t)}")
-          .mkString(", ")
-        val sep = if t.resultType.isInstanceOf[MethodicType] then "" else ": "
-        val result = formatType(t.resultType)
-        val prefix =
-          if t.isContextual then "using "
-          else if t.isImplicit then "implicit "
-          else ""
-        s"($prefix$params)$sep$result"
-      case t: TypeRef => formatPrefix(t.prefix) + t.name
-      case t: AppliedType if isFunction(t.tycon) =>
-        val args = t.args.init.map(formatType).mkString(",")
-        val result = formatType(t.args.last)
-        if t.args.size > 2 then s"($args) => $result" else s"$args => $result"
-      case t: AppliedType if isTuple(t.tycon) =>
-        val types = t.args.map(formatType).mkString(",")
-        s"($types)"
-      case t: AppliedType if isOperatorLike(t.tycon) && t.args.size == 2 =>
-        val operatorLikeTypeFormat = t.args
-          .map(formatType)
-          .mkString(
-            t.tycon match
-              case ref: TypeRef => s" ${ref.name} "
-          )
-        operatorLikeTypeFormat
-      case t: AppliedType if isVarArg(t.tycon) =>
-        s"${formatType(t.args.head)}*"
-      case t: AppliedType =>
-        val tycon = formatType(t.tycon)
-        val args = t.args.map(formatType).mkString(", ")
-        s"$tycon[$args]"
-      case t: PolyType =>
-        val args = t.paramNames.mkString(", ")
-        val sep = if t.resultType.isInstanceOf[MethodicType] then "" else ": "
-        val result = formatType(t.resultType)
-        s"[$args]$sep$result"
-      case t: OrType =>
-        val first = formatType(t.first)
-        val second = formatType(t.second)
-        s"$first | $second"
-      case t: AndType =>
-        val first = formatType(t.first)
-        val second = formatType(t.second)
-        s"$first & $second"
-      case t: ThisType => formatType(t.tref)
-      case t: TermRefinement =>
-        val parentType = formatType(t.parent)
-        if parentType == "PolyFunction" then formatPolymorphicFunction(t.refinedType)
-        else parentType + " {...}"
-      case t: AnnotatedType => formatType(t.typ)
-      case t: TypeParamRef => t.paramName.toString
-      case t: TermParamRef => formatPrefix(t) + "type"
-      case t: TermRef => formatPrefix(t) + "type"
-      case t: ConstantType =>
-        t.value.value match
-          case str: String => s"\"$str\""
-          case t: Type =>
-            // to reproduce this we should try `val x = classOf[A]`
-            s"classOf[${formatType(t)}]"
-          case v => v.toString
-      case t: ByNameType => s"=> " + formatType(t.resultType)
-      case t: TypeRefinement => formatType(t.parent) + " {...}"
-      case t: RecType => formatType(t.parent)
-      case _: WildcardTypeArg => "?"
-      case t: TypeLambda =>
-        val args = t.paramNames.map(t => t.toString).mkString(", ")
-        val result = formatType(t.resultType)
-        s"[$args] =>> $result"
-      case t @ (_: RecThis | _: SkolemType | _: SuperType | _: MatchType | _: CustomTransientGroundType |
-          _: PackageRef) =>
-        throwOrWarn(s"Cannot format type ${t.getClass.getName}")
-        "<unsupported>"
-  private def formatPolymorphicFunction(t: TermType): String =
-    t match
-      case t: PolyType =>
-        val args = t.paramNames.mkString(", ")
-        val result = formatPolymorphicFunction(t.resultType)
-        s"[$args] => $result"
-      case t: MethodType =>
-        val params = t.paramTypes.map(formatType(_)).mkString(", ")
-        if t.paramTypes.size > 1 then s"($params) => ${formatType(t.resultType)}"
-        else s"$params => ${formatType(t.resultType)}"
-
-  private def formatPrefix(p: Prefix): String =
-    val prefix = p match
-      case NoPrefix => ""
-      case p: TermRef if isScalaPredef(p) => ""
-      case p: TermRef if isPackageObject(p.name) => ""
-      case p: TermRef => formatPrefix(p.prefix) + p.name
-      case p: TermParamRef => p.paramName.toString
-      case p: PackageRef => ""
-      case p: ThisType => ""
-      case t: Type => formatType(t)
-
-    if prefix.nonEmpty then s"$prefix." else prefix
-
-  private def formatSymbol(sym: Symbol): String =
-    val prefix = sym.owner match
-      case owner: ClassSymbol if isPackageObject(owner.name) => formatSymbol(owner.owner)
-      case owner: TermOrTypeSymbol => formatSymbol(owner)
-      case owner: PackageSymbol => ""
-    val symName = sym.name match
-      case DefaultGetterName(termName, num) => s"${termName.toString()}.<default ${num + 1}>"
-      case _ => sym.nameStr
-
-    if prefix.isEmpty then symName else s"$prefix.$symName"
-
-  private def isPackageObject(name: Name): Boolean =
-    name.toString == "package" || name.toString.endsWith("$package")
-
-  private def isScalaPredef(ref: TermRef): Boolean =
-    isScalaPackage(ref.prefix) && ref.name.toString == "Predef"
-
-  private def isFunction(tpe: Type): Boolean =
-    tpe match
-      case ref: TypeRef =>
-        isScalaPackage(ref.prefix) && ref.name.toString.startsWith("Function")
-      case _ => false
-
-  private def isTuple(tpe: Type): Boolean =
-    tpe match
-      case ref: TypeRef =>
-        isScalaPackage(ref.prefix) && ref.name.toString.startsWith("Tuple")
-      case _ => false
-  private def isVarArg(tpe: Type): Boolean =
-    tpe match
-      case ref: TypeRef =>
-        isScalaPackage(ref.prefix) && ref.name.toString == "<repeated>"
-      case _ => false
-
-  private def isOperatorLike(tpe: Type): Boolean =
-    tpe match
-      case ref: TypeRef =>
-        val operatorChars = "\\+\\-\\*\\/\\%\\&\\|\\^\\<\\>\\=\\!\\~\\#\\:\\@\\?"
-        val regex = s"[^$operatorChars]".r
-        !regex.findFirstIn(ref.name.toString).isDefined
-      case _ => false
-
-  private def isScalaPackage(prefix: Prefix): Boolean =
-    prefix match
-      case p: PackageRef => p.fullyQualifiedName.toString == "scala"
-      case _ => false
 
   def findClass(cls: binary.ClassType, isExtensionMethod: Boolean = false): Symbol =
     val javaParts = cls.name.split('.')
@@ -501,6 +338,3 @@ class Scala3Unpickler(
 
   private def skip(symbol: TermSymbol): Boolean =
     (symbol.isGetterOrSetter && !symbol.isLazyValInTrait) || symbol.isSynthetic
-
-case class AmbiguousException(m: String) extends Exception
-case class NotFoundException(m: String) extends Exception
