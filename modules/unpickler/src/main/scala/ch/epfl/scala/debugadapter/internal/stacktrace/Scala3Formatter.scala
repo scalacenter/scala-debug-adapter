@@ -12,6 +12,11 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
   def formatClassSymbol(bcls: BinaryClassSymbol) =
     formatSymbol(bcls.symbol)
 
+  def formatMethodSymbol(bmthd: BinaryMethodSymbol) =
+    bmthd.symbol match
+      case None => None
+      case Some(sym) => Some(formatSymbolWithType(sym))
+
   def formatSymbol(sym: Symbol): String =
     val prefix = sym.owner match
       case owner: ClassSymbol if owner.name.isPackageObject => formatSymbol(owner.owner)

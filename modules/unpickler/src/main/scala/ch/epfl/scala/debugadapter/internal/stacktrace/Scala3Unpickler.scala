@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter.internal.stacktrace
 import ch.epfl.scala.debugadapter.internal.binary
 import ch.epfl.scala.debugadapter.internal.jdi.JdiMethod
 import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryClassSymbol.*
+import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryMethodSymbol.*
 import tastyquery.Contexts
 import tastyquery.Contexts.Context
 import tastyquery.Flags
@@ -47,18 +48,22 @@ class Scala3Unpickler(
     formatMethod(JdiMethod(obj)).toJava
 
   def formatMethod(method: binary.Method): Option[String] =
-    findSymbol(method).map(formatter.formatSymbolWithType)
+    findSymbol(method).flatMap(formatter.formatMethodSymbol)
 
   def formatClass(cls: binary.ClassType): String =
     formatter.formatClassSymbol(findClass(cls))
 
-  def findSymbol(method: binary.Method): Option[TermSymbol] =
-    val cls = findClass(method.declaringClass, method.isExtensionMethod).symbol
+  def findSymbol(method: binary.Method): Option[BinaryMethodSymbol] =
+    val bcls = findClass(method.declaringClass, method.isExtensionMethod)
+    val cls = bcls.symbol
     cls match
       case term: TermSymbol =>
         if method.declaringClass.superclass.get.name == "scala.runtime.AbstractPartialFunction" then
-          Option.when(!method.isBridge)(term)
-        else Option.when(!method.isBridge && matchSignature(method, term))(term)
+          Option.when(!method.isBridge)(BinaryMethod(bcls, term, BinaryMethodKind.AnonFun))
+        else
+          Option.when(!method.isBridge && matchSignature(method, term))(
+            BinaryMethod(bcls, term, BinaryMethodKind.AnonFun)
+          )
       case cls: ClassSymbol =>
         val candidates = method match
           case LocalLazyInit(name, _) =>
@@ -67,33 +72,37 @@ class Scala3Unpickler(
               term <- collectLocalSymbols(owner) {
                 case (t: TermSymbol, None) if (t.isLazyVal || t.isModuleVal) && t.matchName(name) => t
               }
-            yield term
+            yield BinaryMethod(bcls, term, BinaryMethodKind.LocalLazyInit)
           case AnonFun(prefix) =>
-            val x =
-              for
-                owner <- withCompanionIfExtendsAnyVal(cls)
-                term <- collectLocalSymbols(owner) {
-                  case (t: TermSymbol, None) if t.isAnonFun && matchSignature(method, t) => t
-                }
-              yield term
-            if x.size > 1 && prefix.nonEmpty then
-              val y = x.filter(s => matchPrefix(prefix, s.owner))
-              if y.size == 0 then x
-              else y
-            else x
+            val symbols =
+              val x =
+                for
+                  owner <- withCompanionIfExtendsAnyVal(cls)
+                  term <- collectLocalSymbols(owner) {
+                    case (t: TermSymbol, None) if t.isAnonFun && matchSignature(method, t) => t
+                  }
+                yield term
+              if x.size > 1 && prefix.nonEmpty then
+                val y = x.filter(s => matchPrefix(prefix, s.owner))
+                if y.size == 0 then x
+                else y
+              else x
+            symbols.map(term => BinaryMethod(bcls, term, BinaryMethodKind.AnonFun))
           case LocalMethod(name, _) =>
             for
               owner <- withCompanionIfExtendsAnyVal(cls)
               term <- collectLocalSymbols(owner) {
                 case (t: TermSymbol, None) if t.matchName(name) && matchSignature(method, t) => t
               }
-            yield term
+            yield BinaryMethod(bcls, term, BinaryMethodKind.LocalDef)
           case LazyInit(name) =>
-            cls.declarations.collect { case t: TermSymbol if t.isLazyVal && t.matchName(name) => t }
+            cls.declarations.collect {
+              case t: TermSymbol if t.isLazyVal && t.matchName(name) => BinaryMethod(bcls, t, BinaryMethodKind.LazyInit)
+            }
           case _ =>
             cls.declarations
-              .collect { case sym: TermSymbol => sym }
-              .filter(matchSymbol(method, _))
+              .collect { case sym: TermSymbol => BinaryMethod(bcls, sym, BinaryMethodKind.InstanceDef) }
+              .filter(bmthd => bmthd.symbol.isDefined && matchSymbol(method, bmthd.symbol.get))
         candidates.singleOptOrThrow(method.name)
       case _ => None
 
@@ -232,14 +241,14 @@ class Scala3Unpickler(
           case (cls: ClassSymbol, None) if cls.matchName(name) && matchParents(cls) =>
             if name == "$anon" then BinaryClass(cls, BinaryClassKind.Anon)
             else BinaryClass(cls, BinaryClassKind.Local)
-          case (lambda: TermSymbol, Some(tpt)) if matchSamClass(tpt) => BinarySAMClass(lambda)
+          case (lambda: TermSymbol, Some(samClass)) if matchSamClass(samClass) => BinarySAMClass(lambda, samClass)
         }
       case _ =>
         collectLocalSymbols(owner) {
           case (cls: ClassSymbol, None) if cls.matchName(name) =>
             if name == "$anon" then BinaryClass(cls, BinaryClassKind.Anon)
             else BinaryClass(cls, BinaryClassKind.Local)
-          case (lambda: TermSymbol, Some(tpt)) => BinarySAMClass(lambda)
+          case (lambda: TermSymbol, Some(samClass)) => BinarySAMClass(lambda, samClass)
         }
 
   private def matchSymbol(method: binary.Method, symbol: TermSymbol): Boolean =
@@ -346,5 +355,5 @@ class Scala3Unpickler(
             .getOrElse(regex.matches(javaType))
     rec(scalaType.toString, javaType.name)
 
-  private def skip(symbol: TermSymbol): Boolean =
-    (symbol.isGetterOrSetter && !symbol.isLazyValInTrait) || symbol.isSynthetic
+  private def skip(bmthd: BinaryMethodSymbol): Boolean =
+    (bmthd.symbol.isDefined && bmthd.symbol.get.isGetterOrSetter && !bmthd.symbol.get.isLazyValInTrait) || bmthd.symbol.get.isSynthetic

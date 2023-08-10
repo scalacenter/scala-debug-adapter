@@ -4,7 +4,7 @@ import tastyquery.Symbols.*
 
 enum BinaryClassSymbol:
   case BinaryClass(symbol: ClassSymbol, kind: BinaryClassKind)
-  case BinarySAMClass(symbol: TermSymbol)
+  case BinarySAMClass(symbol: TermSymbol, samClass: ClassSymbol)
 
 enum BinaryClassKind:
   case TopLevelOrInner, Local, Anon
