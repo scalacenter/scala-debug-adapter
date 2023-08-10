@@ -163,20 +163,19 @@ trait DebugTest {
       assertion(values.getOrElse(throw new NoSuchElementException(variable.name)))
     }
 
-    def assertStop(assertion: List[StackFrame] => Unit): Unit = {
+    def assertStop(assertion: List[StackFrame] => Unit): DebugCheckState = {
       val stopped = state.client.stopped()
-      val paused = true
       val threadId = stopped.threadId
       val stackTrace = state.client.stackTrace(threadId)
 
       assertion(stackTrace.stackFrames.toList)
-      state = state.copy(threadId = threadId, topFrame = stackTrace.stackFrames.head, paused = paused)
+      state.copy(threadId = threadId, topFrame = stackTrace.stackFrames.head, paused = true)
     }
 
     steps.foreach {
       case SingleStepAssert(_: Breakpoint, assertion) =>
         state = continueIfPaused(state)
-        assertStop(assertion)
+        state = assertStop(assertion)
       case SingleStepAssert(_: Logpoint, assertion) =>
         state = continueIfPaused(state)
         // A log point needs time for evaluation
@@ -186,15 +185,15 @@ trait DebugTest {
       case SingleStepAssert(StepIn, assertion) =>
         println(s"Stepping in, at ${formatFrame(state.topFrame)}")
         state.client.stepIn(state.threadId)
-        assertStop(assertion)
+        state = assertStop(assertion)
       case SingleStepAssert(StepOut, assertion) =>
         println(s"Stepping out, at ${formatFrame(state.topFrame)}")
         state.client.stepOut(state.threadId)
-        assertStop(assertion)
+        state = assertStop(assertion)
       case SingleStepAssert(StepOver, assertion) =>
         println(s"Stepping over, at ${formatFrame(state.topFrame)}")
         state.client.stepOver(state.threadId)
-        assertStop(assertion)
+        state = assertStop(assertion)
       case SingleStepAssert(eval: Evaluation, assertion) =>
         Await.result(evaluateExpression(eval, assertion), 16.seconds)
       case SingleStepAssert(Outputed, assertion) =>
@@ -213,8 +212,10 @@ trait DebugTest {
         Await.result(Future.sequence(evaluations), 64.seconds)
       case SingleStepAssert(localVariable: LocalVariable, assertion) =>
         inspect(localVariable, assertion)
-      case SingleStepAssert(Custom(f), assertion) => f()
-      case SingleStepAssert(RedefineClasses, assertion) => state.client.redefineClasses()
+      case SingleStepAssert(Custom(f), _) => f()
+      case SingleStepAssert(RedefineClasses, _) =>
+        state.client.redefineClasses()
+        state = assertStop(_ => ())
     }
 
     state
@@ -230,8 +231,8 @@ trait DebugTest {
     val newState = continueIfPaused(state)
     // This is flaky, terminated can happen before exited
     if (!GithubUtils.isCI()) {
-      state.client.exited()
-      state.client.terminated()
+      newState.client.exited()
+      newState.client.terminated()
     }
     newState
   }

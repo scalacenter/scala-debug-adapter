@@ -14,8 +14,8 @@ private[debugadapter] final class DebugTools(
 
 object DebugTools {
 
-  def none: DebugTools =
-    new DebugTools(Map.empty, None, SourceLookUpProvider.empty)
+  def none(logger: Logger): DebugTools =
+    new DebugTools(Map.empty, None, SourceLookUpProvider.empty(logger))
 
   /**
    * Resolve the expression compilers and the step filter of the debuggee,

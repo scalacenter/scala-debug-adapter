@@ -67,6 +67,9 @@ case class TestingDebuggee(
     }
     scalaInstance.compile(mainModule.absolutePath, dependencies, scalacOptions, Seq(sourceFile))
   }
+
+  private[debugadapter] def getPathOf(fileName: String) =
+    tempDir.resolve("src").resolve(fileName)
 }
 
 object TestingDebuggee {
@@ -387,7 +390,6 @@ object TestingDebuggee {
       exited.future
     }
     override def cancel(): Unit = {
-      thread.interrupt()
       if (process.isAlive) process.destroy()
     }
   }

@@ -23,13 +23,16 @@ import scala.util.Try
 import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
 import scala.util.control.NonFatal
 import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
+import com.microsoft.java.debug.core.adapter.IStackTraceProvider
+import ch.epfl.scala.debugadapter.Debuggee
 
 class HotCodeReplaceProvider(
-    classesObs: Observable[Seq[String]],
+    debuggee: Debuggee,
     logger: Logger,
     testMode: Boolean
 ) extends IHotCodeReplaceProvider {
   private var sourceLookUp: SourceLookUpProvider = null
+  private var stackTraceProvider: StackTraceProvider = null
   private var subscription: Disposable = null
   private var context: IDebugAdapterContext = null
   private var currentDebugSession: IDebugSession = null
@@ -39,8 +42,9 @@ class HotCodeReplaceProvider(
   override def initialize(context: IDebugAdapterContext, options: ju.Map[String, Object]): Unit = {
     this.context = context
     this.currentDebugSession = context.getDebugSession
-    this.subscription = classesObs.subscribe(classes => classesAccumulator.updateAndGet(_ ++ classes))
+    this.subscription = debuggee.classesToUpdate.subscribe(classes => classesAccumulator.updateAndGet(_ ++ classes))
     this.sourceLookUp = context.getProvider(classOf[ISourceLookUpProvider]).asInstanceOf[SourceLookUpProvider]
+    this.stackTraceProvider = context.getProvider(classOf[IStackTraceProvider]).asInstanceOf[StackTraceProvider]
   }
 
   override def close(): Unit = {
@@ -58,9 +62,13 @@ class HotCodeReplaceProvider(
     val res = for {
       _ <- initialized
       _ <- canRedefineClasses
-      classesToReplace = classesAccumulator.getAndUpdate(_ => Set.empty).toSeq.filter(isClassLoaded)
+      classesToReplace = classesAccumulator.getAndUpdate(_ => Set.empty).toSeq
       _ <- if (classesToReplace.isEmpty) Success(()) else doHotCodeReplace(classesToReplace)
-    } yield classesToReplace.toList.asJava
+    } yield {
+      sourceLookUp.reload(classesToReplace)
+      stackTraceProvider.reload()
+      classesToReplace.filter(isClassLoaded).toList.asJava
+    }
     res.toCompletableFuture
   }
 
@@ -234,15 +242,17 @@ class HotCodeReplaceProvider(
       .exists(StackFrameUtility.isObsolete)
 
   private def stepIntoThread(thread: ThreadReference): Unit = {
+    val eventRequestManager = currentDebugSession.getVM().eventRequestManager();
     val request = DebugUtility.createStepIntoRequest(thread, context.getStepFilters.skipClasses)
     currentDebugSession.getEventHub.stepEvents
-      .filter(debugEvent => request.equals(debugEvent.event.request))
+      .filter(debugEvent => request == debugEvent.event.request)
       .take(1)
       .subscribe { debugEvent =>
         debugEvent.shouldResume = false
+        DebugUtility.deleteEventRequestSafely(eventRequestManager, request)
         // Have to send to events to keep the UI sync with the step in operations:
         context.getProtocolServer.sendEvent(new Events.StoppedEvent("step", thread.uniqueID()))
-        context.getProtocolServer.sendEvent(new Events.ContinuedEvent(thread.uniqueID()))
+        // context.getProtocolServer.sendEvent(new Events.ContinuedEvent(thread.uniqueID()))
       }
     request.enable()
     thread.resume()
@@ -251,9 +261,9 @@ class HotCodeReplaceProvider(
 
 object HotCodeReplaceProvider {
   def apply(
-      classesToUpdate: Observable[Seq[String]],
+      debuggee: Debuggee,
       logger: Logger,
       testMode: Boolean
-  ): IHotCodeReplaceProvider =
-    new HotCodeReplaceProvider(classesToUpdate, logger, testMode)
+  ): HotCodeReplaceProvider =
+    new HotCodeReplaceProvider(debuggee, logger, testMode)
 }

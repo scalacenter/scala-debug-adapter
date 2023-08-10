@@ -11,16 +11,21 @@ import ch.epfl.scala.debugadapter.Java9OrAbove
 import scala.util.Try
 import java.nio.file.Path
 import java.util.Optional
-import ch.epfl.scala.debugadapter.ScalaVersion
 import scala.jdk.OptionConverters._
 
 class Scala3UnpicklerBridge(
-    scalaVersion: ScalaVersion,
-    bridge: Any,
+    debuggee: Debuggee,
+    cls: Class[?],
+    var bridge: Any,
     skipMethod: Method,
     formatMethod: Method,
-    testMode: Boolean
-) extends ScalaUnpickler(scalaVersion, testMode) {
+    testMode: Boolean,
+    logger: Logger
+) extends ScalaUnpickler(debuggee.scalaVersion, testMode) {
+
+  override def reload(): Unit =
+    bridge = Scala3UnpicklerBridge.getBridge(debuggee, cls, logger, testMode)
+
   override protected def skipScala(method: jdi.Method): Boolean = {
     try skipMethod.invoke(bridge, method).asInstanceOf[Boolean]
     catch {
@@ -39,6 +44,25 @@ class Scala3UnpicklerBridge(
 }
 
 object Scala3UnpicklerBridge {
+  def getBridge(debuggee: Debuggee, unpicklerClass: Class[?], logger: Logger, testMode: Boolean) = {
+    // TASTy Query needs the javaRuntimeJars
+    val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
+      case Java8(_, classJars, _) => classJars
+      case java9OrAbove: Java9OrAbove =>
+        java9OrAbove.classSystems.map(_.fileSystem.getPath("/modules", "java.base"))
+    }
+
+    val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
+    val warnLogger: Consumer[String] = msg => logger.warn(msg)
+    val ctr = unpicklerClass.getConstructor(classOf[Array[Path]], classOf[Consumer[String]], classOf[Boolean])
+
+    ctr.newInstance(
+      debuggeeClasspath,
+      warnLogger,
+      testMode: java.lang.Boolean
+    )
+  }
+
   def tryLoad(
       debuggee: Debuggee,
       classLoader: ClassLoader,
@@ -48,25 +72,12 @@ object Scala3UnpicklerBridge {
     Try {
       val className = "ch.epfl.scala.debugadapter.internal.stacktrace.Scala3Unpickler"
       val cls = classLoader.loadClass(className)
-      val ctr = cls.getConstructor(classOf[Array[Path]], classOf[Consumer[String]], classOf[Boolean])
 
-      // TASTy Query needs the javaRuntimeJars
-      val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
-        case Java8(_, classJars, _) => classJars
-        case java9OrAbove: Java9OrAbove =>
-          java9OrAbove.classSystems.map(_.fileSystem.getPath("/modules", "java.base"))
-      }
-      val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
-      val warnLogger: Consumer[String] = msg => logger.warn(msg)
-      val bridge = ctr.newInstance(
-        debuggeeClasspath,
-        warnLogger,
-        testMode: java.lang.Boolean
-      )
+      val bridge = getBridge(debuggee, cls, logger, testMode)
       val skipMethod = cls.getMethod("skipMethod", classOf[Any])
       val formatMethod = cls.getMethod("formatMethod", classOf[Any])
 
-      new Scala3UnpicklerBridge(debuggee.scalaVersion, bridge, skipMethod, formatMethod, testMode)
+      new Scala3UnpicklerBridge(debuggee, cls, bridge, skipMethod, formatMethod, testMode, logger)
     }
   }
 }

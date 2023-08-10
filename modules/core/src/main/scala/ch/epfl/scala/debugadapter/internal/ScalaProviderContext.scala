@@ -36,7 +36,7 @@ private[debugadapter] object ScalaProviderContext {
     DebugSettings.getCurrent.showStaticVariables = true
 
     val context = new ScalaProviderContext(debuggee, logger, config)
-    val hotCodeReplaceProvider = HotCodeReplaceProvider(debuggee.classesToUpdate, logger, config.testMode)
+    val hotCodeReplaceProvider = HotCodeReplaceProvider(debuggee, logger, config.testMode)
     // The BreakpointRequestHandler resolves the IHotCodeReplaceProvider in its constructor
     context.registerProvider(classOf[IHotCodeReplaceProvider], hotCodeReplaceProvider)
     context.registerProvider(classOf[ICompletionsProvider], CompletionsProvider)

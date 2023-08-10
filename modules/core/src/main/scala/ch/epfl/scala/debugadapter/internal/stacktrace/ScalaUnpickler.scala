@@ -20,6 +20,8 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
     if (testMode) throw exception
     else exception.getMessage
 
+  def reload(): Unit = ()
+
   override def shouldSkipOver(method: Method): Boolean = {
     if (method.isBridge) true
     else if (isDynamicClass(method.declaringType)) true

@@ -18,6 +18,8 @@ class StackTraceProvider(
 
   private val stepFilters: Seq[StepFilter] = Seq(ClassLoadingFilter, runtimeFilter, scalaUnpickler)
 
+  def reload(): Unit = scalaUnpickler.reload()
+
   override def formatMethod(method: Method): Optional[String] = {
     scalaUnpickler.format(method) match {
       case None => Optional.empty()
