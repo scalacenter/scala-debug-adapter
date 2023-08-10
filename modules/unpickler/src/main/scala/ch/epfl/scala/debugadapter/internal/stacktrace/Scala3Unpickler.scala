@@ -146,7 +146,7 @@ class Scala3Unpickler(
         case NonFatal(e) => false
 
     def collectSymbols(tree: Tree, inlineSet: Set[Symbol]): Seq[S] =
-      tree.walkTree {
+        tree.walkTree {
         case ValDef(_, _, _, symbol) if symbol.isLocal && (symbol.isLazyVal || symbol.isModuleVal) => f((symbol, None))
         case DefDef(_, _, _, _, symbol) if symbol.isLocal => f(symbol, None)
         case ClassDef(_, _, symbol) if symbol.isLocal => f(symbol, None)
