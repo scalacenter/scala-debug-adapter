@@ -142,8 +142,7 @@ class Scala3Unpickler(
 
     def isInline(tree: Ident): Boolean =
       try tree.symbol.isTerm && tree.symbol.asTerm.isInline
-      catch
-        case NonFatal(e) => false
+      catch case NonFatal(e) => false
 
     def collectSymbols(tree: Tree, inlineSet: Set[Symbol]): Seq[S] =
       tree.walkTree {
@@ -161,7 +160,7 @@ class Scala3Unpickler(
     for
       decl <- cls.declarations
       tree <- decl.tree.toSeq
-      localSym <- collectSymbols(tree,Set.empty)
+      localSym <- collectSymbols(tree, Set.empty)
     yield localSym
 
   def formatType(t: TermType | TypeOrWildcard): String =

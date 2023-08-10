@@ -503,8 +503,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
 
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     debuggee.assertFormat("example.B", "int $anonfun$1(int x)", "example.m.f.$anonfun(x: Int): Int")
-    debuggee.assertFormat("example.B$$anon$1","example.m.a.$anon")
-    //debuggee.assertFormat("example.A", "example.A m()", "A.m(): A")
+    debuggee.assertFormat("example.B$$anon$1", "example.m.a.$anon")
+    // debuggee.assertFormat("example.A", "example.A m()", "A.m(): A")
 
   }
 
