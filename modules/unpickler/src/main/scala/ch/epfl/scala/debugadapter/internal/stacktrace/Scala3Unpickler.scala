@@ -101,7 +101,11 @@ class Scala3Unpickler(
             }
           case _ =>
             cls.declarations
-              .collect { case sym: TermSymbol => BinaryMethod(bcls, sym, BinaryMethodKind.InstanceDef) }
+              .collect { case sym: TermSymbol =>
+                if method.name == "$init$" then BinaryMethod(bcls, sym, BinaryMethodKind.Constructor)
+                else if method.name == "<init>" then BinaryMethod(bcls, sym, BinaryMethodKind.TraitConstructor)
+                else BinaryMethod(bcls, sym, BinaryMethodKind.InstanceDef)
+              }
               .filter(bmthd => bmthd.symbol.isDefined && matchSymbol(method, bmthd.symbol.get))
         candidates.singleOptOrThrow(method.name)
       case _ => None
