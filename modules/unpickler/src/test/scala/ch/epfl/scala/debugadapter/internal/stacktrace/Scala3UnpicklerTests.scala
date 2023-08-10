@@ -484,6 +484,30 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.A", "example.A m()", "A.m(): A")
   }
 
+  test("inline def with anonymous class and method") {
+    val source =
+      """|package example
+         |class A 
+         |
+         |inline def m: Unit = 
+         |  val f = (x : Int) => x + 1
+         |  val a = new A {
+         |    println("")
+         |  }
+         |  if true then () else m
+         |
+         |class B : 
+         |  def n = 
+         |    m
+         |""".stripMargin
+
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    debuggee.assertFormat("example.B", "int $anonfun$1(int x)", "example.m.f.$anonfun(x: Int): Int")
+    debuggee.assertFormat("example.B$$anon$1", "example.m.a.$anon")
+    // debuggee.assertFormat("example.A", "example.A m()", "A.m(): A")
+
+  }
+
   test("anonClass from SAM class") {
     val source =
       """|package example

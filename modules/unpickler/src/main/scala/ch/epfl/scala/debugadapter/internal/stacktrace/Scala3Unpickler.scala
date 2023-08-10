@@ -20,6 +20,7 @@ import scala.jdk.OptionConverters.*
 import scala.util.matching.Regex
 import tastyquery.Modifiers.TermSymbolKind
 import tastyquery.SourceLanguage
+import scala.util.control.NonFatal
 
 class Scala3Unpickler(
     classpaths: Array[Path],
@@ -139,7 +140,11 @@ class Scala3Unpickler(
   ): Seq[S] =
     val f = partialF.lift.andThen(_.toSeq)
 
-    def collectSymbols(tree: Tree): Seq[S] =
+    def isInline(tree: Ident): Boolean =
+      try tree.symbol.isTerm && tree.symbol.asTerm.isInline
+      catch case NonFatal(e) => false
+
+    def collectSymbols(tree: Tree, inlineSet: Set[Symbol]): Seq[S] =
       tree.walkTree {
         case ValDef(_, _, _, symbol) if symbol.isLocal && (symbol.isLazyVal || symbol.isModuleVal) => f((symbol, None))
         case DefDef(_, _, _, _, symbol) if symbol.isLocal => f(symbol, None)
@@ -147,13 +152,15 @@ class Scala3Unpickler(
         case lambda: Lambda =>
           val sym = lambda.meth.asInstanceOf[TermReferenceTree].symbol
           f(sym, Some(lambda.samClassSymbol))
+        case tree: Ident if isInline(tree) && !inlineSet.contains(tree.symbol) =>
+          tree.symbol.tree.toSeq.flatMap(collectSymbols(_, inlineSet + tree.symbol))
         case _ => Seq.empty
       }(_ ++ _, Seq.empty)
 
     for
       decl <- cls.declarations
       tree <- decl.tree.toSeq
-      localSym <- collectSymbols(tree)
+      localSym <- collectSymbols(tree, Set.empty)
     yield localSym
 
   def formatType(t: TermType | TypeOrWildcard): String =
