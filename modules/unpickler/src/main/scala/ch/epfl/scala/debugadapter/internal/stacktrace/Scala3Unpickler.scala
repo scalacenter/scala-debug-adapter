@@ -89,12 +89,16 @@ class Scala3Unpickler(
               else x
             symbols.map(term => BinaryMethod(bcls, term, BinaryMethodKind.AnonFun))
           case LocalMethod(name, _) =>
-            for
-              owner <- withCompanionIfExtendsAnyVal(cls)
-              term <- collectLocalSymbols(owner) {
-                case (t: TermSymbol, None) if t.matchName(name) && matchSignature(method, t) => t
-              }
-            yield BinaryMethod(bcls, term, BinaryMethodKind.LocalDef)
+            val terms =
+              for
+                owner <- withCompanionIfExtendsAnyVal(cls)
+                term <- collectLocalSymbols(owner) {
+                  case (t: TermSymbol, None) if t.matchName(name) && matchSignature(method, t) => t
+                }
+              yield term
+
+            if name == "default" then terms.map(BinaryMethod(bcls, _, BinaryMethodKind.DefaultParameter))
+            else terms.map(BinaryMethod(bcls, _, BinaryMethodKind.LocalDef))
           case LazyInit(name) =>
             cls.declarations.collect {
               case t: TermSymbol if t.isLazyVal && t.matchName(name) => BinaryMethod(bcls, t, BinaryMethodKind.LazyInit)
