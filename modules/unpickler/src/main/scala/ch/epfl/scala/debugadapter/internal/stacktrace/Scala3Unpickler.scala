@@ -33,7 +33,7 @@ class Scala3Unpickler(
   private val classpath = ClasspathLoaders.read(classpaths.toList)
   private given ctx: Context = Contexts.init(classpath)
   private val defn = new Definitions
-  private val formatter = new Scala3Formatter(warnLogger.accept, testMode)
+  val formatter = new Scala3Formatter(warnLogger.accept, testMode)
 
   def skipMethod(obj: Any): Boolean =
     skipMethod(JdiMethod(obj): binary.Method)
@@ -55,16 +55,15 @@ class Scala3Unpickler(
 
   def findSymbol(method: binary.Method): Option[BinaryMethodSymbol] =
     val bcls = findClass(method.declaringClass, method.isExtensionMethod)
-    val cls = bcls.symbol
-    cls match
-      case term: TermSymbol =>
+    bcls match
+      case BinarySAMClass(term, _) =>
         if method.declaringClass.superclass.get.name == "scala.runtime.AbstractPartialFunction" then
           Option.when(!method.isBridge)(BinaryMethod(bcls, term, BinaryMethodKind.AnonFun))
         else
           Option.when(!method.isBridge && matchSignature(method, term))(
             BinaryMethod(bcls, term, BinaryMethodKind.AnonFun)
           )
-      case cls: ClassSymbol =>
+      case BinaryClass(cls, _) =>
         val candidates = method match
           case LocalLazyInit(name, _) =>
             for
@@ -75,18 +74,18 @@ class Scala3Unpickler(
             yield BinaryMethod(bcls, term, BinaryMethodKind.LocalLazyInit)
           case AnonFun(prefix) =>
             val symbols =
-              val x =
+              val candidates =
                 for
                   owner <- withCompanionIfExtendsAnyVal(cls)
                   term <- collectLocalSymbols(owner) {
                     case (t: TermSymbol, None) if t.isAnonFun && matchSignature(method, t) => t
                   }
                 yield term
-              if x.size > 1 && prefix.nonEmpty then
-                val y = x.filter(s => matchPrefix(prefix, s.owner))
-                if y.size == 0 then x
-                else y
-              else x
+              if candidates.size > 1 && prefix.nonEmpty then
+                val candidatesMatchingPrefix = candidates.filter(s => matchPrefix(prefix, s.owner))
+                if candidatesMatchingPrefix.size == 0 then candidates
+                else candidatesMatchingPrefix
+              else candidates
             symbols.map(term => BinaryMethod(bcls, term, BinaryMethodKind.AnonFun))
           case LocalMethod(name, _) =>
             val terms =
@@ -97,8 +96,7 @@ class Scala3Unpickler(
                 }
               yield term
 
-            if name == "default" then terms.map(BinaryMethod(bcls, _, BinaryMethodKind.DefaultParameter))
-            else terms.map(BinaryMethod(bcls, _, BinaryMethodKind.LocalDef))
+            terms.map(BinaryMethod(bcls, _, BinaryMethodKind.LocalDef))
           case LazyInit(name) =>
             cls.declarations.collect {
               case t: TermSymbol if t.isLazyVal && t.matchName(name) => BinaryMethod(bcls, t, BinaryMethodKind.LazyInit)
@@ -106,8 +104,12 @@ class Scala3Unpickler(
           case _ =>
             cls.declarations
               .collect { case sym: TermSymbol =>
-                if method.name == "$init$" then BinaryMethod(bcls, sym, BinaryMethodKind.Constructor)
-                else if method.name == "<init>" then BinaryMethod(bcls, sym, BinaryMethodKind.TraitConstructor)
+                if method.name == "$init$" then BinaryMethod(bcls, sym, BinaryMethodKind.TraitConstructor)
+                else if method.name == "<init>" then BinaryMethod(bcls, sym, BinaryMethodKind.Constructor)
+                else if !sym.isMethod then BinaryMethod(bcls, sym, BinaryMethodKind.Getter)
+                else if sym.isSetter then BinaryMethod(bcls, sym, BinaryMethodKind.Setter)
+                else if method.name.contains("$default$") then
+                  BinaryMethod(bcls, sym, BinaryMethodKind.DefaultParameter)
                 else BinaryMethod(bcls, sym, BinaryMethodKind.InstanceDef)
               }
               .filter(bmthd => bmthd.symbol.isDefined && matchSymbol(method, bmthd.symbol.get))
@@ -230,8 +232,7 @@ class Scala3Unpickler(
     javaClass match
       case Some(cls) =>
         val superClassAndInterfaces =
-          (cls.superclass.toSeq ++ cls.interfaces).map(findClass(_)).toList.map(_.symbol).toSet
-        val x = 2
+          (cls.superclass.toSet ++ cls.interfaces).map(findClass(_).symbol)
         def matchParents(classSymbol: ClassSymbol): Boolean =
           if classSymbol.isEnum then superClassAndInterfaces == classSymbol.parentClasses.toSet + ctx.defn.ProductClass
           else if cls.isInterface then superClassAndInterfaces == classSymbol.parentClasses.filter(_.isTrait).toSet
@@ -363,5 +364,8 @@ class Scala3Unpickler(
             .getOrElse(regex.matches(javaType))
     rec(scalaType.toString, javaType.name)
 
-  private def skip(bmthd: BinaryMethodSymbol): Boolean =
-    (bmthd.symbol.isDefined && bmthd.symbol.get.isGetterOrSetter && !bmthd.symbol.get.isLazyValInTrait) || bmthd.symbol.get.isSynthetic
+  private def skip(method: BinaryMethodSymbol): Boolean = method match
+    case BinaryMethod(_, sym, BinaryMethodKind.Getter) => !sym.isLazyValInTrait
+    case BinaryMethod(_, _, BinaryMethodKind.Setter) => true
+    case BinaryMethod(_, sym, _) if sym.isSynthetic => sym.isSynthetic
+    case _ => false

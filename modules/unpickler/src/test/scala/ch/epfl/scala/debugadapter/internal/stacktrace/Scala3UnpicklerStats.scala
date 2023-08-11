@@ -136,9 +136,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         sym match
           case Some(t) =>
             counter.addSuccess(mthd)
-            sym match
-              case None => None
-              case Some(t) => t.symbol
+            t.symbol
           case None =>
             counter.addNotFound(mthd)
             None

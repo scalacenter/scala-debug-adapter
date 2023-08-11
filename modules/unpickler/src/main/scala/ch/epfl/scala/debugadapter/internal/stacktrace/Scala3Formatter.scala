@@ -5,7 +5,7 @@ import tastyquery.Types.*
 import tastyquery.Names.*
 
 class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends ThrowOrWarn(warnLogger, testMode):
-  def formatSymbolWithType(symbol: TermSymbol): String =
+  private def formatSymbolWithType(symbol: TermSymbol): String =
     val sep = if !symbol.declaredType.isInstanceOf[MethodicType] then ": " else ""
     s"${formatSymbol(symbol)}$sep${formatType(symbol.declaredType)}"
 
@@ -17,7 +17,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
       case None => None
       case Some(sym) => Some(formatSymbolWithType(sym))
 
-  def formatSymbol(sym: Symbol): String =
+  private def formatSymbol(sym: Symbol): String =
     val prefix = sym.owner match
       case owner: ClassSymbol if owner.name.isPackageObject => formatSymbol(owner.owner)
       case owner: TermOrTypeSymbol => formatSymbol(owner)
@@ -28,7 +28,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
 
     if prefix.isEmpty then symName else s"$prefix.$symName"
 
-  def formatType(t: TermType | TypeOrWildcard): String =
+  private def formatType(t: TermType | TypeOrWildcard): String =
     t match
       case t: MethodType =>
         val params = t.paramNames

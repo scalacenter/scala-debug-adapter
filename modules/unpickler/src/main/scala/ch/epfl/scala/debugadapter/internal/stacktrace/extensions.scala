@@ -4,23 +4,8 @@ import tastyquery.Symbols.*
 import tastyquery.Trees.*
 import tastyquery.Names.*
 import tastyquery.Types.*
-import tastyquery.Modifiers.TermSymbolKind
+import tastyquery.Modifiers.*
 
-extension (bcls: BinaryClassSymbol)
-  def symbol =
-    bcls match
-      case BinaryClassSymbol.BinaryClass(symbol, kind) => symbol
-      case BinaryClassSymbol.BinarySAMClass(symbol, _) => symbol
-extension (bmthd: BinaryMethodSymbol)
-  def symbol =
-    bmthd match
-      case BinaryMethodSymbol.BinaryMethod(
-            _,
-            symbol,
-            _
-          ) =>
-        Some(symbol)
-      case BinaryMethodSymbol.BinaryByNameArg(binaryOwner: BinaryClassSymbol) => None
 extension (symbol: Symbol)
   def isTrait = symbol.isClass && symbol.asClass.isTrait
   def isAnonFun = symbol.nameStr == "$anonfun"
