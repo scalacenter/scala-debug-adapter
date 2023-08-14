@@ -118,7 +118,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
       try
         val sym = unpickler.findClass(cls)
         counter.addSuccess(cls)
-        Some(sym)
+        Some(sym.symbol)
       catch
         case AmbiguousException(e) =>
           counter.addAmbiguous(cls)
@@ -136,7 +136,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         sym match
           case Some(t) =>
             counter.addSuccess(mthd)
-            sym
+            t.symbol
           case None =>
             counter.addNotFound(mthd)
             None

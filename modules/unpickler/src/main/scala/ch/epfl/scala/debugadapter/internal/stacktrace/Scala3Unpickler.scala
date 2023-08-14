@@ -2,6 +2,8 @@ package ch.epfl.scala.debugadapter.internal.stacktrace
 
 import ch.epfl.scala.debugadapter.internal.binary
 import ch.epfl.scala.debugadapter.internal.jdi.JdiMethod
+import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryClassSymbol.*
+import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryMethodSymbol.*
 import tastyquery.Contexts
 import tastyquery.Contexts.Context
 import tastyquery.Flags
@@ -10,6 +12,7 @@ import tastyquery.Signatures.*
 import tastyquery.Symbols.*
 import tastyquery.Trees.*
 import tastyquery.Types.*
+import tastyquery.Spans.*
 import tastyquery.jdk.ClasspathLoaders
 import tastyquery.jdk.ClasspathLoaders.FileKind
 
@@ -26,19 +29,11 @@ class Scala3Unpickler(
     classpaths: Array[Path],
     warnLogger: Consumer[String],
     testMode: Boolean
-):
+) extends ThrowOrWarn(warnLogger.accept, testMode):
   private val classpath = ClasspathLoaders.read(classpaths.toList)
   private given ctx: Context = Contexts.init(classpath)
   private val defn = new Definitions
-
-  private def warn(msg: String): Unit = warnLogger.accept(msg)
-
-  private def throwOrWarn(message: String): Unit =
-    throwOrWarn(new Exception(message))
-
-  private def throwOrWarn(exception: Throwable): Unit =
-    if testMode then throw exception
-    else exception.getMessage
+  val formatter = new Scala3Formatter(warnLogger.accept, testMode)
 
   def skipMethod(obj: Any): Boolean =
     skipMethod(JdiMethod(obj): binary.Method)
@@ -53,21 +48,22 @@ class Scala3Unpickler(
     formatMethod(JdiMethod(obj)).toJava
 
   def formatMethod(method: binary.Method): Option[String] =
-    findSymbol(method).map { symbol =>
-      val sep = if !symbol.declaredType.isInstanceOf[MethodicType] then ": " else ""
-      s"${formatSymbol(symbol)}$sep${formatType(symbol.declaredType)}"
-    }
-  def formatClass(cls: binary.ClassType): String =
-    formatSymbol(findClass(cls))
+    findSymbol(method).flatMap(formatter.formatMethodSymbol)
 
-  def findSymbol(method: binary.Method): Option[TermSymbol] =
-    val cls = findClass(method.declaringClass, method.isExtensionMethod)
-    cls match
-      case term: TermSymbol =>
+  def formatClass(cls: binary.ClassType): String =
+    formatter.formatClassSymbol(findClass(cls))
+
+  def findSymbol(method: binary.Method): Option[BinaryMethodSymbol] =
+    val bcls = findClass(method.declaringClass, method.isExtensionMethod)
+    bcls match
+      case BinarySAMClass(term, _) =>
         if method.declaringClass.superclass.get.name == "scala.runtime.AbstractPartialFunction" then
-          Option.when(!method.isBridge)(term)
-        else Option.when(!method.isBridge && matchSignature(method, term))(term)
-      case cls: ClassSymbol =>
+          Option.when(!method.isBridge)(BinaryMethod(bcls, term, BinaryMethodKind.AnonFun))
+        else
+          Option.when(!method.isBridge && matchSignature(method, term))(
+            BinaryMethod(bcls, term, BinaryMethodKind.AnonFun)
+          )
+      case BinaryClass(cls, _) =>
         val candidates = method match
           case LocalLazyInit(name, _) =>
             for
@@ -75,33 +71,48 @@ class Scala3Unpickler(
               term <- collectLocalSymbols(owner) {
                 case (t: TermSymbol, None) if (t.isLazyVal || t.isModuleVal) && t.matchName(name) => t
               }
-            yield term
+            yield BinaryMethod(bcls, term, BinaryMethodKind.LocalLazyInit)
           case AnonFun(prefix) =>
-            val x =
+            val symbols =
+              val candidates =
+                for
+                  owner <- withCompanionIfExtendsAnyVal(cls)
+                  term <- collectLocalSymbols(owner) {
+                    case (t: TermSymbol, None) if t.isAnonFun && matchSignature(method, t) => t
+                  }
+                yield term
+              if candidates.size > 1 && prefix.nonEmpty then
+                val candidatesMatchingPrefix = candidates.filter(s => matchPrefix(prefix, s.owner))
+                if candidatesMatchingPrefix.size == 0 then candidates
+                else candidatesMatchingPrefix
+              else candidates
+            symbols.map(term => BinaryMethod(bcls, term, BinaryMethodKind.AnonFun))
+          case LocalMethod(name, _) =>
+            val terms =
               for
                 owner <- withCompanionIfExtendsAnyVal(cls)
                 term <- collectLocalSymbols(owner) {
-                  case (t: TermSymbol, None) if t.isAnonFun && matchSignature(method, t) => t
+                  case (t: TermSymbol, None) if t.matchName(name) && matchSignature(method, t) => t
                 }
               yield term
-            if x.size > 1 && prefix.nonEmpty then
-              val y = x.filter(s => matchPrefix(prefix, s.owner))
-              if y.size == 0 then x
-              else y
-            else x
-          case LocalMethod(name, _) =>
-            for
-              owner <- withCompanionIfExtendsAnyVal(cls)
-              term <- collectLocalSymbols(owner) {
-                case (t: TermSymbol, None) if t.matchName(name) && matchSignature(method, t) => t
-              }
-            yield term
+
+            terms.map(BinaryMethod(bcls, _, BinaryMethodKind.LocalDef))
           case LazyInit(name) =>
-            cls.declarations.collect { case t: TermSymbol if t.isLazyVal && t.matchName(name) => t }
+            cls.declarations.collect {
+              case t: TermSymbol if t.isLazyVal && t.matchName(name) => BinaryMethod(bcls, t, BinaryMethodKind.LazyInit)
+            }
           case _ =>
             cls.declarations
-              .collect { case sym: TermSymbol => sym }
-              .filter(matchSymbol(method, _))
+              .collect { case sym: TermSymbol =>
+                if method.name == "$init$" then BinaryMethod(bcls, sym, BinaryMethodKind.TraitConstructor)
+                else if method.name == "<init>" then BinaryMethod(bcls, sym, BinaryMethodKind.Constructor)
+                else if !sym.isMethod then BinaryMethod(bcls, sym, BinaryMethodKind.Getter)
+                else if sym.isSetter then BinaryMethod(bcls, sym, BinaryMethodKind.Setter)
+                else if method.name.contains("$default$") then
+                  BinaryMethod(bcls, sym, BinaryMethodKind.DefaultParameter)
+                else BinaryMethod(bcls, sym, BinaryMethodKind.InstanceDef)
+              }
+              .filter(bmthd => bmthd.symbol.isDefined && matchSymbol(method, bmthd.symbol.get))
         candidates.singleOptOrThrow(method.name)
       case _ => None
 
@@ -135,7 +146,7 @@ class Scala3Unpickler(
         Seq(cls, companionClass)
       case _ => Seq(cls)
 
-  def collectLocalSymbols[S <: Symbol](cls: ClassSymbol)(
+  def collectLocalSymbols[S](cls: ClassSymbol)(
       partialF: PartialFunction[(Symbol, Option[ClassSymbol]), S]
   ): Seq[S] =
     val f = partialF.lift.andThen(_.toSeq)
@@ -145,7 +156,7 @@ class Scala3Unpickler(
       catch case NonFatal(e) => false
 
     def collectSymbols(tree: Tree, inlineSet: Set[Symbol]): Seq[S] =
-      tree.walkTree {
+      tree.walkTreeWithFilter(_ => true) {
         case ValDef(_, _, _, symbol) if symbol.isLocal && (symbol.isLazyVal || symbol.isModuleVal) => f((symbol, None))
         case DefDef(_, _, _, _, symbol) if symbol.isLocal => f(symbol, None)
         case ClassDef(_, _, symbol) if symbol.isLocal => f(symbol, None)
@@ -163,160 +174,7 @@ class Scala3Unpickler(
       localSym <- collectSymbols(tree, Set.empty)
     yield localSym
 
-  def formatType(t: TermType | TypeOrWildcard): String =
-    t match
-      case t: MethodType =>
-        val params = t.paramNames
-          .map(paramName =>
-            val pattern: Regex = """.+\$\d+$""".r
-            if pattern.matches(paramName.toString) then ""
-            else s"$paramName: "
-          )
-          .zip(t.paramTypes)
-          .map((n, t) => s"$n${formatType(t)}")
-          .mkString(", ")
-        val sep = if t.resultType.isInstanceOf[MethodicType] then "" else ": "
-        val result = formatType(t.resultType)
-        val prefix =
-          if t.isContextual then "using "
-          else if t.isImplicit then "implicit "
-          else ""
-        s"($prefix$params)$sep$result"
-      case t: TypeRef => formatPrefix(t.prefix) + t.name
-      case t: AppliedType if isFunction(t.tycon) =>
-        val args = t.args.init.map(formatType).mkString(",")
-        val result = formatType(t.args.last)
-        if t.args.size > 2 then s"($args) => $result" else s"$args => $result"
-      case t: AppliedType if isTuple(t.tycon) =>
-        val types = t.args.map(formatType).mkString(",")
-        s"($types)"
-      case t: AppliedType if isOperatorLike(t.tycon) && t.args.size == 2 =>
-        val operatorLikeTypeFormat = t.args
-          .map(formatType)
-          .mkString(
-            t.tycon match
-              case ref: TypeRef => s" ${ref.name} "
-          )
-        operatorLikeTypeFormat
-      case t: AppliedType if isVarArg(t.tycon) =>
-        s"${formatType(t.args.head)}*"
-      case t: AppliedType =>
-        val tycon = formatType(t.tycon)
-        val args = t.args.map(formatType).mkString(", ")
-        s"$tycon[$args]"
-      case t: PolyType =>
-        val args = t.paramNames.mkString(", ")
-        val sep = if t.resultType.isInstanceOf[MethodicType] then "" else ": "
-        val result = formatType(t.resultType)
-        s"[$args]$sep$result"
-      case t: OrType =>
-        val first = formatType(t.first)
-        val second = formatType(t.second)
-        s"$first | $second"
-      case t: AndType =>
-        val first = formatType(t.first)
-        val second = formatType(t.second)
-        s"$first & $second"
-      case t: ThisType => formatType(t.tref)
-      case t: TermRefinement =>
-        val parentType = formatType(t.parent)
-        if parentType == "PolyFunction" then formatPolymorphicFunction(t.refinedType)
-        else parentType + " {...}"
-      case t: AnnotatedType => formatType(t.typ)
-      case t: TypeParamRef => t.paramName.toString
-      case t: TermParamRef => formatPrefix(t) + "type"
-      case t: TermRef => formatPrefix(t) + "type"
-      case t: ConstantType =>
-        t.value.value match
-          case str: String => s"\"$str\""
-          case t: Type =>
-            // to reproduce this we should try `val x = classOf[A]`
-            s"classOf[${formatType(t)}]"
-          case v => v.toString
-      case t: ByNameType => s"=> " + formatType(t.resultType)
-      case t: TypeRefinement => formatType(t.parent) + " {...}"
-      case t: RecType => formatType(t.parent)
-      case _: WildcardTypeArg => "?"
-      case t: TypeLambda =>
-        val args = t.paramNames.map(t => t.toString).mkString(", ")
-        val result = formatType(t.resultType)
-        s"[$args] =>> $result"
-      case t @ (_: RecThis | _: SkolemType | _: SuperType | _: MatchType | _: CustomTransientGroundType |
-          _: PackageRef) =>
-        throwOrWarn(s"Cannot format type ${t.getClass.getName}")
-        "<unsupported>"
-  private def formatPolymorphicFunction(t: TermType): String =
-    t match
-      case t: PolyType =>
-        val args = t.paramNames.mkString(", ")
-        val result = formatPolymorphicFunction(t.resultType)
-        s"[$args] => $result"
-      case t: MethodType =>
-        val params = t.paramTypes.map(formatType(_)).mkString(", ")
-        if t.paramTypes.size > 1 then s"($params) => ${formatType(t.resultType)}"
-        else s"$params => ${formatType(t.resultType)}"
-
-  private def formatPrefix(p: Prefix): String =
-    val prefix = p match
-      case NoPrefix => ""
-      case p: TermRef if isScalaPredef(p) => ""
-      case p: TermRef if isPackageObject(p.name) => ""
-      case p: TermRef => formatPrefix(p.prefix) + p.name
-      case p: TermParamRef => p.paramName.toString
-      case p: PackageRef => ""
-      case p: ThisType => ""
-      case t: Type => formatType(t)
-
-    if prefix.nonEmpty then s"$prefix." else prefix
-
-  private def formatSymbol(sym: Symbol): String =
-    val prefix = sym.owner match
-      case owner: ClassSymbol if isPackageObject(owner.name) => formatSymbol(owner.owner)
-      case owner: TermOrTypeSymbol => formatSymbol(owner)
-      case owner: PackageSymbol => ""
-    val symName = sym.name match
-      case DefaultGetterName(termName, num) => s"${termName.toString()}.<default ${num + 1}>"
-      case _ => sym.nameStr
-
-    if prefix.isEmpty then symName else s"$prefix.$symName"
-
-  private def isPackageObject(name: Name): Boolean =
-    name.toString == "package" || name.toString.endsWith("$package")
-
-  private def isScalaPredef(ref: TermRef): Boolean =
-    isScalaPackage(ref.prefix) && ref.name.toString == "Predef"
-
-  private def isFunction(tpe: Type): Boolean =
-    tpe match
-      case ref: TypeRef =>
-        isScalaPackage(ref.prefix) && ref.name.toString.startsWith("Function")
-      case _ => false
-
-  private def isTuple(tpe: Type): Boolean =
-    tpe match
-      case ref: TypeRef =>
-        isScalaPackage(ref.prefix) && ref.name.toString.startsWith("Tuple")
-      case _ => false
-  private def isVarArg(tpe: Type): Boolean =
-    tpe match
-      case ref: TypeRef =>
-        isScalaPackage(ref.prefix) && ref.name.toString == "<repeated>"
-      case _ => false
-
-  private def isOperatorLike(tpe: Type): Boolean =
-    tpe match
-      case ref: TypeRef =>
-        val operatorChars = "\\+\\-\\*\\/\\%\\&\\|\\^\\<\\>\\=\\!\\~\\#\\:\\@\\?"
-        val regex = s"[^$operatorChars]".r
-        !regex.findFirstIn(ref.name.toString).isDefined
-      case _ => false
-
-  private def isScalaPackage(prefix: Prefix): Boolean =
-    prefix match
-      case p: PackageRef => p.fullyQualifiedName.toString == "scala"
-      case _ => false
-
-  def findClass(cls: binary.ClassType, isExtensionMethod: Boolean = false): Symbol =
+  def findClass(cls: binary.ClassType, isExtensionMethod: Boolean = false): BinaryClassSymbol =
     val javaParts = cls.name.split('.')
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
@@ -335,8 +193,8 @@ class Scala3Unpickler(
         findLocalClasses(cls, packageSym, declaringClassName, localClassName, remaining)
       case _ => findSymbolsRecursively(packageSym, decodedClassName)
     if cls.isObject && !isExtensionMethod
-    then allSymbols.filter(_.isModuleClass).singleOrThrow(cls.name)
-    else allSymbols.filter(!_.isModuleClass).singleOrThrow(cls.name)
+    then allSymbols.filter(_.symbol.isModuleClass).singleOrThrow(cls.name)
+    else allSymbols.filter(!_.symbol.isModuleClass).singleOrThrow(cls.name)
 
   private def findLocalClasses(
       cls: binary.ClassType,
@@ -344,33 +202,37 @@ class Scala3Unpickler(
       declaringClassName: String,
       localClassName: String,
       remaining: Option[String]
-  ): Seq[Symbol] =
+  ): Seq[BinaryClassSymbol] =
     val owners = findSymbolsRecursively(packageSym, declaringClassName)
     remaining match
-      case None => owners.flatMap(findLocalClasses(_, localClassName, Some(cls)))
+      case None => owners.flatMap(bcls => findLocalClasses(bcls.symbol, localClassName, Some(cls)))
       case Some(remaining) =>
         val localClasses = owners
-          .flatMap(findLocalClasses(_, localClassName, None))
-          .filter(_.isClass)
-        localClasses.flatMap(s => findSymbolsRecursively(s.asClass, remaining))
+          .flatMap(t => findLocalClasses(t.symbol, localClassName, None))
+          .collect { case BinaryClass(cls, _) => cls }
+        localClasses.flatMap(s => findSymbolsRecursively(s, remaining))
 
-  private def findSymbolsRecursively(owner: DeclaringSymbol, decodedName: String): Seq[ClassSymbol] =
+  private def findSymbolsRecursively(owner: DeclaringSymbol, decodedName: String): Seq[BinaryClass] =
     owner.declarations
       .collect { case sym: ClassSymbol => sym }
       .flatMap { sym =>
         val Symbol = s"${Regex.quote(sym.nameStr)}\\$$?(.*)".r
         decodedName match
           case Symbol(remaining) =>
-            if remaining.isEmpty then Some(sym)
+            if remaining.isEmpty then Some(BinaryClass(sym, BinaryClassKind.TopLevelOrInner))
             else findSymbolsRecursively(sym, remaining)
           case _ => None
       }
 
-  private def findLocalClasses(owner: ClassSymbol, name: String, javaClass: Option[binary.ClassType]): Seq[Symbol] =
+  private def findLocalClasses(
+      owner: ClassSymbol,
+      name: String,
+      javaClass: Option[binary.ClassType]
+  ): Seq[BinaryClassSymbol] =
     javaClass match
       case Some(cls) =>
-        val superClassAndInterfaces = (cls.superclass.toSeq ++ cls.interfaces).map(findClass(_)).toSet
-
+        val superClassAndInterfaces =
+          (cls.superclass.toSet ++ cls.interfaces).map(findClass(_).symbol)
         def matchParents(classSymbol: ClassSymbol): Boolean =
           if classSymbol.isEnum then superClassAndInterfaces == classSymbol.parentClasses.toSet + ctx.defn.ProductClass
           else if cls.isInterface then superClassAndInterfaces == classSymbol.parentClasses.filter(_.isTrait).toSet
@@ -385,13 +247,17 @@ class Scala3Unpickler(
           else superClassAndInterfaces.contains(samClass)
 
         collectLocalSymbols(owner) {
-          case (cls: ClassSymbol, None) if cls.matchName(name) && matchParents(cls) => cls
-          case (lambda: TermSymbol, Some(tpt)) if matchSamClass(tpt) => lambda
+          case (cls: ClassSymbol, None) if cls.matchName(name) && matchParents(cls) =>
+            if name == "$anon" then BinaryClass(cls, BinaryClassKind.Anon)
+            else BinaryClass(cls, BinaryClassKind.Local)
+          case (lambda: TermSymbol, Some(samClass)) if matchSamClass(samClass) => BinarySAMClass(lambda, samClass)
         }
       case _ =>
         collectLocalSymbols(owner) {
-          case (cls: ClassSymbol, None) if cls.matchName(name) => cls
-          case (lambda: TermSymbol, Some(tpt)) => lambda
+          case (cls: ClassSymbol, None) if cls.matchName(name) =>
+            if name == "$anon" then BinaryClass(cls, BinaryClassKind.Anon)
+            else BinaryClass(cls, BinaryClassKind.Local)
+          case (lambda: TermSymbol, Some(samClass)) => BinarySAMClass(lambda, samClass)
         }
 
   private def matchSymbol(method: binary.Method, symbol: TermSymbol): Boolean =
@@ -498,8 +364,8 @@ class Scala3Unpickler(
             .getOrElse(regex.matches(javaType))
     rec(scalaType.toString, javaType.name)
 
-  private def skip(symbol: TermSymbol): Boolean =
-    (symbol.isGetterOrSetter && !symbol.isLazyValInTrait) || symbol.isSynthetic
-
-case class AmbiguousException(m: String) extends Exception
-case class NotFoundException(m: String) extends Exception
+  private def skip(method: BinaryMethodSymbol): Boolean = method match
+    case BinaryMethod(_, sym, BinaryMethodKind.Getter) => !sym.isLazyValInTrait
+    case BinaryMethod(_, _, BinaryMethodKind.Setter) => true
+    case BinaryMethod(_, sym, _) => sym.isSynthetic
+    case _ => false
