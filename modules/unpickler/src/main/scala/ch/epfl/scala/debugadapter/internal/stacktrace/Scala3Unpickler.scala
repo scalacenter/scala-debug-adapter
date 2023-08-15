@@ -12,7 +12,6 @@ import tastyquery.Signatures.*
 import tastyquery.Symbols.*
 import tastyquery.Trees.*
 import tastyquery.Types.*
-import tastyquery.Spans.*
 import tastyquery.jdk.ClasspathLoaders
 import tastyquery.jdk.ClasspathLoaders.FileKind
 
@@ -68,7 +67,7 @@ class Scala3Unpickler(
           case LocalLazyInit(name, _) =>
             for
               owner <- withCompanionIfExtendsAnyVal(cls)
-              term <- collectLocalSymbols(owner) {
+              term <- collectLocalSymbols(owner, method.sourceLines) {
                 case (t: TermSymbol, None) if (t.isLazyVal || t.isModuleVal) && t.matchName(name) => t
               }
             yield BinaryMethod(bcls, term, BinaryMethodKind.LocalLazyInit)
@@ -77,7 +76,7 @@ class Scala3Unpickler(
               val candidates =
                 for
                   owner <- withCompanionIfExtendsAnyVal(cls)
-                  term <- collectLocalSymbols(owner) {
+                  term <- collectLocalSymbols(owner, method.sourceLines) {
                     case (t: TermSymbol, None) if t.isAnonFun && matchSignature(method, t) => t
                   }
                 yield term
@@ -91,7 +90,7 @@ class Scala3Unpickler(
             val terms =
               for
                 owner <- withCompanionIfExtendsAnyVal(cls)
-                term <- collectLocalSymbols(owner) {
+                term <- collectLocalSymbols(owner, method.sourceLines) {
                   case (t: TermSymbol, None) if t.matchName(name) && matchSignature(method, t) => t
                 }
               yield term
@@ -113,7 +112,18 @@ class Scala3Unpickler(
                 else BinaryMethod(bcls, sym, BinaryMethodKind.InstanceDef)
               }
               .filter(bmthd => bmthd.symbol.isDefined && matchSymbol(method, bmthd.symbol.get))
-        candidates.singleOptOrThrow(method.name)
+
+        if candidates.size >= 1 then candidates.singleOptOrThrow(method.name)
+        else
+          cls.parentClasses
+            .flatMap(parent =>
+              parent.declarations.collect { case sym: TermSymbol =>
+                BinaryMethod(bcls, sym, BinaryMethodKind.MixinForwarder)
+              }
+            )
+            .filter(bmthd => bmthd.symbol.isDefined && matchSymbol(method, bmthd.symbol.get))
+            .singleOptOrThrow(method.name)
+
       case _ => None
 
   def matchPrefix(prefix: String, owner: Symbol): Boolean =
@@ -146,7 +156,7 @@ class Scala3Unpickler(
         Seq(cls, companionClass)
       case _ => Seq(cls)
 
-  def collectLocalSymbols[S](cls: ClassSymbol)(
+  def collectLocalSymbols[S](cls: ClassSymbol, lines: Seq[Int])(
       partialF: PartialFunction[(Symbol, Option[ClassSymbol]), S]
   ): Seq[S] =
     val f = partialF.lift.andThen(_.toSeq)
@@ -156,7 +166,9 @@ class Scala3Unpickler(
       catch case NonFatal(e) => false
 
     def collectSymbols(tree: Tree, inlineSet: Set[Symbol]): Seq[S] =
-      tree.walkTreeWithFilter(_ => true) {
+      tree.walkTreeWithFilter(tree =>
+        lines.forall(x => tree.pos.isUnknown || !tree.pos.hasLineColumnInformation || x >= tree.pos.pointLine)
+      ) {
         case ValDef(_, _, _, symbol) if symbol.isLocal && (symbol.isLazyVal || symbol.isModuleVal) => f((symbol, None))
         case DefDef(_, _, _, _, symbol) if symbol.isLocal => f(symbol, None)
         case ClassDef(_, _, symbol) if symbol.isLocal => f(symbol, None)
@@ -246,14 +258,14 @@ class Scala3Unpickler(
             superClassAndInterfaces.exists(_ == defn.serializable)
           else superClassAndInterfaces.contains(samClass)
 
-        collectLocalSymbols(owner) {
+        collectLocalSymbols(owner, Seq.empty) {
           case (cls: ClassSymbol, None) if cls.matchName(name) && matchParents(cls) =>
             if name == "$anon" then BinaryClass(cls, BinaryClassKind.Anon)
             else BinaryClass(cls, BinaryClassKind.Local)
           case (lambda: TermSymbol, Some(samClass)) if matchSamClass(samClass) => BinarySAMClass(lambda, samClass)
         }
       case _ =>
-        collectLocalSymbols(owner) {
+        collectLocalSymbols(owner, Seq.empty) {
           case (cls: ClassSymbol, None) if cls.matchName(name) =>
             if name == "$anon" then BinaryClass(cls, BinaryClassKind.Anon)
             else BinaryClass(cls, BinaryClassKind.Local)

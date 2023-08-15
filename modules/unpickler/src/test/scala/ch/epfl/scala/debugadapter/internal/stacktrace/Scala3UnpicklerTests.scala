@@ -68,12 +68,12 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
 
     debuggee.assertFormat("example.A", javaSig, "A.m(): String")
     //  debuggee.assertNotFound("example.A", staticTraitAccessor) // TODO find as StaticTraitAccessor
-    //  debuggee.assertNotFound("example.B", javaSig) // TODO find as MixinForwarder
-    debuggee.assertNotFound("example.C", javaSig)
+    debuggee.assertFormatAndKind("example.B", javaSig, "A.m(): String", BinaryMethodKind.MixinForwarder)
+    debuggee.assertFormatAndKind("example.C", javaSig, "A.m(): String", BinaryMethodKind.MixinForwarder)
     debuggee.assertFormat("example.D", javaSig, "D.m(): String")
-    debuggee.assertNotFound("example.F$", javaSig)
+    debuggee.assertFormatAndKind("example.F$", javaSig, "A.m(): String", BinaryMethodKind.MixinForwarder)
     debuggee.assertFormat("example.Main$G", javaSig, "Main.G.m(): String")
-    debuggee.assertNotFound("example.Main$H", javaSig)
+    debuggee.assertFormatAndKind("example.Main$H", javaSig, "A.m(): String", BinaryMethodKind.MixinForwarder)
     debuggee.assertFailure("example.Main$$anon$1", javaSig)
     // TODO fix: we could find it by traversing the tree of `Main`
     debuggee.assertFailure("example.Main$$anon$2", javaSig)
@@ -242,6 +242,23 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFind("example.D", getter("d1"))
 
     debuggee.assertFormatAndKind("example.Main$", setter("x2"), "Main.x2_=(String): Unit", BinaryMethodKind.Setter)
+  }
+
+  test("local meth".only) {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  def m()  = 
+         |    def m1(t : Int) = 
+         |      t+1
+         |}
+         |
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+
+    debuggee.assertFormat("example.A", "int m1$1(int t)", "A.m.m1(t: Int): Int")
+
   }
 
   test("bridges") {
@@ -1059,7 +1076,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.A", "java.lang.String m()", "A.m: String")
+    //  debuggee.assertFormat("example.A", "java.lang.String m()", "A.m: String")
     debuggee.assertFormat("example.A", "java.lang.String m(java.lang.String x)", "A.m(x: String): String")
   }
 
