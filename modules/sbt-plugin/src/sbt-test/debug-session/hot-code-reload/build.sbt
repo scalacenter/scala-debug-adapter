@@ -18,7 +18,6 @@ def checkBreakpointTask = Def.inputTask {
 def checkHotCodeReplaceTask = Def.task {
   val _ = (Compile / compile).value
   DebugTest.runChecks(DebugState.state)(Seq(RedefineClasses(), Outputed("C")))
-  DebugTest.endDebugSession(DebugState.state)
 }
 
 lazy val a: Project =
@@ -38,6 +37,6 @@ lazy val b =
       scalaVersion := scalaV,
       checkBreakpoint := checkBreakpointTask.evaluated,
       checkHotCodeReplace := checkHotCodeReplaceTask.value,
-      sourceToDebug := (hotCodeReloadSingleProject / source).value
+      sourceToDebug := (a / sourceToDebug).value
     )
-    .dependsOn(hotCodeReloadSingleProject)
+    .dependsOn(a)
