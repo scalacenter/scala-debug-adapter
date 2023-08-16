@@ -59,7 +59,12 @@ object Scala3UnpicklerBridge {
     ctr.newInstance(debuggeeClasspath, warnLogger, testMode: java.lang.Boolean)
   }
 
-  def tryLoad(debuggee: Debuggee, classLoader: ClassLoader, logger: Logger, testMode: Boolean): Try[Scala3UnpicklerBridge] = {
+  def tryLoad(
+      debuggee: Debuggee,
+      classLoader: ClassLoader,
+      logger: Logger,
+      testMode: Boolean
+  ): Try[Scala3UnpicklerBridge] = {
     Try {
       val className = "ch.epfl.scala.debugadapter.internal.stacktrace.Scala3Unpickler"
       val cls = classLoader.loadClass(className)

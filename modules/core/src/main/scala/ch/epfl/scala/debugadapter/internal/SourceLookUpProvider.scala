@@ -95,8 +95,8 @@ private[debugadapter] final class SourceLookUpProvider(
   }
 
   private def loadClassesByNames: Map[String, Seq[String]] =
-    classPathEntries.map(_.classesByNames).foldLeft(Map.empty[String, Seq[String]]) { (x, y) => 
-      (x.keys ++ y.keys).map { k => 
+    classPathEntries.map(_.classesByNames).foldLeft(Map.empty[String, Seq[String]]) { (x, y) =>
+      (x.keys ++ y.keys).map { k =>
         k -> (x.getOrElse(k, Seq.empty) ++ y.getOrElse(k, Seq.empty))
       }.toMap
     }

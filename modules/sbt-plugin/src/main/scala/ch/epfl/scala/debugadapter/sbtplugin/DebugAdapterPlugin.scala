@@ -122,7 +122,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val fileConverter = Keys.fileConverter.value
       val classDir = Keys.classDirectory.value.toPath
       if (previousAnalysis.isPresent) {
-        val classesToReload = getNewClasses(currentAnalysis.readStamps, previousAnalysis.get.readStamps, fileConverter, classDir)
+        val classesToReload =
+          getNewClasses(currentAnalysis.readStamps, previousAnalysis.get.readStamps, fileConverter, classDir)
         observer.onNext(classesToReload)
       }
       currentAnalysis
@@ -136,9 +137,12 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       classDir: java.nio.file.Path
   ): Seq[String] = {
     def isNewer(current: Stamp, previous: Stamp) = {
-      val newHash = current.getHash
-      val oldHash = previous.getHash
-      newHash.isPresent && (!oldHash.isPresent || newHash.get != oldHash.get)
+      if (previous == null) true
+      else {
+        val newHash = current.getHash
+        val oldHash = previous.getHash
+        newHash.isPresent && (!oldHash.isPresent || newHash.get != oldHash.get)
+      }
     }
 
     object ClassFile {
