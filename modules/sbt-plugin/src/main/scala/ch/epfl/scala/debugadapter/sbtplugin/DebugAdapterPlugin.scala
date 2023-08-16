@@ -120,42 +120,37 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       val previousAnalysis = Keys.previousCompile.value.analysis
       val observer = debugAdapterClassesObserver.value
       val fileConverter = Keys.fileConverter.value
-      val classDir = Keys.classDirectory.value
-
-      if (previousAnalysis.isPresent)
-        observer.onNext {
-          getNewerClassFiles(currentAnalysis.readStamps, previousAnalysis.get.readStamps, fileConverter, classDir)
-        }
-
+      val classDir = Keys.classDirectory.value.toPath
+      if (previousAnalysis.isPresent) {
+        val classesToReload = getNewClasses(currentAnalysis.readStamps, previousAnalysis.get.readStamps, fileConverter, classDir)
+        observer.onNext(classesToReload)
+      }
       currentAnalysis
     }
   )
 
-  def getNewerClassFiles(
+  def getNewClasses(
       currentStamps: ReadStamps,
       previousStamps: ReadStamps,
       fileConverter: FileConverter,
-      classDir: File
+      classDir: java.nio.file.Path
   ): Seq[String] = {
     def isNewer(current: Stamp, previous: Stamp) = {
       val newHash = current.getHash
       val oldHash = previous.getHash
-
-      if (!newHash.isPresent()) false
-      else if (!oldHash.isPresent()) true
-      else newHash.get() != oldHash.get()
+      newHash.isPresent && (!oldHash.isPresent || newHash.get != oldHash.get)
     }
 
     object ClassFile {
       def unapply(vf: VirtualFileRef): Option[String] = {
-        val path: java.nio.file.Path = fileConverter.toPath(vf)
+        val path = fileConverter.toPath(vf)
         if (path.toString.endsWith(".class")) {
-          Some(classDir.toPath().relativize(path).toString.replace(File.separator, ".").stripSuffix(".class"))
+          Some(classDir.relativize(path).toString.replace(File.separator, ".").stripSuffix(".class"))
         } else None
       }
     }
 
-    val oldStamps = previousStamps.getAllProductStamps()
+    val oldStamps = previousStamps.getAllProductStamps
     currentStamps.getAllProductStamps.asScala.collect {
       case (file @ ClassFile(fqcn), stamp) if isNewer(stamp, oldStamps.get(file)) => fqcn
     }.toSeq
@@ -398,7 +393,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             InternalTasks.libraries.value,
             InternalTasks.unmanagedEntries.value,
             InternalTasks.javaRuntime.value,
-            debugAdapterClassesObserver.value,
+            InternalTasks.classesObservable.value,
             cleanups,
             parallel,
             testRunners,
@@ -464,7 +459,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           InternalTasks.libraries.value,
           InternalTasks.unmanagedEntries.value,
           InternalTasks.javaRuntime.value,
-          debugAdapterClassesObserver.value,
+          InternalTasks.classesObservable.value,
           new LoggerAdapter(logger)
         )
       startServer(jobService, scope, state, target, debuggee, debugToolsResolver, debugAdapterConfig.value)

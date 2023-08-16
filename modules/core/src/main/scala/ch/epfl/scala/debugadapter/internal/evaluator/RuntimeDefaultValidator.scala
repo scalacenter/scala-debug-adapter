@@ -1,17 +1,18 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import ch.epfl.scala.debugadapter.Logger
-import com.sun.jdi._
-import scala.meta.{Type => _, _}
-import scala.meta.trees.*
+import ch.epfl.scala.debugadapter.internal.NameTransformer
+import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
+import com.sun.jdi.*
+
+import scala.jdk.CollectionConverters.*
 import scala.meta.parsers.*
-import RuntimeEvaluatorExtractors.*
+import scala.meta.trees.*
+import scala.meta.{Type => _, *}
 import scala.util.Failure
 import scala.util.Success
 
-import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
-
-import scala.jdk.CollectionConverters.*
+import RuntimeEvaluatorExtractors.*
 
 case class Call(fun: Term, argClause: Term.ArgClause)
 case class PreparedCall(qual: Validation[RuntimeTree], name: String)

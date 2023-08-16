@@ -19,7 +19,6 @@ import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
-import scala.jdk.CollectionConverters.*
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
@@ -133,7 +132,7 @@ private[debugadapter] final class DebugSession private (
             )
         }
 
-        context.getProviders().asScala.values.foreach(_.close())
+        context.getProviders.forEach(_.close())
 
         DebugSession.Stopped
 

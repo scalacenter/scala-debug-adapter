@@ -216,7 +216,7 @@ private[internal] object EvaluationProvider {
       tools: DebugTools,
       logger: Logger,
       config: DebugConfig
-  ): EvaluationProvider = {
+  ): IEvaluationProvider = {
     val scalaEvaluators = tools.expressionCompilers.view.map { case (entry, compiler) =>
       (entry, new ScalaEvaluator(entry, compiler, logger, config.testMode))
     }.toMap

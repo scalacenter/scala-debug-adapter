@@ -23,11 +23,7 @@ private[debugadapter] class ScalaProviderContext private (debuggee: Debuggee, lo
 }
 
 private[debugadapter] object ScalaProviderContext {
-  def apply(
-      debuggee: Debuggee,
-      logger: Logger,
-      config: DebugConfig
-  ): ScalaProviderContext = {
+  def apply(debuggee: Debuggee, logger: Logger, config: DebugConfig): ScalaProviderContext = {
 
     /**
      * Since Scala 2.13, object fields are represented by static fields in JVM byte code.

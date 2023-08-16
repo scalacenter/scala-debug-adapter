@@ -1,30 +1,31 @@
 package ch.epfl.scala.debugadapter.internal
 
-import com.microsoft.java.debug.core.adapter.IHotCodeReplaceProvider
-import io.reactivex.Observable
-import java.{util => ju}
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.atomic.AtomicReference
-import io.reactivex.disposables.Disposable
+import ch.epfl.scala.debugadapter.Debuggee
+import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
+import com.microsoft.java.debug.core.DebugException
+import com.microsoft.java.debug.core.DebugUtility
+import com.microsoft.java.debug.core.IDebugSession
+import com.microsoft.java.debug.core.StackFrameUtility
 import com.microsoft.java.debug.core.adapter.HotCodeReplaceEvent
 import com.microsoft.java.debug.core.adapter.IDebugAdapterContext
-import com.microsoft.java.debug.core.IDebugSession
-import com.sun.jdi.*
-import com.microsoft.java.debug.core.DebugException
-import ch.epfl.scala.debugadapter.Logger
-import scala.jdk.CollectionConverters.*
-import com.microsoft.java.debug.core.StackFrameUtility
-import scala.collection.mutable
-import com.microsoft.java.debug.core.DebugUtility
-import com.microsoft.java.debug.core.protocol.Events
-import scala.util.Success
-import scala.util.Failure
-import scala.util.Try
-import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
-import scala.util.control.NonFatal
+import com.microsoft.java.debug.core.adapter.IHotCodeReplaceProvider
 import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 import com.microsoft.java.debug.core.adapter.IStackTraceProvider
-import ch.epfl.scala.debugadapter.Debuggee
+import com.microsoft.java.debug.core.protocol.Events
+import com.sun.jdi.*
+import io.reactivex.Observable
+import io.reactivex.disposables.Disposable
+
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicReference
+import java.{util => ju}
+import scala.collection.mutable
+import scala.jdk.CollectionConverters.*
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
+import scala.util.control.NonFatal
 
 class HotCodeReplaceProvider(
     debuggee: Debuggee,
@@ -250,8 +251,8 @@ class HotCodeReplaceProvider(
       .subscribe { debugEvent =>
         debugEvent.shouldResume = false
         DebugUtility.deleteEventRequestSafely(eventRequestManager, request)
-        // Have to send to events to keep the UI sync with the step in operations:
         context.getProtocolServer.sendEvent(new Events.StoppedEvent("step", thread.uniqueID()))
+        // TODO do we need to send this event?
         // context.getProtocolServer.sendEvent(new Events.ContinuedEvent(thread.uniqueID()))
       }
     request.enable()

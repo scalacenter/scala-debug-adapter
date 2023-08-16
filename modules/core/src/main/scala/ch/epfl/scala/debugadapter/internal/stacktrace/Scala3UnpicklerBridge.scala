@@ -24,7 +24,7 @@ class Scala3UnpicklerBridge(
 ) extends ScalaUnpickler(debuggee.scalaVersion, testMode) {
 
   override def reload(): Unit =
-    bridge = Scala3UnpicklerBridge.getBridge(debuggee, cls, logger, testMode)
+    bridge = Scala3UnpicklerBridge.load(debuggee, cls, logger, testMode)
 
   override protected def skipScala(method: jdi.Method): Boolean = {
     try skipMethod.invoke(bridge, method).asInstanceOf[Boolean]
@@ -44,7 +44,7 @@ class Scala3UnpicklerBridge(
 }
 
 object Scala3UnpicklerBridge {
-  def getBridge(debuggee: Debuggee, unpicklerClass: Class[?], logger: Logger, testMode: Boolean) = {
+  def load(debuggee: Debuggee, unpicklerClass: Class[?], logger: Logger, testMode: Boolean) = {
     // TASTy Query needs the javaRuntimeJars
     val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
       case Java8(_, classJars, _) => classJars
@@ -56,24 +56,15 @@ object Scala3UnpicklerBridge {
     val warnLogger: Consumer[String] = msg => logger.warn(msg)
     val ctr = unpicklerClass.getConstructor(classOf[Array[Path]], classOf[Consumer[String]], classOf[Boolean])
 
-    ctr.newInstance(
-      debuggeeClasspath,
-      warnLogger,
-      testMode: java.lang.Boolean
-    )
+    ctr.newInstance(debuggeeClasspath, warnLogger, testMode: java.lang.Boolean)
   }
 
-  def tryLoad(
-      debuggee: Debuggee,
-      classLoader: ClassLoader,
-      logger: Logger,
-      testMode: Boolean
-  ): Try[Scala3UnpicklerBridge] = {
+  def tryLoad(debuggee: Debuggee, classLoader: ClassLoader, logger: Logger, testMode: Boolean): Try[Scala3UnpicklerBridge] = {
     Try {
       val className = "ch.epfl.scala.debugadapter.internal.stacktrace.Scala3Unpickler"
       val cls = classLoader.loadClass(className)
 
-      val bridge = getBridge(debuggee, cls, logger, testMode)
+      val bridge = load(debuggee, cls, logger, testMode)
       val skipMethod = cls.getMethod("skipMethod", classOf[Any])
       val formatMethod = cls.getMethod("formatMethod", classOf[Any])
 
