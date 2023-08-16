@@ -9,8 +9,10 @@ trait Method:
   def returnTypeName: String
   def sourceLines: Seq[Int]
   def isBridge: Boolean
+  def isStatic: Boolean
 
   def isExtensionMethod: Boolean = name.endsWith("$extension")
+  def isTraitStaticAccessor: Boolean = name.endsWith("$") && declaringClass.isInterface && isStatic
   def isTraitInitializer: Boolean = name == "$init$"
   def isClassInitializer: Boolean = name == "<init>"
   def isLocalMethod: Boolean = name.matches(".*\\$\\d+")

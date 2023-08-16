@@ -64,10 +64,15 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val javaSig = "java.lang.String m()"
-    val staticTraitAccessor = "java.lang.String m$(x$1: example.A)"
+    val staticTraitAccessor = "java.lang.String m$(example.A $this)"
 
     debuggee.assertFormat("example.A", javaSig, "A.m(): String")
-    //  debuggee.assertNotFound("example.A", staticTraitAccessor) // TODO find as StaticTraitAccessor
+    debuggee.assertFormatAndKind(
+      "example.A",
+      staticTraitAccessor,
+      "A.m(): String",
+      BinaryMethodKind.TraitStaticAccessor
+    ) // TODO find as StaticTraitAccessor
     debuggee.assertFormatAndKind("example.B", javaSig, "A.m(): String", BinaryMethodKind.MixinForwarder)
     debuggee.assertFormatAndKind("example.C", javaSig, "A.m(): String", BinaryMethodKind.MixinForwarder)
     debuggee.assertFormat("example.D", javaSig, "D.m(): String")
@@ -242,23 +247,6 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFind("example.D", getter("d1"))
 
     debuggee.assertFormatAndKind("example.Main$", setter("x2"), "Main.x2_=(String): Unit", BinaryMethodKind.Setter)
-  }
-
-  test("local meth".only) {
-    val source =
-      """|package example
-         |
-         |class A {
-         |  def m()  = 
-         |    def m1(t : Int) = 
-         |      t+1
-         |}
-         |
-         |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-
-    debuggee.assertFormat("example.A", "int m1$1(int t)", "A.m.m1(t: Int): Int")
-
   }
 
   test("bridges") {
@@ -455,7 +443,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
 
     debuggee.assertFormatAndKind("example.A$", "java.lang.String a()", "A.a: String", BinaryMethodKind.Getter)
-    debuggee.assertNotFound("example.A$", "java.lang.String b()")
+    debuggee.assertFormatAndKind("example.A$", "java.lang.String b()", "B.b: String", BinaryMethodKind.MixinForwarder)
     debuggee.assertFormatAndKind("example.B", "java.lang.String b()", "B.b: String", BinaryMethodKind.Getter)
 
     if !isScala30 then // new in Scala 3.3.0
@@ -478,7 +466,12 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.A", "int productArity()", "A.productArity: Int")
     debuggee.assertFormat("example.A", "java.lang.String productPrefix()", "A.productPrefix: String")
     debuggee.assertFormat("example.A", "java.lang.Object productElement(int n)", "A.productElement(n: Int): Any")
-    debuggee.assertNotFound("example.A", "scala.collection.Iterator productIterator()") // it is a bridge
+    debuggee.assertFormatAndKind(
+      "example.A",
+      "scala.collection.Iterator productIterator()",
+      "Product.productIterator: Iterator[Any]",
+      BinaryMethodKind.MixinForwarder
+    ) // it is a bridge
 
     debuggee.assertFormat("example.A$", "example.A apply(java.lang.String a)", "A.apply(a: String): A")
     debuggee.assertFormat("example.A$", "example.A unapply(example.A x$1)", "A.unapply(A): A")
@@ -678,7 +671,12 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
 
     debuggee.assertFormat("example.A", "int m(scala.collection.immutable.List xs)", "A.m(xs: List[Int]): Int")
-    debuggee.assertNotFound("example.B", "int m(scala.collection.immutable.List xs)")
+    debuggee.assertFormatAndKind(
+      "example.B",
+      "int m(scala.collection.immutable.List xs)",
+      "A.m(xs: List[Int]): Int",
+      BinaryMethodKind.MixinForwarder
+    )
     debuggee.assertFormat(
       "example.B",
       "java.lang.String m(scala.collection.immutable.List xs)",

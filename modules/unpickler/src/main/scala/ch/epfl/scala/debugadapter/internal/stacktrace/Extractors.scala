@@ -37,6 +37,11 @@ object LazyInit:
     val lazyInit = "(.*)\\$lzyINIT\\d+".r
     lazyInit.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0))
 
+object StaticAccessor:
+  def unapply(method: binary.Method): Option[String] =
+    if method.isTraitStaticAccessor then Some(method.name.stripSuffix("$"))
+    else None
+
 object AnonFun:
   def unapply(method: binary.Method): Option[String] =
     val anonFun = "(.*)\\$anonfun\\$\\d+".r

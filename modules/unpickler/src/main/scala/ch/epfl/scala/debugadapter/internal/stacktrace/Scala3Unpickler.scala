@@ -100,29 +100,37 @@ class Scala3Unpickler(
             cls.declarations.collect {
               case t: TermSymbol if t.isLazyVal && t.matchName(name) => BinaryMethod(bcls, t, BinaryMethodKind.LazyInit)
             }
-          case _ =>
-            cls.declarations
-              .collect { case sym: TermSymbol =>
-                if method.name == "$init$" then BinaryMethod(bcls, sym, BinaryMethodKind.TraitConstructor)
-                else if method.name == "<init>" then BinaryMethod(bcls, sym, BinaryMethodKind.Constructor)
-                else if !sym.isMethod then BinaryMethod(bcls, sym, BinaryMethodKind.Getter)
-                else if sym.isSetter then BinaryMethod(bcls, sym, BinaryMethodKind.Setter)
-                else if method.name.contains("$default$") then
-                  BinaryMethod(bcls, sym, BinaryMethodKind.DefaultParameter)
-                else BinaryMethod(bcls, sym, BinaryMethodKind.InstanceDef)
-              }
-              .filter(bmthd => bmthd.symbol.isDefined && matchSymbol(method, bmthd.symbol.get))
+          case StaticAccessor(_) =>
+            cls.declarations.collect {
+              case sym: TermSymbol if matchSymbol(method, sym) =>
+                BinaryMethod(bcls, sym, BinaryMethodKind.TraitStaticAccessor)
+            }
 
-        if candidates.size >= 1 then candidates.singleOptOrThrow(method.name)
-        else
-          cls.parentClasses
-            .flatMap(parent =>
-              parent.declarations.collect { case sym: TermSymbol =>
-                BinaryMethod(bcls, sym, BinaryMethodKind.MixinForwarder)
+          case _ =>
+            val candidates = cls.declarations
+              .collect {
+                case sym: TermSymbol if matchSymbol(method, sym) =>
+                  if method.name == "$init$" then BinaryMethod(bcls, sym, BinaryMethodKind.TraitConstructor)
+                  else if method.name == "<init>" then BinaryMethod(bcls, sym, BinaryMethodKind.Constructor)
+                  else if !sym.isMethod then BinaryMethod(bcls, sym, BinaryMethodKind.Getter)
+                  else if sym.isSetter then BinaryMethod(bcls, sym, BinaryMethodKind.Setter)
+                  else if method.name.contains("$default$") then
+                    BinaryMethod(bcls, sym, BinaryMethodKind.DefaultParameter)
+                  else BinaryMethod(bcls, sym, BinaryMethodKind.InstanceDef)
               }
-            )
-            .filter(bmthd => bmthd.symbol.isDefined && matchSymbol(method, bmthd.symbol.get))
-            .singleOptOrThrow(method.name)
+            if candidates.nonEmpty then candidates
+            else
+              def allTraitParents(cls: ClassSymbol): Seq[ClassSymbol] =
+                (cls.parentClasses ++ cls.parentClasses.flatMap(allTraitParents)).distinct.filter(_.isTrait)
+              allTraitParents(cls)
+                .flatMap(parent =>
+                  parent.declarations.collect {
+                    case sym: TermSymbol if !sym.isAbstractMember && matchSymbol(method, sym) =>
+                      BinaryMethod(bcls, sym, BinaryMethodKind.MixinForwarder)
+                  }
+                )
+
+        candidates.singleOptOrThrow(method.name)
 
       case _ => None
 
@@ -165,9 +173,11 @@ class Scala3Unpickler(
       try tree.symbol.isTerm && tree.symbol.asTerm.isInline
       catch case NonFatal(e) => false
 
-    def collectSymbols(tree: Tree, inlineSet: Set[Symbol]): Seq[S] =
+    def collectSymbols(tree: Tree, inlineSet: Set[Symbol], lines: Seq[Int]): Seq[S] =
       tree.walkTreeWithFilter(tree =>
-        lines.forall(x => tree.pos.isUnknown || !tree.pos.hasLineColumnInformation || x >= tree.pos.pointLine)
+        tree.pos.isUnknown || !tree.pos.hasLineColumnInformation || lines.forall(x =>
+          (x >= (tree.pos.startLine + 1) && x <= tree.pos.endLine + 1)
+        )
       ) {
         case ValDef(_, _, _, symbol) if symbol.isLocal && (symbol.isLazyVal || symbol.isModuleVal) => f((symbol, None))
         case DefDef(_, _, _, _, symbol) if symbol.isLocal => f(symbol, None)
@@ -176,14 +186,14 @@ class Scala3Unpickler(
           val sym = lambda.meth.asInstanceOf[TermReferenceTree].symbol
           f(sym, Some(lambda.samClassSymbol))
         case tree: Ident if isInline(tree) && !inlineSet.contains(tree.symbol) =>
-          tree.symbol.tree.toSeq.flatMap(collectSymbols(_, inlineSet + tree.symbol))
+          tree.symbol.tree.toSeq.flatMap(collectSymbols(_, inlineSet + tree.symbol, Seq.empty))
         case _ => Seq.empty
       }(_ ++ _, Seq.empty)
 
     for
       decl <- cls.declarations
       tree <- decl.tree.toSeq
-      localSym <- collectSymbols(tree, Set.empty)
+      localSym <- collectSymbols(tree, Set.empty, lines)
     yield localSym
 
   def findClass(cls: binary.ClassType, isExtensionMethod: Boolean = false): BinaryClassSymbol =
@@ -287,6 +297,7 @@ class Scala3Unpickler(
       case "<init>" => "<init>"
       case _ => NameTransformer.encode(symbolName)
     if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
+    else if method.isTraitStaticAccessor then encodedScalaName == expectedName.stripSuffix("$")
     else encodedScalaName == expectedName
 
   private def matchSignature(method: binary.Method, symbol: TermSymbol): Boolean =
@@ -302,7 +313,7 @@ class Scala3Unpickler(
       val pattern = ".+\\$\\d+".r
       pattern.matches(
         paramName
-      ) || (method.isExtensionMethod && paramName == "$this") || (method.isClassInitializer && paramName == "$outer")
+      ) || (method.isExtensionMethod && paramName == "$this") || (method.isTraitStaticAccessor && paramName == "$this") || (method.isClassInitializer && paramName == "$outer")
 
     val paramNames: List[String] = parametersName(symbol.declaredType)
     val capturedParams = method.allParameters.dropRight(paramNames.size)

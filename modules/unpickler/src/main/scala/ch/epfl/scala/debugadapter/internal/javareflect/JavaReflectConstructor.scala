@@ -22,4 +22,6 @@ class JavaReflectConstructor(constructor: Constructor[?], val sourceLines: Seq[I
 
   override def isBridge: Boolean = false
 
+  override def isStatic: Boolean = false
+
   override def toString: String = constructor.toString
