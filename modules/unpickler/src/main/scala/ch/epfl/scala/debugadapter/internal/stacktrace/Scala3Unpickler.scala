@@ -23,6 +23,8 @@ import scala.util.matching.Regex
 import tastyquery.Modifiers.TermSymbolKind
 import tastyquery.SourceLanguage
 import scala.util.control.NonFatal
+import tastyquery.Traversers.TreeTraverser
+import scala.collection.mutable.Buffer
 
 class Scala3Unpickler(
     classpaths: Array[Path],
@@ -167,34 +169,44 @@ class Scala3Unpickler(
   def collectLocalSymbols[S](cls: ClassSymbol, lines: Seq[Int])(
       partialF: PartialFunction[(Symbol, Option[ClassSymbol]), S]
   ): Seq[S] =
-    val f = partialF.lift.andThen(_.toSeq)
+    val localSymbols = Buffer.empty[S]
+    var inlinedSymbols = Set.empty[Symbol]
+    val f = partialF.lift.andThen(sym => localSymbols ++= sym)
+    class LocalSymbolCollector(lines: Seq[Int]) extends TreeTraverser:
+      override def traverse(tree: Tree): Unit =
+        if matchLines(tree) then
+          tree match
+            case ValDef(_, _, _, symbol) if symbol.isLocal && (symbol.isLazyVal || symbol.isModuleVal) =>
+              f((symbol, None))
+            case DefDef(_, _, _, _, symbol) if symbol.isLocal => f(symbol, None)
+            case ClassDef(_, _, symbol) if symbol.isLocal => f(symbol, None)
+            case lambda: Lambda =>
+              val sym = lambda.meth.asInstanceOf[TermReferenceTree].symbol
+              f(sym, Some(lambda.samClassSymbol))
+            case tree: Ident if isInline(tree) && !inlinedSymbols.contains(tree.symbol) =>
+              inlinedSymbols += tree.symbol
+              val collector = new LocalSymbolCollector(Seq.empty)
+              tree.symbol.tree.foreach(collector.traverse)
+            case _ => ()
+          super.traverse(tree)
 
-    def isInline(tree: Ident): Boolean =
-      try tree.symbol.isTerm && tree.symbol.asTerm.isInline
-      catch case NonFatal(e) => false
+      def matchLines(tree: Tree): Boolean =
+        tree.pos.isUnknown
+          || !tree.pos.hasLineColumnInformation
+          || lines.forall(x => x >= (tree.pos.startLine + 1) && x <= tree.pos.endLine + 1)
 
-    def collectSymbols(tree: Tree, inlineSet: Set[Symbol], lines: Seq[Int]): Seq[S] =
-      tree.walkTreeWithFilter(tree =>
-        tree.pos.isUnknown || !tree.pos.hasLineColumnInformation || lines.forall(x =>
-          (x >= (tree.pos.startLine + 1) && x <= tree.pos.endLine + 1)
-        )
-      ) {
-        case ValDef(_, _, _, symbol) if symbol.isLocal && (symbol.isLazyVal || symbol.isModuleVal) => f((symbol, None))
-        case DefDef(_, _, _, _, symbol) if symbol.isLocal => f(symbol, None)
-        case ClassDef(_, _, symbol) if symbol.isLocal => f(symbol, None)
-        case lambda: Lambda =>
-          val sym = lambda.meth.asInstanceOf[TermReferenceTree].symbol
-          f(sym, Some(lambda.samClassSymbol))
-        case tree: Ident if isInline(tree) && !inlineSet.contains(tree.symbol) =>
-          tree.symbol.tree.toSeq.flatMap(collectSymbols(_, inlineSet + tree.symbol, Seq.empty))
-        case _ => Seq.empty
-      }(_ ++ _, Seq.empty)
+      def isInline(tree: Ident): Boolean =
+        try tree.symbol.isTerm && tree.symbol.asTerm.isInline
+        catch case NonFatal(e) => false
+    end LocalSymbolCollector
 
+    val collector = new LocalSymbolCollector(lines)
     for
       decl <- cls.declarations
       tree <- decl.tree.toSeq
-      localSym <- collectSymbols(tree, Set.empty, lines)
-    yield localSym
+    do collector.traverse(tree)
+
+    localSymbols.toSeq
 
   def findClass(cls: binary.ClassType, isExtensionMethod: Boolean = false): BinaryClassSymbol =
     val javaParts = cls.name.split('.')

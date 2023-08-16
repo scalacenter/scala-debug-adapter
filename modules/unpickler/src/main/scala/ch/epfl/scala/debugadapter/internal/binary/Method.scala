@@ -12,7 +12,8 @@ trait Method:
   def isStatic: Boolean
 
   def isExtensionMethod: Boolean = name.endsWith("$extension")
-  def isTraitStaticAccessor: Boolean = name.endsWith("$") && declaringClass.isInterface && isStatic
+  def isTraitStaticAccessor: Boolean =
+    name.endsWith("$") && !isTraitInitializer && declaringClass.isInterface && isStatic
   def isTraitInitializer: Boolean = name == "$init$"
   def isClassInitializer: Boolean = name == "<init>"
   def isLocalMethod: Boolean = name.matches(".*\\$\\d+")

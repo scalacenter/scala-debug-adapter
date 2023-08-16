@@ -1074,7 +1074,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    //  debuggee.assertFormat("example.A", "java.lang.String m()", "A.m: String")
+    debuggee.assertFormat("example.A", "java.lang.String m()", "A.m: String")
     debuggee.assertFormat("example.A", "java.lang.String m(java.lang.String x)", "A.m(x: String): String")
   }
 
@@ -1112,9 +1112,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       else
         val method = cls.getDeclaredMethods
           .find { m =>
-            println(
-              s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})"
-            )
+            // println(s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})")
             m.getName == name && m.getReturnType.getName == returnType && matchParams(m.getParameters)
           }
         assert(method.isDefined)
