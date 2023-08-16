@@ -1,7 +1,12 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
+import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.internal.NameTransformer
+import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
 import com.sun.jdi._
 
+import scala.collection.mutable.Buffer
+import scala.jdk.CollectionConverters.*
 import scala.meta.Lit
 import scala.meta.Stat
 import scala.meta.Term
@@ -10,13 +15,8 @@ import scala.meta.{Type => MType}
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-import scala.jdk.CollectionConverters.*
-
-import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
-import scala.collection.mutable.Buffer
 
 import RuntimeEvaluatorExtractors.*
-import ch.epfl.scala.debugadapter.Logger
 
 private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup: SourceLookUpProvider)(implicit
     logger: Logger
@@ -347,7 +347,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
   }
 
   def searchClassesQCN(partialClassName: String): Validation[RuntimeTree] = {
-    val name = SourceLookUpProvider.getScalaClassName(partialClassName)
+    val name = NameTransformer.scalaClassName(partialClassName)
     searchClasses(name + "$", Some(partialClassName))
       .map(TopLevelModuleTree(_))
       .orElse(searchClasses(name, Some(partialClassName)).map(ClassTree(_)))
@@ -359,7 +359,7 @@ private[evaluator] class RuntimeEvaluationHelpers(frame: JdiFrame, sourceLookup:
   def moduleInitializer(modCls: ClassType, of: RuntimeEvaluableTree): Validation[NestedModuleTree] =
     of.`type` match {
       case ref: ReferenceType =>
-        zeroArgMethodByName(ref, SourceLookUpProvider.getScalaClassName(modCls.name).stripSuffix("$"))
+        zeroArgMethodByName(ref, NameTransformer.scalaClassName(modCls.name).stripSuffix("$"))
           .map(m => NestedModuleTree(modCls, InstanceMethodTree(m, Seq.empty, of)))
       case _ => Recoverable(s"Cannot find module initializer for non-reference type $modCls")
     }

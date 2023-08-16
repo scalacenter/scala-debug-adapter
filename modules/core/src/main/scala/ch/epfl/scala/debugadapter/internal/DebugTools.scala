@@ -14,8 +14,8 @@ private[debugadapter] final class DebugTools(
 
 object DebugTools {
 
-  def none: DebugTools =
-    new DebugTools(Map.empty, None, SourceLookUpProvider.empty)
+  def none(logger: Logger): DebugTools =
+    new DebugTools(Map.empty, None, SourceLookUpProvider.empty(logger))
 
   /**
    * Resolve the expression compilers and the step filter of the debuggee,
@@ -37,20 +37,19 @@ object DebugTools {
         }
       } else None
 
-    val sourceLookup =
-      TimeUtils.logTime(logger, "Loaded all sources and classes") {
-        val classEntries = debuggee.classEntries
-        val distinctEntries = classEntries
-          .groupBy(e => e.name)
-          .map { case (name, group) =>
-            if (group.size > 1) logger.warn(s"Found duplicate entry $name in debuggee ${debuggee.name}")
-            group.head
-          }
-          .toSeq
-        SourceLookUpProvider(distinctEntries, logger)
-      }
+    val sourceLookUp = TimeUtils.logTime(logger, "Loaded all sources and classes") {
+      val classEntries = debuggee.classEntries
+      val distinctEntries = classEntries
+        .groupBy(e => e.name)
+        .map { case (name, group) =>
+          if (group.size > 1) logger.warn(s"Found duplicate entry $name in debuggee ${debuggee.name}")
+          group.head
+        }
+        .toSeq
+      SourceLookUpProvider(distinctEntries, logger)
+    }
 
-    new DebugTools(allCompilers, unpickler, sourceLookup)
+    new DebugTools(allCompilers, unpickler, sourceLookUp)
   }
 
   /* At most 2 expression compilers are resolved, one for Scala 2 and one for Scala 3

@@ -33,7 +33,7 @@ class Scala3Unpickler(
   private val classpath = ClasspathLoaders.read(classpaths.toList)
   private given ctx: Context = Contexts.init(classpath)
   private val defn = new Definitions
-  val formatter = new Scala3Formatter(warnLogger.accept, testMode)
+  private[stacktrace] val formatter = new Scala3Formatter(warnLogger.accept, testMode)
 
   def skipMethod(obj: Any): Boolean =
     skipMethod(JdiMethod(obj): binary.Method)

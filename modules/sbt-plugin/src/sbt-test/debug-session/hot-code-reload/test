@@ -1,0 +1,12 @@
+$ copy-file ./src/main/scala/example/A.scala.1 ./src/main/scala/example/A.scala 
+> 'a / checkBreakpoint {"class":"example.Main","arguments":[],"jvmOptions":[]}'
+$ copy-file ./src/main/scala/example/A.scala.2 ./src/main/scala/example/A.scala
+> a / checkHotCodeReplace
+> a / stopDebugSession
+
+$ copy-file ./src/main/scala/example/A.scala.1 ./src/main/scala/example/A.scala
+> 'b / checkBreakpoint {"class":"example.Main","arguments":[],"jvmOptions":[]}'
+$ copy-file ./src/main/scala/example/A.scala.2 ./src/main/scala/example/A.scala
+> b / checkHotCodeReplace
+> b / stopDebugSession
+

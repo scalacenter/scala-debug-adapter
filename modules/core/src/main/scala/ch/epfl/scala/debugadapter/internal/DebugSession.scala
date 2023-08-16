@@ -131,6 +131,9 @@ private[debugadapter] final class DebugSession private (
               s"Communication with debuggee $name is frozen: missing terminated event."
             )
         }
+
+        context.getProviders.forEach(_.close())
+
         DebugSession.Stopped
 
       case _ => DebugSession.Stopped
@@ -153,7 +156,7 @@ private[debugadapter] final class DebugSession private (
         // here we parse to PartialLaunchArguments which only contains noDebug
         val launchArgs = JsonUtils.fromJson(request.arguments, classOf[PartialLaunchArguments])
         val tools =
-          if (launchArgs.noDebug) DebugTools.none
+          if (launchArgs.noDebug) DebugTools.none(logger)
           else DebugTools(debuggee, resolver, logger)
         context.configure(tools)
         // launch request is implemented by spinning up a JVM

@@ -1,24 +1,19 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter.ClassEntry
-import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.{ClassEntry, Logger, Module}
 import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSig
 import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 
 import java.net.URI
 import scala.collection.parallel.immutable.ParVector
-import ch.epfl.scala.debugadapter.internal.evaluator.NameTransformer
 
 private[debugadapter] final class SourceLookUpProvider(
-    private[internal] val classPathEntries: Seq[ClassEntryLookUp],
-    sourceUriToClassPathEntry: Map[URI, ClassEntryLookUp],
-    fqcnToClassPathEntry: Map[String, ClassEntryLookUp]
+    private[internal] var classPathEntries: Seq[ClassEntryLookUp],
+    private var sourceUriToClassPathEntry: Map[URI, ClassEntryLookUp],
+    private var fqcnToClassPathEntry: Map[String, ClassEntryLookUp],
+    logger: Logger
 ) extends ISourceLookUpProvider {
-
-  val classSearch =
-    classPathEntries
-      .flatMap(_.fullyQualifiedNames.filterNot(_.contains("$$anon$")))
-      .groupBy(SourceLookUpProvider.getScalaClassName)
+  var classesByNames: Map[String, Seq[String]] = loadClassesByNames
 
   override def supportsRealtimeBreakpointVerification(): Boolean = true
 
@@ -70,7 +65,7 @@ private[debugadapter] final class SourceLookUpProvider(
   private[internal] def allOrphanClasses: Iterable[ClassFile] =
     classPathEntries.flatMap(_.orphanClassFiles)
   private[internal] def classesByName(name: String): Seq[String] =
-    classSearch.get(name).getOrElse(Seq.empty)
+    classesByNames.get(name).getOrElse(Seq.empty)
 
   private[internal] def getScalaSig(fqcn: String): Option[ScalaSig] = {
     for {
@@ -84,28 +79,42 @@ private[debugadapter] final class SourceLookUpProvider(
       .get(className)
       .flatMap(_.getSourceFile(className))
   }
+
+  def reload(classesToReplace: Seq[String]): Unit = {
+    classPathEntries = classPathEntries.map { lookUp =>
+      lookUp.entry match {
+        case m: Module => ClassEntryLookUp(m, logger)
+        case _ => lookUp
+      }
+    }
+
+    sourceUriToClassPathEntry = classPathEntries.flatMap(lookup => lookup.sources.map(uri => (uri, lookup))).toMap
+    fqcnToClassPathEntry =
+      classPathEntries.flatMap(lookup => lookup.fullyQualifiedNames.map(fqcn => (fqcn, lookup))).toMap
+    classesByNames = loadClassesByNames
+  }
+
+  private def loadClassesByNames: Map[String, Seq[String]] =
+    classPathEntries.map(_.classesByNames).foldLeft(Map.empty[String, Seq[String]]) { (x, y) =>
+      (x.keys ++ y.keys).map { k =>
+        k -> (x.getOrElse(k, Seq.empty) ++ y.getOrElse(k, Seq.empty))
+      }.toMap
+    }
 }
 
 private[debugadapter] object SourceLookUpProvider {
-  def empty: SourceLookUpProvider =
-    new SourceLookUpProvider(Seq.empty, Map.empty, Map.empty)
-
-  def getScalaClassName(className: String): String = {
-    val lastDot = className.lastIndexOf('.') + 1
-    val decoded = NameTransformer.decode(className.drop(lastDot))
-    val lastDollar = decoded.stripSuffix("$").lastIndexOf('$') + 1
-    decoded.drop(lastDollar)
-  }
+  def empty(logger: Logger): SourceLookUpProvider =
+    new SourceLookUpProvider(Seq.empty, Map.empty, Map.empty, logger)
 
   def apply(entries: Seq[ClassEntry], logger: Logger): SourceLookUpProvider = {
-    val parrallelEntries = ParVector(entries*)
+    val parallelEntries = ParVector(entries*)
     val sourceLookUps =
-      parrallelEntries
+      parallelEntries
         .flatMap(_.sourceEntries)
         .distinct
         .map(entry => entry -> SourceEntryLookUp(entry, logger))
         .toMap
-    val allLookUps = parrallelEntries
+    val allLookUps = parallelEntries
       .map(entry => ClassEntryLookUp(entry, entry.sourceEntries.flatMap(sourceLookUps.apply), logger))
       .seq
     val sourceUriToClassPathEntry = allLookUps
@@ -114,10 +123,6 @@ private[debugadapter] object SourceLookUpProvider {
     val fqcnToClassPathEntry = allLookUps
       .flatMap(lookup => lookup.fullyQualifiedNames.map(fqcn => (fqcn, lookup)))
       .toMap
-    new SourceLookUpProvider(
-      allLookUps,
-      sourceUriToClassPathEntry,
-      fqcnToClassPathEntry
-    )
+    new SourceLookUpProvider(allLookUps, sourceUriToClassPathEntry, fqcnToClassPathEntry, logger)
   }
 }

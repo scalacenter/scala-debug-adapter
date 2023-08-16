@@ -1,4 +1,4 @@
-package ch.epfl.scala.debugadapter.internal.evaluator
+package ch.epfl.scala.debugadapter.internal
 
 /**
  * Adapted from https://github.com/lampepfl/dotty/blob/main/compiler/src/dotty/tools/dotc/util/NameTransformer.scala
@@ -143,5 +143,12 @@ object NameTransformer {
     }
     // System.out.println("= " + (if (buf == null) name else buf.toString()));//DEBUG
     if (buf eq null) name else buf.toString
+  }
+
+  def scalaClassName(fqcn: String): String = {
+    val lastDot = fqcn.lastIndexOf('.')
+    val decodedName = decode(fqcn.drop(lastDot + 1))
+    val lastDollar = decodedName.stripSuffix("$").lastIndexOf('$')
+    decodedName.drop(lastDollar + 1)
   }
 }

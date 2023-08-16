@@ -4,16 +4,28 @@ import ch.epfl.scala.debugadapter._
 import sbt.{ScalaVersion => _, _}
 
 import scala.util.Properties
+import _root_.io.reactivex.Observable
+import ch.epfl.scala.debugadapter.sbtplugin.DebugAdapterPlugin.autoImport._
 
 private[sbtplugin] object InternalTasks {
   lazy val modules: Def.Initialize[Task[Seq[Module]]] = Def.taskDyn {
     val _ = Keys.fullClasspath.value // compile to fill the class directories
-    val internalDependencies = Keys.bspInternalDependencyConfigurations
     val modules = for {
       (proj, configs) <- Keys.bspInternalDependencyConfigurations.value
       config <- configs
     } yield module(proj, config)
     modules.join(_.join)
+  }
+
+  lazy val classesObservable: Def.Initialize[Observable[Seq[String]]] = Def.settingDyn {
+    val internalDependencies = Keys.bspInternalDependencyConfigurations
+    val observables = for {
+      (proj, configs) <- Keys.bspInternalDependencyConfigurations.value
+      config <- configs
+    } yield (proj / config / debugAdapterClassesObserver)
+    Def.setting {
+      observables.join.value.fold(Observable.empty[Seq[String]])(_ mergeWith _)
+    }
   }
 
   lazy val libraries: Def.Initialize[Task[Seq[Library]]] = Def.task {

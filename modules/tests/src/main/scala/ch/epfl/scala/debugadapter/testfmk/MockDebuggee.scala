@@ -11,6 +11,7 @@ import ch.epfl.scala.debugadapter.Module
 import ch.epfl.scala.debugadapter.Library
 import ch.epfl.scala.debugadapter.UnmanagedEntry
 import ch.epfl.scala.debugadapter.JavaRuntime
+import io.reactivex.subjects.PublishSubject
 
 class MockDebuggee extends Debuggee {
   val scalaVersion: ScalaVersion = ScalaVersion.`2.12`
@@ -32,6 +33,8 @@ class MockDebuggee extends Debuggee {
   override def unmanagedEntries: Seq[UnmanagedEntry] = Seq.empty
 
   override def javaRuntime: Option[JavaRuntime] = None
+
+  override val classesToUpdate = PublishSubject.create[Seq[String]]()
 }
 
 class MockCancelableFuture() extends CancelableFuture[Unit] {

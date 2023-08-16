@@ -230,4 +230,17 @@ object NoStep extends DebugStep[Nothing] {
     new SingleStepAssert[Nothing](NoStep, _ => ())
 }
 
+case class Custom(f: () => Unit) extends DebugStep[Nothing]
+
+object Custom {
+  def apply(f: => Unit): SingleStepAssert[Nothing] = {
+    new SingleStepAssert[Nothing](Custom(() => f), _ => ())
+  }
+}
+
+object RedefineClasses extends DebugStep[Nothing] {
+  def apply(): SingleStepAssert[Nothing] =
+    new SingleStepAssert[Nothing](RedefineClasses, _ => ())
+}
+
 final case class ObjectRef(clsName: String)
