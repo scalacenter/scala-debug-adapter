@@ -173,7 +173,8 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |object F extends A
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
+    // TODO use testMode after resolving ambiguity on local classes
+    check(config = defaultConfig.copy(testMode = false))(
       Breakpoint(10),
       StepIn.line(4),
       StepOut.line(10),

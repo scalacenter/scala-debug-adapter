@@ -51,8 +51,6 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
     else if (isStaticMain(method)) None
     else if (isStaticConstructor(method)) Some(formatJava(method))
     else if (isAdaptedMethod(method)) None
-    else if (isAnonFunction(method)) Some(formatJava(method))
-    else if (isAnonClass(method.declaringType)) Some(formatJava(method))
     else if (scalaVersion.isScala2 && isNestedClass(method.declaringType)) Some(formatJava(method))
     else
       try formatScala(method)

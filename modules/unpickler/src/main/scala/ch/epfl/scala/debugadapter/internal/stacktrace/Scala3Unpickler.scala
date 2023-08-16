@@ -402,5 +402,7 @@ class Scala3Unpickler(
   private def skip(method: BinaryMethodSymbol): Boolean = method match
     case BinaryMethod(_, sym, BinaryMethodKind.Getter) => !sym.isLazyValInTrait
     case BinaryMethod(_, _, BinaryMethodKind.Setter) => true
+    case BinaryMethod(_, _, BinaryMethodKind.MixinForwarder) => true
+    case BinaryMethod(_, _, BinaryMethodKind.TraitStaticAccessor) => true
     case BinaryMethod(_, sym, _) => sym.isSynthetic
     case _ => false
