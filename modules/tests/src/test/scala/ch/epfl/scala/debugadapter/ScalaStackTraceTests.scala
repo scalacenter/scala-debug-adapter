@@ -47,7 +47,7 @@ class ScalaStackTraceTests extends DebugTestSuite {
       Breakpoint(
         10,
         List(
-          "Main.Hello.greet.$anonfun(n: Int): Int",
+          "Main.Hello.greet.<anon fun>(n: Int): Int",
           "JFunction1$mcII$sp.apply(t: Any): Any",
           "List.map[B](f: A => B): List[B]",
           "Main.Hello.greet(): Unit",
@@ -141,8 +141,8 @@ class ScalaStackTraceTests extends DebugTestSuite {
       Breakpoint(
         6,
         List(
-          "Main.main.y: Int", // initializer
-          "Main.main.y: Int", // getter
+          "Main.main.y.<lazy init>: Int",
+          "Main.main.y: Int",
           "Main.main.m(z: Int): Int",
           "Main.main(args: Array[String]): Unit"
         )

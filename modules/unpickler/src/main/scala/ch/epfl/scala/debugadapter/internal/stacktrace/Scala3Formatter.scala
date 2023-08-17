@@ -11,18 +11,44 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
     s"${formatSymbol(symbol)}$sep${formatType(symbol.declaredType)}"
 
   def formatClassSymbol(bcls: BinaryClassSymbol) =
-    formatSymbol(bcls.symbol)
+    bcls match
+      case BinaryClassSymbol.BinaryClass(symbol, BinaryClassKind.Anon) =>
+        val prefix = formatOwner(symbol.owner)
+        s"$prefix.<anon class>"
+      case BinaryClassSymbol.BinaryClass(symbol, _) => formatSymbol(bcls.symbol)
+      case BinaryClassSymbol.BinarySAMClass(symbol, samClass) =>
+        val prefix = formatOwner(symbol.owner)
+        s"$prefix.<anon ${formatType(samClass)}>"
 
   def formatMethodSymbol(bmthd: BinaryMethodSymbol): String =
-    bmthd.symbol match
-      case Some(sym) => formatSymbolWithType(sym)
+    bmthd match
+      case BinaryMethodSymbol.BinaryMethod(_, term, BinaryMethodKind.DefaultParameter) =>
+        val sep = if !term.declaredType.isInstanceOf[MethodicType] then ": " else ""
+        term.name match
+          case DefaultGetterName(termName, num) =>
+            s"${formatOwner(term.owner)}.$termName.<default ${num + 1}>$sep${formatType(term.declaredType)}"
+      case BinaryMethodSymbol.BinaryMethod(binaryOwner, term, kind) =>
+        val sep = if !term.declaredType.isInstanceOf[MethodicType] then ": " else ""
+        val symbolStr = kind match
+          case BinaryMethodKind.AnonFun => formatOwner(term.owner) + ".<anon fun>"
+          case BinaryMethodKind.Setter => formatSymbol(term).stripSuffix("_=") + ".<setter>"
+          case BinaryMethodKind.LazyInit => formatSymbol(term) + ".<lazy init>"
+          case BinaryMethodKind.LocalLazyInit => formatSymbol(term) + ".<lazy init>"
+          case BinaryMethodKind.MixinForwarder => formatSymbol(term) + ".<mixin forwarder>"
+          case BinaryMethodKind.TraitStaticAccessor => formatSymbol(term) + ".<trait static accessor>"
+          case _ => formatSymbol(term)
+
+        s"$symbolStr$sep${formatType(term.declaredType)}"
       case _ => throw new UnsupportedOperationException(bmthd.toString)
 
-  private def formatSymbol(sym: Symbol): String =
-    val prefix = sym.owner match
+  private def formatOwner(sym: Symbol): String =
+    sym match
       case owner: ClassSymbol if owner.name.isPackageObject => formatSymbol(owner.owner)
       case owner: TermOrTypeSymbol => formatSymbol(owner)
       case owner: PackageSymbol => ""
+
+  private def formatSymbol(sym: Symbol): String =
+    val prefix = formatOwner(sym.owner)
     val symName = sym.name match
       case DefaultGetterName(termName, num) => s"${termName.toString()}.<default ${num + 1}>"
       case _ => sym.nameStr

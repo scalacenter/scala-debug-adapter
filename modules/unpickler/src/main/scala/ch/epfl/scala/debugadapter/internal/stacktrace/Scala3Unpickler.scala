@@ -168,7 +168,7 @@ class Scala3Unpickler(
       case _ => Seq(cls)
 
   def collectLocalSymbols[S](cls: ClassSymbol, lines: Seq[Int])(
-      partialF: PartialFunction[(Symbol, Option[ClassSymbol]), S]
+      partialF: PartialFunction[(Symbol, Option[Lambda]), S]
   ): Seq[S] =
     val localSymbols = Buffer.empty[S]
     var inlinedSymbols = Set.empty[Symbol]
@@ -183,7 +183,7 @@ class Scala3Unpickler(
             case ClassDef(_, _, symbol) if symbol.isLocal => f(symbol, None)
             case lambda: Lambda =>
               val sym = lambda.meth.asInstanceOf[TermReferenceTree].symbol
-              f(sym, Some(lambda.samClassSymbol))
+              f(sym, Some(lambda))
             case tree: Ident if isInline(tree) && !inlinedSymbols.contains(tree.symbol) =>
               inlinedSymbols += tree.symbol
               val collector = new LocalSymbolCollector(Seq.empty)
@@ -285,14 +285,15 @@ class Scala3Unpickler(
           case (cls: ClassSymbol, None) if cls.matchName(name) && matchParents(cls) =>
             if name == "$anon" then BinaryClass(cls, BinaryClassKind.Anon)
             else BinaryClass(cls, BinaryClassKind.Local)
-          case (lambda: TermSymbol, Some(samClass)) if matchSamClass(samClass) => BinarySAMClass(lambda, samClass)
+          case (sym: TermSymbol, Some(lambda)) if matchSamClass(lambda.samClassSymbol) =>
+            BinarySAMClass(sym, lambda.tpe.asInstanceOf[Type])
         }
       case _ =>
         collectLocalSymbols(owner, Seq.empty) {
           case (cls: ClassSymbol, None) if cls.matchName(name) =>
             if name == "$anon" then BinaryClass(cls, BinaryClassKind.Anon)
             else BinaryClass(cls, BinaryClassKind.Local)
-          case (lambda: TermSymbol, Some(samClass)) => BinarySAMClass(lambda, samClass)
+          case (sym: TermSymbol, Some(lambda)) => BinarySAMClass(sym, lambda.tpe.asInstanceOf[Type])
         }
 
   private def matchSymbol(method: binary.Method, symbol: TermSymbol): Boolean =

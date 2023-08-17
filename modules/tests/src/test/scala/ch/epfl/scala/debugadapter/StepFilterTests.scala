@@ -1140,7 +1140,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(9),
-      StepIn.method(if (isScala3) "Main.main.foo: String" else "Main$.foo$lzycompute$1(LazyRef): String"),
+      StepIn.method(if (isScala3) "Main.main.foo.<lazy init>: String" else "Main$.foo$lzycompute$1(LazyRef): String"),
       StepOut.line(9),
       Breakpoint(10),
       StepIn.method(printlnMethod)
