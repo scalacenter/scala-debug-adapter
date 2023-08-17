@@ -1492,7 +1492,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     )
   }
 
-  test("evaluate in munit test".ignore) {
+  test("evaluate in munit test") {
     val source =
       """|package example
          |class MySuite extends munit.FunSuite {

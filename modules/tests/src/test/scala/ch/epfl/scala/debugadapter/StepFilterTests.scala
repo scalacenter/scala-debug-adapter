@@ -475,7 +475,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
     if (isScala3) {
       // This only works since Scala 3.3.0: in previous versions, there is a single method for
       // getting and initializing the lazy field. We skip it.
-      check(
+      check(config = defaultConfig.copy(testMode = false))(
         Breakpoint(9),
         StepIn.line(4),
         StepIn.line(6),
@@ -992,7 +992,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     if (isScala3) {
-      check(
+      check(config = defaultConfig.copy(testMode = false))(
         Breakpoint(19),
         StepIn.method("D.<init>(): Unit"),
         StepIn.method("Object.<init>(): void"),

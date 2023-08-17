@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter.internal.stacktrace
 import tastyquery.Symbols.*
 import tastyquery.Types.*
 import tastyquery.Names.*
+import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryMethodKind.*
 
 class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends ThrowOrWarn(warnLogger, testMode):
   private def formatSymbolWithType(symbol: TermSymbol): String =
@@ -12,10 +13,10 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
   def formatClassSymbol(bcls: BinaryClassSymbol) =
     formatSymbol(bcls.symbol)
 
-  def formatMethodSymbol(bmthd: BinaryMethodSymbol) =
+  def formatMethodSymbol(bmthd: BinaryMethodSymbol): String =
     bmthd.symbol match
-      case None => None
-      case Some(sym) => Some(formatSymbolWithType(sym))
+      case Some(sym) => formatSymbolWithType(sym)
+      case _ => throw new UnsupportedOperationException(bmthd.toString)
 
   private def formatSymbol(sym: Symbol): String =
     val prefix = sym.owner match

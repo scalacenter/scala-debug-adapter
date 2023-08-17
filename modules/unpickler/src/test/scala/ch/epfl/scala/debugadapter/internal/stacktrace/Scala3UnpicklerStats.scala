@@ -52,12 +52,12 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case InnerClass(_) => unpickler.process(cls, innerClassCounter)
         case _ => unpickler.process(cls, topLevelClassCounter)
       method <- cls.declaredMethods
-      methSym <- method match
+    do
+      method match
         case AnonFun(_) => unpickler.process(method, anonFunCounter)
         case LocalLazyInit(_, _) => unpickler.process(method, localLazyInitCounter)
         case LocalMethod(_, _) => unpickler.process(method, localMethodCounter)
         case _ => unpickler.process(method, methodCounter)
-    do ()
     localClassCounter.printStatus("local classes")
     anonClassCounter.printStatus("anon classes")
     innerClassCounter.printStatus("inner classes")
@@ -131,23 +131,17 @@ class Scala3UnpicklerStats extends munit.FunSuite:
           counter.exceptions += e.toString
           None
 
-    def process(mthd: Method, counter: Counter[Method]): Option[TermSymbol] =
+    def process(mthd: Method, counter: Counter[Method]): Unit =
       try
         val sym = unpickler.findSymbol(mthd)
-        sym match
-          case Some(t) =>
-            counter.addSuccess(mthd)
-            t.symbol
-          case None =>
-            counter.addNotFound(mthd)
-            None
+        counter.addSuccess(mthd)
       catch
+        case NotFoundException(e) =>
+          counter.addNotFound(mthd)
         case AmbiguousException(e) =>
           counter.addAmbiguous(mthd)
-          None
         case e =>
           counter.exceptions += e.toString
-          None
 
   override def munitTimeout: Duration = 2.minutes
 
