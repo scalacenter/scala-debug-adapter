@@ -1947,7 +1947,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     if (isScala3)
-      check(
+      check(config = defaultConfig.copy(testMode = false))(
         Breakpoint(7),
         Evaluation.success("list(0)", 1),
         Breakpoint(8),

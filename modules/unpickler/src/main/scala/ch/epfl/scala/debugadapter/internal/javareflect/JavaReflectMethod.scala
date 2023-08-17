@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter.internal.javareflect
 import ch.epfl.scala.debugadapter.internal.binary
 
 import java.lang.reflect.Method
+import java.lang.reflect.Modifier
 
 class JavaReflectMethod(method: Method, val sourceLines: Seq[Int]) extends binary.Method:
 
@@ -18,6 +19,8 @@ class JavaReflectMethod(method: Method, val sourceLines: Seq[Int]) extends binar
     method.getParameters.map(JavaReflectParameter.apply(_))
 
   override def name: String = method.getName
+
+  override def isStatic: Boolean = Modifier.isStatic(method.getModifiers)
 
   override def toString: String = method.toString
 

@@ -64,19 +64,23 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     val javaSig = "java.lang.String m()"
-    val staticTraitAccessor = "java.lang.String m$(x$1: example.A)"
+    val staticTraitAccessor = "java.lang.String m$(example.A $this)"
 
     debuggee.assertFormat("example.A", javaSig, "A.m(): String")
-    //  debuggee.assertNotFound("example.A", staticTraitAccessor) // TODO find as StaticTraitAccessor
-    //  debuggee.assertNotFound("example.B", javaSig) // TODO find as MixinForwarder
-    debuggee.assertNotFound("example.C", javaSig)
+    debuggee.assertFormatAndKind(
+      "example.A",
+      staticTraitAccessor,
+      "A.m(): String",
+      BinaryMethodKind.TraitStaticAccessor
+    )
+    debuggee.assertFormatAndKind("example.B", javaSig, "A.m(): String", BinaryMethodKind.MixinForwarder)
+    debuggee.assertFormatAndKind("example.C", javaSig, "A.m(): String", BinaryMethodKind.MixinForwarder)
     debuggee.assertFormat("example.D", javaSig, "D.m(): String")
-    debuggee.assertNotFound("example.F$", javaSig)
+    debuggee.assertFormatAndKind("example.F$", javaSig, "A.m(): String", BinaryMethodKind.MixinForwarder)
     debuggee.assertFormat("example.Main$G", javaSig, "Main.G.m(): String")
-    debuggee.assertNotFound("example.Main$H", javaSig)
-    debuggee.assertFailure("example.Main$$anon$1", javaSig)
-    // TODO fix: we could find it by traversing the tree of `Main`
-    debuggee.assertFailure("example.Main$$anon$2", javaSig)
+    debuggee.assertFormatAndKind("example.Main$H", javaSig, "A.m(): String", BinaryMethodKind.MixinForwarder)
+    debuggee.assertAmbiguous("example.Main$$anon$1", javaSig)
+    debuggee.assertAmbiguous("example.Main$$anon$2", javaSig)
   }
 
   test("find local class, trait and object by parents") {
@@ -194,8 +198,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       "A.m1.m.m(z: String): Unit",
       BinaryMethodKind.LocalDef
     )
-    // TODO fix
-    debuggee.assertFailure("example.A", if isScala30 then "void m$2(int i)" else "void m$3(int i)")
+    debuggee.assertAmbiguous("example.A", if isScala30 then "void m$2(int i)" else "void m$3(int i)")
   }
 
   test("getters and setters") {
@@ -304,7 +307,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     debuggee.assertFormatAndKind("example.Main$C$1", "Main.m.C", BinaryClassKind.Local)
     debuggee.assertFormatAndKind("example.Main$E$1$F", "Main.m.E.F", BinaryClassKind.TopLevelOrInner)
-    debuggee.assertFailure("example.Main$G$1")
+    debuggee.assertAmbiguous("example.Main$G$1")
   }
 
   test("local class in signature") {
@@ -438,7 +441,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
 
     debuggee.assertFormatAndKind("example.A$", "java.lang.String a()", "A.a: String", BinaryMethodKind.Getter)
-    debuggee.assertNotFound("example.A$", "java.lang.String b()")
+    debuggee.assertFormatAndKind("example.A$", "java.lang.String b()", "B.b: String", BinaryMethodKind.MixinForwarder)
     debuggee.assertFormatAndKind("example.B", "java.lang.String b()", "B.b: String", BinaryMethodKind.Getter)
 
     if !isScala30 then // new in Scala 3.3.0
@@ -461,7 +464,12 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.A", "int productArity()", "A.productArity: Int")
     debuggee.assertFormat("example.A", "java.lang.String productPrefix()", "A.productPrefix: String")
     debuggee.assertFormat("example.A", "java.lang.Object productElement(int n)", "A.productElement(n: Int): Any")
-    debuggee.assertNotFound("example.A", "scala.collection.Iterator productIterator()") // it is a bridge
+    debuggee.assertFormatAndKind(
+      "example.A",
+      "scala.collection.Iterator productIterator()",
+      "Product.productIterator: Iterator[Any]",
+      BinaryMethodKind.MixinForwarder
+    ) // it is a bridge
 
     debuggee.assertFormat("example.A$", "example.A apply(java.lang.String a)", "A.apply(a: String): A")
     debuggee.assertFormat("example.A$", "example.A unapply(example.A x$1)", "A.unapply(A): A")
@@ -661,7 +669,12 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
 
     debuggee.assertFormat("example.A", "int m(scala.collection.immutable.List xs)", "A.m(xs: List[Int]): Int")
-    debuggee.assertNotFound("example.B", "int m(scala.collection.immutable.List xs)")
+    debuggee.assertFormatAndKind(
+      "example.B",
+      "int m(scala.collection.immutable.List xs)",
+      "A.m(xs: List[Int]): Int",
+      BinaryMethodKind.MixinForwarder
+    )
     debuggee.assertFormat(
       "example.B",
       "java.lang.String m(scala.collection.immutable.List xs)",
@@ -1097,9 +1110,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       else
         val method = cls.getDeclaredMethods
           .find { m =>
-            println(
-              s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})"
-            )
+            // println(s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})")
             m.getName == name && m.getReturnType.getName == returnType && matchParams(m.getParameters)
           }
         assert(method.isDefined)
@@ -1107,7 +1118,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
 
     private def assertFind(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
-      assert(unpickler.findSymbol(m).isDefined)
+      unpickler.findSymbol(m)
 
     private def assertSkip(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
@@ -1119,15 +1130,15 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
 
     private def assertNotFound(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
-      assert(unpickler.findSymbol(m).isEmpty)
+      intercept[NotFoundException](unpickler.findSymbol(m))
 
-    private def assertFailure(declaringType: String, javaSig: String)(using munit.Location): Unit =
+    private def assertAmbiguous(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
-      intercept[Exception](unpickler.findSymbol(m))
+      intercept[AmbiguousException](unpickler.findSymbol(m))
 
-    private def assertFailure(declaringType: String)(using munit.Location): Unit =
+    private def assertAmbiguous(declaringType: String)(using munit.Location): Unit =
       val cls = getClass(declaringType)
-      intercept[Exception](unpickler.findClass(cls))
+      intercept[AmbiguousException](unpickler.findClass(cls))
 
     private def assertFormat(declaringType: String, javaSig: String, expected: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
@@ -1138,8 +1149,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     ): Unit =
       val m = getMethod(declaringType, javaSig)
       val binarySymbol = unpickler.findSymbol(m)
-      assertEquals(binarySymbol.flatMap(bsym => unpickler.formatter.formatMethodSymbol(bsym)), Some(expected))
-      assertEquals(binarySymbol.map(_.symbolKind), Some(kind))
+      assertEquals(unpickler.formatter.formatMethodSymbol(binarySymbol), expected)
+      assertEquals(binarySymbol.symbolKind, kind)
 
     private def assertFormat(declaringType: String, expected: String)(using munit.Location): Unit =
       val cls = getClass(declaringType)

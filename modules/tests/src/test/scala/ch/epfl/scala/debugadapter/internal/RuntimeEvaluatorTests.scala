@@ -476,7 +476,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
 
   test("Should compute a method call on the current class") {
     implicit val debuggee = method
-    check(
+    check(config = defaultConfig.copy(testMode = false))(
       Breakpoint(38),
       Evaluation.success("bar1", 42),
       Breakpoint(10),
@@ -661,7 +661,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
 
   test("Should find outer methods, fields, class & modules") {
     implicit val debuggee = method
-    check(
+    check(config = defaultConfig.copy(testMode = false))(
       Breakpoint(38),
       DebugStepAssert.inParallel(
         Evaluation.success("foo_v2(\"hello \").bar(42)", "hello 42"),
@@ -1077,7 +1077,7 @@ class Scala213RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`
 class Scala31RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`3.1+`) {
   test("Should access to wrapping 'object' methods") {
     implicit val debuggee = nested
-    check(
+    check(config = defaultConfig.copy(testMode = false))(
       Breakpoint(21),
       Evaluation.success("upperMain1", "upper main 1"),
       Breakpoint(31),
@@ -1184,7 +1184,7 @@ class Scala31RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`3
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
+    check(config = defaultConfig.copy(testMode = false))(
       Breakpoint(8),
       Evaluation.success("x", 1),
       Breakpoint(9), // calling map
