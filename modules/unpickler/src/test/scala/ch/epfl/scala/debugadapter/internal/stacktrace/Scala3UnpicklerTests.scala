@@ -304,8 +304,12 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
 
-
-    debuggee.assertFormatAndKind("example.A$B$C", "example.A$B example$A$B$C$$$outer()", "A.B.C.<outer A>", BinaryMethodKind.OuterClassGetter)
+    debuggee.assertFormatAndKind(
+      "example.A$B$C",
+      "example.A$B example$A$B$C$$$outer()",
+      "A.B.C.<outer A>",
+      BinaryMethodKind.OuterClassGetter
+    )
 
   }
 
@@ -1160,8 +1164,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       else
         val method = cls.getDeclaredMethods
           .find { m =>
-             println(s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})")
-            m.getName == name && m.getReturnType.getName == returnType && matchParams(m.getParameters)
+            println(
+              s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})"
+            )
+          m.getName == name && m.getReturnType.getName == returnType && matchParams(m.getParameters)
           }
         assert(method.isDefined)
         JavaReflectMethod(method.get, Seq.empty)

@@ -66,7 +66,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     anonFunCounter.printStatus("anon fun")
     localLazyInitCounter.printStatus("local lazy inits")
     methodCounter.printStatus("other methods")
-   // methodCounter.notFound.foreach{mthd => println(mthd.declaringClass.name) ; println(mthd.name)}
+  // methodCounter.notFound.foreach{mthd => println(mthd.declaringClass.name) ; println(mthd.name)}
 
   def loadClasses(jars: Seq[Library], jarName: String): Seq[JavaReflectClass] =
     val jar = jars.find(_.name == jarName).get

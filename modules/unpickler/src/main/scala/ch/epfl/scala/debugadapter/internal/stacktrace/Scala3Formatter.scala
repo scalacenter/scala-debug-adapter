@@ -22,8 +22,8 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
 
   def formatMethodSymbol(bmthd: BinaryMethodSymbol): String =
     bmthd match
-      case BinaryMethodSymbol.OuterClassGetter(outer, declClass) => 
-        s"${formatOwner(declClass)}.<outer ${formatOwner(outer)}>"  
+      case BinaryMethodSymbol.OuterClassGetter(outer, declClass) =>
+        s"${formatOwner(declClass)}.<outer ${formatOwner(outer)}>"
 
       case BinaryMethodSymbol.BinaryMethod(_, term, BinaryMethodKind.DefaultParameter) =>
         val sep = if !term.declaredType.isInstanceOf[MethodicType] then ": " else ""

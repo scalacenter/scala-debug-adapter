@@ -110,11 +110,10 @@ class Scala3Unpickler(
               case sym: TermSymbol if matchSymbol(method, sym) =>
                 BinaryMethod(bcls, sym, BinaryMethodKind.TraitStaticAccessor)
             }
-          case OuterField(_) => 
+          case OuterField(_) =>
             val declaringClass = findClass(method.declaringClass)
             val outer = declaringClass.symbol.owner.owner
             List(OuterClassGetter(outer, declaringClass.symbol))
-
 
           case _ =>
             val candidates = cls.declarations

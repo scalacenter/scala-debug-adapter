@@ -45,7 +45,7 @@ object StaticAccessor:
 object OuterField:
   def unapply(method: binary.Method): Option[String] =
     val anonFun = "(.*)\\$\\$\\$outer".r
-    anonFun.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0))    
+    anonFun.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0))
 
 object AnonFun:
   def unapply(method: binary.Method): Option[String] =
