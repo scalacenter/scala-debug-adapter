@@ -293,6 +293,22 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.B", javaSig("java.lang.String"), "B.m(): String")
   }
 
+  test("find outter field") {
+    val source =
+      """|package example
+         |class A :
+         |  private val x =2 
+         |  class B : 
+         |    class C :
+         |      private val y = x+2
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+
+
+    debuggee.assertFormatAndKind("example.A$B$C", "example.A$B example$A$B$C$$$outer()", "A.B.C.<outer A>", BinaryMethodKind.OuterClassGetter)
+
+  }
+
   test("using and implicit parameters") {
     val source =
       """|package example
@@ -1144,7 +1160,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       else
         val method = cls.getDeclaredMethods
           .find { m =>
-            // println(s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})")
+             println(s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})")
             m.getName == name && m.getReturnType.getName == returnType && matchParams(m.getParameters)
           }
         assert(method.isDefined)

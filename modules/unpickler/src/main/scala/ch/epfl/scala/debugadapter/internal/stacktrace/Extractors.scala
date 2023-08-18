@@ -42,6 +42,11 @@ object StaticAccessor:
     if method.isTraitStaticAccessor then Some(method.name.stripSuffix("$"))
     else None
 
+object OuterField:
+  def unapply(method: binary.Method): Option[String] =
+    val anonFun = "(.*)\\$\\$\\$outer".r
+    anonFun.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0))    
+
 object AnonFun:
   def unapply(method: binary.Method): Option[String] =
     val anonFun = "(.*)\\$anonfun\\$\\d+".r
