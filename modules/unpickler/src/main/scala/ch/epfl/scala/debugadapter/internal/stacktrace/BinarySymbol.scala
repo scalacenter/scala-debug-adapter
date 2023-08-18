@@ -1,10 +1,11 @@
 package ch.epfl.scala.debugadapter.internal.stacktrace
 
 import tastyquery.Symbols.*
+import tastyquery.Types.Type
 
 enum BinaryClassSymbol:
   case BinaryClass(symbol: ClassSymbol, kind: BinaryClassKind)
-  case BinarySAMClass(symbol: TermSymbol, samClass: ClassSymbol)
+  case BinarySAMClass(symbol: TermSymbol, samType: Type)
   def symbol: Symbol
   def symbolKind = this match
     case BinaryClass(_, kind) => kind
