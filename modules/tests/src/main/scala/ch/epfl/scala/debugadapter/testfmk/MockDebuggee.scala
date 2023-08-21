@@ -14,6 +14,9 @@ import ch.epfl.scala.debugadapter.JavaRuntime
 import io.reactivex.subjects.PublishSubject
 
 class MockDebuggee extends Debuggee {
+
+  override def compile(): Unit = ()
+
   val scalaVersion: ScalaVersion = ScalaVersion.`2.12`
   var currentProcess: MockCancelableFuture = _
 

@@ -6,6 +6,7 @@ import sbt.{ScalaVersion => _, _}
 import scala.util.Properties
 import _root_.io.reactivex.Observable
 import ch.epfl.scala.debugadapter.sbtplugin.DebugAdapterPlugin.autoImport._
+import java.util.concurrent.Semaphore
 
 private[sbtplugin] object InternalTasks {
   lazy val modules: Def.Initialize[Task[Seq[Module]]] = Def.taskDyn {
@@ -27,6 +28,17 @@ private[sbtplugin] object InternalTasks {
       observables.join.value.fold(Observable.empty[Seq[String]])(_ mergeWith _)
     }
   }
+
+  lazy val compileLocks: Def.Initialize[Seq[Semaphore]] = Def.settingDyn({
+    val internalDependencies = Keys.bspInternalDependencyConfigurations
+    val locks = for {
+      (proj, configs) <- Keys.bspInternalDependencyConfigurations.value
+      config <- configs
+    } yield (proj / config / debugAdapterCompileLock)
+    Def.setting {
+      locks.join.value
+    }
+  })
 
   lazy val libraries: Def.Initialize[Task[Seq[Library]]] = Def.task {
     val classifierReport = Keys.updateClassifiers.value

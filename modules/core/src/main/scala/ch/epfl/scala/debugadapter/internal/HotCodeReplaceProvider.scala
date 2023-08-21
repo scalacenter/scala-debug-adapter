@@ -58,6 +58,7 @@ class HotCodeReplaceProvider(
   override def onClassRedefined(consumer: ju.function.Consumer[ju.List[String]]): Unit = ???
 
   override def redefineClasses(): CompletableFuture[ju.List[String]] = {
+    debuggee.compile()
     def isClassLoaded(className: String): Boolean =
       getJdiClassByName(className).nonEmpty
     val res = for {

@@ -21,7 +21,6 @@ import sjsonnew.support.scalajson.unsafe.Converter
 import sjsonnew.support.scalajson.unsafe.{Parser => JsonParser}
 import xsbti.FileConverter
 import xsbti.VirtualFileRef
-import xsbti.compile.CompileAnalysis
 import xsbti.compile.analysis.ReadStamps
 import xsbti.compile.analysis.Stamp
 
@@ -34,6 +33,8 @@ import scala.concurrent.duration.Duration
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
+import java.util.concurrent.Semaphore
+import xsbti.compile.CompileAnalysis
 
 object DebugAdapterPlugin extends sbt.AutoPlugin {
   private final val DebugSessionStart: String = "debugSession/start"
@@ -69,6 +70,9 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       settingKey[DebugConfig]("Configure the debug session").withRank(KeyRanks.DTask)
     val debugAdapterClassesObserver =
       settingKey[PublishSubject[Seq[String]]]("Observe the classes to be reloaded by the debuggee")
+        .withRank(KeyRanks.DTask)
+    val debugAdapterCompileLock =
+      settingKey[Semaphore]("Observe the compilation of the debuggee")
         .withRank(KeyRanks.DTask)
     val stopDebugSession =
       taskKey[Unit]("Stop the current debug session").withRank(KeyRanks.DTask)
@@ -110,25 +114,37 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     startRemoteDebugSession := remoteSessionTask.evaluated,
     stopDebugSession := stopSessionTask.value,
     debugAdapterClassesObserver := PublishSubject.create(),
+    debugAdapterCompileLock := new Semaphore(1),
+    Keys.compile := Def
+      .task {
+        debugAdapterCompileLock.value.acquire()
+        try customCompile.value
+        finally debugAdapterCompileLock.value.release()
+      }
+      .andFinally(Def.task(debugAdapterCompileLock.value.release()))
+      .value,
     Keys.compile / Keys.javacOptions := {
       val jo = (Keys.compile / Keys.javacOptions).value
       if (jo.exists(_.startsWith("-g"))) jo
       else jo :+ "-g"
-    },
-    Keys.compile := {
-      val currentAnalysis: CompileAnalysis = Keys.compile.value
-      val previousAnalysis = Keys.previousCompile.value.analysis
-      val observer = debugAdapterClassesObserver.value
-      val fileConverter = Keys.fileConverter.value
-      val classDir = Keys.classDirectory.value.toPath
-      if (previousAnalysis.isPresent) {
-        val classesToReload =
-          getNewClasses(currentAnalysis.readStamps, previousAnalysis.get.readStamps, fileConverter, classDir)
-        observer.onNext(classesToReload)
-      }
-      currentAnalysis
     }
   )
+
+  def customCompile = Def.task {
+    val logger = Keys.streams.value.log
+    val currentAnalysis = Keys.compile.value
+    val previousAnalysis = Keys.previousCompile.value.analysis
+    val observer = debugAdapterClassesObserver.value
+    val fileConverter = Keys.fileConverter.value
+    val classDir = Keys.classDirectory.value.toPath
+
+    if (previousAnalysis.isPresent) {
+      val classesToReload =
+        getNewClasses(currentAnalysis.readStamps, previousAnalysis.get.readStamps, fileConverter, classDir)
+      observer.onNext(classesToReload)
+    }
+    currentAnalysis
+  }
 
   def getNewClasses(
       currentStamps: ReadStamps,
@@ -292,6 +308,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             InternalTasks.unmanagedEntries.value,
             InternalTasks.javaRuntime.value,
             InternalTasks.classesObservable.value,
+            InternalTasks.compileLocks.value,
             mainClass.`class`,
             mainClass.arguments,
             new LoggerAdapter(logger)
@@ -398,6 +415,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             InternalTasks.unmanagedEntries.value,
             InternalTasks.javaRuntime.value,
             InternalTasks.classesObservable.value,
+            InternalTasks.compileLocks.value,
             cleanups,
             parallel,
             testRunners,
@@ -464,6 +482,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           InternalTasks.unmanagedEntries.value,
           InternalTasks.javaRuntime.value,
           InternalTasks.classesObservable.value,
+          InternalTasks.compileLocks.value,
           new LoggerAdapter(logger)
         )
       startServer(jobService, scope, state, target, debuggee, debugToolsResolver, debugAdapterConfig.value)

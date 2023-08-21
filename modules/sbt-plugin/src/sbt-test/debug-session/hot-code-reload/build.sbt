@@ -16,7 +16,6 @@ def checkBreakpointTask = Def.inputTask {
 }
 
 def checkHotCodeReplaceTask = Def.task {
-  val _ = (Compile / compile).value
   DebugTest.runChecks(DebugState.state)(Seq(RedefineClasses(), Outputed("C")))
 }
 
@@ -26,7 +25,10 @@ lazy val a: Project =
     .settings(
       scalaVersion := scalaV,
       checkBreakpoint := checkBreakpointTask.evaluated,
-      checkHotCodeReplace := checkHotCodeReplaceTask.value,
+      checkHotCodeReplace := {
+        (Compile / compile).value
+        checkHotCodeReplaceTask.value
+      },
       sourceToDebug := (Compile / sources).value.find(_.getName == "A.scala").get.toPath
     )
 
@@ -36,7 +38,10 @@ lazy val b =
     .settings(
       scalaVersion := scalaV,
       checkBreakpoint := checkBreakpointTask.evaluated,
-      checkHotCodeReplace := checkHotCodeReplaceTask.value,
+      checkHotCodeReplace := {
+        (a / Compile / compile).value
+        checkHotCodeReplaceTask.value
+      },
       sourceToDebug := (a / sourceToDebug).value
     )
     .dependsOn(a)

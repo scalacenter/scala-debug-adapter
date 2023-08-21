@@ -14,9 +14,18 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
 import ch.epfl.scala.debugadapter.testing.TestSuiteEvent
 import io.reactivex.Observable
+import java.util.concurrent.Semaphore
 
 private[debugadapter] sealed trait SbtDebuggee extends Debuggee {
   val logger: LoggerAdapter
+  val compileLocks: Seq[Semaphore]
+
+  override def compile(): Unit = {
+    compileLocks.foreach { compileLock =>
+      compileLock.acquire()
+      compileLock.release()
+    }
+  }
 }
 
 private[debugadapter] final class MainClassDebuggee(
@@ -28,6 +37,7 @@ private[debugadapter] final class MainClassDebuggee(
     val unmanagedEntries: Seq[UnmanagedEntry],
     val javaRuntime: Option[JavaRuntime],
     override val classesToUpdate: Observable[Seq[String]],
+    override val compileLocks: Seq[Semaphore],
     mainClass: String,
     args: Seq[String],
     val logger: LoggerAdapter
@@ -49,6 +59,7 @@ private[debugadapter] final class TestSuitesDebuggee(
     val unmanagedEntries: Seq[UnmanagedEntry],
     val javaRuntime: Option[JavaRuntime],
     override val classesToUpdate: Observable[Seq[String]],
+    override val compileLocks: Seq[Semaphore],
     cleanups: Seq[Cleanup],
     parallel: Boolean,
     runners: Map[TestFramework, Runner],
@@ -183,6 +194,7 @@ private[debugadapter] final class AttachRemoteDebuggee(
     val unmanagedEntries: Seq[UnmanagedEntry],
     val javaRuntime: Option[JavaRuntime],
     override val classesToUpdate: Observable[Seq[String]],
+    override val compileLocks: Seq[Semaphore],
     val logger: LoggerAdapter
 ) extends SbtDebuggee {
   override def name: String = s"${getClass.getSimpleName}(${target.uri})"

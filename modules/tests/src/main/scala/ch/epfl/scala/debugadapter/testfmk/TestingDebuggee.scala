@@ -41,6 +41,8 @@ case class TestingDebuggee(
 ) extends Debuggee
     with TestingContext {
 
+  override def compile(): Unit = ()
+
   override val classesToUpdate: Subject[Seq[String]] = PublishSubject.create()
   def mainSource: Path = sourceFiles.head
 
