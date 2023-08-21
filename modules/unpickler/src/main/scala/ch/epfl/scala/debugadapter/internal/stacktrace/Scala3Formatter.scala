@@ -4,33 +4,33 @@ import tastyquery.Symbols.*
 import tastyquery.Types.*
 import tastyquery.Names.*
 import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryMethodKind.*
+import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryClassKind.*
+import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryClassSymbol.*
+import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryMethodSymbol.*
 
 class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends ThrowOrWarn(warnLogger, testMode):
   private def formatSymbolWithType(symbol: TermSymbol): String =
     val sep = if !symbol.declaredType.isInstanceOf[MethodicType] then ": " else ""
     s"${formatSymbol(symbol)}$sep${formatType(symbol.declaredType)}"
 
-  def formatClassSymbol(bcls: BinaryClassSymbol) =
-    bcls match
-      case BinaryClassSymbol.BinaryClass(symbol, BinaryClassKind.Anon) =>
+  def format(binaryClass: BinaryClassSymbol) =
+    binaryClass match
+      case BinaryClass(symbol, Anon) =>
         val prefix = formatOwner(symbol.owner)
         s"$prefix.<anon class>"
-      case BinaryClassSymbol.BinaryClass(symbol, _) => formatSymbol(bcls.symbol)
-      case BinaryClassSymbol.BinarySAMClass(symbol, samClass) =>
+      case BinaryClass(symbol, _) => formatSymbol(symbol)
+      case BinarySAMClass(symbol, samClass) =>
         val prefix = formatOwner(symbol.owner)
         s"$prefix.<anon ${formatType(samClass)}>"
 
-  def formatMethodSymbol(bmthd: BinaryMethodSymbol): String =
-    bmthd match
-      case BinaryMethodSymbol.OuterClassGetter(outer, declClass) =>
-        s"${formatOwner(declClass)}.<outer ${formatOwner(outer)}>"
-
-      case BinaryMethodSymbol.BinaryMethod(_, term, BinaryMethodKind.DefaultParameter) =>
+  def format(method: BinaryMethodSymbol): String =
+    method match
+      case BinaryMethod(_, term, BinaryMethodKind.DefaultParameter) =>
         val sep = if !term.declaredType.isInstanceOf[MethodicType] then ": " else ""
         term.name match
           case DefaultGetterName(termName, num) =>
             s"${formatOwner(term.owner)}.$termName.<default ${num + 1}>$sep${formatType(term.declaredType)}"
-      case BinaryMethodSymbol.BinaryMethod(binaryOwner, term, kind) =>
+      case BinaryMethod(binaryOwner, term, kind) =>
         val sep = if !term.declaredType.isInstanceOf[MethodicType] then ": " else ""
         val symbolStr = kind match
           case BinaryMethodKind.AnonFun => formatOwner(term.owner) + ".<anon fun>"
@@ -42,13 +42,15 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
           case _ => formatSymbol(term)
 
         s"$symbolStr$sep${formatType(term.declaredType)}"
-      case _ => throw new UnsupportedOperationException(bmthd.toString)
+      case BinaryOuter(owner, outer) =>
+        s"${format(owner)}.<outer>: ${formatOwner(outer)}"
+      case _ => throw new UnsupportedOperationException(method.toString)
 
   private def formatOwner(sym: Symbol): String =
     sym match
-      case owner: ClassSymbol if owner.name.isPackageObject => formatSymbol(owner.owner)
-      case owner: TermOrTypeSymbol => formatSymbol(owner)
-      case owner: PackageSymbol => ""
+      case sym: ClassSymbol if sym.name.isPackageObject => formatSymbol(sym.owner)
+      case sym: TermOrTypeSymbol => formatSymbol(sym)
+      case sym: PackageSymbol => ""
 
   private def formatSymbol(sym: Symbol): String =
     val prefix = formatOwner(sym.owner)

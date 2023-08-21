@@ -17,7 +17,7 @@ enum BinaryClassKind:
 enum BinaryMethodSymbol:
   case BinaryMethod(binaryOwner: BinaryClassSymbol, term: TermSymbol, kind: BinaryMethodKind)
   case BinaryByNameArg(binaryOwner: BinaryClassSymbol)
-  case OuterClassGetter(outer: Symbol, declClass: Symbol)
+  case BinaryOuter(binaryOwner: BinaryClassSymbol, outerClass: ClassSymbol)
 
   def symbol = this match
     case BinaryMethod(_, term, _) => Some(term)
@@ -26,8 +26,8 @@ enum BinaryMethodSymbol:
   def symbolKind = this match
     case BinaryMethod(_, _, kind) => kind
     case BinaryByNameArg(_) => BinaryMethodKind.ByNameArg
-    case OuterClassGetter(_, _) => BinaryMethodKind.OuterClassGetter
+    case BinaryOuter(_, _) => BinaryMethodKind.Outer
 
 enum BinaryMethodKind:
   case InstanceDef, LocalDef, AnonFun, Getter, Setter, LazyInit, LocalLazyInit, Constructor, TraitConstructor,
-    MixinForwarder, TraitStaticAccessor, SuperAccessor, DefaultParameter, ByNameArg, OuterClassGetter
+    MixinForwarder, TraitStaticAccessor, SuperAccessor, DefaultParameter, ByNameArg, Outer

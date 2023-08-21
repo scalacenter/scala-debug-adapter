@@ -307,10 +307,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormatAndKind(
       "example.A$B$C",
       "example.A$B example$A$B$C$$$outer()",
-      "A.B.C.<outer A>",
-      BinaryMethodKind.OuterClassGetter
+      "A.B.C.<outer>: A.B",
+      BinaryMethodKind.Outer
     )
-
   }
 
   test("using and implicit parameters") {
@@ -1164,10 +1163,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       else
         val method = cls.getDeclaredMethods
           .find { m =>
-            println(
-              s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})"
-            )
-          m.getName == name && m.getReturnType.getName == returnType && matchParams(m.getParameters)
+            // println(s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})")
+            m.getName == name && m.getReturnType.getName == returnType && matchParams(m.getParameters)
           }
         assert(method.isDefined)
         JavaReflectMethod(method.get, Seq.empty)
@@ -1205,7 +1202,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     ): Unit =
       val m = getMethod(declaringType, javaSig)
       val binarySymbol = unpickler.findSymbol(m)
-      assertEquals(unpickler.formatter.formatMethodSymbol(binarySymbol), expected)
+      assertEquals(unpickler.formatter.format(binarySymbol), expected)
       assertEquals(binarySymbol.symbolKind, kind)
 
     private def assertFormat(declaringType: String, expected: String)(using munit.Location): Unit =
@@ -1217,5 +1214,5 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     ): Unit =
       val cls = getClass(declaringType)
       val binarySymbol = unpickler.findClass(cls)
-      assertEquals(unpickler.formatter.formatClassSymbol(binarySymbol), expected)
+      assertEquals(unpickler.formatter.format(binarySymbol), expected)
       assertEquals(unpickler.findClass(cls, false).symbolKind, kind)
