@@ -293,6 +293,25 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.B", javaSig("java.lang.String"), "B.m(): String")
   }
 
+  test("find outter field") {
+    val source =
+      """|package example
+         |class A :
+         |  private val x =2 
+         |  class B : 
+         |    class C :
+         |      private val y = x+2
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+
+    debuggee.assertFormatAndKind(
+      "example.A$B$C",
+      "example.A$B example$A$B$C$$$outer()",
+      "A.B.C.<outer>: A.B",
+      BinaryMethodKind.Outer
+    )
+  }
+
   test("using and implicit parameters") {
     val source =
       """|package example
@@ -1183,7 +1202,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     ): Unit =
       val m = getMethod(declaringType, javaSig)
       val binarySymbol = unpickler.findSymbol(m)
-      assertEquals(unpickler.formatter.formatMethodSymbol(binarySymbol), expected)
+      assertEquals(unpickler.formatter.format(binarySymbol), expected)
       assertEquals(binarySymbol.symbolKind, kind)
 
     private def assertFormat(declaringType: String, expected: String)(using munit.Location): Unit =
@@ -1195,5 +1214,5 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     ): Unit =
       val cls = getClass(declaringType)
       val binarySymbol = unpickler.findClass(cls)
-      assertEquals(unpickler.formatter.formatClassSymbol(binarySymbol), expected)
+      assertEquals(unpickler.formatter.format(binarySymbol), expected)
       assertEquals(unpickler.findClass(cls, false).symbolKind, kind)

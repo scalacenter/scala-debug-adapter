@@ -213,7 +213,9 @@ lazy val unpickler3: Project = project
       "org.scala-lang" %% "tasty-core" % scalaVersion.value,
       Dependencies.munit % Test
     ),
-    Test / fork := true
+    Test / fork := true,
+    // do not use sbt logger, otherwise the output of a test only appears at the end of the suite
+    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "+l")
   )
 
 lazy val scalacOptionsSetting = Def.settings(

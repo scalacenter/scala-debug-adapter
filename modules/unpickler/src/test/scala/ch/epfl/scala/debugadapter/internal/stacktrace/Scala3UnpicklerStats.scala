@@ -4,7 +4,6 @@ import ch.epfl.scala.debugadapter.*
 import ch.epfl.scala.debugadapter.internal.IO
 import ch.epfl.scala.debugadapter.internal.binary.*
 import ch.epfl.scala.debugadapter.internal.javareflect.*
-import ch.epfl.scala.debugadapter.internal.stacktrace.LocalClass
 import ch.epfl.scala.debugadapter.testfmk.TestingResolver
 import org.objectweb.asm
 import tastyquery.Symbols.*
@@ -47,16 +46,16 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
       clsSym <- cls match
-        case LocalClass(_, _, _) => unpickler.process(cls, localClassCounter)
-        case AnonClass(_, _) => unpickler.process(cls, anonClassCounter)
-        case InnerClass(_) => unpickler.process(cls, innerClassCounter)
+        case Patterns.LocalClass(_, _, _) => unpickler.process(cls, localClassCounter)
+        case Patterns.AnonClass(_, _) => unpickler.process(cls, anonClassCounter)
+        case Patterns.InnerClass(_) => unpickler.process(cls, innerClassCounter)
         case _ => unpickler.process(cls, topLevelClassCounter)
       method <- cls.declaredMethods
     do
       method match
-        case AnonFun(_) => unpickler.process(method, anonFunCounter)
-        case LocalLazyInit(_, _) => unpickler.process(method, localLazyInitCounter)
-        case LocalMethod(_, _) => unpickler.process(method, localMethodCounter)
+        case Patterns.AnonFun(_) => unpickler.process(method, anonFunCounter)
+        case Patterns.LocalLazyInit(_, _) => unpickler.process(method, localLazyInitCounter)
+        case Patterns.LocalMethod(_, _) => unpickler.process(method, localMethodCounter)
         case _ => unpickler.process(method, methodCounter)
     localClassCounter.printStatus("local classes")
     anonClassCounter.printStatus("anon classes")
@@ -66,7 +65,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     anonFunCounter.printStatus("anon fun")
     localLazyInitCounter.printStatus("local lazy inits")
     methodCounter.printStatus("other methods")
-    // methodCounter.notFound.foreach{mthd => println(mthd.declaringClass.name) ; println(mthd.name)}
+  // methodCounter.notFound.foreach{mthd => println(mthd.declaringClass.name) ; println(mthd.name)}
 
   def loadClasses(jars: Seq[Library], jarName: String): Seq[JavaReflectClass] =
     val jar = jars.find(_.name == jarName).get
