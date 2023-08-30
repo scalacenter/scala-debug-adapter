@@ -125,7 +125,7 @@ class HotCodeReplaceProvider(
             Success(())
           }
       } yield res
-      publishEvent(HotCodeReplaceEvent.EventType.END, "Completed hot code replace", classesToReplace);
+      publishEvent(HotCodeReplaceEvent.EventType.END, "Completed hot code replace", classesToReplace.asJava)
       threadFrameMap.clear()
       res
     }
