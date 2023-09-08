@@ -493,7 +493,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     )
     debuggee.assertFormatAndKind("example.B", "java.lang.String b()", "B.b: String", BinaryMethodKind.Getter)
 
-    if !isScala30 then // new in Scala 3.3.0
+    if !isScala30 then // new in Scala 3.3.1
       debuggee.assertNotSkipped("example.A$", "java.lang.Object a$lzyINIT1()")
       debuggee.assertSkip("example.A$", "java.lang.Object b$lzyINIT1()") // it's a forwarder
   }

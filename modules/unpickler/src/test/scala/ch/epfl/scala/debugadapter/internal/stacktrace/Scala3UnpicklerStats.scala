@@ -40,11 +40,11 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     val localLazyInitCounter = new Counter[Method]()
     val methodCounter = new Counter[Method]()
 
-    val jars = TestingResolver.fetch("org.scala-lang", "scala3-compiler_3", "3.3.0")
+    val jars = TestingResolver.fetch("org.scala-lang", "scala3-compiler_3", "3.3.1")
     val unpickler = new Scala3Unpickler(jars.map(_.absolutePath).toArray ++ javaRuntimeJars, println, testMode = true)
 
     for
-      cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
+      cls <- loadClasses(jars, "scala3-compiler_3-3.3.1")
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.process(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.process(cls, anonClassCounter)
