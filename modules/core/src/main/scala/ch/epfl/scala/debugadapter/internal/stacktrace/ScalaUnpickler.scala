@@ -24,6 +24,7 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
 
   override def shouldSkipOver(method: Method): Boolean = {
     if (method.isBridge) true
+    else if (isBoxingMethod(method)) true
     else if (isDynamicClass(method.declaringType)) true
     else if (isJava(method)) false
     else if (isConstructor(method)) false
@@ -143,6 +144,10 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
 
   private def isPrivateAccessor(method: Method): Boolean =
     method.name.matches(""".+\$access\$\d+""")
+
+  private def isBoxingMethod(method: Method): Boolean = {
+    method.declaringType().name().startsWith("scala.runtime.BoxesRunTime")
+  }
 }
 
 object ScalaUnpickler {
