@@ -25,7 +25,7 @@ private[internal] object RuntimeStepFilter {
     "java.lang.invoke.DirectMethodHandle.constructorMethod(java.lang.Object)"
   )
   private val scala3ClassesToSkip = Set("scala.runtime.LazyVals$")
-  private val scala2ClassesToSkip = Set.empty[String]
+  private val scala2ClassesToSkip = Set("scala.runtime.BoxesRunTime")
 
   def apply(scalaVersion: ScalaVersion): StepFilter = {
     if (scalaVersion.isScala2)
