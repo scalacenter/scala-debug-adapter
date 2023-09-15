@@ -21,6 +21,91 @@ class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1+`) {
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(7), StepIn.method("Main$.mTarget(String)"))
   }
+
+  test("skip exported methods") {
+    val source =
+      """|package example
+         |
+         |case class A():
+         |  def aa = 42
+         |
+         |case class B(a: A):
+         |  export a.*
+         |
+         |@main def Main = 
+         |  val b = B(A())
+         |  b.aa
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(11),
+      StepIn.line(4)
+    )
+  }
+
+  test("given lazy val") {
+    val source =
+      """|package example
+         |
+         |trait Msg {
+         |  def value: String
+         |}
+         |
+         |object Msg {
+         |  val default = new Msg {
+         |    def value: String = "Hello"
+         |  }
+         |  def greet(using msg: Msg): Unit = println(msg.value)
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    m
+         |    A.m
+         |    B.m
+         |  }
+         |
+         |  def m: Unit =
+         |    given Msg = Msg.default
+         |    Msg.greet
+         |    Msg.greet
+         |}
+         |
+         |object A {
+         |  given Msg = Msg.default
+         |  def m =
+         |    Msg.greet
+         |    Msg.greet
+         |}
+         |
+         |object B {
+         |  given Msg with
+         |    def value: String = "Hello"
+         |  def m =
+         |    Msg.greet
+         |    Msg.greet
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(23),
+      StepIn.line(22),
+      StepIn.line(23),
+      StepIn.line(11),
+      StepOut.line(24),
+      StepIn.line(11),
+      Breakpoint(30),
+      StepIn.line(28),
+      StepIn.line(30),
+      StepIn.line(11),
+      StepOut.line(31),
+      StepIn.line(11),
+      Breakpoint(38),
+      StepIn.line(11),
+      StepOut.line(39),
+      StepIn.line(11)
+    )
+  }
 }
 
 class Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)

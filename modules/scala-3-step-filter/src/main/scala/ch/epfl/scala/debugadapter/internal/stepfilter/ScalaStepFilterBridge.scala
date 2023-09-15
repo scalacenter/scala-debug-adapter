@@ -182,4 +182,4 @@ class ScalaStepFilterBridge(
     val isNonLazyGetterOrSetter =
       (!symbol.flags.is(Flags.Method) || symbol.is(Flags.Accessor)) &&
         !symbol.is(Flags.Lazy)
-    isNonLazyGetterOrSetter || symbol.is(Flags.Synthetic)
+    isNonLazyGetterOrSetter || symbol.is(Flags.Synthetic) || symbol.isExport
