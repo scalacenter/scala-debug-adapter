@@ -26,6 +26,7 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 import scala.util.control.NonFatal
+import io.reactivex.subjects.PublishSubject
 
 class HotCodeReplaceProvider(
     debuggee: Debuggee,
@@ -39,6 +40,7 @@ class HotCodeReplaceProvider(
   private var currentDebugSession: IDebugSession = null
   private val classesAccumulator: AtomicReference[Set[String]] = new AtomicReference(Set.empty)
   private val threadFrameMap: mutable.Map[ThreadReference, Seq[StackFrame]] = mutable.Map.empty
+  private val eventSubject = PublishSubject.create[HotCodeReplaceEvent]()
 
   override def initialize(context: IDebugAdapterContext, options: ju.Map[String, Object]): Unit = {
     this.context = context
@@ -46,6 +48,7 @@ class HotCodeReplaceProvider(
     this.subscription = debuggee.classesToUpdate.subscribe(classes => classesAccumulator.updateAndGet(_ ++ classes))
     this.sourceLookUp = context.getProvider(classOf[ISourceLookUpProvider]).asInstanceOf[SourceLookUpProvider]
     this.stackTraceProvider = context.getProvider(classOf[IStackTraceProvider]).asInstanceOf[StackTraceProvider]
+
   }
 
   override def close(): Unit = {
@@ -88,27 +91,44 @@ class HotCodeReplaceProvider(
       Failure(new DebugException("JVM does not support popping frames"))
     else Success(())
 
-  override def getEventHub: Observable[HotCodeReplaceEvent] =
-    Observable.empty()
+  override val getEventHub: Observable[HotCodeReplaceEvent] = eventSubject
+
+  private def publishEvent(tpe: HotCodeReplaceEvent.EventType, message: String): Unit = {
+    eventSubject.onNext(new HotCodeReplaceEvent(tpe, message));
+  }
+
+  private def publishEvent(tpe: HotCodeReplaceEvent.EventType, message: String, data: AnyRef): Unit = {
+    eventSubject.onNext(new HotCodeReplaceEvent(tpe, message, data));
+  }
 
   private def doHotCodeReplace(classesToReplace: Seq[String]): Try[Unit] = {
-    val res = for {
-      suspendedThreads <- getSuspendedThreads()
-      poppedThreads <- canPopFrames.transform(
-        _ => attemptPopFrames(suspendedThreads, classesToReplace),
-        e => Try(warnOrThrow("Cannot pop frames")).map(_ => Seq.empty)
-      )
-      _ = redefineClasses(classesToReplace)
-      res <-
-        if (containsObsoleteMethods(suspendedThreads))
-          Failure(new DebugException("Failed to complete hot code replace: JVM still contains obsolete code"))
-        else {
-          poppedThreads.foreach(stepIntoThread)
-          Success(())
-        }
-    } yield res
-    threadFrameMap.clear()
-    res
+    if (!currentDebugSession.getVM().canRedefineClasses()) {
+      val err = "JVM doesn't support hot reload classes"
+      publishEvent(HotCodeReplaceEvent.EventType.ERROR, err)
+      Failure(new DebugException(err))
+    } else {
+      val res = for {
+        suspendedThreads <- getSuspendedThreads()
+        poppedThreads <- canPopFrames.transform(
+          _ => attemptPopFrames(suspendedThreads, classesToReplace),
+          e => Try(warnOrThrow("Cannot pop frames")).map(_ => Seq.empty)
+        )
+        _ = publishEvent(HotCodeReplaceEvent.EventType.STARTING, "Start hot code replacement procedure...")
+        _ = redefineClasses(classesToReplace)
+        res <-
+          if (containsObsoleteMethods(suspendedThreads)) {
+            val err = "JVM contains obsolete methods"
+            publishEvent(HotCodeReplaceEvent.EventType.ERROR, err);
+            Failure(new DebugException(s"Failed to complete hot code replace: $err"))
+          } else {
+            poppedThreads.foreach(stepIntoThread)
+            Success(())
+          }
+      } yield res
+      publishEvent(HotCodeReplaceEvent.EventType.END, "Completed hot code replace", classesToReplace.asJava)
+      threadFrameMap.clear()
+      res
+    }
   }
 
   private def warnOrThrow(message: String) =
@@ -209,7 +229,7 @@ class HotCodeReplaceProvider(
               _: UnsupportedOperationException | _: NoClassDefFoundError | _: VerifyError | _: ClassFormatError |
               _: ClassCircularityError
             ) =>
-          // publishEvent(HotCodeReplaceEvent.EventType.ERROR, e.getMessage());
+          publishEvent(HotCodeReplaceEvent.EventType.ERROR, e.getMessage());
           Failure(new DebugException("Failed to redefine classes: " + e.getMessage()))
       }
   }

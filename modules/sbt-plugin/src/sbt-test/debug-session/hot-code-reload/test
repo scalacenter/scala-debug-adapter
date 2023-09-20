@@ -10,3 +10,7 @@ $ copy-file ./src/main/scala/example/A.scala.2 ./src/main/scala/example/A.scala
 > b / checkHotCodeReplace
 > b / stopDebugSession
 
+$ copy-file ./src/main/scala/example/A.scala.1 ./src/main/scala/example/A.scala
+> 'c / checkBreakpoint {"class":"example.Main","arguments":[],"jvmOptions":[]}'
+> c / checkHotCodeReplace
+> c / stopDebugSession
