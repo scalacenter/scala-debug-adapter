@@ -5,10 +5,13 @@ import com.sun.jdi.Location
 import ch.epfl.scala.debugadapter.ScalaVersion
 
 private[internal] class RuntimeStepFilter(classesToSkip: Set[String], methodsToSkip: Set[String]) extends StepFilter {
-  override def shouldSkipOver(method: Method): Boolean = shouldSkipOut(method)
+  override def shouldSkipOver(method: Method): Boolean = shouldSkipOut(method) || isBoxingMethod(method)
   override def shouldSkipOut(upperLocation: Location, method: Method): Boolean = shouldSkipOut(method)
   private def shouldSkipOut(method: Method): Boolean =
     classesToSkip.contains(method.declaringType.name) || methodsToSkip.contains(method.toString)
+  private def isBoxingMethod(method: Method): Boolean = {
+    method.declaringType().name().startsWith("scala.runtime.BoxesRunTime")
+  }
 }
 
 private[internal] object RuntimeStepFilter {
