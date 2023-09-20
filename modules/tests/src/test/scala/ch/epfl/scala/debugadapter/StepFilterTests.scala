@@ -34,7 +34,7 @@ class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1+`) {
          |  }
          |}""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(6), StepIn.method("Integer.valueOf(int): Integer"))
+    check(Breakpoint(6), StepIn.line(5))
   }
 
   test("skip exported methods") {
