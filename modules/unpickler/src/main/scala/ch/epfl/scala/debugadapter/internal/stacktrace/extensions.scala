@@ -5,13 +5,13 @@ import tastyquery.Trees.*
 import tastyquery.Names.*
 import tastyquery.Types.*
 import tastyquery.Modifiers.*
+import ch.epfl.scala.debugadapter.internal.binary
 
 extension (symbol: Symbol)
   def isTrait = symbol.isClass && symbol.asClass.isTrait
   def isAnonFun = symbol.nameStr == "$anonfun"
   def isAnonClass = symbol.nameStr == "$anon"
-  def matchName(name: String) =
-    symbol.nameStr == name
+  def matchName(name: String) = symbol.nameStr == name
   def isLocal = symbol.owner.isTerm
   def isModuleClass = symbol.isClass && symbol.asClass.isModuleClass
   def nameStr = symbol.name.toString
@@ -21,15 +21,14 @@ extension (symbol: TermSymbol)
   private def isLazyValInTrait: Boolean = symbol.owner.isTrait && symbol.isLazyVal
   private def isLazyVal: Boolean = symbol.kind == TermSymbolKind.LazyVal
 
-extension [T](binarySymbols: Seq[T])
-  def singleOrThrow(binaryName: String): T =
-    singleOptOrThrow(binaryName)
-      .getOrElse(throw new NotFoundException(s"Cannot find Scala symbol of $binaryName"))
+extension [T <: BinarySymbol](candidates: Seq[T])
+  def singleOrThrow(symbol: binary.Symbol): T =
+    singleOptOrThrow(symbol)
+      .getOrElse(throw new NotFoundException(symbol))
 
-  def singleOptOrThrow(binaryName: String): Option[T] =
-    if binarySymbols.size > 1 then
-      throw new AmbiguousException(s"Found ${binarySymbols.size} matching symbols for $binaryName")
-    else binarySymbols.headOption
+  def singleOptOrThrow(symbol: binary.Symbol): Option[T] =
+    if candidates.size > 1 then throw new AmbiguousException(symbol, candidates)
+    else candidates.headOption
 
 extension (name: Name)
   def isPackageObject: Boolean =

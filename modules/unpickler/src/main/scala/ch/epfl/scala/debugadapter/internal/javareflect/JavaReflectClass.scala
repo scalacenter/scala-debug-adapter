@@ -5,25 +5,33 @@ import scala.util.matching.Regex
 import scala.jdk.CollectionConverters.*
 
 class JavaReflectClass(cls: Class[?], sourceLineMap: Map[MethodSig, Seq[Int]]) extends binary.ClassType:
-
   override def name: String = cls.getTypeName
-
   override def superclass = Option(cls.getSuperclass).map(JavaReflectClass(_))
-
   override def interfaces = cls.getInterfaces.toList.map(JavaReflectClass(_))
+  override def isInterface: Boolean = cls.isInterface
+  override def sourceLines: Seq[Int] =
+    val distinctLines = sourceLineMap.values.flatten.toSeq.distinct
+    if distinctLines.size > 1 then Seq(distinctLines.min, distinctLines.max)
+    else distinctLines
 
   override def toString: String = cls.toString
 
-  override def isInterface: Boolean = cls.isInterface()
+  def declaredMethodsAndConstructors: Seq[binary.Method] =
+    declaredConstructors ++ declaredMethods
 
-  def declaredMethods: Seq[binary.Method] =
-    val methods = cls.getDeclaredMethods.map { m =>
+  private def declaredConstructors: Seq[binary.Method] =
+    cls.getDeclaredConstructors.map { c =>
+      val sig = JavaReflectUtils.signature(c)
+      val sourceLines = sourceLineMap(sig)
+      JavaReflectConstructor(c, sourceLines)
+    }
+
+  private def declaredMethods: Seq[binary.Method] =
+    cls.getDeclaredMethods.map { m =>
       val sig = JavaReflectUtils.signature(m)
       val sourceLines = sourceLineMap(sig)
       JavaReflectMethod(m, sourceLines)
     }
-    val constructors = cls.getDeclaredConstructors.map(JavaReflectConstructor(_, Seq.empty))
-    methods ++ constructors
 
 object JavaReflectClass:
   def apply(cls: Class[?], sourceLineMap: Map[MethodSig, Seq[Int]]): JavaReflectClass =

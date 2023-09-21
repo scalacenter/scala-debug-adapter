@@ -2,7 +2,7 @@ package ch.epfl.scala.debugadapter.internal.stacktrace
 
 import ch.epfl.scala.debugadapter.*
 import ch.epfl.scala.debugadapter.internal.IO
-import ch.epfl.scala.debugadapter.internal.binary.*
+import ch.epfl.scala.debugadapter.internal.binary
 import ch.epfl.scala.debugadapter.internal.javareflect.*
 import ch.epfl.scala.debugadapter.testfmk.TestingResolver
 import org.objectweb.asm
@@ -16,6 +16,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Properties
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration.DurationInt
+import scala.util.control.NonFatal
 
 class Scala3UnpicklerStats extends munit.FunSuite:
   private val javaRuntime = JavaRuntime(Properties.jdkHome).get
@@ -29,43 +30,63 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         )
       }
 
-  test("dotty stats"):
-    val localClassCounter = new Counter[ClassType]()
-    val innerClassCounter = new Counter[ClassType]()
-    val anonClassCounter = new Counter[ClassType]()
-    val topLevelClassCounter = new Counter[ClassType]()
+  test("scala3-compiler:3.3.0"):
+    val localClassCounter = Counter("local classes")
+    val innerClassCounter = Counter("inner classes")
+    val anonClassCounter = Counter("anon classes")
+    val topLevelClassCounter = Counter("top-level classes")
 
-    val localMethodCounter = new Counter[Method]()
-    val anonFunCounter = new Counter[Method]()
-    val localLazyInitCounter = new Counter[Method]()
-    val methodCounter = new Counter[Method]()
+    val localMethodCounter = Counter("local methods")
+    val anonFunCounter = Counter("anon functions")
+    val localLazyInitCounter = Counter("local lazy initializers")
+    val methodCounter = Counter("methods")
 
     val jars = TestingResolver.fetch("org.scala-lang", "scala3-compiler_3", "3.3.0")
     val unpickler = new Scala3Unpickler(jars.map(_.absolutePath).toArray ++ javaRuntimeJars, println, testMode = true)
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
+      // if cls.name == "dotty.tools.dotc.typer.Implicits$$anon$2"
+      // if cls.name == "dotty.tools.dotc.core.NameOps$$anon$3"
       clsSym <- cls match
-        case Patterns.LocalClass(_, _, _) => unpickler.process(cls, localClassCounter)
-        case Patterns.AnonClass(_, _) => unpickler.process(cls, anonClassCounter)
-        case Patterns.InnerClass(_) => unpickler.process(cls, innerClassCounter)
-        case _ => unpickler.process(cls, topLevelClassCounter)
-      method <- cls.declaredMethods
+        case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
+        case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
+        case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
+        case _ => unpickler.tryFind(cls, topLevelClassCounter)
+      method <- cls.declaredMethodsAndConstructors
     do
       method match
-        case Patterns.AnonFun(_) => unpickler.process(method, anonFunCounter)
-        case Patterns.LocalLazyInit(_, _) => unpickler.process(method, localLazyInitCounter)
-        case Patterns.LocalMethod(_, _) => unpickler.process(method, localMethodCounter)
-        case _ => unpickler.process(method, methodCounter)
-    localClassCounter.printStatus("local classes")
-    anonClassCounter.printStatus("anon classes")
-    innerClassCounter.printStatus("inner classes")
-    topLevelClassCounter.printStatus("top level classes")
-    localMethodCounter.printStatus("local methods")
-    anonFunCounter.printStatus("anon fun")
-    localLazyInitCounter.printStatus("local lazy inits")
-    methodCounter.printStatus("other methods")
-  // methodCounter.notFound.foreach{mthd => println(mthd.declaringClass.name) ; println(mthd.name)}
+        case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
+        case Patterns.LocalLazyInit(_, _) => unpickler.tryFind(method, localLazyInitCounter)
+        case Patterns.LocalMethod(_, _) => unpickler.tryFind(method, localMethodCounter)
+        case _ => unpickler.tryFind(method, methodCounter)
+    anonClassCounter.ambiguous.foreach { case AmbiguousException(symbol, candidates) =>
+      val lines = symbol.sourceLines.mkString("(", ", ", ")")
+      println(s"$symbol $lines is ambiguous:" + candidates.map(s"\n  - " + _).mkString)
+    }
+    checkCounter(localClassCounter, 42)
+    checkCounter(anonClassCounter, 401, expectedAmbiguous = 3, expectedNotFound = 26)
+    checkCounter(innerClassCounter, 2409)
+    checkCounter(topLevelClassCounter, 1313, expectedNotFound = 192)
+    localMethodCounter.printReport()
+    anonFunCounter.printReport()
+    localLazyInitCounter.printReport()
+    methodCounter.printReport()
+
+    // methodCounter.notFound.foreach{mthd => println(mthd.declaringClass.name) ; println(mthd.name)}
+
+  def checkCounter(
+      counter: Counter,
+      expectedSuccess: Int,
+      expectedAmbiguous: Int = 0,
+      expectedNotFound: Int = 0,
+      expectedExceptions: Int = 0
+  )(using munit.Location): Unit =
+    counter.printReport()
+    assertEquals(counter.success.size, expectedSuccess)
+    assertEquals(counter.ambiguous.size, expectedAmbiguous)
+    assertEquals(counter.notFound.size, expectedNotFound)
+    assertEquals(counter.exceptions.size, expectedExceptions)
 
   def loadClasses(jars: Seq[Library], jarName: String): Seq[JavaReflectClass] =
     val jar = jars.find(_.name == jarName).get
@@ -114,54 +135,55 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     linesMap
 
   extension (unpickler: Scala3Unpickler)
-    def process(cls: ClassType, counter: Counter[ClassType]): Option[Symbol] =
+    def tryFind(cls: binary.ClassType, counter: Counter): Option[BinaryClassSymbol] =
       try
         val sym = unpickler.findClass(cls)
-        counter.addSuccess(cls)
-        Some(sym.symbol)
+        counter.success += cls
+        Some(sym)
       catch
-        case AmbiguousException(e) =>
-          counter.addAmbiguous(cls)
+        case ambiguious: AmbiguousException =>
+          counter.ambiguous += ambiguious
           None
-        case NotFoundException(e) =>
-          counter.addNotFound(cls)
+        case notFound: NotFoundException =>
+          counter.notFound += notFound
           None
-        case e =>
-          counter.exceptions += e.toString
+        case e: Exception =>
+          counter.exceptions += e
           None
 
-    def process(mthd: Method, counter: Counter[Method]): Unit =
+    def tryFind(mthd: binary.Method, counter: Counter): Unit =
       try
-        val sym = unpickler.findSymbol(mthd)
-        counter.addSuccess(mthd)
+        val sym = unpickler.findMethod(mthd)
+        counter.success += mthd
       catch
-        case NotFoundException(e) =>
-          counter.addNotFound(mthd)
-        case AmbiguousException(e) =>
-          counter.addAmbiguous(mthd)
-        case e =>
-          counter.exceptions += e.toString
+        case notFound: NotFoundException => counter.notFound += notFound
+        case ambiguous: AmbiguousException => counter.ambiguous += ambiguous
+        case e: Exception => counter.exceptions += e
 
   override def munitTimeout: Duration = 2.minutes
 
-  class Counter[T]:
-    val success: mutable.Buffer[T] = mutable.Buffer.empty[T]
-    var notFound: mutable.Buffer[T] = mutable.Buffer.empty[T]
-    var ambiguous: mutable.Buffer[T] = mutable.Buffer.empty[T]
-    var exceptions: mutable.Buffer[String] = mutable.Buffer.empty[String]
-
-    def addSuccess(cls: T) = success += cls
-
-    def addNotFound(cls: T) = notFound += cls
-
-    def addAmbiguous(cls: T) = ambiguous += cls
+  class Counter(name: String):
+    val success = mutable.Buffer.empty[binary.Symbol]
+    val notFound = mutable.Buffer.empty[NotFoundException]
+    val ambiguous = mutable.Buffer.empty[AmbiguousException]
+    val exceptions = mutable.Buffer.empty[Exception]
 
     def printExceptions = exceptions.foreach(println(_))
 
-    def printStatus(m: String) =
-      println(s"$m:")
-      println(s"  - total is ${ambiguous.size + notFound.size + success.size}")
-      println(s"  - success is ${success.size}")
-      println(s"  - ambiguous is ${ambiguous.size}")
-      println(s"  - notFound is ${notFound.size}")
-      println(s"  - exceptions is ${exceptions.size}")
+    def size: Int = success.size + notFound.size + ambiguous.size + exceptions.size
+
+    def printReport() =
+      def format(kind: String, count: Int): Option[String] =
+        val percent = count * 100 / size
+        Option.when(count > 0)(s"$kind: $count ($percent%)")
+      if size > 0 then
+        val stats = Seq(
+          "success" -> success.size,
+          "ambiguous" -> ambiguous.size,
+          "not found" -> notFound.size,
+          "exceptions" -> exceptions.size
+        )
+          .flatMap(format)
+          .map("\n  - " + _)
+          .mkString
+        println(s"$size $name: $stats")

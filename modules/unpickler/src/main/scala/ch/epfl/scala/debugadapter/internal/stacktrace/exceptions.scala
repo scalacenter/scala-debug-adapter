@@ -1,4 +1,8 @@
 package ch.epfl.scala.debugadapter.internal.stacktrace
 
-case class AmbiguousException(m: String) extends Exception
-case class NotFoundException(m: String) extends Exception
+import ch.epfl.scala.debugadapter.internal.binary
+
+case class AmbiguousException(symbol: binary.Symbol, candidates: Seq[BinarySymbol])
+    extends Exception(s"Found ${candidates.size} matching symbols for ${symbol.name}")
+
+case class NotFoundException(symbol: binary.Symbol) extends Exception(s"Cannot find binary symbol of $symbol")

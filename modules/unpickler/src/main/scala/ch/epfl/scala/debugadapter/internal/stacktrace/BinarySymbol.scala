@@ -3,7 +3,9 @@ package ch.epfl.scala.debugadapter.internal.stacktrace
 import tastyquery.Symbols.*
 import tastyquery.Types.Type
 
-enum BinaryClassSymbol:
+sealed trait BinarySymbol
+
+enum BinaryClassSymbol extends BinarySymbol:
   case BinaryClass(symbol: ClassSymbol, kind: BinaryClassKind)
   case BinarySAMClass(symbol: TermSymbol, samType: Type)
   def symbol: Symbol
@@ -11,10 +13,16 @@ enum BinaryClassSymbol:
     case BinaryClass(_, kind) => kind
     case _ => BinaryClassKind.SAMClass
 
+  override def toString: String =
+    val span = symbol.tree.map(tree => s"(${tree.pos.startLine}, ${tree.pos.endLine})").getOrElse("")
+    this match
+      case BinarySAMClass(symbol, samType) => s"BinarySAMClass($symbol $span, ${samType.showBasic})"
+      case BinaryClass(symbol, kind) => s"BinaryClass($symbol $span, $kind)"
+
 enum BinaryClassKind:
   case TopLevelOrInner, Local, Anon, SAMClass
 
-enum BinaryMethodSymbol:
+enum BinaryMethodSymbol extends BinarySymbol:
   case BinaryMethod(binaryOwner: BinaryClassSymbol, term: TermSymbol, kind: BinaryMethodKind)
   case BinaryByNameArg(binaryOwner: BinaryClassSymbol)
   case BinaryOuter(binaryOwner: BinaryClassSymbol, outerClass: ClassSymbol)

@@ -1,7 +1,6 @@
 package ch.epfl.scala.debugadapter.internal.binary
 
-trait Parameter:
-  def name: String
+trait Parameter extends Symbol:
   def `type`: Type
 
   def isThis: Boolean = name == "$this"

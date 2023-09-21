@@ -1171,7 +1171,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
 
     private def assertFind(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
-      unpickler.findSymbol(m)
+      unpickler.findMethod(m)
 
     private def assertSkip(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
@@ -1183,11 +1183,11 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
 
     private def assertNotFound(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
-      intercept[NotFoundException](unpickler.findSymbol(m))
+      intercept[NotFoundException](unpickler.findMethod(m))
 
     private def assertAmbiguous(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
-      intercept[AmbiguousException](unpickler.findSymbol(m))
+      intercept[AmbiguousException](unpickler.findMethod(m))
 
     private def assertAmbiguous(declaringType: String)(using munit.Location): Unit =
       val cls = getClass(declaringType)
@@ -1201,7 +1201,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
         using munit.Location
     ): Unit =
       val m = getMethod(declaringType, javaSig)
-      val binarySymbol = unpickler.findSymbol(m)
+      val binarySymbol = unpickler.findMethod(m)
       assertEquals(unpickler.formatter.format(binarySymbol), expected)
       assertEquals(binarySymbol.symbolKind, kind)
 
