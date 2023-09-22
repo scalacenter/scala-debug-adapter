@@ -772,8 +772,6 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       Breakpoint(31),
       StepIn.line(17),
       Breakpoint(32),
-      StepIn.method("BoxesRunTime.boxToInteger(int): Integer"),
-      StepOut.line(32),
       StepIn.line(18),
       Breakpoint(33),
       StepIn.line(19)
