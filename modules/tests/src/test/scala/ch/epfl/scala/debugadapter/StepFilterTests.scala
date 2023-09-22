@@ -23,6 +23,41 @@ class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1+`) {
     check(Breakpoint(7), StepIn.method(if (isScala3) "Main.m(message: String): Unit" else "Main$.mTarget(String)"))
   }
 
+  test("skip boxing methods") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val f: Int => String = x => x.toString
+         |    f(1)
+         |  }
+         |}""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(6), StepIn.line(5))
+  }
+
+  test("skip exported methods") {
+    val source =
+      """|package example
+         |
+         |case class A():
+         |  def aa = 42
+         |
+         |case class B(a: A):
+         |  export a.*
+         |
+         |@main def Main = 
+         |  val b = B(A())
+         |  b.aa
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(11),
+      StepIn.line(4)
+    )
+  }
+
   test("given lazy val") {
     val source =
       """|package example
@@ -737,8 +772,6 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       Breakpoint(31),
       StepIn.line(17),
       Breakpoint(32),
-      StepIn.method("BoxesRunTime.boxToInteger(int): Integer"),
-      StepOut.line(32),
       StepIn.line(18),
       Breakpoint(33),
       StepIn.line(19)

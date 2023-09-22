@@ -27,7 +27,8 @@ private[internal] object RuntimeStepFilter {
     "scala.runtime.LazyLong",
     "scala.runtime.LazyFloat",
     "scala.runtime.LazyDouble",
-    "scala.runtime.LazyUnit"
+    "scala.runtime.LazyUnit",
+    "scala.runtime.BoxesRunTime"
   )
   private val scala3ClassesToSkip = scalaClassesToSkip ++ Set("scala.runtime.LazyVals$")
   private val scala2ClassesToSkip = scalaClassesToSkip
