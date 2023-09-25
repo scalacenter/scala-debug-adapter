@@ -6,6 +6,7 @@ import tastyquery.Names.*
 import tastyquery.Types.*
 import tastyquery.Modifiers.*
 import ch.epfl.scala.debugadapter.internal.binary
+import tastyquery.SourcePosition
 
 extension (symbol: Symbol)
   def isTrait = symbol.isClass && symbol.asClass.isTrait
@@ -72,3 +73,11 @@ extension (prefix: Prefix)
     prefix match
       case p: PackageRef => p.fullyQualifiedName.toString == "scala"
       case _ => false
+
+extension (pos: SourcePosition)
+  def isEnclosing(other: SourcePosition): Boolean =
+    pos.sourceFile == other.sourceFile
+      && pos.hasLineColumnInformation
+      && other.hasLineColumnInformation
+      && pos.startLine < other.startLine
+      && pos.endLine > other.endLine
