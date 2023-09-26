@@ -76,11 +76,11 @@ class Scala3Unpickler(
               case (t: TermSymbol, None) if (t.isLazyVal || t.isModuleVal) && t.matchName(name) => t
             }
           case Patterns.AnonFun(prefix) =>
-            collectLocalMethods(binaryClass, LocalLazyInit, method.sourceLines) {
+            collectLocalMethods(binaryClass, AnonFun, method.sourceLines) {
               case (t: TermSymbol, None) if t.isAnonFun && matchSignature(method, t) => t
             }
           case Patterns.LocalMethod(name, _) =>
-            collectLocalMethods(binaryClass, LocalLazyInit, method.sourceLines) {
+            collectLocalMethods(binaryClass, LocalDef, method.sourceLines) {
               case (t: TermSymbol, None) if t.matchName(name) && matchSignature(method, t) => t
             }
           case Patterns.LazyInit(name) =>
@@ -130,7 +130,7 @@ class Scala3Unpickler(
     for
       cls <- withCompanionIfExtendsAnyVal(binaryClass.symbol)
       term <- collectLocalSymbols(cls, sourceLines)(symbolMatcher)
-    yield BinaryMethod(binaryClass, term, LocalDef)
+    yield BinaryMethod(binaryClass, term, kind)
 
   def withCompanionIfExtendsAnyVal(cls: ClassSymbol): Seq[ClassSymbol] =
     cls.companionClass match
