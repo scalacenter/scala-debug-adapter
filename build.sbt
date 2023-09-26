@@ -75,7 +75,7 @@ lazy val core = projectMatrix
   .enablePlugins(SbtJdiTools, BuildInfoPlugin)
   .settings(
     name := "scala-debug-adapter",
-    scalacOptionsSetting,
+    scalacOptionsSettings,
     libraryDependencies ++= List(
       Dependencies.scalaReflect(scalaVersion.value),
       Dependencies.asm,
@@ -114,24 +114,11 @@ lazy val tests = projectMatrix
       Dependencies.coursier.cross(CrossVersion.for3Use2_13),
       Dependencies.coursierJvm.cross(CrossVersion.for3Use2_13)
     ),
-    scalacOptionsSetting,
+    scalacOptionsSettings,
     PgpKeys.publishSigned := {},
     publish := {},
-    // Test / javaOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=1044",
-    Test / fork := true,
     Test / baseDirectory := (ThisBuild / baseDirectory).value / "modules" / "tests",
-    // do not use sbt logger, otherwise the output of a test only appears at the end of the suite
-    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "+l"),
-    Test / testOptions := (Test / testOptions)
-      .dependsOn(
-        // break cyclic reference
-        LocalProject("expressionCompiler2_12") / publishLocal,
-        LocalProject("expressionCompiler2_13") / publishLocal,
-        LocalProject("expressionCompiler3_0") / publishLocal,
-        LocalProject("expressionCompiler3") / publishLocal,
-        LocalProject("unpickler3") / publishLocal
-      )
-      .value
+    testOptionsSettings
   )
   .dependsOn(core)
 
@@ -141,7 +128,7 @@ lazy val sbtPlugin = project
   .settings(
     name := "sbt-debug-adapter",
     scalaVersion := Dependencies.scala212,
-    scalacOptionsSetting,
+    scalacOptionsSettings,
     sbtVersion := "1.4.9",
     scriptedSbt := "1.5.5",
     Compile / generateContrabands / contrabandFormatsForType := ContrabandConfig.getFormats,
@@ -197,7 +184,7 @@ lazy val expressionCompiler = projectMatrix
     },
     Compile / doc / sources := Seq.empty,
     libraryDependencies += Dependencies.scalaCompiler(scalaVersion.value),
-    scalacOptionsSetting
+    scalacOptionsSettings
   )
 
 lazy val unpickler3: Project = project
@@ -209,16 +196,32 @@ lazy val unpickler3: Project = project
     scalaVersion := Dependencies.scala31Plus,
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
-      "ch.epfl.scala" %% "tasty-query" % "0.10.0",
+      "ch.epfl.scala" %% "tasty-query" % "0.9.0+29-1dc86f2f-SNAPSHOT",
       "org.scala-lang" %% "tasty-core" % scalaVersion.value,
+      Dependencies.asm,
+      Dependencies.asmUtil,
       Dependencies.munit % Test
     ),
-    Test / fork := true,
-    // do not use sbt logger, otherwise the output of a test only appears at the end of the suite
-    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "+l")
+    testOptionsSettings
   )
 
-lazy val scalacOptionsSetting = Def.settings(
+lazy val testOptionsSettings = Def.settings(
+  Test / fork := true,
+  // do not use sbt logger, otherwise the output of a test only appears at the end of the suite
+  Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "+l"),
+  Test / testOptions := (Test / testOptions)
+    .dependsOn(
+      // break cyclic reference
+      LocalProject("expressionCompiler2_12") / publishLocal,
+      LocalProject("expressionCompiler2_13") / publishLocal,
+      LocalProject("expressionCompiler3_0") / publishLocal,
+      LocalProject("expressionCompiler3") / publishLocal,
+      LocalProject("unpickler3") / publishLocal
+    )
+    .value
+)
+
+lazy val scalacOptionsSettings = Def.settings(
   scalacOptions ++= onScalaVersion(
     scala212 = Seq("-Xsource:3", "-Ywarn-unused-import", "-deprecation"),
     scala213 = Seq("-Xsource:3", "-Wunused:imports", "-deprecation"),

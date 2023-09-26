@@ -1130,6 +1130,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
   }
 
   extension (debuggee: TestingDebuggee)
+    private def loader: JavaReflectLoader = JavaReflectLoader(debuggee.classLoader, readSourceLines = false)
+
     private def unpickler: Scala3Unpickler =
       val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
         case Java8(_, classJars, _) => classJars
@@ -1138,9 +1140,6 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       }
       val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
       new Scala3Unpickler(debuggeeClasspath, println, testMode = true)
-
-    private def getClass(declaringType: String): binary.ClassType =
-      JavaReflectClass(debuggee.classLoader.loadClass(declaringType), Map.empty)
 
     private def getMethod(declaringType: String, javaSig: String)(using munit.Location): binary.Method =
       def typeAndName(p: String): (String, String) =
@@ -1152,22 +1151,23 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       val (returnType, name) = typeAndName(parts(0))
       val params = parts.drop(1).map(typeAndName)
 
-      def matchParams(javaParams: Array[Parameter]): Boolean =
-        javaParams.map(p => (p.getType.getTypeName, p.getName)).toSeq == params.toSeq
+      def matchParams(javaParams: Seq[binary.Parameter]): Boolean =
+        javaParams.map(p => (p.`type`.name, p.name)) == params.toSeq
 
-      val cls = debuggee.classLoader.loadClass(declaringType)
+      val cls = loader.loadClass(declaringType)
       if name == "<init>" then
-        val constructor = cls.getDeclaredConstructors.find(m => matchParams(m.getParameters))
+        val constructor =
+          cls.declaredMethodsAndConstructors.find(m => m.name == "<init>" && matchParams(m.allParameters))
         assert(constructor.isDefined)
-        JavaReflectConstructor(constructor.get, Seq.empty)
+        constructor.get
       else
-        val method = cls.getDeclaredMethods
+        val method = cls.declaredMethodsAndConstructors
           .find { m =>
             // println(s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})")
-            m.getName == name && m.getReturnType.getName == returnType && matchParams(m.getParameters)
+            m.name == name && m.returnType.exists(_.name == returnType) && matchParams(m.allParameters)
           }
         assert(method.isDefined)
-        JavaReflectMethod(method.get, Seq.empty)
+        method.get
 
     private def assertFind(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val m = getMethod(declaringType, javaSig)
@@ -1190,7 +1190,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       intercept[AmbiguousException](unpickler.findMethod(m))
 
     private def assertAmbiguous(declaringType: String)(using munit.Location): Unit =
-      val cls = getClass(declaringType)
+      val cls = loader.loadClass(declaringType)
       intercept[AmbiguousException](unpickler.findClass(cls))
 
     private def assertFormat(declaringType: String, javaSig: String, expected: String)(using munit.Location): Unit =
@@ -1206,13 +1206,13 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       assertEquals(binarySymbol.symbolKind, kind)
 
     private def assertFormat(declaringType: String, expected: String)(using munit.Location): Unit =
-      val cls = getClass(declaringType)
+      val cls = loader.loadClass(declaringType)
       assertEquals(unpickler.formatClass(cls), expected)
 
     private def assertFormatAndKind(declaringType: String, expected: String, kind: BinaryClassKind)(using
         munit.Location
     ): Unit =
-      val cls = getClass(declaringType)
+      val cls = loader.loadClass(declaringType)
       val binarySymbol = unpickler.findClass(cls)
       assertEquals(unpickler.formatter.format(binarySymbol), expected)
       assertEquals(unpickler.findClass(cls, false).symbolKind, kind)

@@ -46,9 +46,6 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
-      // if cls.name == "dotty.tools.dotc.typer.Implicits$$anon$2"
-      // if cls.name == "dotty.tools.dotc.core.NameOps$$anon$3"
-      // if cls.name == "dotty.tools.dotc.typer.Typer$BindingPrec$$anon$9"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
@@ -61,8 +58,6 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case Patterns.LocalLazyInit(_, _) => unpickler.tryFind(method, localLazyInitCounter)
         case Patterns.LocalMethod(_, _) => unpickler.tryFind(method, localMethodCounter)
         case _ => unpickler.tryFind(method, methodCounter)
-    // anonClassCounter.printNotFound()
-    // anonClassCounter.printAmbiguous()
     localClassCounter.printReport()
     anonClassCounter.printReport()
     innerClassCounter.printReport()
@@ -72,13 +67,13 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     localLazyInitCounter.printReport()
     methodCounter.printReport()
     checkCounter(localClassCounter, 42)
-    checkCounter(anonClassCounter, 403, expectedAmbiguous = 1, expectedNotFound = 26)
+    checkCounter(anonClassCounter, 424, expectedNotFound = 6)
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1313, expectedNotFound = 192)
-    checkCounter(localMethodCounter, 2514, expectedAmbiguous = 4, expectedNotFound = 443)
-    checkCounter(anonFunCounter, 5340, expectedAmbiguous = 63, expectedNotFound = 1581)
+    checkCounter(localMethodCounter, 2524, expectedNotFound = 437)
+    checkCounter(anonFunCounter, 5404, expectedAmbiguous = 36, expectedNotFound = 1544)
     checkCounter(localLazyInitCounter, 107, expectedNotFound = 1)
-    checkCounter(methodCounter, 45788, expectedAmbiguous = 1004, expectedNotFound = 8239, expectedExceptions = 26)
+    checkCounter(methodCounter, 46540, expectedAmbiguous = 172, expectedNotFound = 8515, expectedExceptions = 30)
 
   def checkCounter(
       counter: Counter,
@@ -94,49 +89,23 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
   def loadClasses(jars: Seq[Library], jarName: String): Seq[JavaReflectClass] =
     val jar = jars.find(_.name == jarName).get
-    val classLoader = new URLClassLoader(jars.map(_.absolutePath.toUri.toURL).toArray)
-    val classes = IO
+    val classNames = IO
       .withinJarFile(jar.absolutePath) { fs =>
-        val root = fs.getPath("/")
-        val sourceMatcher = fs.getPathMatcher("glob:**.class")
+        val classMatcher = fs.getPathMatcher("glob:**.class")
         Files
-          .walk(root: Path)
-          .filter(sourceMatcher.matches)
+          .walk(fs.getPath("/"): Path)
+          .filter(classMatcher.matches)
           .iterator
           .asScala
-          .map { classFile =>
-            val inputStream = Files.newInputStream(classFile)
-            val reader = new asm.ClassReader(inputStream)
-            val className = reader.getClassName.replace('/', '.')
-            val lineNumbers = getLineNumbers(reader)
-            JavaReflectClass(classLoader.loadClass(className), lineNumbers)
-          }
+          .map(_.toString.stripPrefix("/").stripSuffix(".class").replace('/', '.'))
           .toSeq
       }
       .get
-    println(s"classNames: ${classes.size}")
+    val classLoader = new URLClassLoader(jars.map(_.absolutePath.toUri.toURL).toArray)
+    val loader = JavaReflectLoader(classLoader)
+    val classes = classNames.map(loader.loadClass)
+    println(s"Loaded ${classes.size} classes in $jarName.")
     classes
-
-  def getLineNumbers(reader: asm.ClassReader): Map[MethodSig, Seq[Int]] =
-    var linesMap = Map.empty[MethodSig, Seq[Int]]
-    val visitor =
-      new asm.ClassVisitor(asm.Opcodes.ASM9):
-        override def visitMethod(
-            access: Int,
-            name: String,
-            descriptor: String,
-            signature: String,
-            exceptions: Array[String]
-        ): asm.MethodVisitor =
-          new asm.MethodVisitor(asm.Opcodes.ASM9):
-            val lines = mutable.Set.empty[Int]
-            override def visitLineNumber(line: Int, start: asm.Label): Unit =
-              lines += line
-            override def visitEnd(): Unit =
-              val span = if lines.size > 1 then Seq(lines.min, lines.max) else lines.toSeq
-              linesMap = linesMap + (MethodSig(name, descriptor) -> span)
-    reader.accept(visitor, asm.Opcodes.ASM9)
-    linesMap
 
   extension (unpickler: Scala3Unpickler)
     def tryFind(cls: binary.ClassType, counter: Counter): Option[BinaryClassSymbol] =
@@ -172,8 +141,6 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     val ambiguous = mutable.Buffer.empty[AmbiguousException]
     val exceptions = mutable.Buffer.empty[Exception]
 
-    def printExceptions = exceptions.foreach(println(_))
-
     def size: Int = success.size + notFound.size + ambiguous.size + exceptions.size
 
     def printReport() =
@@ -203,3 +170,6 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         val lines = symbol.sourceLines.mkString("(", ", ", ")")
         println(s"$symbol $lines is ambiguous:" + candidates.map(s"\n  - " + _).mkString)
       }
+
+    def printFirstException() = exceptions.headOption.foreach(println)
+    def printExceptions() = exceptions.foreach(println)

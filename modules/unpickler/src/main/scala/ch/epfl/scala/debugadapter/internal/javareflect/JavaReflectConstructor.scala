@@ -5,18 +5,19 @@ import ch.epfl.scala.debugadapter.internal.binary
 import java.lang.reflect.Constructor
 import java.lang.reflect.Method
 
-class JavaReflectConstructor(constructor: Constructor[?], val sourceLines: Seq[Int]) extends binary.Method:
+class JavaReflectConstructor(constructor: Constructor[?], val sourceLines: Seq[Int], loader: JavaReflectLoader)
+    extends binary.Method:
 
   override def returnType: Option[binary.Type] =
-    Some(JavaReflectClass(classOf[Unit]))
+    Some(loader.loadClass(classOf[Unit]))
 
   override def returnTypeName: String = "void"
 
   override def declaringClass: binary.ClassType =
-    JavaReflectClass(constructor.getDeclaringClass)
+    loader.loadClass(constructor.getDeclaringClass)
 
   override def allParameters: Seq[binary.Parameter] =
-    constructor.getParameters.map(JavaReflectParameter.apply(_))
+    constructor.getParameters.map(JavaReflectParameter.apply(_, loader))
 
   override def name: String = "<init>"
 

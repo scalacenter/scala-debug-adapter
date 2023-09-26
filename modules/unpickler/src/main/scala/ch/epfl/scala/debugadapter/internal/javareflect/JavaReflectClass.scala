@@ -4,10 +4,11 @@ import ch.epfl.scala.debugadapter.internal.binary
 import scala.util.matching.Regex
 import scala.jdk.CollectionConverters.*
 
-class JavaReflectClass(cls: Class[?], sourceLineMap: Map[MethodSig, Seq[Int]]) extends binary.ClassType:
+class JavaReflectClass(cls: Class[?], sourceLineMap: Map[MethodSig, Seq[Int]], loader: JavaReflectLoader)
+    extends binary.ClassType:
   override def name: String = cls.getTypeName
-  override def superclass = Option(cls.getSuperclass).map(JavaReflectClass(_))
-  override def interfaces = cls.getInterfaces.toList.map(JavaReflectClass(_))
+  override def superclass = Option(cls.getSuperclass).map(loader.loadClass)
+  override def interfaces = cls.getInterfaces.toList.map(loader.loadClass)
   override def isInterface: Boolean = cls.isInterface
   override def sourceLines: Seq[Int] =
     val distinctLines = sourceLineMap.values.flatten.toSeq.distinct
@@ -22,19 +23,13 @@ class JavaReflectClass(cls: Class[?], sourceLineMap: Map[MethodSig, Seq[Int]]) e
   private def declaredConstructors: Seq[binary.Method] =
     cls.getDeclaredConstructors.map { c =>
       val sig = JavaReflectUtils.signature(c)
-      val sourceLines = sourceLineMap(sig)
-      JavaReflectConstructor(c, sourceLines)
+      val sourceLines = sourceLineMap.getOrElse(sig, Seq.empty)
+      JavaReflectConstructor(c, sourceLines, loader)
     }
 
   private def declaredMethods: Seq[binary.Method] =
     cls.getDeclaredMethods.map { m =>
       val sig = JavaReflectUtils.signature(m)
-      val sourceLines = sourceLineMap(sig)
-      JavaReflectMethod(m, sourceLines)
+      val sourceLines = sourceLineMap.getOrElse(sig, Seq.empty)
+      JavaReflectMethod(m, sourceLines, loader)
     }
-
-object JavaReflectClass:
-  def apply(cls: Class[?], sourceLineMap: Map[MethodSig, Seq[Int]]): JavaReflectClass =
-    new JavaReflectClass(cls, sourceLineMap)
-
-  def apply(cls: Class[?]): JavaReflectClass = new JavaReflectClass(cls, Map.empty)
