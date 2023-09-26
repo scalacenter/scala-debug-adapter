@@ -28,7 +28,7 @@ class JavaReflectLoader(classLoader: ClassLoader, readSourceLines: Boolean = tru
 
   private def getLineNumbers(reader: asm.ClassReader): Map[MethodSig, Seq[Int]] =
     assert(readSourceLines)
-    var linesMap = Map.empty[MethodSig, Seq[Int]]
+    val linesMap = mutable.Map.empty[MethodSig, Seq[Int]]
     val visitor =
       new asm.ClassVisitor(asm.Opcodes.ASM9):
         override def visitMethod(
@@ -39,11 +39,10 @@ class JavaReflectLoader(classLoader: ClassLoader, readSourceLines: Boolean = tru
             exceptions: Array[String]
         ): asm.MethodVisitor =
           new asm.MethodVisitor(asm.Opcodes.ASM9):
-            val lines = mutable.Set.empty[Int]
+            val lines = mutable.Buffer.empty[Int]
             override def visitLineNumber(line: Int, start: asm.Label): Unit =
               lines += line
             override def visitEnd(): Unit =
-              val span = if lines.size > 1 then Seq(lines.min, lines.max) else lines.toSeq
-              linesMap = linesMap + (MethodSig(name, descriptor) -> span)
+              linesMap += MethodSig(name, descriptor) -> lines.toSeq.distinct.sorted
     reader.accept(visitor, asm.Opcodes.ASM9)
-    linesMap
+    linesMap.toMap

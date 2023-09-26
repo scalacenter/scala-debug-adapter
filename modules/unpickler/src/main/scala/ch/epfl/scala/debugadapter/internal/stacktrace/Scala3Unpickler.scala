@@ -172,7 +172,7 @@ class Scala3Unpickler(
           def isEnclosing(symbol: Symbol, other: Symbol): Boolean =
             symbol.tree.zip(other.tree).exists((tree, other) => tree.pos.isEnclosing(other.pos))
           matchingSymbols
-            .filterNot { case (symbol, _) => matchingSymbols.keys.exists(other => isEnclosing(symbol, other)) }
+            .filterNot((symbol, _) => matchingSymbols.keys.exists(other => symbol.pos.isEnclosing(other.pos)))
             .values
             .toSeq
 

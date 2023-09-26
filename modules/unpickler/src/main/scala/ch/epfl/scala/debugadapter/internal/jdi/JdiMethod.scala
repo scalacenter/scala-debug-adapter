@@ -24,9 +24,7 @@ class JdiMethod(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method") 
   override def returnTypeName: String = invokeMethod("returnTypeName")
 
   override def sourceLines: Seq[Int] =
-    val allDistinctLines = allLineLocations.map(_.lineNumber).distinct
-    if allDistinctLines.size > 1 then Seq(allDistinctLines.min, allDistinctLines.max)
-    else allDistinctLines
+    allLineLocations.map(_.lineNumber).distinct.sorted
 
   override def isBridge: Boolean = invokeMethod("isBridge")
 

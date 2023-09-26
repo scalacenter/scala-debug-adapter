@@ -16,6 +16,7 @@ extension (symbol: Symbol)
   def isLocal = symbol.owner.isTerm
   def isModuleClass = symbol.isClass && symbol.asClass.isModuleClass
   def nameStr = symbol.name.toString
+  def pos: SourcePosition = symbol.tree.map(_.pos).getOrElse(SourcePosition.NoPosition)
 
 extension (symbol: TermSymbol)
   private def isGetterOrSetter = !symbol.isMethod || symbol.isSetter
