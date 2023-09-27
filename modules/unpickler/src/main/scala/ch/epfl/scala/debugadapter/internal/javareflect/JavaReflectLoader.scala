@@ -1,5 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.javareflect
 
+import ch.epfl.scala.debugadapter.internal.binary.*
+
 import scala.collection.mutable
 import org.objectweb.asm
 import java.io.IOException
@@ -26,9 +28,9 @@ class JavaReflectLoader(classLoader: ClassLoader, readSourceLines: Boolean = tru
       else Map.empty
     JavaReflectClass(cls, lines, this)
 
-  private def getLineNumbers(reader: asm.ClassReader): Map[MethodSig, Seq[Int]] =
+  private def getLineNumbers(reader: asm.ClassReader): Map[MethodSig, Seq[SourceLine]] =
     assert(readSourceLines)
-    val linesMap = mutable.Map.empty[MethodSig, Seq[Int]]
+    val linesMap = mutable.Map.empty[MethodSig, Seq[SourceLine]]
     val visitor =
       new asm.ClassVisitor(asm.Opcodes.ASM9):
         override def visitMethod(
@@ -43,6 +45,6 @@ class JavaReflectLoader(classLoader: ClassLoader, readSourceLines: Boolean = tru
             override def visitLineNumber(line: Int, start: asm.Label): Unit =
               lines += line
             override def visitEnd(): Unit =
-              linesMap += MethodSig(name, descriptor) -> lines.toSeq.distinct.sorted
+              linesMap += MethodSig(name, descriptor) -> lines.toSeq.distinct.sorted.map(SourceLine(_))
     reader.accept(visitor, asm.Opcodes.ASM9)
     linesMap.toMap

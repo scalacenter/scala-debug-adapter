@@ -1129,6 +1129,22 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.A", "java.lang.String m(java.lang.String x)", "A.m(x: String): String")
   }
 
+  test("adapted anon fun") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  def m(x: String): String = x.takeWhile(_ != '.')
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat(
+      "example.A",
+      "boolean m$$anonfun$adapted$1(java.lang.Object _$1)",
+      "A.m.<adapted anon fun>(Char): Boolean"
+    )
+  }
+
   extension (debuggee: TestingDebuggee)
     private def loader: JavaReflectLoader = JavaReflectLoader(debuggee.classLoader, readSourceLines = false)
 
@@ -1155,18 +1171,22 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
         javaParams.map(p => (p.`type`.name, p.name)) == params.toSeq
 
       val cls = loader.loadClass(declaringType)
+      def notFoundMessage: String =
+        val allMethods = cls.declaredMethodsAndConstructors
+          .map(m =>
+            s"  ${m.returnType.map(_.name).getOrElse("unknown")} ${m.name}(${m.allParameters.map(p => p.`type`.name + " " + p.name).mkString(", ")})"
+          )
+          .mkString("\n")
+        s"Cannot find method '$javaSig':\n$allMethods"
       if name == "<init>" then
         val constructor =
           cls.declaredMethodsAndConstructors.find(m => m.name == "<init>" && matchParams(m.allParameters))
-        assert(constructor.isDefined)
+        assert(constructor.isDefined, notFoundMessage)
         constructor.get
       else
         val method = cls.declaredMethodsAndConstructors
-          .find { m =>
-            // println(s"${m.getReturnType.getName} ${m.getName}(${m.getParameters.map(p => p.getType.getTypeName + " " + p.getName).mkString(", ")})")
-            m.name == name && m.returnType.exists(_.name == returnType) && matchParams(m.allParameters)
-          }
-        assert(method.isDefined)
+          .find(m => m.name == name && m.returnType.exists(_.name == returnType) && matchParams(m.allParameters))
+        assert(method.isDefined, notFoundMessage)
         method.get
 
     private def assertFind(declaringType: String, javaSig: String)(using munit.Location): Unit =
