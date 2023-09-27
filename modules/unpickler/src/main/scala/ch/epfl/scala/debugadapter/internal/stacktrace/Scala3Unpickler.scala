@@ -141,8 +141,12 @@ class Scala3Unpickler(
       case Patterns.LocalClass(declaringClassName, localClassName, remaining) =>
         findLocalClasses(cls, packageSym, declaringClassName, localClassName, remaining)
       case _ => findClassRecursively(packageSym, decodedClassName)
-    if cls.isObject && !isExtensionMethod
-    then allSymbols.filter(_.symbol.isModuleClass).singleOrThrow(cls)
+
+    if cls.isObject && !isExtensionMethod then allSymbols.filter(_.symbol.isModuleClass).singleOrThrow(cls)
+    else if cls.sourceLines.isEmpty && allSymbols.forall(_.symbol.isModuleClass) then
+      allSymbols.singleOrThrow(cls) match
+        case BinaryClass(symbol, TopLevelOrInner) => BinaryClass(symbol, SyntheticCompanionClass)
+        case _ => notFound(cls)
     else allSymbols.filter(!_.symbol.isModuleClass).singleOrThrow(cls)
 
   private def notFound(symbol: binary.Symbol): Nothing = throw NotFoundException(symbol)
@@ -193,7 +197,11 @@ class Scala3Unpickler(
           case _ => None
       }
 
-  private def collectLocalMethods(binaryClass: BinaryClass, kind: BinaryMethodKind, sourceLines: Seq[binary.SourceLine])(
+  private def collectLocalMethods(
+      binaryClass: BinaryClass,
+      kind: BinaryMethodKind,
+      sourceLines: Seq[binary.SourceLine]
+  )(
       symbolMatcher: PartialFunction[(Symbol, Option[Lambda]), TermSymbol]
   ): Seq[BinaryMethod] =
     for

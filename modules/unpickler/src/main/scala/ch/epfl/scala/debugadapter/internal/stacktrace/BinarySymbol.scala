@@ -21,7 +21,7 @@ enum BinaryClassSymbol extends BinarySymbol:
       case BinaryClass(symbol, kind) => s"BinaryClass($symbol $span, $kind)"
 
 enum BinaryClassKind:
-  case TopLevelOrInner, Local, Anon, SAMClass
+  case TopLevelOrInner, Local, Anon, SAMClass, SyntheticCompanionClass
 
 enum BinaryMethodSymbol extends BinarySymbol:
   case BinaryMethod(binaryOwner: BinaryClassSymbol, term: TermSymbol, kind: BinaryMethodKind)

@@ -59,8 +59,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case Patterns.LocalLazyInit(_, _) => unpickler.tryFind(method, localLazyInitCounter)
         case Patterns.LocalMethod(_, _) => unpickler.tryFind(method, localMethodCounter)
         case _ => unpickler.tryFind(method, methodCounter)
-    anonClassCounter.printAmbiguous()
-    anonClassCounter.printNotFound()
+    topLevelClassCounter.printNotFound()
     localClassCounter.printReport()
     anonClassCounter.printReport()
     innerClassCounter.printReport()
@@ -72,11 +71,11 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(localClassCounter, 42)
     checkCounter(anonClassCounter, 428, expectedNotFound = 2)
     checkCounter(innerClassCounter, 2409)
-    checkCounter(topLevelClassCounter, 1313, expectedNotFound = 192)
+    checkCounter(topLevelClassCounter, 1505)
     checkCounter(localMethodCounter, 2524, expectedNotFound = 437)
-    checkCounter(anonFunCounter, 5404, expectedAmbiguous = 36, expectedNotFound = 1544)
+    checkCounter(anonFunCounter, 5405, expectedAmbiguous = 36, expectedNotFound = 1544)
     checkCounter(localLazyInitCounter, 107, expectedNotFound = 1)
-    checkCounter(methodCounter, 46548, expectedAmbiguous = 172, expectedNotFound = 8522, expectedExceptions = 30)
+    checkCounter(methodCounter, 47450, expectedAmbiguous = 175, expectedNotFound = 10225, expectedExceptions = 30)
 
   def checkCounter(
       counter: Counter,
