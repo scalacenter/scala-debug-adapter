@@ -53,6 +53,11 @@ object Patterns:
       val anonFun = "(.*)\\$anonfun\\$\\d+".r
       anonFun.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0).stripSuffix("$"))
 
+  object AdaptedAnonFun:
+    def unapply(method: binary.Method): Option[String] =
+      val adaptedAnonFun = "(.*)\\$anonfun\\$adapted\\$\\d+".r
+      adaptedAnonFun.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0).stripSuffix("$"))
+
   object LocalMethod:
     def unapply(method: binary.Method): Option[(String, Int)] =
       if method.name.contains("$default") || method.name.contains("$proxy") then None

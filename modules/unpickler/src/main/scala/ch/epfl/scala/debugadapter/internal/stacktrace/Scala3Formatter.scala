@@ -34,6 +34,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
         val sep = if !term.declaredType.isInstanceOf[MethodicType] then ": " else ""
         val symbolStr = kind match
           case BinaryMethodKind.AnonFun => formatOwner(term.owner) + ".<anon fun>"
+          case BinaryMethodKind.AdaptedAnonFun => formatOwner(term.owner) + ".<adapted anon fun>"
           case BinaryMethodKind.Setter => formatSymbol(term).stripSuffix("_=") + ".<setter>"
           case BinaryMethodKind.LazyInit => formatSymbol(term) + ".<lazy init>"
           case BinaryMethodKind.LocalLazyInit => formatSymbol(term) + ".<lazy init>"

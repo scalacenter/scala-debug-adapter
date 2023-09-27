@@ -78,6 +78,10 @@ class Scala3Unpickler(
             collectLocalMethods(binaryClass, AnonFun, method.sourceLines) {
               case (t: TermSymbol, None) if t.isAnonFun && matchSignature(method, t) => t
             }
+          case Patterns.AdaptedAnonFun(prefix) =>
+            collectLocalMethods(binaryClass, AdaptedAnonFun, method.sourceLines) {
+              case (t: TermSymbol, None) if t.isAnonFun && matchSignature(method, t, isAdapted = true) => t
+            }
           case Patterns.LocalMethod(name, _) =>
             collectLocalMethods(binaryClass, LocalDef, method.sourceLines) {
               case (t: TermSymbol, None) if t.matchName(name) && matchSignature(method, t) => t
@@ -336,7 +340,7 @@ class Scala3Unpickler(
     else if method.isTraitStaticAccessor then encodedScalaName == expectedName.stripSuffix("$")
     else encodedScalaName == expectedName
 
-  private def matchSignature(method: binary.Method, symbol: TermSymbol): Boolean =
+  private def matchSignature(method: binary.Method, symbol: TermSymbol, isAdapted: Boolean = false): Boolean =
     def parametersName(tpe: TypeOrMethodic): List[String] =
       tpe match
         case t: MethodType =>
@@ -347,23 +351,27 @@ class Scala3Unpickler(
 
     def matchCapture(paramName: String): Boolean =
       val pattern = ".+\\$\\d+".r
-      pattern.matches(
-        paramName
-      ) || (method.isExtensionMethod && paramName == "$this") || (method.isTraitStaticAccessor && paramName == "$this") || (method.isClassInitializer && paramName == "$outer")
+      pattern.matches(paramName) ||
+      (method.isExtensionMethod && paramName == "$this") ||
+      (method.isTraitStaticAccessor && paramName == "$this") ||
+      (method.isClassInitializer && paramName == "$outer")
 
-    val paramNames: List[String] = parametersName(symbol.declaredType)
+    val paramNames = parametersName(symbol.declaredType)
     val capturedParams = method.allParameters.dropRight(paramNames.size)
     val declaredParams = method.allParameters.drop(capturedParams.size)
+
+    def matchTypes: Boolean =
+      symbol.signedName match
+        case SignedName(_, sig, _) =>
+          matchArgumentsTypes(sig.paramsSig, declaredParams)
+          && method.declaredReturnType.forall(matchType(sig.resSig, _))
+        case _ =>
+          // TODO compare symbol.declaredType
+          declaredParams.isEmpty
+
     capturedParams.map(_.name).forall(matchCapture) &&
     declaredParams.map(_.name).corresponds(paramNames)((n1, n2) => n1 == n2) &&
-    (symbol.signedName match
-      case SignedName(_, sig, _) =>
-        matchArgumentsTypes(sig.paramsSig, declaredParams)
-        && method.declaredReturnType.forall(matchType(sig.resSig, _))
-      case _ =>
-        // TODO compare symbol.declaredType
-        declaredParams.isEmpty
-    )
+    (isAdapted || matchTypes)
 
   private def matchArgumentsTypes(scalaParams: Seq[ParamSig], javaParams: Seq[binary.Parameter]): Boolean =
     scalaParams
@@ -429,5 +437,6 @@ class Scala3Unpickler(
       case BinaryMethod(_, _, Setter) => true
       case BinaryMethod(_, _, MixinForwarder) => true
       case BinaryMethod(_, _, TraitStaticAccessor) => true
+      case BinaryMethod(_, _, AdaptedAnonFun) => true
       case BinaryMethod(_, sym, _) => sym.isSynthetic || sym.isExport
       case _ => false

@@ -38,5 +38,5 @@ enum BinaryMethodSymbol extends BinarySymbol:
     case BinaryOuter(_, _) => BinaryMethodKind.Outer
 
 enum BinaryMethodKind:
-  case InstanceDef, LocalDef, AnonFun, Getter, Setter, LazyInit, LocalLazyInit, Constructor, TraitConstructor,
-    MixinForwarder, TraitStaticAccessor, SuperAccessor, DefaultParameter, ByNameArg, Outer
+  case InstanceDef, LocalDef, AnonFun, AdaptedAnonFun, Getter, Setter, LazyInit, LocalLazyInit, Constructor,
+    TraitConstructor, MixinForwarder, TraitStaticAccessor, SuperAccessor, DefaultParameter, ByNameArg, Outer

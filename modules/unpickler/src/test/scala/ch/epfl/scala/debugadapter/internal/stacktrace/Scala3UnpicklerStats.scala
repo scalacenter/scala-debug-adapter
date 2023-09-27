@@ -38,6 +38,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     val localMethodCounter = Counter("local methods")
     val anonFunCounter = Counter("anon functions")
+    val adaptedAnonFunCounter = Counter("adapted anon functions")
     val localLazyInitCounter = Counter("local lazy initializers")
     val methodCounter = Counter("methods")
 
@@ -56,24 +57,27 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
+        case Patterns.AdaptedAnonFun(_) => unpickler.tryFind(method, adaptedAnonFunCounter)
         case Patterns.LocalLazyInit(_, _) => unpickler.tryFind(method, localLazyInitCounter)
         case Patterns.LocalMethod(_, _) => unpickler.tryFind(method, localMethodCounter)
         case _ => unpickler.tryFind(method, methodCounter)
-    topLevelClassCounter.printNotFound()
+    localMethodCounter.printNotFound()
     localClassCounter.printReport()
     anonClassCounter.printReport()
     innerClassCounter.printReport()
     topLevelClassCounter.printReport()
     localMethodCounter.printReport()
     anonFunCounter.printReport()
+    adaptedAnonFunCounter.printReport()
     localLazyInitCounter.printReport()
     methodCounter.printReport()
     checkCounter(localClassCounter, 42)
     checkCounter(anonClassCounter, 428, expectedNotFound = 2)
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
-    checkCounter(localMethodCounter, 2524, expectedNotFound = 437)
+    checkCounter(localMethodCounter, 2524, expectedNotFound = 66)
     checkCounter(anonFunCounter, 5405, expectedAmbiguous = 36, expectedNotFound = 1544)
+    checkCounter(adaptedAnonFunCounter, 269, expectedNotFound = 102)
     checkCounter(localLazyInitCounter, 107, expectedNotFound = 1)
     checkCounter(methodCounter, 47450, expectedAmbiguous = 175, expectedNotFound = 10225, expectedExceptions = 30)
 
