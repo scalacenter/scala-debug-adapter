@@ -143,10 +143,10 @@ class Scala3Unpickler(
   ): Seq[S] =
     val span = if lines.size > 2 then Seq(lines.min, lines.max) else lines
 
-    val collectors = Buffer.empty[LocalSymbolCollector]
+    val collectors = Buffer.empty[Collector]
     var inlinedSymbols = Set.empty[Symbol]
 
-    class LocalSymbolCollector(inlined: Boolean = false) extends TreeTraverser:
+    class Collector(inlined: Boolean = false) extends TreeTraverser:
       collectors += this
       private var buffer = Map.empty[Symbol, S]
       override def traverse(tree: Tree): Unit =
@@ -163,7 +163,7 @@ class Scala3Unpickler(
               matchSymbol(sym, Some(lambda))
             case tree: Ident if isInline(tree) && !inlinedSymbols.contains(tree.symbol) =>
               inlinedSymbols += tree.symbol
-              val collector = new LocalSymbolCollector(inlined = true)
+              val collector = new Collector(inlined = true)
               tree.symbol.tree.foreach(collector.traverse)
             case _ => ()
           super.traverse(tree)
@@ -190,9 +190,9 @@ class Scala3Unpickler(
       private def isInline(tree: Ident): Boolean =
         try tree.symbol.isTerm && tree.symbol.asTerm.isInline
         catch case NonFatal(e) => false
-    end LocalSymbolCollector
+    end Collector
 
-    val collector = new LocalSymbolCollector()
+    val collector = Collector()
     for
       decl <- cls.declarations
       tree <- decl.tree.toSeq
@@ -255,7 +255,21 @@ class Scala3Unpickler(
       sourceLines: Seq[binary.SourceLine],
       classOwners: Seq[ClassSymbol]
   ): Seq[binary.SourceLine] =
-    sourceLines.filter(line => classOwners.exists(cls => cls.pos.containsLine(line)))
+    val inlineSymbols = classOwners.flatMap(collectInlineSymbols)
+    sourceLines.filter(line =>
+      classOwners.exists(_.pos.containsLine(line) && !inlineSymbols.exists(_.pos.containsLine(line)))
+    )
+
+  private def collectInlineSymbols(cls: ClassSymbol): Seq[TermSymbol] =
+    val buffer = Buffer.empty[TermSymbol]
+    val collector = new TreeTraverser:
+      override def traverse(tree: Tree): Unit =
+        tree match
+          case termDef: ValOrDefDef if termDef.symbol.isInline => buffer += termDef.symbol
+          case _ => ()
+        super.traverse(tree)
+    cls.tree.foreach(collector.traverse)
+    buffer.toSeq
 
   private def findSymbolsRecursively(owner: DeclaringSymbol, decodedName: String): Seq[BinaryClass] =
     owner.declarations

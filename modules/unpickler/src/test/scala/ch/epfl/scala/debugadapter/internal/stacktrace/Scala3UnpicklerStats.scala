@@ -46,7 +46,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
-      // if cls.name == "dotty.tools.dotc.transform.CheckUnused$UnusedData$ScopeType$$anon$7"
+      // if cls.name == "dotty.tools.dotc.core.TrackingTypeComparer$$anon$6"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
@@ -70,13 +70,13 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     localLazyInitCounter.printReport()
     methodCounter.printReport()
     checkCounter(localClassCounter, 42)
-    checkCounter(anonClassCounter, 427, expectedNotFound = 3)
+    checkCounter(anonClassCounter, 428, expectedNotFound = 2)
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1313, expectedNotFound = 192)
     checkCounter(localMethodCounter, 2524, expectedNotFound = 437)
     checkCounter(anonFunCounter, 5404, expectedAmbiguous = 36, expectedNotFound = 1544)
     checkCounter(localLazyInitCounter, 107, expectedNotFound = 1)
-    checkCounter(methodCounter, 46546, expectedAmbiguous = 172, expectedNotFound = 8521, expectedExceptions = 30)
+    checkCounter(methodCounter, 46548, expectedAmbiguous = 172, expectedNotFound = 8522, expectedExceptions = 30)
 
   def checkCounter(
       counter: Counter,
