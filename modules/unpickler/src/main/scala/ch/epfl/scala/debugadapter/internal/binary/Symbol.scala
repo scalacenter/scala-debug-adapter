@@ -2,4 +2,4 @@ package ch.epfl.scala.debugadapter.internal.binary
 
 trait Symbol:
   def name: String
-  def sourceLines: Seq[Int]
+  def sourceLines: Seq[SourceLine]

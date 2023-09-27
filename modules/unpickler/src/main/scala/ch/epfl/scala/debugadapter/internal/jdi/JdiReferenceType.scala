@@ -11,10 +11,8 @@ class JdiReferenceType(obj: Any, className: String = "com.sun.jdi.ReferenceType"
   override def interfaces: Seq[ClassType] = if isClass then asClass.interfaces else asInterface.interfaces
   def isClass = isInstanceOf("com.sun.jdi.ClassType")
   override def isInterface = isInstanceOf("com.sun.jdi.InterfaceType")
-  override def sourceLines: Seq[Int] =
-    val distinctLines = allLineLocations.map(_.lineNumber)
-    if distinctLines.size > 1 then Seq(distinctLines.min, distinctLines.max)
-    else distinctLines
+  override def sourceLines: Seq[SourceLine] =
+    allLineLocations.map(_.lineNumber).distinct.sorted.map(SourceLine(_))
 
   def asClass: JdiClassType = JdiClassType(obj)
   def asInterface: JdiInterfaceType = JdiInterfaceType(obj)

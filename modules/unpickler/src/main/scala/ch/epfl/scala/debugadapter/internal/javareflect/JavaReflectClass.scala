@@ -4,16 +4,14 @@ import ch.epfl.scala.debugadapter.internal.binary
 import scala.util.matching.Regex
 import scala.jdk.CollectionConverters.*
 
-class JavaReflectClass(cls: Class[?], sourceLineMap: Map[MethodSig, Seq[Int]], loader: JavaReflectLoader)
+class JavaReflectClass(cls: Class[?], sourceLineMap: Map[MethodSig, Seq[binary.SourceLine]], loader: JavaReflectLoader)
     extends binary.ClassType:
   override def name: String = cls.getTypeName
   override def superclass = Option(cls.getSuperclass).map(loader.loadClass)
   override def interfaces = cls.getInterfaces.toList.map(loader.loadClass)
   override def isInterface: Boolean = cls.isInterface
-  override def sourceLines: Seq[Int] =
-    val distinctLines = sourceLineMap.values.flatten.toSeq.distinct
-    if distinctLines.size > 1 then Seq(distinctLines.min, distinctLines.max)
-    else distinctLines
+  override def sourceLines: Seq[binary.SourceLine] =
+    sourceLineMap.values.flatten.toSeq.distinct.sorted
 
   override def toString: String = cls.toString
 

@@ -19,9 +19,9 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
         val prefix = formatOwner(symbol.owner)
         s"$prefix.<anon class>"
       case BinaryClass(symbol, _) => formatSymbol(symbol)
-      case BinarySAMClass(symbol, samClass) =>
+      case BinarySAMClass(symbol, _, samType) =>
         val prefix = formatOwner(symbol.owner)
-        s"$prefix.<anon ${formatType(samClass)}>"
+        s"$prefix.<anon ${formatType(samType)}>"
 
   def format(method: BinaryMethodSymbol): String =
     method match

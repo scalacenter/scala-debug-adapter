@@ -7,7 +7,7 @@ sealed trait BinarySymbol
 
 enum BinaryClassSymbol extends BinarySymbol:
   case BinaryClass(symbol: ClassSymbol, kind: BinaryClassKind)
-  case BinarySAMClass(symbol: TermSymbol, samType: Type)
+  case BinarySAMClass(symbol: TermSymbol, samClassSymbol: ClassSymbol, samType: Type)
   def symbol: Symbol
   def symbolKind = this match
     case BinaryClass(_, kind) => kind
@@ -16,7 +16,8 @@ enum BinaryClassSymbol extends BinarySymbol:
   override def toString: String =
     val span = symbol.tree.map(tree => s"(${tree.pos.startLine}, ${tree.pos.endLine})").getOrElse("")
     this match
-      case BinarySAMClass(symbol, samType) => s"BinarySAMClass($symbol $span, ${samType.showBasic})"
+      case BinarySAMClass(symbol, samClassSymbol, samType) =>
+        s"BinarySAMClass($symbol $span, $samClassSymbol, ${samType.showBasic})"
       case BinaryClass(symbol, kind) => s"BinaryClass($symbol $span, $kind)"
 
 enum BinaryClassKind:

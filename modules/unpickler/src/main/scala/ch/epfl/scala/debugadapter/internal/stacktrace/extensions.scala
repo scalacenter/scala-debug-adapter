@@ -82,3 +82,9 @@ extension (pos: SourcePosition)
       && other.hasLineColumnInformation
       && pos.startLine < other.startLine
       && pos.endLine > other.endLine
+
+  def containsLine(sourceLine: binary.SourceLine): Boolean =
+    !pos.isUnknown
+      && pos.hasLineColumnInformation
+      && pos.startLine <= sourceLine.toTasty
+      && pos.endLine >= sourceLine.toTasty

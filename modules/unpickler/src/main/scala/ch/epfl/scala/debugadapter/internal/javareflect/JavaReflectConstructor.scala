@@ -5,8 +5,11 @@ import ch.epfl.scala.debugadapter.internal.binary
 import java.lang.reflect.Constructor
 import java.lang.reflect.Method
 
-class JavaReflectConstructor(constructor: Constructor[?], val sourceLines: Seq[Int], loader: JavaReflectLoader)
-    extends binary.Method:
+class JavaReflectConstructor(
+    constructor: Constructor[?],
+    val sourceLines: Seq[binary.SourceLine],
+    loader: JavaReflectLoader
+) extends binary.Method:
 
   override def returnType: Option[binary.Type] =
     Some(loader.loadClass(classOf[Unit]))
