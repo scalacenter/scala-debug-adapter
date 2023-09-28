@@ -88,3 +88,8 @@ extension (pos: SourcePosition)
       && pos.hasLineColumnInformation
       && pos.startLine <= sourceLine.toTasty
       && pos.endLine >= sourceLine.toTasty
+
+extension (sourceLines: Seq[binary.SourceLine])
+  def interval: Seq[binary.SourceLine] =
+    if sourceLines.size > 2 then Seq(sourceLines.min, sourceLines.max)
+    else sourceLines
