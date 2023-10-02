@@ -73,3 +73,8 @@ object Patterns:
         val javaPrefix = method.declaringClass.name.replace('.', '$') + "$$"
         val decodedName = NameTransformer.decode(method.name.stripPrefix(javaPrefix).split("\\$_\\$").last)
         "(.+)\\$lzyINIT\\d+\\$(\\d+)".r.unapplySeq(decodedName).map(xs => (xs(0), xs(1).toInt))
+
+  object SuperArg:
+    def unapply(method: binary.Method): Boolean =
+      val superArg = "(.*)\\$superArg\\$\\d+(\\$\\d+)?".r
+      superArg.unapplySeq(method.name).isDefined

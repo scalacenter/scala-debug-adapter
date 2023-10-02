@@ -47,13 +47,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
-      // if cls.name == "dotty.tools.repl.ReplDriver$$anon$1"
+      // if cls.name == "dotty.tools.dotc.cc.CaptureSet$"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethodsAndConstructors
+    // if method.name == "dotty$tools$dotc$cc$CaptureSet$$$Diff$superArg$1"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -61,7 +62,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case Patterns.LocalLazyInit(_, _) => unpickler.tryFind(method, localLazyInitCounter)
         case Patterns.LocalMethod(_, _) => unpickler.tryFind(method, localMethodCounter)
         case _ => unpickler.tryFind(method, methodCounter)
-    anonClassCounter.printNotFound()
+    // localMethodCounter.printAmbiguous()
     // localMethodCounter.printNotFound()
     localClassCounter.printReport()
     anonClassCounter.printReport()
@@ -76,7 +77,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(anonClassCounter, 430)
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
-    checkCounter(localMethodCounter, 2525, expectedNotFound = 65)
+    checkCounter(localMethodCounter, 2528, expectedAmbiguous = 2, expectedNotFound = 60)
     checkCounter(anonFunCounter, 5451, expectedAmbiguous = 36, expectedNotFound = 1498)
     checkCounter(adaptedAnonFunCounter, 272, expectedNotFound = 99)
     checkCounter(localLazyInitCounter, 107, expectedNotFound = 1)

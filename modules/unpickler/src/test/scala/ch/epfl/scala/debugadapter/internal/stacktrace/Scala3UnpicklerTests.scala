@@ -646,7 +646,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
 
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormatAndKind("example.Main$$anon$1", "Main.foo.<anon Ordering[String]>", BinaryClassKind.SAMClass)
+    debuggee.assertFormatAndKind("example.Main$$anon$1", "Main.foo.<anon class>", BinaryClassKind.SAMClass)
     debuggee.assertFormatAndKind(
       "example.Main$$anon$1",
       "int compare(java.lang.String x, java.lang.String y)",
@@ -656,7 +656,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertNotFound("example.Main$$anon$1", "int compare(java.lang.Object x, java.lang.Object y)")
     debuggee.assertFormatAndKind(
       "example.Main$$anon$2",
-      "Main.f.<anon PartialFunction[String, Int]>",
+      "Main.f.<anon class>",
       BinaryClassKind.SAMClass
     )
     debuggee.assertFormatAndKind(
@@ -1141,12 +1141,82 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat(
       "example.A",
       "boolean m$$anonfun$adapted$1(java.lang.Object _$1)",
-      "A.m.<adapted anon fun>(Char): Boolean"
+      "A.m.<anon fun>.<adapted>(Char): Boolean"
+    )
+  }
+
+  test("super args") {
+    val source =
+      """|package example
+         |
+         |class A1(x: => String)
+         |class A2(x: Int)(y: String => String)
+         |
+         |object B1 extends A1("") {
+         |  object B2 extends A2(5)(x => x)
+         |}
+         |
+         |class C1 extends A1(
+         |  ""
+         |) {
+         |  object C2 extends A2(5)(x => x)
+         |  
+         |  def m = {
+         |    class C3 extends A1(
+         |      ""
+         |    ) {
+         |      class C4 extends A2(5)({ x =>
+         |          x + x
+         |      })
+         |    }
+         |
+         |    new A1("") {
+         |      override def toString: String = ""
+         |    }
+         |  }
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat("example.B1$", "scala.Function0 B1$$superArg$1()", "B1.<init>.<super arg>: () => String")
+    debuggee.assertFormat(
+      "example.B1$",
+      "scala.Function1 example$B1$$$B2$$superArg$1()",
+      "B1.B2.<init>.<super arg>: String => String"
+    )
+    debuggee.assertFormat(
+      "example.C1",
+      "scala.Function0 C1$superArg$1()",
+      "C1.<init>.<super arg>: () => String",
+      loadLines = true
+    )
+    debuggee.assertFormat(
+      "example.C1",
+      "scala.Function1 example$C1$$C2$$superArg$1()",
+      "C1.C2.<init>.<super arg>: String => String",
+      loadLines = true
+    )
+    debuggee.assertFormat(
+      "example.C1",
+      "scala.Function0 example$C1$$_$C3$superArg$1$1()",
+      "C1.m.C3.<init>.<super arg>: () => String",
+      loadLines = true
+    )
+    debuggee.assertFormat(
+      "example.C1",
+      "scala.Function0 example$C1$$_$$anon$superArg$1$1()",
+      "C1.m.<anon class>.<init>.<super arg>: () => String",
+      loadLines = true
+    )
+    debuggee.assertFormat(
+      "example.C1$C3$1",
+      "scala.Function1 example$C1$C3$1$$C4$superArg$1()",
+      "C1.m.C3.C4.<init>.<super arg>: String => String"
     )
   }
 
   extension (debuggee: TestingDebuggee)
-    private def loader: JavaReflectLoader = JavaReflectLoader(debuggee.classLoader, readSourceLines = false)
+    private def loader(loadLines: Boolean): JavaReflectLoader =
+      JavaReflectLoader(debuggee.classLoader, readSourceLines = loadLines)
 
     private def unpickler: Scala3Unpickler =
       val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
@@ -1157,7 +1227,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
       new Scala3Unpickler(debuggeeClasspath, println, testMode = true)
 
-    private def getMethod(declaringType: String, javaSig: String)(using munit.Location): binary.Method =
+    private def getMethod(declaringType: String, javaSig: String, loadLines: Boolean)(using
+        munit.Location
+    ): binary.Method =
       def typeAndName(p: String): (String, String) =
         val parts = p.split(' ').filter(_.nonEmpty)
         assert(parts.size == 2)
@@ -1170,7 +1242,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       def matchParams(javaParams: Seq[binary.Parameter]): Boolean =
         javaParams.map(p => (p.`type`.name, p.name)) == params.toSeq
 
-      val cls = loader.loadClass(declaringType)
+      val cls = loader(loadLines).loadClass(declaringType)
       def notFoundMessage: String =
         val allMethods = cls.declaredMethodsAndConstructors
           .map(m =>
@@ -1190,49 +1262,51 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
         method.get
 
     private def assertFind(declaringType: String, javaSig: String)(using munit.Location): Unit =
-      val m = getMethod(declaringType, javaSig)
+      val m = getMethod(declaringType, javaSig, loadLines = false)
       unpickler.findMethod(m)
 
     private def assertSkip(declaringType: String, javaSig: String)(using munit.Location): Unit =
-      val m = getMethod(declaringType, javaSig)
+      val m = getMethod(declaringType, javaSig, loadLines = false)
       assert(unpickler.skipMethod(m))
 
     private def assertNotSkipped(declaringType: String, javaSig: String)(using munit.Location): Unit =
-      val m = getMethod(declaringType, javaSig)
+      val m = getMethod(declaringType, javaSig, loadLines = false)
       assert(!unpickler.skipMethod(m))
 
     private def assertNotFound(declaringType: String, javaSig: String)(using munit.Location): Unit =
-      val m = getMethod(declaringType, javaSig)
+      val m = getMethod(declaringType, javaSig, loadLines = false)
       intercept[NotFoundException](unpickler.findMethod(m))
 
     private def assertAmbiguous(declaringType: String, javaSig: String)(using munit.Location): Unit =
-      val m = getMethod(declaringType, javaSig)
+      val m = getMethod(declaringType, javaSig, loadLines = false)
       intercept[AmbiguousException](unpickler.findMethod(m))
 
     private def assertAmbiguous(declaringType: String)(using munit.Location): Unit =
-      val cls = loader.loadClass(declaringType)
+      val cls = loader(loadLines = false).loadClass(declaringType)
       intercept[AmbiguousException](unpickler.findClass(cls))
 
-    private def assertFormat(declaringType: String, javaSig: String, expected: String)(using munit.Location): Unit =
-      val m = getMethod(declaringType, javaSig)
+    private def assertFormat(declaringType: String, javaSig: String, expected: String, loadLines: Boolean = false)(using
+        munit.Location
+    ): Unit =
+      val m = getMethod(declaringType, javaSig, loadLines = loadLines)
       assertEquals(unpickler.formatMethod(m), Some(expected))
 
     private def assertFormatAndKind(declaringType: String, javaSig: String, expected: String, kind: BinaryMethodKind)(
         using munit.Location
     ): Unit =
-      val m = getMethod(declaringType, javaSig)
+      val m = getMethod(declaringType, javaSig, loadLines = false)
       val binarySymbol = unpickler.findMethod(m)
       assertEquals(unpickler.formatter.format(binarySymbol), expected)
       assertEquals(binarySymbol.symbolKind, kind)
 
     private def assertFormat(declaringType: String, expected: String)(using munit.Location): Unit =
-      val cls = loader.loadClass(declaringType)
+      val cls = loader(loadLines = false).loadClass(declaringType)
       assertEquals(unpickler.formatClass(cls), expected)
 
     private def assertFormatAndKind(declaringType: String, expected: String, kind: BinaryClassKind)(using
         munit.Location
     ): Unit =
-      val cls = loader.loadClass(declaringType)
+      val cls = loader(loadLines = false).loadClass(declaringType)
       val binarySymbol = unpickler.findClass(cls)
       assertEquals(unpickler.formatter.format(binarySymbol), expected)
       assertEquals(unpickler.findClass(cls, false).symbolKind, kind)

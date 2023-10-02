@@ -37,6 +37,17 @@ extension (name: Name)
     val nameStr = name.toString
     nameStr == "package" || nameStr.endsWith("$package")
 
+extension (tpe: TypeOrMethodic)
+  def allParamsTypes: Seq[Type] = tpe match
+    case t: MethodType => t.paramTypes ++ t.resultType.allParamsTypes
+    case t: PolyType => t.resultType.allParamsTypes
+    case _ => Seq.empty
+
+  def allParamsNames: Seq[TermName] = tpe match
+    case t: MethodType => t.paramNames ++ t.resultType.allParamsNames
+    case t: PolyType => t.resultType.allParamsNames
+    case _ => Seq.empty
+
 extension (tpe: Type)
   def isFunction: Boolean =
     tpe match
@@ -75,6 +86,14 @@ extension (prefix: Prefix)
       case p: PackageRef => p.fullyQualifiedName.toString == "scala"
       case _ => false
 
+extension (tree: Apply)
+  def allArgsFlatten: Seq[TermTree] =
+    def rec(fun: Tree): Seq[TermTree] = fun match
+      case TypeApply(fun, _) => rec(fun)
+      case Apply(fun, args) => rec(fun) ++ args
+      case _ => Seq.empty
+    rec(tree.fun) ++ tree.args
+
 extension (pos: SourcePosition)
   def isEnclosing(other: SourcePosition): Boolean =
     pos.sourceFile == other.sourceFile
@@ -88,6 +107,11 @@ extension (pos: SourcePosition)
       && pos.hasLineColumnInformation
       && pos.startLine <= sourceLine.toTasty
       && pos.endLine >= sourceLine.toTasty
+
+  def unknownOrContainsAll(span: Seq[binary.SourceLine]): Boolean =
+    pos.isUnknown
+      || !pos.hasLineColumnInformation
+      || span.forall(pos.containsLine)
 
 extension (sourceLines: Seq[binary.SourceLine])
   def interval: Seq[binary.SourceLine] =

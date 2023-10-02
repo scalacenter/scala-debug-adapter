@@ -15,37 +15,34 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
 
   def format(binaryClass: BinaryClassSymbol) =
     binaryClass match
-      case BinaryClass(symbol, Anon) =>
+      case BinaryClass(symbol, _) => formatSymbol(symbol)
+      case BinarySAMClass(symbol, _, _) =>
         val prefix = formatOwner(symbol.owner)
         s"$prefix.<anon class>"
-      case BinaryClass(symbol, _) => formatSymbol(symbol)
-      case BinarySAMClass(symbol, _, samType) =>
-        val prefix = formatOwner(symbol.owner)
-        s"$prefix.<anon ${formatType(samType)}>"
 
   def format(method: BinaryMethodSymbol): String =
     method match
-      case BinaryMethod(_, term, BinaryMethodKind.DefaultParameter) =>
-        val sep = if !term.declaredType.isInstanceOf[MethodicType] then ": " else ""
-        term.name match
-          case DefaultGetterName(termName, num) =>
-            s"${formatOwner(term.owner)}.$termName.<default ${num + 1}>$sep${formatType(term.declaredType)}"
       case BinaryMethod(binaryOwner, term, kind) =>
         val sep = if !term.declaredType.isInstanceOf[MethodicType] then ": " else ""
         val symbolStr = kind match
-          case BinaryMethodKind.AnonFun => formatOwner(term.owner) + ".<anon fun>"
-          case BinaryMethodKind.AdaptedAnonFun => formatOwner(term.owner) + ".<adapted anon fun>"
+          case BinaryMethodKind.AdaptedAnonFun => formatSymbol(term) + ".<adapted>"
           case BinaryMethodKind.Setter => formatSymbol(term).stripSuffix("_=") + ".<setter>"
           case BinaryMethodKind.LazyInit => formatSymbol(term) + ".<lazy init>"
           case BinaryMethodKind.LocalLazyInit => formatSymbol(term) + ".<lazy init>"
           case BinaryMethodKind.MixinForwarder => formatSymbol(term) + ".<mixin forwarder>"
           case BinaryMethodKind.TraitStaticAccessor => formatSymbol(term) + ".<trait static accessor>"
           case _ => formatSymbol(term)
-
         s"$symbolStr$sep${formatType(term.declaredType)}"
       case BinaryOuter(owner, outer) =>
         s"${format(owner)}.<outer>: ${formatOwner(outer)}"
+      case BinarySuperArg(_, init, tpe) =>
+        s"${formatSymbol(init)}.<super arg>: ${formatType(tpe)}"
       case _ => throw new UnsupportedOperationException(method.toString)
+
+  private def formatSymbol(sym: Symbol): String =
+    val prefix = formatOwner(sym.owner)
+    val nameStr = formatName(sym.name)
+    if prefix.isEmpty then nameStr else s"$prefix.$nameStr"
 
   private def formatOwner(sym: Symbol): String =
     sym match
@@ -53,13 +50,14 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
       case sym: TermOrTypeSymbol => formatSymbol(sym)
       case sym: PackageSymbol => ""
 
-  private def formatSymbol(sym: Symbol): String =
-    val prefix = formatOwner(sym.owner)
-    val symName = sym.name match
+  private def formatName(name: Name): String =
+    def rec(name: Name): String = name match
       case DefaultGetterName(termName, num) => s"${termName.toString()}.<default ${num + 1}>"
-      case _ => sym.nameStr
-
-    if prefix.isEmpty then symName else s"$prefix.$symName"
+      case TypeName(toTermName) => rec(toTermName)
+      case SimpleName("$anonfun") => "<anon fun>"
+      case SimpleName("$anon") => "<anon class>"
+      case _ => name.toString
+    rec(name)
 
   private def formatType(t: TermType | TypeOrWildcard): String =
     t match
@@ -84,7 +82,10 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
       case t: AppliedType if t.tycon.isFunction =>
         val args = t.args.init.map(formatType).mkString(",")
         val result = formatType(t.args.last)
-        if t.args.size > 2 then s"($args) => $result" else s"$args => $result"
+        t.args.size match
+          case 1 => s"() => $result"
+          case 2 => s"$args => $result"
+          case _ => s"($args) => $result"
       case t: AppliedType if t.tycon.isTuple =>
         val types = t.args.map(formatType).mkString(",")
         s"($types)"
