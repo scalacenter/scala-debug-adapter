@@ -71,20 +71,20 @@ class Scala3Unpickler(
       case binaryClass: BinaryClass =>
         val candidates = method match
           case Patterns.LocalLazyInit(name, _) =>
-            collectLocalMethods(binaryClass, LocalLazyInit, method.sourceLines) {
+            collectLocalMethods(binaryClass, LocalLazyInit, method) {
               case t: TermSymbol if (t.isLazyVal || t.isModuleVal) && t.matchName(name) => t
             }
           case Patterns.AnonFun(prefix) =>
-            collectLocalMethods(binaryClass, AnonFun, method.sourceLines) {
+            collectLocalMethods(binaryClass, AnonFun, method) {
               case t: TermSymbol if t.isAnonFun && matchSignature(method, t) => t
             }
           case Patterns.AdaptedAnonFun(prefix) =>
-            collectLocalMethods(binaryClass, AdaptedAnonFun, method.sourceLines) {
+            collectLocalMethods(binaryClass, AdaptedAnonFun, method) {
               case t: TermSymbol if t.isAnonFun && matchSignature(method, t, isAdapted = true) => t
             }
           case Patterns.SuperArg() => findSuperArgs(binaryClass, method.returnType, method.sourceLines)
           case Patterns.LocalMethod(name, _) =>
-            collectLocalMethods(binaryClass, LocalDef, method.sourceLines) {
+            collectLocalMethods(binaryClass, LocalDef, method) {
               case t: TermSymbol if t.matchName(name) && matchSignature(method, t) => t
             }
           case Patterns.LazyInit(name) =>
@@ -204,12 +204,14 @@ class Scala3Unpickler(
   private def collectLocalMethods(
       binaryClass: BinaryClass,
       kind: BinaryMethodKind,
-      sourceLines: Seq[binary.SourceLine]
+      javaMethod: binary.Method
   )(
       symbolMatcher: PartialFunction[Symbol, TermSymbol]
   ): Seq[BinaryMethod] =
+    val classOwners = withCompanionIfExtendsAnyVal(binaryClass.symbol)
+    val sourceLines = removeInlinedLines(javaMethod.sourceLines, classOwners)
     for
-      cls <- withCompanionIfExtendsAnyVal(binaryClass.symbol)
+      cls <- classOwners
       term <- collectLocalSymbols(cls, sourceLines) {
         case sym: Symbol if symbolMatcher.isDefinedAt(sym) => symbolMatcher(sym)
       }
