@@ -414,5 +414,5 @@ class Scala3Unpickler(
       case BinaryMethod(_, _, Setter) => true
       case BinaryMethod(_, _, MixinForwarder) => true
       case BinaryMethod(_, _, TraitStaticAccessor) => true
-      case BinaryMethod(_, sym, _) => sym.isSynthetic
+      case BinaryMethod(_, sym, _) => sym.isSynthetic || sym.isExport
       case _ => false

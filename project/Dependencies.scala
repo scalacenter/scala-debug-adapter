@@ -6,8 +6,8 @@ object Dependencies {
   val scala213 = scalaEnvVersion.filter(isScala213).getOrElse("2.13.11")
   val scala30 = scalaEnvVersion.filter(isScala30).getOrElse("3.0.2")
   val scala31Plus = scalaEnvVersion.filter(isScala31Plus).getOrElse("3.3.0")
-  val asmVersion = "9.5"
-  val coursierVersion = "2.1.6"
+  val asmVersion = "9.6"
+  val coursierVersion = "2.1.7"
 
   def isScala212(version: String): Boolean = version.startsWith("2.12")
   def isScala213(version: String): Boolean = version.startsWith("2.13")
@@ -33,11 +33,11 @@ object Dependencies {
 
   val scalaParallelCollection = "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4"
   val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.11.0"
-  val sbtTestAgent = "org.scala-sbt" % "test-agent" % "1.9.4"
-  val scalaMeta = ("org.scalameta" %% "parsers" % "4.8.10").cross(CrossVersion.for3Use2_13)
+  val sbtTestAgent = "org.scala-sbt" % "test-agent" % "1.9.6"
+  val scalaMeta = ("org.scalameta" %% "parsers" % "4.8.11").cross(CrossVersion.for3Use2_13)
 
   // test dependencies
-  val munit = "org.scalameta" %% "munit" % "1.0.0-M8"
+  val munit = "org.scalameta" %% "munit" % "1.0.0-M10"
   val coursier = "io.get-coursier" %% "coursier" % coursierVersion
   val coursierJvm = "io.get-coursier" %% "coursier-jvm" % coursierVersion
 }

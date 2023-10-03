@@ -14,10 +14,10 @@ jobs:
     env:
       SCALA_VERSION: ${{ inputs.scala-version }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
-    - uses: coursier/setup-action@v1.3.3
+    - uses: coursier/setup-action@v1.3.4
       with:
         jvm: 'temurin:1.17.0.3'
         apps: sbt
@@ -33,10 +33,10 @@ jobs:
       SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
       SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:  
           submodules: true
-      - uses: coursier/setup-action@v1.3.3
+      - uses: coursier/setup-action@v1.3.4
         with:
           apps: sbt
           jvm: 'adopt:1.8.0-292'

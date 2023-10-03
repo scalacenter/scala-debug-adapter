@@ -9,16 +9,16 @@ jobs:
     name: Check Formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: ./bin/scalafmt --test
   cross-compilation:
     name: Cross Compilation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
-      - uses: coursier/setup-action@v1.3.3
+      - uses: coursier/setup-action@v1.3.4
         with:
           apps: sbt
       - run: sbt +Test/compile
@@ -38,10 +38,10 @@ jobs:
     name: Unit Tests on ${{ matrix.os }} -- ${{ matrix.jvm }}
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
-    - uses: coursier/setup-action@v1.3.3
+    - uses: coursier/setup-action@v1.3.4
       with:
         jvm: ${{ matrix.jvm }}
         apps: sbt
@@ -62,10 +62,10 @@ jobs:
     name: Scripted Tests on ${{ matrix.os }} -- ${{ matrix.jvm }}
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
-    - uses: coursier/setup-action@v1.3.3
+    - uses: coursier/setup-action@v1.3.4
       with:
         jvm: ${{ matrix.jvm }}
         apps: sbt
