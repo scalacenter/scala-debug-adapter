@@ -72,20 +72,20 @@ class Scala3Unpickler(
         val candidates = method match
           case Patterns.LocalLazyInit(name, _) =>
             collectLocalMethods(binaryClass, LocalLazyInit, method) {
-              case t: TermSymbol if (t.isLazyVal || t.isModuleVal) && t.matchName(name) => t
+              case (t: TermSymbol, _) if (t.isLazyVal || t.isModuleVal) && t.matchName(name) => t
             }
           case Patterns.AnonFun(prefix) =>
             collectLocalMethods(binaryClass, AnonFun, method) {
-              case t: TermSymbol if t.isAnonFun && matchSignature(method, t) => t
+              case (t: TermSymbol, inlined) if t.isAnonFun && matchSignature(method, t, inlined) => t
             }
           case Patterns.AdaptedAnonFun(prefix) =>
             collectLocalMethods(binaryClass, AdaptedAnonFun, method) {
-              case t: TermSymbol if t.isAnonFun && matchSignature(method, t, isAdapted = true) => t
+              case (t: TermSymbol, _) if t.isAnonFun && matchSignature(method, t, isAdaptedOrInlined = true) => t
             }
           case Patterns.SuperArg() => findSuperArgs(binaryClass, method.returnType, method.sourceLines)
           case Patterns.LocalMethod(name, _) =>
             collectLocalMethods(binaryClass, LocalDef, method) {
-              case t: TermSymbol if t.matchName(name) && matchSignature(method, t) => t
+              case (t: TermSymbol, inlined) if t.matchName(name) && matchSignature(method, t, inlined) => t
             }
           case Patterns.LazyInit(name) =>
             binaryClass.symbol.declarations.collect {
@@ -206,14 +206,14 @@ class Scala3Unpickler(
       kind: BinaryMethodKind,
       javaMethod: binary.Method
   )(
-      symbolMatcher: PartialFunction[Symbol, TermSymbol]
+      symbolMatcher: PartialFunction[(Symbol, Boolean), TermSymbol]
   ): Seq[BinaryMethod] =
     val classOwners = withCompanionIfExtendsAnyVal(binaryClass.symbol)
     val sourceLines = removeInlinedLines(javaMethod.sourceLines, classOwners)
     for
       cls <- classOwners
       term <- collectLocalSymbols(cls, sourceLines) {
-        case sym: Symbol if symbolMatcher.isDefinedAt(sym) => symbolMatcher(sym)
+        case (sym: Symbol, inlined) if symbolMatcher.isDefinedAt((sym, inlined)) => symbolMatcher((sym, inlined))
       }
     yield BinaryMethod(binaryClass, term, kind)
 
@@ -223,10 +223,10 @@ class Scala3Unpickler(
       lines: Seq[binary.SourceLine]
   ): Seq[BinaryClassSymbol] =
     collectLocalSymbols(cls, lines) {
-      case cls: ClassSymbol if cls.matchName(name) =>
+      case (cls: ClassSymbol, _) if cls.matchName(name) =>
         val kind = if name == "$anon" then Anon else Local
         BinaryClass(cls, kind)
-      case lambda: Lambda if lambda.meth.symbol.isInstanceOf[TermSymbol] && lambda.tpe.isInstanceOf[Type] =>
+      case (lambda: Lambda, _) if lambda.meth.symbol.isInstanceOf[TermSymbol] && lambda.tpe.isInstanceOf[Type] =>
         BinarySAMClass(
           lambda.meth.symbol.asInstanceOf[TermSymbol],
           lambda.samClassSymbol,
@@ -235,11 +235,23 @@ class Scala3Unpickler(
     }
 
   private def collectLocalSymbols[S](cls: ClassSymbol, lines: Seq[binary.SourceLine])(
-      symbolMatcher: PartialFunction[Symbol | Lambda, S]
+      symbolMatcher: PartialFunction[(Symbol | Lambda, Boolean), S]
   ): Seq[S] =
     val span = lines.interval
     val collectors = Buffer.empty[Collector]
     var inlinedSymbols = Set.empty[Symbol]
+
+    object InlinedTree:
+      def unapply(tree: Tree): Option[Symbol] =
+        tree match
+          case ident: Ident if isInline(ident) => Some(ident.symbol)
+          case Apply(fun, _) => unapply(fun)
+          case TypeApply(fun, _) => unapply(fun)
+          case _ => None
+
+      private def isInline(tree: Ident): Boolean =
+        try tree.symbol.isTerm && tree.symbol.asTerm.isInline
+        catch case NonFatal(e) => false
 
     class Collector(inlined: Boolean = false) extends TreeTraverser:
       collectors += this
@@ -252,10 +264,10 @@ class Scala3Unpickler(
             case DefDef(_, _, _, _, symbol) if symbol.isLocal => matchSymbol(symbol)
             case ClassDef(_, _, symbol) if symbol.isLocal => matchSymbol(symbol)
             case lambda: Lambda => matchLambda(lambda)
-            case tree: Ident if isInline(tree) && !inlinedSymbols.contains(tree.symbol) =>
-              inlinedSymbols += tree.symbol
+            case InlinedTree(symbol) if !inlinedSymbols.contains(symbol) =>
+              inlinedSymbols += symbol
               val collector = new Collector(inlined = true)
-              tree.symbol.tree.foreach(collector.traverse)
+              symbol.tree.foreach(collector.traverse)
             case _ => ()
           super.traverse(tree)
 
@@ -268,19 +280,15 @@ class Scala3Unpickler(
             .toSeq
 
       private def matchLambda(lambda: Lambda): Unit =
-        symbolMatcher.lift(lambda).foreach(res => buffer += (lambda.meth.symbol -> res))
+        symbolMatcher.lift((lambda, inlined)).foreach(res => buffer += (lambda.meth.symbol -> res))
 
       private def matchSymbol(symbol: Symbol) =
-        symbolMatcher.lift(symbol).foreach(res => buffer += (symbol -> res))
+        symbolMatcher.lift((symbol, inlined)).foreach(res => buffer += (symbol -> res))
 
       private def matchLines(tree: Tree): Boolean =
         tree match
           case lambda: Lambda => lambda.meth.symbol.tree.exists(matchLines)
           case tree => inlined || tree.pos.unknownOrContainsAll(span)
-
-      private def isInline(tree: Ident): Boolean =
-        try tree.symbol.isTerm && tree.symbol.asTerm.isInline
-        catch case NonFatal(e) => false
     end Collector
 
     val collector = Collector()
@@ -321,7 +329,7 @@ class Scala3Unpickler(
       )
 
     val span = sourceLines.interval
-    val localClasses = collectLocalSymbols(binaryOwner.symbol, span) { case cls: ClassSymbol => cls }
+    val localClasses = collectLocalSymbols(binaryOwner.symbol, span) { case (cls: ClassSymbol, _) => cls }
     val innerClasses = binaryOwner.symbol.declarations.collect {
       case cls: ClassSymbol if cls.pos.unknownOrContainsAll(span) => cls
     }
@@ -399,7 +407,7 @@ class Scala3Unpickler(
     else if method.isTraitStaticAccessor then encodedScalaName == expectedName.stripSuffix("$")
     else encodedScalaName == expectedName
 
-  private def matchSignature(method: binary.Method, symbol: TermSymbol, isAdapted: Boolean = false): Boolean =
+  private def matchSignature(method: binary.Method, symbol: TermSymbol, isAdaptedOrInlined: Boolean = false): Boolean =
     def matchCapture(paramName: String): Boolean =
       val pattern = ".+\\$\\d+".r
       pattern.matches(paramName) ||
@@ -422,7 +430,7 @@ class Scala3Unpickler(
 
     capturedParams.map(_.name).forall(matchCapture) &&
     declaredParams.map(_.name).corresponds(paramNames)((n1, n2) => n1 == n2) &&
-    (isAdapted || matchTypes)
+    (isAdaptedOrInlined || matchTypes)
 
   private def matchArgumentsTypes(scalaParams: Seq[ParamSig], javaParams: Seq[binary.Parameter]): Boolean =
     scalaParams
