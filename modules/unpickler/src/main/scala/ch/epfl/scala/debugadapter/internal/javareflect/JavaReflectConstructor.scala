@@ -11,8 +11,7 @@ class JavaReflectConstructor(
     loader: JavaReflectLoader
 ) extends binary.Method:
 
-  override def returnType: Option[binary.Type] =
-    Some(loader.loadClass(classOf[Unit]))
+  override def returnType: Option[binary.Type] = Some(declaringClass)
 
   override def returnTypeName: String = "void"
 

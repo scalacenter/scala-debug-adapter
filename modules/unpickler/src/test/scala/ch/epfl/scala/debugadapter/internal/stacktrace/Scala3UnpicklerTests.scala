@@ -788,7 +788,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     assertFormat("example.Main$ mbis(example.Main$ a)", "Main.mbis(a: Main.type): Main.type")
     assertFormat("int m(scala.Function0 x)", "Main.m(x: => Int): Int")
     assertFormat("int m(scala.Function1 x)", "Main.m(x: Int => Int): Int")
-    assertFormat("int m(scala.Tuple2 x)", "Main.m(x: (Int,Int)): Int")
+    assertFormat("int m(scala.Tuple2 x)", "Main.m(x: (Int, Int)): Int")
     assertFormat("int m(example.$bang$colon t)", "Main.m(t: Int !: Int): Int")
 
     // TODO fix: should be m
@@ -1212,6 +1212,37 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       "scala.Function1 example$C1$C3$1$$C4$superArg$1()",
       "C1.m.C3.C4.<init>.<super arg>: String => String"
     )
+  }
+
+  test("method returning a context function") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  def m(x: Int): String ?=> String = ???
+         |  def m(): (Int, String) ?=> Int = ???
+         |  def m(x: String): Int ?=> String ?=> String = ???
+         |  // def mbis: ? ?=> String = ???
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat(
+      "example.A",
+      "java.lang.String m(int x, java.lang.String evidence$1)",
+      "A.m(x: Int): String ?=> String"
+    )
+    debuggee.assertFormat(
+      "example.A",
+      "int m(int evidence$2, java.lang.String evidence$3)",
+      "A.m(): (Int, String) ?=> Int"
+    )
+    debuggee.assertFormat(
+      "example.A",
+      "java.lang.String m(java.lang.String x, int evidence$4, java.lang.String evidence$5)",
+      "A.m(x: String): Int ?=> String ?=> String"
+    )
+    // todo fix
+    // debuggee.assertFormat("example.A", "java.lang.String mbis(java.lang.Object evidence$5)", "A.m: ? ?=> String")
   }
 
   extension (debuggee: TestingDebuggee)

@@ -80,14 +80,19 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
         s"($prefix$params)$sep$result"
       case t: TypeRef => formatPrefix(t.prefix) + t.name
       case t: AppliedType if t.tycon.isFunction =>
-        val args = t.args.init.map(formatType).mkString(",")
+        val args = t.args.init.map(formatType).mkString(", ")
         val result = formatType(t.args.last)
         t.args.size match
-          case 1 => s"() => $result"
           case 2 => s"$args => $result"
           case _ => s"($args) => $result"
+      case t: AppliedType if t.tycon.isContextFunction =>
+        val args = t.args.init.map(formatType).mkString(", ")
+        val result = formatType(t.args.last)
+        t.args.size match
+          case 2 => s"$args ?=> $result"
+          case _ => s"($args) ?=> $result"
       case t: AppliedType if t.tycon.isTuple =>
-        val types = t.args.map(formatType).mkString(",")
+        val types = t.args.map(formatType).mkString(", ")
         s"($types)"
       case t: AppliedType if t.tycon.isOperatorLike && t.args.size == 2 =>
         val operatorLikeTypeFormat = t.args

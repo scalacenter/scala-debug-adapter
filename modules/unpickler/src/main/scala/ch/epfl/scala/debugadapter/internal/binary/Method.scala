@@ -14,11 +14,3 @@ trait Method extends Symbol:
     name.endsWith("$") && !isTraitInitializer && declaringClass.isInterface && isStatic
   def isTraitInitializer: Boolean = name == "$init$"
   def isClassInitializer: Boolean = name == "<init>"
-  def isLocalMethod: Boolean = name.matches(".*\\$\\d+")
-  def declaredParams: Seq[Parameter] =
-    if isExtensionMethod && allParameters.headOption.exists(_.isThis) then allParameters.tail
-    else if isClassInitializer && allParameters.headOption.exists(_.isOuter) then allParameters.tail
-    else if isLocalMethod then allParameters.dropWhile(_.isCapture)
-    else allParameters
-  def declaredReturnType: Option[Type] =
-    if isClassInitializer then Some(declaringClass) else returnType

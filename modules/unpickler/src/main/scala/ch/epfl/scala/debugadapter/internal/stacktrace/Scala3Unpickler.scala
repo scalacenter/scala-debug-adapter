@@ -244,12 +244,12 @@ class Scala3Unpickler(
     object InlinedTree:
       def unapply(tree: Tree): Option[Symbol] =
         tree match
-          case ident: Ident if isInline(ident) => Some(ident.symbol)
+          case tree: TermReferenceTree if isInline(tree) => Some(tree.symbol)
           case Apply(fun, _) => unapply(fun)
           case TypeApply(fun, _) => unapply(fun)
           case _ => None
 
-      private def isInline(tree: Ident): Boolean =
+      private def isInline(tree: TermReferenceTree): Boolean =
         try tree.symbol.isTerm && tree.symbol.asTerm.isInline
         catch case NonFatal(e) => false
 
@@ -352,7 +352,7 @@ class Scala3Unpickler(
             case tpe: Type => toFunction0(tpe)
             case _ => toFunction0(byName.resultType)
         case _ => argType0
-      if javaType.forall(matchType(ErasedTypeRef.erase(argType).toSigFullName, _))
+      if javaType.forall(matchType(argType.erased, _))
     yield BinarySuperArg(binaryOwner, init, argType)
   end findSuperArgs
 
@@ -408,34 +408,48 @@ class Scala3Unpickler(
     else encodedScalaName == expectedName
 
   private def matchSignature(method: binary.Method, symbol: TermSymbol, isAdaptedOrInlined: Boolean = false): Boolean =
-    def matchCapture(paramName: String): Boolean =
-      val pattern = ".+\\$\\d+".r
-      pattern.matches(paramName) ||
-      (method.isExtensionMethod && paramName == "$this") ||
-      (method.isTraitStaticAccessor && paramName == "$this") ||
-      (method.isClassInitializer && paramName == "$outer")
+    object CurriedContextFunction:
+      def unapply(tpe: Type): Option[(Seq[TypeOrWildcard], TypeOrWildcard)] =
+        def rec(tpe: TypeOrWildcard, args: Seq[TypeOrWildcard]): Option[(Seq[TypeOrWildcard], TypeOrWildcard)] =
+          tpe match
+            case tpe: AppliedType if tpe.tycon.isContextFunction => rec(tpe.args.last, args ++ tpe.args.init)
+            case res => Option.when(args.nonEmpty)((args, res))
+        rec(tpe, Seq.empty)
 
-    val paramNames = symbol.declaredType.allParamsNames.map(_.toString)
-    val capturedParams = method.allParameters.dropRight(paramNames.size)
-    val declaredParams = method.allParameters.drop(capturedParams.size)
+    symbol.erasedParamsAndReturnTypes match
+      case Some((erasedParams, erasedReturnType)) =>
+        val paramNames = symbol.declaredType.allParamsNames.map(_.toString)
+        symbol.declaredType.returnType.dealias match
+          case CurriedContextFunction(uncurriedArgs, uncurriedReturnType) if !symbol.isAnonFun =>
+            val capturedParams = method.allParameters.dropRight(paramNames.size + uncurriedArgs.size)
+            val declaredParams = method.allParameters.drop(capturedParams.size).dropRight(uncurriedArgs.size)
+            val contextParams = method.allParameters.drop(capturedParams.size + declaredParams.size)
 
-    def matchTypes: Boolean =
-      symbol.signedName match
-        case SignedName(_, sig, _) =>
-          matchArgumentsTypes(sig.paramsSig, declaredParams)
-          && method.declaredReturnType.forall(matchType(sig.resSig, _))
-        case _ =>
-          // TODO compare symbol.declaredType
-          declaredParams.isEmpty
+            (capturedParams ++ contextParams).forall(_.isGenerated) &&
+            declaredParams.map(_.name).corresponds(paramNames)((n1, n2) => n1 == n2) &&
+            (isAdaptedOrInlined || matchSignature(
+              erasedParams ++ uncurriedArgs.map(_.erased),
+              uncurriedReturnType.erased,
+              declaredParams ++ contextParams,
+              method.returnType
+            ))
+          case _ =>
+            val capturedParams = method.allParameters.dropRight(paramNames.size)
+            val declaredParams = method.allParameters.drop(capturedParams.size)
 
-    capturedParams.map(_.name).forall(matchCapture) &&
-    declaredParams.map(_.name).corresponds(paramNames)((n1, n2) => n1 == n2) &&
-    (isAdaptedOrInlined || matchTypes)
+            capturedParams.forall(_.isGenerated) &&
+            declaredParams.map(_.name).corresponds(paramNames)((n1, n2) => n1 == n2) &&
+            (isAdaptedOrInlined || matchSignature(erasedParams, erasedReturnType, declaredParams, method.returnType))
+      case None => method.allParameters.forall(_.isGenerated)
 
-  private def matchArgumentsTypes(scalaParams: Seq[ParamSig], javaParams: Seq[binary.Parameter]): Boolean =
-    scalaParams
-      .collect { case termSig: ParamSig.Term => termSig }
-      .corresponds(javaParams)((scalaParam, javaParam) => matchType(scalaParam.typ, javaParam.`type`))
+  private def matchSignature(
+      scalaParams: Seq[FullyQualifiedName],
+      scalaReturnType: FullyQualifiedName,
+      javaParams: Seq[binary.Parameter],
+      javaReturnType: Option[binary.Type]
+  ): Boolean =
+    scalaParams.corresponds(javaParams)((scalaParam, javaParam) => matchType(scalaParam, javaParam.`type`)) &&
+      javaReturnType.forall(matchType(scalaReturnType, _))
 
   private val javaToScala: Map[String, String] = Map(
     "scala.Boolean" -> "boolean",

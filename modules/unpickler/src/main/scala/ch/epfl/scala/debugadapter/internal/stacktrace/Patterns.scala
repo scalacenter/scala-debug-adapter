@@ -65,7 +65,7 @@ object Patterns:
 
   object LocalLazyInit:
     def unapply(method: binary.Method): Option[(String, Int)] =
-      if method.declaredParams.nonEmpty then None
+      if !method.allParameters.forall(_.isGenerated) then None
       else
         val decodedName = decodeNameAndRemovePrefix(method)
         "(.+)\\$lzyINIT\\d+\\$(\\d+)".r.unapplySeq(decodedName).map(xs => (xs(0), xs(1).toInt))

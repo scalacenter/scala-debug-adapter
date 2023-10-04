@@ -47,14 +47,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
-      // if cls.name == "dotty.tools.dotc.transform.localopt.TypedFormatChecker$Conversion"
+      // if cls.name == "dotty.tools.dotc.transform.init.Semantic$"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethodsAndConstructors
-    // if method.name == "d_$hash$1"
+    // if method.name == "promoteArgs$1"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -63,7 +63,9 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case Patterns.LocalMethod(_, _) => unpickler.tryFind(method, localMethodCounter)
         case _ => unpickler.tryFind(method, methodCounter)
     // localMethodCounter.printAmbiguous()
-    localMethodCounter.printNotFound()
+    // localMethodCounter.printExceptions()
+    // localMethodCounter.printFirstException()
+    // localMethodCounter.printNotFound()
     localClassCounter.printReport()
     anonClassCounter.printReport()
     innerClassCounter.printReport()
@@ -77,11 +79,11 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(anonClassCounter, 430)
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
-    checkCounter(localMethodCounter, 2563, expectedAmbiguous = 2, expectedNotFound = 25)
-    checkCounter(anonFunCounter, 5457, expectedAmbiguous = 36, expectedNotFound = 1492)
+    checkCounter(localMethodCounter, 2570, expectedAmbiguous = 2, expectedNotFound = 18)
+    checkCounter(anonFunCounter, 5464, expectedAmbiguous = 37, expectedNotFound = 1484)
     checkCounter(adaptedAnonFunCounter, 272, expectedNotFound = 99)
     checkCounter(localLazyInitCounter, 107, expectedNotFound = 1)
-    checkCounter(methodCounter, 47456, expectedAmbiguous = 175, expectedNotFound = 10229, expectedExceptions = 30)
+    checkCounter(methodCounter, 47484, expectedAmbiguous = 175, expectedNotFound = 10201, expectedExceptions = 30)
 
   def checkCounter(
       counter: Counter,
@@ -179,5 +181,9 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         println(s"$symbol $lines is ambiguous:" + candidates.map(s"\n  - " + _).mkString)
       }
 
-    def printFirstException() = exceptions.headOption.foreach(println)
+    def printFirstException() = exceptions.headOption.foreach(printException)
     def printExceptions() = exceptions.foreach(println)
+
+    private def printException(e: Exception) =
+      println(e)
+      e.printStackTrace()

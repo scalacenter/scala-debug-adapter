@@ -7,6 +7,8 @@ import tastyquery.Types.*
 import tastyquery.Modifiers.*
 import ch.epfl.scala.debugadapter.internal.binary
 import tastyquery.SourcePosition
+import tastyquery.Contexts.*
+import tastyquery.Signatures.*
 
 extension (symbol: Symbol)
   def isTrait = symbol.isClass && symbol.asClass.isTrait
@@ -22,6 +24,17 @@ extension (symbol: TermSymbol)
   private def isGetterOrSetter = !symbol.isMethod || symbol.isSetter
   private def isLazyValInTrait: Boolean = symbol.owner.isTrait && symbol.isLazyVal
   private def isLazyVal: Boolean = symbol.kind == TermSymbolKind.LazyVal
+
+  def erasedParamsAndReturnTypes(using Context): Option[(Seq[FullyQualifiedName], FullyQualifiedName)] =
+    symbol.signedName match
+      case SignedName(_, sig, _) =>
+        val termParams = sig.paramsSig.collect { case term: ParamSig.Term => term.typ }
+        Some((termParams, sig.resSig))
+      case _ =>
+        // todo fix
+        // val returnType = symbol.declaredType.asInstanceOf[Type].erased
+        // (Seq.empty, returnType)
+        None
 
 extension [T <: BinarySymbol](candidates: Seq[T])
   def singleOrThrow(symbol: binary.Symbol): T =
@@ -48,11 +61,19 @@ extension (tpe: TypeOrMethodic)
     case t: PolyType => t.resultType.allParamsNames
     case _ => Seq.empty
 
+  def returnType: Type = tpe match
+    case t: LambdaType => t.resultType.returnType
+    case t: Type => t
+
 extension (tpe: Type)
   def isFunction: Boolean =
     tpe match
-      case ref: TypeRef =>
-        isScalaPackage(ref.prefix) && ref.nameStr.startsWith("Function")
+      case ref: TypeRef => ref.prefix.isScalaPackage && ref.nameStr.startsWith("Function")
+      case _ => false
+
+  def isContextFunction: Boolean =
+    tpe match
+      case ref: TypeRef => ref.prefix.isScalaPackage && ref.nameStr.startsWith("ContextFunction")
       case _ => false
 
   def isTuple: Boolean =
@@ -75,6 +96,12 @@ extension (tpe: Type)
       case _ => false
 
 extension (tpe: NamedType) def nameStr: String = tpe.name.toString
+
+extension (tpe: TypeOrWildcard)
+  def erased(using Context): FullyQualifiedName =
+    tpe match
+      case tpe: Type => ErasedTypeRef.erase(tpe).toSigFullName
+      case _: WildcardTypeArg => ctx.defn.ObjectClass.fullName
 
 extension (ref: TermRef)
   def isScalaPredef: Boolean =
