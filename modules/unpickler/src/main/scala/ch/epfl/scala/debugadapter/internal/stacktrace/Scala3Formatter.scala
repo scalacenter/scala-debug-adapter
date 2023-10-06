@@ -29,8 +29,11 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
           case BinaryMethodKind.Setter => formatSymbol(term).stripSuffix("_=") + ".<setter>"
           case BinaryMethodKind.LazyInit => formatSymbol(term) + ".<lazy init>"
           case BinaryMethodKind.LocalLazyInit => formatSymbol(term) + ".<lazy init>"
-          case BinaryMethodKind.MixinForwarder => formatSymbol(term) + ".<mixin forwarder>"
-          case BinaryMethodKind.TraitStaticAccessor => formatSymbol(term) + ".<trait static accessor>"
+          case BinaryMethodKind.MixinForwarder => formatSymbol(binaryOwner.symbol, term.name) + ".<mixin forwarder>"
+          case BinaryMethodKind.TraitStaticAccessor => formatSymbol(term) + ".<static accessor>"
+          case BinaryMethodKind.TraitParamGetter => formatSymbol(binaryOwner.symbol, term.name)
+          case BinaryMethodKind.TraitParamSetter =>
+            formatSymbol(binaryOwner.symbol, term.name).stripSuffix("_=") + ".<setter>"
           case _ => formatSymbol(term)
         s"$symbolStr$sep${formatType(term.declaredType)}"
       case BinaryOuter(owner, outer) =>
@@ -40,8 +43,11 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
       case _ => throw new UnsupportedOperationException(method.toString)
 
   private def formatSymbol(sym: Symbol): String =
-    val prefix = formatOwner(sym.owner)
-    val nameStr = formatName(sym.name)
+    formatSymbol(sym.owner, sym.name)
+
+  private def formatSymbol(owner: Symbol, name: Name): String =
+    val prefix = formatOwner(owner)
+    val nameStr = formatName(name)
     if prefix.isEmpty then nameStr else s"$prefix.$nameStr"
 
   private def formatOwner(sym: Symbol): String =

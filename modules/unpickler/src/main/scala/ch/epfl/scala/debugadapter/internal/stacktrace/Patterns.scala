@@ -60,21 +60,19 @@ object Patterns:
     def unapply(method: binary.Method): Option[(String, Int)] =
       if method.name.contains("$default") || method.name.contains("$proxy") then None
       else
-        val decodedName = decodeNameAndRemovePrefix(method)
-        "(.+)\\$(\\d+)".r.unapplySeq(decodedName).map(xs => (xs(0), xs(1).toInt))
+        "(.+)\\$(\\d+)".r
+          .unapplySeq(method.unexpandedDecodedName)
+          .map(xs => (xs(0), xs(1).toInt))
 
   object LocalLazyInit:
     def unapply(method: binary.Method): Option[(String, Int)] =
       if !method.allParameters.forall(_.isGenerated) then None
       else
-        val decodedName = decodeNameAndRemovePrefix(method)
-        "(.+)\\$lzyINIT\\d+\\$(\\d+)".r.unapplySeq(decodedName).map(xs => (xs(0), xs(1).toInt))
+        "(.+)\\$lzyINIT\\d+\\$(\\d+)".r
+          .unapplySeq(method.unexpandedDecodedName)
+          .map(xs => (xs(0), xs(1).toInt))
 
   object SuperArg:
     def unapply(method: binary.Method): Boolean =
       val superArg = "(.*)\\$superArg\\$\\d+(\\$\\d+)?".r
       superArg.unapplySeq(method.name).isDefined
-
-  private def decodeNameAndRemovePrefix(method: binary.Method): String =
-    val javaPrefix = NameTransformer.decode(method.declaringClass.name).replace('.', '$') + "$$"
-    NameTransformer.decode(method.name).stripPrefix(javaPrefix).split("_\\$").last

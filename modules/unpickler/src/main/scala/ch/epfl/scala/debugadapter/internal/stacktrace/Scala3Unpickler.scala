@@ -52,8 +52,7 @@ class Scala3Unpickler(
 
   def formatMethod(method: binary.Method): Option[String] =
     findMethod(method) match
-      case BinaryMethod(_, _, MixinForwarder | TraitStaticAccessor) =>
-        None
+      case BinaryMethod(_, _, MixinForwarder | TraitStaticAccessor) => None
       case binaryMethod => Some(formatter.format(binaryMethod))
 
   def formatClass(cls: binary.ClassType): String =
@@ -84,9 +83,11 @@ class Scala3Unpickler(
             }
           case Patterns.SuperArg() => findSuperArgs(binaryClass, method.returnType, method.sourceLines)
           case Patterns.LocalMethod(name, _) =>
-            collectLocalMethods(binaryClass, LocalDef, method) {
+            val localMethods = collectLocalMethods(binaryClass, LocalDef, method) {
               case (t: TermSymbol, inlined) if t.matchName(name) && matchSignature(method, t, inlined) => t
             }
+            val anonGetters = if name == "x" then findInstanceMethods(binaryClass, method) else Seq.empty
+            localMethods ++ anonGetters
           case Patterns.LazyInit(name) =>
             binaryClass.symbol.declarations.collect {
               case t: TermSymbol if t.isLazyVal && t.matchName(name) => BinaryMethod(binaryClass, t, LazyInit)
@@ -102,28 +103,7 @@ class Scala3Unpickler(
             val outer = binaryClass.symbol.owner.owner
             List(BinaryOuter(binaryClass, outerClass(binaryClass.symbol)))
 
-          case _ =>
-            val candidates = binaryClass.symbol.declarations
-              .collect {
-                case sym: TermSymbol if matchSymbol(method, sym) =>
-                  if method.name == "$init$" then BinaryMethod(binaryClass, sym, TraitConstructor)
-                  else if method.name == "<init>" then BinaryMethod(binaryClass, sym, Constructor)
-                  else if !sym.isMethod then BinaryMethod(binaryClass, sym, Getter)
-                  else if sym.isSetter then BinaryMethod(binaryClass, sym, Setter)
-                  else if method.name.contains("$default$") then BinaryMethod(binaryClass, sym, DefaultParameter)
-                  else BinaryMethod(binaryClass, sym, InstanceDef)
-              }
-            if candidates.nonEmpty then candidates
-            else
-              def allTraitParents(cls: ClassSymbol): Seq[ClassSymbol] =
-                (cls.parentClasses ++ cls.parentClasses.flatMap(allTraitParents)).distinct.filter(_.isTrait)
-              allTraitParents(binaryClass.symbol)
-                .flatMap(parent =>
-                  parent.declarations.collect {
-                    case sym: TermSymbol if !sym.isAbstractMember && matchSymbol(method, sym) =>
-                      BinaryMethod(binaryClass, sym, MixinForwarder)
-                  }
-                )
+          case _ => findInstanceMethods(binaryClass, method)
 
         candidates.singleOrThrow(method)
 
@@ -152,6 +132,32 @@ class Scala3Unpickler(
         case BinaryClass(symbol, TopLevelOrInner) => BinaryClass(symbol, SyntheticCompanionClass)
         case _ => notFound(cls)
     else allSymbols.filter(!_.symbol.isModuleClass).singleOrThrow(cls)
+
+  private def findInstanceMethods(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethod] =
+    val fromClass: Seq[BinaryMethod] = binaryClass.symbol.declarations
+      .collect {
+        case sym: TermSymbol if matchSymbol(method, sym) =>
+          if method.name == "$init$" then BinaryMethod(binaryClass, sym, TraitConstructor)
+          else if method.name == "<init>" then BinaryMethod(binaryClass, sym, Constructor)
+          else if !sym.isMethod then BinaryMethod(binaryClass, sym, Getter)
+          else if sym.isSetter then BinaryMethod(binaryClass, sym, Setter)
+          else if method.name.contains("$default$") then BinaryMethod(binaryClass, sym, DefaultParameter)
+          else BinaryMethod(binaryClass, sym, InstanceDef)
+      }
+
+    def allTraits(cls: ClassSymbol): Seq[ClassSymbol] =
+      (cls.parentClasses ++ cls.parentClasses.flatMap(allTraits)).distinct.filter(_.isTrait)
+
+    def fromTraits: Seq[BinaryMethod] =
+      allTraits(binaryClass.symbol)
+        .flatMap(_.declarations)
+        .collect { case sym: TermSymbol if matchSymbol(method, sym) => sym }
+        .collect {
+          case sym if sym.isSetter => BinaryMethod(binaryClass, sym, TraitParamSetter)
+          case sym if !sym.isMethod && sym.isParamAccessor => BinaryMethod(binaryClass, sym, TraitParamGetter)
+          case sym if !sym.isAbstractMember => BinaryMethod(binaryClass, sym, MixinForwarder)
+        }
+    if fromClass.nonEmpty then fromClass else fromTraits
 
   private def notFound(symbol: binary.Symbol): Nothing = throw NotFoundException(symbol)
 
@@ -393,19 +399,14 @@ class Scala3Unpickler(
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
 
   private def matchTargetName(method: binary.Method, symbol: TermSymbol): Boolean =
-    val javaPrefix = method.declaringClass.name.replace('.', '$') + "$$"
-    // if an inner accesses a private method, the backend makes the method public
-    // and prefixes its name with the full class name.
-    // Example: method foo in class example.Inner becomes example$Inner$$foo
-    val expectedName = method.name.stripPrefix(javaPrefix)
     val symbolName = symbol.targetName.toString
-    val encodedScalaName = symbolName match
+    val scalaName = symbol.targetName.toString match
       case "<init>" if symbol.owner.asClass.isTrait => "$init$"
       case "<init>" => "<init>"
-      case _ => NameTransformer.encode(symbolName)
-    if method.isExtensionMethod then encodedScalaName == expectedName.stripSuffix("$extension")
-    else if method.isTraitStaticAccessor then encodedScalaName == expectedName.stripSuffix("$")
-    else encodedScalaName == expectedName
+      case scalaName => scalaName
+    if method.isExtensionMethod then scalaName == method.unexpandedDecodedName.stripSuffix("$extension")
+    else if method.isTraitStaticAccessor then scalaName == method.unexpandedDecodedName.stripSuffix("$")
+    else scalaName == method.unexpandedDecodedName
 
   private def matchSignature(method: binary.Method, symbol: TermSymbol, isAdaptedOrInlined: Boolean = false): Boolean =
     object CurriedContextFunction:

@@ -41,4 +41,5 @@ enum BinaryMethodSymbol extends BinarySymbol:
 
 enum BinaryMethodKind:
   case InstanceDef, LocalDef, AnonFun, AdaptedAnonFun, Getter, Setter, LazyInit, LocalLazyInit, Constructor,
-    TraitConstructor, MixinForwarder, TraitStaticAccessor, SuperAccessor, DefaultParameter, ByNameArg, Outer, SuperArg
+    TraitConstructor, MixinForwarder, TraitStaticAccessor, SuperAccessor, DefaultParameter, ByNameArg, Outer, SuperArg,
+    TraitParamGetter, TraitParamSetter

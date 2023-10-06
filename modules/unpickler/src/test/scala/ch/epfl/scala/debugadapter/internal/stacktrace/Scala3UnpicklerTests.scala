@@ -67,38 +67,13 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val staticTraitAccessor = "java.lang.String m$(example.A $this)"
 
     debuggee.assertFormat("example.A", javaSig, "A.m(): String")
-    debuggee.assertFormatAndKind(
-      "example.A",
-      staticTraitAccessor,
-      "A.m.<trait static accessor>(): String",
-      BinaryMethodKind.TraitStaticAccessor
-    )
-    debuggee.assertFormatAndKind(
-      "example.B",
-      javaSig,
-      "A.m.<mixin forwarder>(): String",
-      BinaryMethodKind.MixinForwarder
-    )
-    debuggee.assertFormatAndKind(
-      "example.C",
-      javaSig,
-      "A.m.<mixin forwarder>(): String",
-      BinaryMethodKind.MixinForwarder
-    )
+    debuggee.assertFormat("example.A", staticTraitAccessor, "A.m.<static accessor>(): String")
+    debuggee.assertFormat("example.B", javaSig, "B.m.<mixin forwarder>(): String")
+    debuggee.assertFormat("example.C", javaSig, "C.m.<mixin forwarder>(): String")
     debuggee.assertFormat("example.D", javaSig, "D.m(): String")
-    debuggee.assertFormatAndKind(
-      "example.F$",
-      javaSig,
-      "A.m.<mixin forwarder>(): String",
-      BinaryMethodKind.MixinForwarder
-    )
+    debuggee.assertFormat("example.F$", javaSig, "F.m.<mixin forwarder>(): String")
     debuggee.assertFormat("example.Main$G", javaSig, "Main.G.m(): String")
-    debuggee.assertFormatAndKind(
-      "example.Main$H",
-      javaSig,
-      "A.m.<mixin forwarder>(): String",
-      BinaryMethodKind.MixinForwarder
-    )
+    debuggee.assertFormat("example.Main$H", javaSig, "Main.H.m.<mixin forwarder>(): String")
     debuggee.assertAmbiguous("example.Main$$anon$1", javaSig)
     debuggee.assertAmbiguous("example.Main$$anon$2", javaSig)
   }
@@ -485,13 +460,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
 
     debuggee.assertFormatAndKind("example.A$", "java.lang.String a()", "A.a: String", BinaryMethodKind.Getter)
-    debuggee.assertFormatAndKind(
-      "example.A$",
-      "java.lang.String b()",
-      "B.b.<mixin forwarder>: String",
-      BinaryMethodKind.MixinForwarder
-    )
+    debuggee.assertFormat("example.A$", "java.lang.String b()", "A.b.<mixin forwarder>: String")
     debuggee.assertFormatAndKind("example.B", "java.lang.String b()", "B.b: String", BinaryMethodKind.Getter)
+    debuggee.assertFormat("example.B", "java.lang.String b$(example.B $this)", "B.b.<static accessor>: String")
 
     if !isScala30 then // new in Scala 3.3.0
       debuggee.assertNotSkipped("example.A$", "java.lang.Object a$lzyINIT1()")
@@ -513,12 +484,11 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.A", "int productArity()", "A.productArity: Int")
     debuggee.assertFormat("example.A", "java.lang.String productPrefix()", "A.productPrefix: String")
     debuggee.assertFormat("example.A", "java.lang.Object productElement(int n)", "A.productElement(n: Int): Any")
-    debuggee.assertFormatAndKind(
+    debuggee.assertFormat(
       "example.A",
       "scala.collection.Iterator productIterator()",
-      "Product.productIterator.<mixin forwarder>: Iterator[Any]",
-      BinaryMethodKind.MixinForwarder
-    ) // it is a bridge
+      "A.productIterator.<mixin forwarder>: Iterator[Any]"
+    )
 
     debuggee.assertFormat("example.A$", "example.A apply(java.lang.String a)", "A.apply(a: String): A")
     debuggee.assertFormat("example.A$", "example.A unapply(example.A x$1)", "A.unapply(A): A")
@@ -722,11 +692,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
 
     debuggee.assertFormat("example.A", "int m(scala.collection.immutable.List xs)", "A.m(xs: List[Int]): Int")
-    debuggee.assertFormatAndKind(
+    debuggee.assertFormat(
       "example.B",
       "int m(scala.collection.immutable.List xs)",
-      "A.m.<mixin forwarder>(xs: List[Int]): Int",
-      BinaryMethodKind.MixinForwarder
+      "B.m.<mixin forwarder>(xs: List[Int]): Int"
     )
     debuggee.assertFormat(
       "example.B",
@@ -1245,6 +1214,32 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     // debuggee.assertFormat("example.A", "java.lang.String mbis(java.lang.Object evidence$5)", "A.m: ? ?=> String")
   }
 
+  test("trait param") {
+    val source =
+      """|package example
+         |
+         |trait A(val x: Int, var y: Int, z: Int)(using String)
+         |
+         |class B(x: Int)(using String) extends A(x, 1, -1)
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormatAndKind("example.B", "int x()", "B.x: Int", BinaryMethodKind.TraitParamGetter)
+    debuggee.assertFormatAndKind("example.B", "int y()", "B.y: Int", BinaryMethodKind.TraitParamGetter)
+    debuggee.assertFormatAndKind(
+      "example.B",
+      "void y_$eq(int x$1)",
+      "B.y.<setter>(Int): Unit",
+      BinaryMethodKind.TraitParamSetter
+    )
+    debuggee.assertFormatAndKind("example.B", "int example$A$$z()", "B.z: Int", BinaryMethodKind.TraitParamGetter)
+    debuggee.assertFormatAndKind(
+      "example.B",
+      "java.lang.String example$A$$x$4()",
+      "B.x$4: String",
+      BinaryMethodKind.TraitParamGetter
+    )
+  }
+
   extension (debuggee: TestingDebuggee)
     private def loader(loadLines: Boolean): JavaReflectLoader =
       JavaReflectLoader(debuggee.classLoader, readSourceLines = loadLines)
@@ -1320,7 +1315,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
         munit.Location
     ): Unit =
       val m = getMethod(declaringType, javaSig, loadLines = loadLines)
-      assertEquals(unpickler.formatMethod(m), Some(expected))
+      val binarySymbol = unpickler.findMethod(m)
+      assertEquals(unpickler.formatter.format(binarySymbol), expected)
 
     private def assertFormatAndKind(declaringType: String, javaSig: String, expected: String, kind: BinaryMethodKind)(
         using munit.Location
