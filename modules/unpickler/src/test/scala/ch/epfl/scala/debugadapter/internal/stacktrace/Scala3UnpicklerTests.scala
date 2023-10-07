@@ -1240,6 +1240,33 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     )
   }
 
+  test("lifted try") {
+    val source =
+      """|package example
+         |
+         |class A:
+         |  println("" + (try "" catch case e: Exception => ""))
+         |
+         |  val x = "" + 
+         |    (try "" catch case e: Exception => "")
+         |
+         |  def m1 = 
+         |    val x = "" + (try "" catch case e: Exception => "")
+         |    def m2 = 1 + (try 2 catch case e: Exception => 3)
+         |    x * m2
+         |
+         |  inline def m3 = try "" catch case e: Exception => ""
+         |
+         |   def m4 = "" + m3
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertNotFound("example.A", "java.lang.String liftedTree1$1()", loadLines = true)
+    debuggee.assertFormat("example.A", "java.lang.String liftedTree2$1()", "A.<try>: \"\" | \"\"", loadLines = true)
+    debuggee.assertFormat("example.A", "java.lang.String liftedTree3$1()", "A.<try>: \"\" | \"\"", loadLines = true)
+    debuggee.assertFormat("example.A", "int liftedTree4$1()", "A.<try>: 2 | 3", loadLines = true)
+    debuggee.assertAmbiguous("example.A", "java.lang.String liftedTree5$1()", loadLines = true)
+  }
+
   extension (debuggee: TestingDebuggee)
     private def loader(loadLines: Boolean): JavaReflectLoader =
       JavaReflectLoader(debuggee.classLoader, readSourceLines = loadLines)
@@ -1299,12 +1326,16 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       val m = getMethod(declaringType, javaSig, loadLines = false)
       assert(!unpickler.skipMethod(m))
 
-    private def assertNotFound(declaringType: String, javaSig: String)(using munit.Location): Unit =
-      val m = getMethod(declaringType, javaSig, loadLines = false)
+    private def assertNotFound(declaringType: String, javaSig: String, loadLines: Boolean = false)(using
+        munit.Location
+    ): Unit =
+      val m = getMethod(declaringType, javaSig, loadLines)
       intercept[NotFoundException](unpickler.findMethod(m))
 
-    private def assertAmbiguous(declaringType: String, javaSig: String)(using munit.Location): Unit =
-      val m = getMethod(declaringType, javaSig, loadLines = false)
+    private def assertAmbiguous(declaringType: String, javaSig: String, loadLines: Boolean = false)(using
+        munit.Location
+    ): Unit =
+      val m = getMethod(declaringType, javaSig, loadLines)
       intercept[AmbiguousException](unpickler.findMethod(m))
 
     private def assertAmbiguous(declaringType: String)(using munit.Location): Unit =

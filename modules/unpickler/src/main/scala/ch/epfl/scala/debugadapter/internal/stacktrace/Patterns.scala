@@ -76,3 +76,8 @@ object Patterns:
     def unapply(method: binary.Method): Boolean =
       val superArg = "(.*)\\$superArg\\$\\d+(\\$\\d+)?".r
       superArg.unapplySeq(method.name).isDefined
+
+  object LiftedTree:
+    def unapply(method: binary.Method): Boolean =
+      val liftedTree = "liftedTree\\d+\\$\\d+".r
+      liftedTree.unapplySeq(method.name).isDefined
