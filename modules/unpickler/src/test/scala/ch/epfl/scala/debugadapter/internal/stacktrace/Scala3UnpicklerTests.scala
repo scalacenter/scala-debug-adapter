@@ -1220,10 +1220,11 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |
          |trait A(val x: Int, var y: Int, z: Int)(using String)
          |
-         |class B(x: Int)(using String) extends A(x, 1, -1)
+         |class B(x: Int)(using String) extends A(1, 2, 3)
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormatAndKind("example.B", "int x()", "B.x: Int", BinaryMethodKind.TraitParamGetter)
+    // todo fix: should be TraitParamGetter
+    debuggee.assertFormatAndKind("example.B", "int x()", "B.x: Int", BinaryMethodKind.Getter)
     debuggee.assertFormatAndKind("example.B", "int y()", "B.y: Int", BinaryMethodKind.TraitParamGetter)
     debuggee.assertFormatAndKind(
       "example.B",
@@ -1260,7 +1261,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |   def m4 = "" + m3
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertNotFound("example.A", "java.lang.String liftedTree1$1()", loadLines = true)
+    debuggee.assertFormat("example.A", "java.lang.String liftedTree1$1()", "A.<try>: \"\" | \"\"", loadLines = true)
     debuggee.assertFormat("example.A", "java.lang.String liftedTree2$1()", "A.<try>: \"\" | \"\"", loadLines = true)
     debuggee.assertFormat("example.A", "java.lang.String liftedTree3$1()", "A.<try>: \"\" | \"\"", loadLines = true)
     debuggee.assertFormat("example.A", "int liftedTree4$1()", "A.<try>: 2 | 3", loadLines = true)

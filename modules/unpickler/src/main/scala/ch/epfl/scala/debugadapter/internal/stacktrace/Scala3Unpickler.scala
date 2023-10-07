@@ -286,7 +286,6 @@ class Scala3Unpickler(
             case ClassDef(_, template, sym) if sym.companionClass.exists(_.isEnum) =>
               super.traverse(template.body)
             case _ => ()
-        
 
       def collected: Seq[S] =
         if inlined || lines.isEmpty then buffer.values.toSeq
