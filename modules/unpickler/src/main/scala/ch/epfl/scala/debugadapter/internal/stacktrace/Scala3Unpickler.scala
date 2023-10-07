@@ -279,6 +279,14 @@ class Scala3Unpickler(
               symbol.tree.foreach(collector.traverse)
             case tree => matchTree(tree)
           super.traverse(tree)
+        else
+          // bug in dotty: wrong pos of `def $new` in the companion object of an enum
+          // the pos is outside the companion object, in the enum
+          tree match
+            case ClassDef(_, template, sym) if sym.companionClass.exists(_.isEnum) =>
+              super.traverse(template.body)
+            case _ => ()
+        
 
       def collected: Seq[S] =
         if inlined || lines.isEmpty then buffer.values.toSeq
@@ -298,14 +306,7 @@ class Scala3Unpickler(
     end Collector
 
     val collector = Collector()
-    root match
-      case cls: ClassSymbol =>
-        for
-          sym <- cls.declarations
-          tree <- sym.tree
-        do collector.traverse(tree)
-      case sym =>
-        sym.tree.foreach(collector.traverse)
+    root.tree.foreach(collector.traverse)
     collectors.toSeq.flatMap(_.collected)
   end collectTrees1
 
