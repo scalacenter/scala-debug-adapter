@@ -9,6 +9,7 @@ import ch.epfl.scala.debugadapter.internal.binary
 import tastyquery.SourcePosition
 import tastyquery.Contexts.*
 import tastyquery.Signatures.*
+import scala.util.control.NonFatal
 
 extension (symbol: Symbol)
   def isTrait = symbol.isClass && symbol.asClass.isTrait
@@ -120,6 +121,11 @@ extension (tree: Apply)
       case Apply(fun, args) => rec(fun) ++ args
       case _ => Seq.empty
     rec(tree.fun) ++ tree.args
+
+extension (tree: TermTree)
+  def safeWidenType(using Context): Option[TermType] =
+    try Some(tree.tpe.widenTermRef)
+    catch case NonFatal(_) => None
 
 extension (pos: SourcePosition)
   def isEnclosing(other: SourcePosition): Boolean =

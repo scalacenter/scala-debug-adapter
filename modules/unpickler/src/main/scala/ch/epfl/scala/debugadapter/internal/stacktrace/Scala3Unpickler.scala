@@ -74,9 +74,13 @@ class Scala3Unpickler(
               (term.isLazyVal || term.isModuleVal) && term.matchName(name)
             }
           case Patterns.AnonFun(prefix) =>
-            collectLocalMethods(binaryClass, AnonFun, method) { (term, inlined) =>
+            val anonFuns = collectLocalMethods(binaryClass, AnonFun, method) { (term, inlined) =>
               term.isAnonFun && matchSignature(method, term, inlined)
             }
+            val byNameArgs =
+              if method.allParameters.forall(_.isCapture) then findByNameArgs(binaryClass, method)
+              else Seq.empty
+            anonFuns ++ byNameArgs
           case Patterns.AdaptedAnonFun(prefix) =>
             collectLocalMethods(binaryClass, AdaptedAnonFun, method) { (term, _) =>
               term.isAnonFun && matchSignature(method, term, isAdaptedOrInlined = true)
@@ -271,7 +275,7 @@ class Scala3Unpickler(
       collectors += this
       private var buffer = Map.empty[Tree, S]
       override def traverse(tree: Tree): Unit =
-        if matchLines(tree) then
+        if inlined || matchLines(tree, span) then
           tree match
             case InlinedTree(symbol) if !inlinedSymbols.contains(symbol) =>
               inlinedSymbols += symbol
@@ -297,17 +301,17 @@ class Scala3Unpickler(
 
       private def matchTree(tree: Tree): Unit =
         matcher(inlined).lift(tree).foreach(res => buffer += (tree -> res))
-
-      private def matchLines(tree: Tree): Boolean =
-        tree match
-          case lambda: Lambda => lambda.meth.symbol.tree.exists(matchLines)
-          case tree => inlined || tree.pos.unknownOrContainsAll(span)
     end Collector
 
     val collector = Collector()
     root.tree.foreach(collector.traverse)
     collectors.toSeq.flatMap(_.collected)
   end collectTrees1
+
+  private def matchLines(tree: Tree, span: Seq[binary.SourceLine]): Boolean =
+    tree match
+      case lambda: Lambda => lambda.meth.symbol.tree.exists(matchLines(_, span))
+      case tree => tree.pos.unknownOrContainsAll(span)
 
   private def findSuperArgs(binaryOwner: BinaryClass, method: binary.Method): Seq[BinarySuperArg] =
     def asSuperCall(parent: Tree): Option[Apply] =
@@ -364,14 +368,38 @@ class Scala3Unpickler(
         case tpe: Type => method.returnType.exists(matchType(tpe.erased, _))
         case _ => false
     val classOwners = withCompanionIfExtendsAnyVal(binaryOwner.symbol)
-    val sourceLines = removeInlinedLines(method.sourceLines, classOwners)
+    val sourceSpan = removeInlinedLines(method.sourceLines, classOwners).interval
     for
       classOwner <- classOwners
-      tryTree <- collectTrees[BinaryLiftedTry](classOwner, sourceLines) {
+      liftedTry <- collectTrees[BinaryLiftedTry](classOwner, sourceSpan) {
         case tryTree: Try if matchType0(tryTree.tpe) =>
-          BinaryLiftedTry(binaryOwner, tryTree.tpe.widen.asInstanceOf[Type].dealias)
+          BinaryLiftedTry(binaryOwner, tryTree.tpe.asInstanceOf[Type])
       }
-    yield tryTree
+    yield liftedTry
+
+  private def findByNameArgs(binaryOwner: BinaryClass, method: binary.Method): Seq[BinaryByNameArg] =
+    def matchType0(tpe: TermType): Boolean =
+      tpe match
+        case tpe: Type => method.returnType.exists(matchType(tpe.erased, _))
+        case _ => false
+    val classOwners = withCompanionIfExtendsAnyVal(binaryOwner.symbol)
+    val sourceSpan = removeInlinedLines(method.sourceLines, classOwners).interval
+    object ByNameApply:
+      def unapply(tree: Apply): Option[Seq[(TermTree, Type)]] =
+        tree.fun.safeWidenType match
+          case Some(sig: MethodType) if sig.paramTypes.size == tree.args.size =>
+            Some(tree.args.zip(sig.paramTypes).collect { case (arg, t: ByNameType) => (arg, t.resultType) })
+              .filter(_.nonEmpty)
+          case _ => None
+    for
+      classOwner <- classOwners
+      byNameArg <- collectTrees1[Seq[BinaryByNameArg]](classOwner, sourceSpan)(inlined => { case ByNameApply(args) =>
+        args.collect {
+          case (arg, tpe) if matchType0(tpe) && (inlined || matchLines(arg, sourceSpan)) =>
+            BinaryByNameArg(binaryOwner, tpe)
+        }
+      }).flatten
+    yield byNameArg
 
   private def removeInlinedLines(
       sourceLines: Seq[binary.SourceLine],

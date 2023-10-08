@@ -47,14 +47,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
-      // if cls.name == "dotty.tools.dotc.core.SourceLanguage$$anon$1"
+      // if cls.name == "scala.quoted.runtime.impl.QuotesImpl"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethodsAndConstructors
-    // if method.name == "dotty$tools$dotc$reporting$ShowMatchTrace$$x$2"
+    // if method.name == "scala$quoted$runtime$impl$QuotesImpl$reflect$report$$$_$error$$anonfun$1"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -68,6 +68,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     // localMethodCounter.printFirstException()
     // localMethodCounter.printNotFound()
     // methodCounter.printNotFound()
+    anonFunCounter.printNotFound()
     localClassCounter.printReport()
     anonClassCounter.printReport()
     innerClassCounter.printReport()
@@ -82,7 +83,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
     checkCounter(localMethodCounter, 2585, expectedAmbiguous = 2, expectedNotFound = 3)
-    checkCounter(anonFunCounter, 5479, expectedAmbiguous = 37, expectedNotFound = 1469)
+    checkCounter(anonFunCounter, 6645, expectedAmbiguous = 331, expectedNotFound = 9)
     checkCounter(adaptedAnonFunCounter, 272, expectedNotFound = 99)
     checkCounter(localLazyInitCounter, 107)
     checkCounter(methodCounter, 47605, expectedAmbiguous = 177, expectedNotFound = 10079, expectedExceptions = 30)
@@ -133,7 +134,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
           counter.notFound += notFound
           None
         case e: Exception =>
-          counter.exceptions += e
+          counter.exceptions += (cls -> e)
           None
 
     def tryFind(mthd: binary.Method, counter: Counter): Unit =
@@ -143,7 +144,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
       catch
         case notFound: NotFoundException => counter.notFound += notFound
         case ambiguous: AmbiguousException => counter.ambiguous += ambiguous
-        case e: Exception => counter.exceptions += e
+        case e: Exception => counter.exceptions += (mthd -> e)
 
   override def munitTimeout: Duration = 2.minutes
 
@@ -151,7 +152,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     val success = mutable.Buffer.empty[binary.Symbol]
     val notFound = mutable.Buffer.empty[NotFoundException]
     val ambiguous = mutable.Buffer.empty[AmbiguousException]
-    val exceptions = mutable.Buffer.empty[Exception]
+    val exceptions = mutable.Buffer.empty[(binary.Symbol, Exception)]
 
     def size: Int = success.size + notFound.size + ambiguous.size + exceptions.size
 
@@ -184,8 +185,8 @@ class Scala3UnpicklerStats extends munit.FunSuite:
       }
 
     def printFirstException() = exceptions.headOption.foreach(printException)
-    def printExceptions() = exceptions.foreach(println)
+    def printExceptions() = exceptions.foreach((sym, e) => println(s"$sym $e"))
 
-    private def printException(e: Exception) =
-      println(e)
+    private def printException(sym: binary.Symbol, e: Exception) =
+      println(s"$sym $e")
       e.printStackTrace()
