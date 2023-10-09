@@ -26,16 +26,14 @@ extension (symbol: TermSymbol)
   private def isLazyValInTrait: Boolean = symbol.owner.isTrait && symbol.isLazyVal
   private def isLazyVal: Boolean = symbol.kind == TermSymbolKind.LazyVal
 
-  def erasedParamsAndReturnTypes(using Context): Option[(Seq[FullyQualifiedName], FullyQualifiedName)] =
+  def erasedParamsAndReturnTypes(using Context): (Seq[FullyQualifiedName], FullyQualifiedName) =
     symbol.signedName match
       case SignedName(_, sig, _) =>
         val termParams = sig.paramsSig.collect { case term: ParamSig.Term => term.typ }
-        Some((termParams, sig.resSig))
+        (termParams, sig.resSig)
       case _ =>
-        // todo fix
-        // val returnType = symbol.declaredType.asInstanceOf[Type].erased
-        // (Seq.empty, returnType)
-        None
+        val returnType = symbol.declaredType.asInstanceOf[Type].erased
+        (Seq.empty, returnType)
 
 extension [T <: BinarySymbol](candidates: Seq[T])
   def singleOrThrow(symbol: binary.Symbol): T =

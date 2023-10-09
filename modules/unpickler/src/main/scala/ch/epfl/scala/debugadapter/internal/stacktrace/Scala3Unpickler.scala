@@ -456,31 +456,29 @@ class Scala3Unpickler(
             case res => Option.when(args.nonEmpty)((args, res))
         rec(tpe, Seq.empty)
 
-    symbol.erasedParamsAndReturnTypes match
-      case Some((erasedParams, erasedReturnType)) =>
-        val paramNames = symbol.declaredType.allParamsNames.map(_.toString)
-        symbol.declaredType.returnType.dealias match
-          case CurriedContextFunction(uncurriedArgs, uncurriedReturnType) if !symbol.isAnonFun =>
-            val capturedParams = method.allParameters.dropRight(paramNames.size + uncurriedArgs.size)
-            val declaredParams = method.allParameters.drop(capturedParams.size).dropRight(uncurriedArgs.size)
-            val contextParams = method.allParameters.drop(capturedParams.size + declaredParams.size)
+    val (erasedParams, erasedReturnType) = symbol.erasedParamsAndReturnTypes
+    val paramNames = symbol.declaredType.allParamsNames.map(_.toString)
+    symbol.declaredType.returnType.dealias match
+      case CurriedContextFunction(uncurriedArgs, uncurriedReturnType) if !symbol.isAnonFun =>
+        val capturedParams = method.allParameters.dropRight(paramNames.size + uncurriedArgs.size)
+        val declaredParams = method.allParameters.drop(capturedParams.size).dropRight(uncurriedArgs.size)
+        val contextParams = method.allParameters.drop(capturedParams.size + declaredParams.size)
 
-            (capturedParams ++ contextParams).forall(_.isGenerated) &&
-            declaredParams.map(_.name).corresponds(paramNames)((n1, n2) => n1 == n2) &&
-            (isAdaptedOrInlined || matchSignature(
-              erasedParams ++ uncurriedArgs.map(_.erased),
-              uncurriedReturnType.erased,
-              declaredParams ++ contextParams,
-              method.returnType
-            ))
-          case _ =>
-            val capturedParams = method.allParameters.dropRight(paramNames.size)
-            val declaredParams = method.allParameters.drop(capturedParams.size)
+        (capturedParams ++ contextParams).forall(_.isGenerated) &&
+        declaredParams.map(_.name).corresponds(paramNames)((n1, n2) => n1 == n2) &&
+        (isAdaptedOrInlined || matchSignature(
+          erasedParams ++ uncurriedArgs.map(_.erased),
+          uncurriedReturnType.erased,
+          declaredParams ++ contextParams,
+          method.returnType
+        ))
+      case _ =>
+        val capturedParams = method.allParameters.dropRight(paramNames.size)
+        val declaredParams = method.allParameters.drop(capturedParams.size)
 
-            capturedParams.forall(_.isGenerated) &&
-            declaredParams.map(_.name).corresponds(paramNames)((n1, n2) => n1 == n2) &&
-            (isAdaptedOrInlined || matchSignature(erasedParams, erasedReturnType, declaredParams, method.returnType))
-      case None => method.allParameters.forall(_.isGenerated)
+        capturedParams.forall(_.isGenerated) &&
+        declaredParams.map(_.name).corresponds(paramNames)((n1, n2) => n1 == n2) &&
+        (isAdaptedOrInlined || matchSignature(erasedParams, erasedReturnType, declaredParams, method.returnType))
 
   private def matchSignature(
       scalaParams: Seq[FullyQualifiedName],
