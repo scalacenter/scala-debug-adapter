@@ -1268,6 +1268,25 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertAmbiguous("example.A", "java.lang.String liftedTree5$1()", loadLines = true)
   }
 
+  test("by-name args") {
+    val source =
+      """|package example
+         |
+         |class A {
+         |  def foo[T](x: => T): T = x
+         |
+         |  foo("Hello")
+         |  
+         |  def m =
+         |    foo(1 + 1)
+         |}
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat("example.A", "java.lang.Object foo(scala.Function0 x)", "A.foo[T](x: => T): T")
+    debuggee.assertFormat("example.A", "java.lang.String $init$$$anonfun$1()", "A.<by-name arg>: String")
+    debuggee.assertFormat("example.A", "int m$$anonfun$1()", "A.<by-name arg>: Int")
+  }
+
   extension (debuggee: TestingDebuggee)
     private def loader(loadLines: Boolean): JavaReflectLoader =
       JavaReflectLoader(debuggee.classLoader, readSourceLines = loadLines)
