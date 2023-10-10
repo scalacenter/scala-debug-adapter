@@ -47,14 +47,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
-      // if cls.name == "scala.quoted.runtime.impl.QuotesImpl"
+      // if cls.name == "dotty.tools.dotc.util.StackTraceOps$"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethodsAndConstructors
-    // if method.name == "scala$quoted$runtime$impl$QuotesImpl$reflect$report$$$_$error$$anonfun$1"
+    // if method.name == "unseen$1$$anonfun$adapted$1"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -62,8 +62,9 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case Patterns.LocalLazyInit(_, _) => unpickler.tryFind(method, localLazyInitCounter)
         case Patterns.LocalMethod(_, _) => unpickler.tryFind(method, localMethodCounter)
         case _ => unpickler.tryFind(method, methodCounter)
+    // adaptedAnonFunCounter.printAmbiguous()
+    adaptedAnonFunCounter.printAmbiguous()
     adaptedAnonFunCounter.printNotFound()
-    anonFunCounter.printNotFound()
     localClassCounter.printReport()
     anonClassCounter.printReport()
     innerClassCounter.printReport()
@@ -79,7 +80,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(topLevelClassCounter, 1505)
     checkCounter(localMethodCounter, 2585, expectedAmbiguous = 2, expectedNotFound = 3)
     checkCounter(anonFunCounter, 6645, expectedAmbiguous = 331, expectedNotFound = 9)
-    checkCounter(adaptedAnonFunCounter, 272, expectedNotFound = 99)
+    checkCounter(adaptedAnonFunCounter, 232, expectedAmbiguous = 135, expectedNotFound = 4)
     checkCounter(localLazyInitCounter, 107)
     checkCounter(methodCounter, 47089, expectedAmbiguous = 161, expectedNotFound = 10641)
 

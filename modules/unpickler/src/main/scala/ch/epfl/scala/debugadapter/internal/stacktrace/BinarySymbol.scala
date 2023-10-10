@@ -28,7 +28,7 @@ enum BinaryMethodSymbol extends BinarySymbol:
   case BinaryOuter(binaryOwner: BinaryClassSymbol, outerClass: ClassSymbol)
   case BinarySuperArg(binaryOwner: BinaryClassSymbol, init: TermSymbol, tpe: Type)
   case BinaryLiftedTry(binaryOwner: BinaryClassSymbol, tpe: Type)
-  case BinaryByNameArg(binaryOwner: BinaryClassSymbol, tpe: Type)
+  case BinaryByNameArg(binaryOwner: BinaryClassSymbol, tpe: Type, isAdapted: Boolean)
 
   def symbol = this match
     case BinaryMethod(_, term, _) => Some(term)
@@ -39,9 +39,10 @@ enum BinaryMethodSymbol extends BinarySymbol:
     case BinaryOuter(_, _) => BinaryMethodKind.Outer
     case BinarySuperArg(_, _, _) => BinaryMethodKind.SuperArg
     case BinaryLiftedTry(_, _) => BinaryMethodKind.LiftedTry
-    case BinaryByNameArg(_, _) => BinaryMethodKind.ByNameArg
+    case BinaryByNameArg(_, _, adapted) =>
+      if adapted then BinaryMethodKind.AdaptedByNameArg else BinaryMethodKind.ByNameArg
 
 enum BinaryMethodKind:
   case InstanceDef, LocalDef, AnonFun, AdaptedAnonFun, Getter, Setter, LazyInit, LocalLazyInit, Constructor,
     TraitConstructor, MixinForwarder, TraitStaticAccessor, SuperAccessor, DefaultParameter, Outer, SuperArg,
-    TraitParamGetter, TraitParamSetter, LiftedTry, ByNameArg
+    TraitParamGetter, TraitParamSetter, LiftedTry, ByNameArg, AdaptedByNameArg

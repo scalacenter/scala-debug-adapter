@@ -39,7 +39,9 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
       case BinaryOuter(owner, outer) => s"${format(owner)}.<outer>: ${formatOwner(outer)}"
       case BinarySuperArg(_, init, tpe) => s"${formatSymbol(init)}.<super arg>: ${formatType(tpe)}"
       case BinaryLiftedTry(owner, tpe) => s"${format(owner)}.<try>: ${formatType(tpe)}"
-      case BinaryByNameArg(owner, tpe) => s"${format(owner)}.<by-name arg>: ${formatType(tpe)}"
+      case BinaryByNameArg(owner, tpe, adapted) =>
+        val adaptedSuffix = if adapted then ".<adapted>" else ""
+        s"${format(owner)}.<by-name arg>$adaptedSuffix: ${formatType(tpe)}"
 
   private def formatSymbol(sym: Symbol): String =
     formatSymbol(sym.owner, sym.name)
