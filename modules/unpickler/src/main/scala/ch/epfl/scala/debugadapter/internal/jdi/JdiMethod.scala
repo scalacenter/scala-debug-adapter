@@ -25,12 +25,14 @@ class JdiMethod(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method") 
 
   override def returnTypeName: String = invokeMethod("returnTypeName")
 
-  override def sourceLines: Seq[SourceLine] =
-    allLineLocations.map(_.lineNumber).distinct.sorted.map(SourceLine(_))
-
   override def isBridge: Boolean = invokeMethod("isBridge")
 
   override def isStatic: Boolean = invokeMethod("isStatic")
+
+  override def sourceLines: Seq[SourceLine] =
+    allLineLocations.map(_.lineNumber).distinct.sorted.map(SourceLine(_))
+
+  override def instructions: Seq[Instruction] = Seq.empty
 
   private def allLineLocations: Seq[JdiLocation] =
     invokeMethod[ju.List[Any]]("allLineLocations").asScala.map(JdiLocation.apply(_)).toSeq

@@ -5,7 +5,7 @@ import ch.epfl.scala.debugadapter.internal.binary
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
-class JavaReflectMethod(method: Method, val sourceLines: Seq[binary.SourceLine], loader: JavaReflectLoader)
+class JavaReflectMethod(method: Method, val signature: MethodSig, extraInfos: ExtraBytecodeInfo, loader: JavaReflectLoader)
     extends binary.Method:
 
   override def returnType: Option[binary.Type] =
@@ -26,3 +26,7 @@ class JavaReflectMethod(method: Method, val sourceLines: Seq[binary.SourceLine],
   override def toString: String = method.toString
 
   override def isBridge: Boolean = method.isBridge
+
+  override def sourceLines: Seq[binary.SourceLine] = extraInfos.sourceLines
+
+  override def instructions: Seq[binary.Instruction] = extraInfos.instructions

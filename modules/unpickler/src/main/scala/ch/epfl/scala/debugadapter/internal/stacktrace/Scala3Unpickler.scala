@@ -27,6 +27,7 @@ import tastyquery.SourceLanguage
 import scala.util.control.NonFatal
 import tastyquery.Traversers.TreeTraverser
 import scala.collection.mutable.Buffer
+import ch.epfl.scala.debugadapter.internal.binary.Instruction
 
 class Scala3Unpickler(
     classpaths: Array[Path],
@@ -60,6 +61,9 @@ class Scala3Unpickler(
 
   def findMethod(method: binary.Method): BinaryMethodSymbol =
     val binaryClass = findClass(method.declaringClass, method.isExtensionMethod)
+    findMethod(binaryClass, method)
+
+  def findMethod(binaryClass: BinaryClassSymbol, method: binary.Method): BinaryMethodSymbol =
     binaryClass match
       case BinarySAMClass(term, _, _) =>
         if method.declaringClass.superclass.get.name == "scala.runtime.AbstractPartialFunction" then
@@ -74,7 +78,18 @@ class Scala3Unpickler(
               (term.isLazyVal || term.isModuleVal) && term.matchName(name)
             }
           case Patterns.AnonFun(prefix) => findAnonFun(binaryClass, method)
-          case Patterns.AdaptedAnonFun(prefix) => findAnonFun(binaryClass, method, isAdapted = true)
+          case Patterns.AdaptedAnonFun(prefix) =>
+            method.instructions
+              .collectFirst {
+                case Instruction.Method(_, owner, name, descriptor, _) if owner == method.declaringClass.name =>
+                  method.declaringClass.declaredMethod(name, descriptor)
+              }
+              .flatten
+              .map(findMethod(binaryClass, _))
+              .collect {
+                case _ => ???
+              }
+              
           case Patterns.SuperArg() => findSuperArgs(binaryClass, method)
           case Patterns.LiftedTree() => findLiftedTry(binaryClass, method)
           case Patterns.LocalMethod(name, _) =>

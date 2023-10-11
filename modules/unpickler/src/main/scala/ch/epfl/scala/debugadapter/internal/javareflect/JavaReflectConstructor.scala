@@ -1,13 +1,13 @@
 package ch.epfl.scala.debugadapter.internal.javareflect
 
 import ch.epfl.scala.debugadapter.internal.binary
-
 import java.lang.reflect.Constructor
 import java.lang.reflect.Method
 
 class JavaReflectConstructor(
     constructor: Constructor[?],
-    val sourceLines: Seq[binary.SourceLine],
+    signature: MethodSig,
+    extraInfos: ExtraBytecodeInfo,
     loader: JavaReflectLoader
 ) extends binary.Method:
 
@@ -28,3 +28,7 @@ class JavaReflectConstructor(
   override def isStatic: Boolean = false
 
   override def toString: String = constructor.toString
+
+  override def sourceLines: Seq[binary.SourceLine] = extraInfos.sourceLines
+
+  override def instructions: Seq[binary.Instruction] = extraInfos.instructions

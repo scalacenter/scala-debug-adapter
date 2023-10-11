@@ -6,7 +6,7 @@ import scala.collection.mutable
 import org.objectweb.asm
 import java.io.IOException
 
-class JavaReflectLoader(classLoader: ClassLoader, readSourceLines: Boolean = true):
+class JavaReflectLoader(classLoader: ClassLoader, loadExtraInfo: Boolean = true):
   private val loadedClasses: mutable.Map[Class[?], JavaReflectClass] = mutable.Map.empty
 
   def loadClass(cls: Class[?]): JavaReflectClass =
@@ -18,19 +18,19 @@ class JavaReflectLoader(classLoader: ClassLoader, readSourceLines: Boolean = tru
 
   private def doLoadClass(cls: Class[?]): JavaReflectClass =
     val lines =
-      if readSourceLines && !cls.isPrimitive && !cls.isArray then
+      if loadExtraInfo && !cls.isPrimitive && !cls.isArray then
         try
           val name = cls.getName
           val inputStream = classLoader.getResourceAsStream(name.replace('.', '/') + ".class")
           val asmReader = new asm.ClassReader(inputStream)
-          getLineNumbers(asmReader)
+          getExtraInfo(asmReader)
         catch case _: IOException => Map.empty
       else Map.empty
     JavaReflectClass(cls, lines, this)
 
-  private def getLineNumbers(reader: asm.ClassReader): Map[MethodSig, Seq[SourceLine]] =
-    assert(readSourceLines)
-    val linesMap = mutable.Map.empty[MethodSig, Seq[SourceLine]]
+  private def getExtraInfo(reader: asm.ClassReader): Map[MethodSig, ExtraBytecodeInfo] =
+    assert(loadExtraInfo)
+    val extraInfos = mutable.Map.empty[MethodSig, ExtraBytecodeInfo]
     val visitor =
       new asm.ClassVisitor(asm.Opcodes.ASM9):
         override def visitMethod(
@@ -42,9 +42,13 @@ class JavaReflectLoader(classLoader: ClassLoader, readSourceLines: Boolean = tru
         ): asm.MethodVisitor =
           new asm.MethodVisitor(asm.Opcodes.ASM9):
             val lines = mutable.Buffer.empty[Int]
+            val instructions = mutable.Buffer.empty[Instruction]
             override def visitLineNumber(line: Int, start: asm.Label): Unit =
               lines += line
+            override def visitMethodInsn(opcode: Int, owner: String, name: String, descriptor: String, isInterface: Boolean): Unit =
+              instructions += Instruction.Method(opcode, owner, name, descriptor, isInterface)
             override def visitEnd(): Unit =
-              linesMap += MethodSig(name, descriptor) -> lines.toSeq.distinct.sorted.map(SourceLine(_))
+              val sourceLines = lines.toSeq.distinct.sorted.map(SourceLine(_))
+              extraInfos += MethodSig(name, descriptor) -> ExtraBytecodeInfo(sourceLines, instructions.toSeq)
     reader.accept(visitor, asm.Opcodes.ASM9)
-    linesMap.toMap
+    extraInfos.toMap
