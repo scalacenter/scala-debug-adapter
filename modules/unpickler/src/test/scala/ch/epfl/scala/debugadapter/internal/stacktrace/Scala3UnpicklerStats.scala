@@ -47,14 +47,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
-      // if cls.name == "dotty.tools.dotc.core.TypeEval$"
+      // if cls.name == "dotty.tools.dotc.typer.Deriving$Deriver"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethodsAndConstructors
-    // if method.name == "unseen$1$$anonfun$adapted$1"
+    // if method.name == "deriveSingleParameter$1"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -62,9 +62,6 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case Patterns.LocalLazyInit(_, _) => unpickler.tryFind(method, localLazyInitCounter)
         case Patterns.LocalMethod(_, _) => unpickler.tryFind(method, localMethodCounter)
         case _ => unpickler.tryFind(method, methodCounter)
-    // adaptedAnonFunCounter.printAmbiguous()
-    adaptedAnonFunCounter.printAmbiguous()
-    adaptedAnonFunCounter.printNotFound()
     localClassCounter.printReport()
     anonClassCounter.printReport()
     innerClassCounter.printReport()
@@ -79,10 +76,10 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
     checkCounter(localMethodCounter, 2585, expectedAmbiguous = 2, expectedNotFound = 3)
-    checkCounter(anonFunCounter, 6645, expectedAmbiguous = 331, expectedNotFound = 9)
-    checkCounter(adaptedAnonFunCounter, 232, expectedAmbiguous = 135, expectedNotFound = 4)
+    checkCounter(anonFunCounter, 6649, expectedAmbiguous = 331, expectedNotFound = 5)
+    checkCounter(adaptedAnonFunCounter, 286, expectedAmbiguous = 83, expectedNotFound = 2)
     checkCounter(localLazyInitCounter, 107)
-    checkCounter(methodCounter, 47089, expectedAmbiguous = 161, expectedNotFound = 10641)
+    checkCounter(methodCounter, 47097, expectedAmbiguous = 161, expectedNotFound = 10633)
 
   def checkCounter(
       counter: Counter,

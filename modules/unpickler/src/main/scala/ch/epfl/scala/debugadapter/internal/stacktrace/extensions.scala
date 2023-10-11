@@ -10,6 +10,7 @@ import tastyquery.SourcePosition
 import tastyquery.Contexts.*
 import tastyquery.Signatures.*
 import scala.util.control.NonFatal
+import tastyquery.SourceLanguage
 
 extension (symbol: Symbol)
   def isTrait = symbol.isClass && symbol.asClass.isTrait
@@ -20,20 +21,12 @@ extension (symbol: Symbol)
   def isModuleClass = symbol.isClass && symbol.asClass.isModuleClass
   def nameStr = symbol.name.toString
   def pos: SourcePosition = symbol.tree.map(_.pos).getOrElse(SourcePosition.NoPosition)
+  def isInline = symbol.isTerm && symbol.asTerm.isInline
 
 extension (symbol: TermSymbol)
   private def isGetterOrSetter = !symbol.isMethod || symbol.isSetter
   private def isLazyValInTrait: Boolean = symbol.owner.isTrait && symbol.isLazyVal
   private def isLazyVal: Boolean = symbol.kind == TermSymbolKind.LazyVal
-
-  def erasedParamsAndReturnTypes(using Context): (Seq[FullyQualifiedName], FullyQualifiedName) =
-    symbol.signedName match
-      case SignedName(_, sig, _) =>
-        val termParams = sig.paramsSig.collect { case term: ParamSig.Term => term.typ }
-        (termParams, sig.resSig)
-      case _ =>
-        val returnType = symbol.declaredType.asInstanceOf[Type].erased
-        (Seq.empty, returnType)
 
 extension [A](xs: Seq[A])
   def singleOrElse[B >: A](x: => B): B =
@@ -101,9 +94,12 @@ extension (tpe: Type)
 extension (tpe: NamedType) def nameStr: String = tpe.name.toString
 
 extension (tpe: TypeOrWildcard)
-  def erased(using Context): FullyQualifiedName =
+  def asErasedReturnType(using Context): FullyQualifiedName = erased(isReturnType = true)
+  def asErasedArgType(using Context): FullyQualifiedName = erased(isReturnType = false)
+
+  private def erased(isReturnType: Boolean)(using Context): FullyQualifiedName =
     tpe match
-      case tpe: Type => ErasedTypeRef.erase(tpe).toSigFullName
+      case tpe: Type => ErasedTypeRef.erase(tpe, SourceLanguage.Scala3, keepUnit = isReturnType).toSigFullName
       case _: WildcardTypeArg => ctx.defn.ObjectClass.fullName
 
 extension (ref: TermRef)
@@ -123,11 +119,6 @@ extension (tree: Apply)
       case Apply(fun, args) => rec(fun) ++ args
       case _ => Seq.empty
     rec(tree.fun) ++ tree.args
-
-extension (tree: TermTree)
-  def safeWidenType(using Context): Option[TermType] =
-    try Some(tree.tpe.widenTermRef)
-    catch case NonFatal(_) => None
 
 extension (pos: SourcePosition)
   def isEnclosing(other: SourcePosition): Boolean =

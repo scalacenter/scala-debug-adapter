@@ -263,16 +263,16 @@ class Scala3Unpickler(
   ): Seq[BinaryByNameArg] =
     def matchType0(tpe: TermType): Boolean =
       (tpe, isAdapted) match
-        case (tpe: Type, false) => method.returnType.exists(matchType(tpe.erased, _))
-        case (tpe: Type, true) => tpe.erased.toString == "scala.Unit"
+        case (tpe: Type, false) => method.returnType.exists(matchType(tpe.asErasedReturnType, _))
+        case (tpe: Type, true) => tpe.asErasedReturnType.toString == "void"
         case _ => false
     val classOwners = withCompanionIfExtendsAnyVal(binaryOwner.symbol)
     val sourceSpan = removeInlinedLines(method.sourceLines, classOwners).interval
     object ByNameApply:
       def unapply(tree: Apply): Option[Seq[(TermTree, Type)]] =
-        tree.fun.safeWidenType match
-          case Some(sig: MethodType) if sig.paramTypes.size == tree.args.size =>
-            Some(tree.args.zip(sig.paramTypes).collect { case (arg, t: ByNameType) => (arg, t.resultType) })
+        tree.fun.tpe.widenTermRef match
+          case m: MethodType if m.paramTypes.size == tree.args.size =>
+            Some(tree.args.zip(m.paramTypes).collect { case (arg, t: ByNameType) => (arg, t.resultType) })
               .filter(_.nonEmpty)
           case _ => None
     for
@@ -350,14 +350,14 @@ class Scala3Unpickler(
             case tpe: Type => toFunction0(tpe)
             case _ => toFunction0(byName.resultType)
         case _ => argType0
-      if method.returnType.forall(matchType(argType.erased, _))
+      if method.returnType.forall(matchType(argType.asErasedArgType, _))
     yield BinarySuperArg(binaryOwner, init, argType)
   end findSuperArgs
 
   private def findLiftedTry(binaryOwner: BinaryClass, method: binary.Method): Seq[BinaryLiftedTry] =
     def matchType0(tpe: TermType): Boolean =
       tpe match
-        case tpe: Type => method.returnType.exists(matchType(tpe.erased, _))
+        case tpe: Type => method.returnType.exists(matchType(tpe.asErasedReturnType, _))
         case _ => false
     val classOwners = withCompanionIfExtendsAnyVal(binaryOwner.symbol)
     val sourceSpan = removeInlinedLines(method.sourceLines, classOwners).interval
@@ -382,14 +382,10 @@ class Scala3Unpickler(
     object InlinedTree:
       def unapply(tree: Tree): Option[Symbol] =
         tree match
-          case tree: TermReferenceTree if isInline(tree) => Some(tree.symbol)
+          case tree: TermReferenceTree if tree.symbol.isInline => Some(tree.symbol)
           case Apply(fun, _) => unapply(fun)
           case TypeApply(fun, _) => unapply(fun)
           case _ => None
-
-      private def isInline(tree: TermReferenceTree): Boolean =
-        try tree.symbol.isTerm && tree.symbol.asTerm.isInline
-        catch case NonFatal(e) => false
 
     class Collector(inlined: Boolean = false) extends TreeTraverser:
       collectors += this
@@ -493,7 +489,8 @@ class Scala3Unpickler(
             case res => Option.when(args.nonEmpty)((args, res))
         rec(tpe, Seq.empty)
 
-    val (erasedParams, erasedReturnType) = symbol.erasedParamsAndReturnTypes
+    val paramsSig = symbol.signature.paramsSig.collect { case ParamSig.Term(sig) => sig }
+    val resSig = symbol.signature.resSig
     val paramNames = symbol.declaredType.allParamsNames.map(_.toString)
     symbol.declaredType.returnType.dealias match
       case CurriedContextFunction(uncurriedArgs, uncurriedReturnType) if !symbol.isAnonFun =>
@@ -504,8 +501,8 @@ class Scala3Unpickler(
         (capturedParams ++ contextParams).forall(_.isGenerated) &&
         declaredParams.map(_.name).corresponds(paramNames)(_ == _) &&
         (isAdapted || isInlined || matchSignature(
-          erasedParams ++ uncurriedArgs.map(_.erased),
-          uncurriedReturnType.erased,
+          paramsSig ++ uncurriedArgs.map(_.asErasedArgType),
+          uncurriedReturnType.asErasedReturnType,
           declaredParams ++ contextParams,
           method.returnType
         ))
@@ -515,7 +512,7 @@ class Scala3Unpickler(
 
         capturedParams.forall(_.isGenerated) &&
         declaredParams.map(_.name).corresponds(paramNames)(_ == _) &&
-        (isAdapted || isInlined || matchSignature(erasedParams, erasedReturnType, declaredParams, method.returnType))
+        (isAdapted || isInlined || matchSignature(paramsSig, resSig, declaredParams, method.returnType))
 
   private def matchSignature(
       scalaParams: Seq[FullyQualifiedName],
