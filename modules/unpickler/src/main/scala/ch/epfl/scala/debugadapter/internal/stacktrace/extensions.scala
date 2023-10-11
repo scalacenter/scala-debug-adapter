@@ -35,14 +35,18 @@ extension (symbol: TermSymbol)
         val returnType = symbol.declaredType.asInstanceOf[Type].erased
         (Seq.empty, returnType)
 
-extension [T <: BinarySymbol](candidates: Seq[T])
+extension [A](xs: Seq[A])
+  def singleOrElse[B >: A](x: => B): B =
+    if xs.size == 1 then xs.head else x
+
+extension [T <: BinarySymbol](xs: Seq[T])
   def singleOrThrow(symbol: binary.Symbol): T =
     singleOptOrThrow(symbol)
       .getOrElse(throw new NotFoundException(symbol))
 
   def singleOptOrThrow(symbol: binary.Symbol): Option[T] =
-    if candidates.size > 1 then throw new AmbiguousException(symbol, candidates)
-    else candidates.headOption
+    if xs.size > 1 then throw new AmbiguousException(symbol, xs)
+    else xs.headOption
 
 extension (name: Name)
   def isPackageObject: Boolean =

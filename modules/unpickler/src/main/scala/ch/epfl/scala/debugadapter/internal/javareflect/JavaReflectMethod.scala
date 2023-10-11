@@ -5,8 +5,12 @@ import ch.epfl.scala.debugadapter.internal.binary
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
-class JavaReflectMethod(method: Method, val signature: MethodSig, extraInfos: ExtraBytecodeInfo, loader: JavaReflectLoader)
-    extends binary.Method:
+class JavaReflectMethod(
+    method: Method,
+    val signature: MethodSig,
+    extraInfos: ExtraBytecodeInfo,
+    loader: JavaReflectLoader
+) extends binary.Method:
 
   override def returnType: Option[binary.Type] =
     Option(method.getReturnType).map(loader.loadClass)

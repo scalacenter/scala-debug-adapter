@@ -47,7 +47,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
-      // if cls.name == "dotty.tools.dotc.util.StackTraceOps$"
+      // if cls.name == "dotty.tools.dotc.core.TypeEval$"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)

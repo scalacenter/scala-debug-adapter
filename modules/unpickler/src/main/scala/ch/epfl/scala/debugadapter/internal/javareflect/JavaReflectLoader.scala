@@ -45,8 +45,14 @@ class JavaReflectLoader(classLoader: ClassLoader, loadExtraInfo: Boolean = true)
             val instructions = mutable.Buffer.empty[Instruction]
             override def visitLineNumber(line: Int, start: asm.Label): Unit =
               lines += line
-            override def visitMethodInsn(opcode: Int, owner: String, name: String, descriptor: String, isInterface: Boolean): Unit =
-              instructions += Instruction.Method(opcode, owner, name, descriptor, isInterface)
+            override def visitMethodInsn(
+                opcode: Int,
+                owner: String,
+                name: String,
+                descriptor: String,
+                isInterface: Boolean
+            ): Unit =
+              instructions += Instruction.Method(opcode, owner.replace('/', '.'), name, descriptor, isInterface)
             override def visitEnd(): Unit =
               val sourceLines = lines.toSeq.distinct.sorted.map(SourceLine(_))
               extraInfos += MethodSig(name, descriptor) -> ExtraBytecodeInfo(sourceLines, instructions.toSeq)

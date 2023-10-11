@@ -78,18 +78,7 @@ class Scala3Unpickler(
               (term.isLazyVal || term.isModuleVal) && term.matchName(name)
             }
           case Patterns.AnonFun(prefix) => findAnonFun(binaryClass, method)
-          case Patterns.AdaptedAnonFun(prefix) =>
-            method.instructions
-              .collectFirst {
-                case Instruction.Method(_, owner, name, descriptor, _) if owner == method.declaringClass.name =>
-                  method.declaringClass.declaredMethod(name, descriptor)
-              }
-              .flatten
-              .map(findMethod(binaryClass, _))
-              .collect {
-                case _ => ???
-              }
-              
+          case Patterns.AdaptedAnonFun(prefix) => findAdaptedAnonFun(binaryClass, method)
           case Patterns.SuperArg() => findSuperArgs(binaryClass, method)
           case Patterns.LiftedTree() => findLiftedTry(binaryClass, method)
           case Patterns.LocalMethod(name, _) =>
@@ -171,6 +160,8 @@ class Scala3Unpickler(
 
   private def notFound(symbol: binary.Symbol): Nothing = throw NotFoundException(symbol)
 
+  private def unexpected(message: String): Nothing = throw UnexpectedException(message)
+
   private def withCompanionIfExtendsAnyVal(cls: ClassSymbol): Seq[ClassSymbol] =
     cls.companionClass match
       case Some(companionClass) if companionClass.isSubclass(ctx.defn.AnyValClass) =>
@@ -233,6 +224,23 @@ class Scala3Unpickler(
           lambda.tpe.asInstanceOf[Type]
         )
     }
+
+  private def findAdaptedAnonFun(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
+    if method.instructions.nonEmpty then
+      val underlying = method.instructions
+        .collect {
+          case Instruction.Method(_, owner, name, descriptor, _) if owner == method.declaringClass.name =>
+            method.declaringClass.declaredMethod(name, descriptor)
+        }
+        .flatten
+        .singleOrElse(unexpected(s"$method is not an adapted method: cannot find unerlying invocation"))
+      findAnonFun(binaryClass, underlying).map {
+        _ match
+          case BinaryMethod(owner, term, AnonFun) => BinaryMethod(owner, term, AdaptedAnonFun)
+          case BinaryByNameArg(owner, tpe, false) => BinaryByNameArg(owner, tpe, true)
+          case _ => unexpected(s"Found invalid underlying method for $method: $underlying")
+      }
+    else findAnonFun(binaryClass, method, isAdapted = true)
 
   private def findAnonFun(
       binaryOwner: BinaryClass,
@@ -494,7 +502,7 @@ class Scala3Unpickler(
         val contextParams = method.allParameters.drop(capturedParams.size + declaredParams.size)
 
         (capturedParams ++ contextParams).forall(_.isGenerated) &&
-        (isAdapted || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
+        declaredParams.map(_.name).corresponds(paramNames)(_ == _) &&
         (isAdapted || isInlined || matchSignature(
           erasedParams ++ uncurriedArgs.map(_.erased),
           uncurriedReturnType.erased,
@@ -506,7 +514,7 @@ class Scala3Unpickler(
         val declaredParams = method.allParameters.drop(capturedParams.size)
 
         capturedParams.forall(_.isGenerated) &&
-        (isAdapted || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
+        declaredParams.map(_.name).corresponds(paramNames)(_ == _) &&
         (isAdapted || isInlined || matchSignature(erasedParams, erasedReturnType, declaredParams, method.returnType))
 
   private def matchSignature(
