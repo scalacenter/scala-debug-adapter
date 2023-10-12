@@ -264,7 +264,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     def javaSig(returnType: String): String = s"$returnType m()"
 
     debuggee.assertFormat("example.A", javaSig("java.lang.Object"), "A.m(): Object")
-    debuggee.assertNotFound("example.B", javaSig("java.lang.Object"))
+    debuggee.assertFormat("example.B", javaSig("java.lang.Object"), "B.m.<bridge>(): Object")
     debuggee.assertFormat("example.B", javaSig("java.lang.String"), "B.m(): String")
   }
 
@@ -623,7 +623,11 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       "Main.foo.<anon fun>(x: String, y: String): Int",
       BinaryMethodKind.AnonFun
     )
-    debuggee.assertNotFound("example.Main$$anon$1", "int compare(java.lang.Object x, java.lang.Object y)")
+    debuggee.assertFormat(
+      "example.Main$$anon$1",
+      "int compare(java.lang.Object x, java.lang.Object y)",
+      "Main.foo.<anon fun>.<bridge>(x: String, y: String): Int"
+    )
     debuggee.assertFormatAndKind(
       "example.Main$$anon$2",
       "Main.f.<anon class>",
@@ -632,11 +636,24 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormatAndKind(
       "example.Main$$anon$2",
       "boolean isDefinedAt(java.lang.String x)",
-      "Main.f.<anon fun>(String): Int",
+      "Main.f.<anon fun>(String): Int", // TODO fix: PartialFunctions are not real SAMClass
       BinaryMethodKind.AnonFun
     )
-    debuggee.assertNotFound("example.Main$$anon$2", "boolean isDefinedAt(java.lang.Object x)")
-
+    debuggee.assertFormat(
+      "example.Main$$anon$2",
+      "boolean isDefinedAt(java.lang.Object x)",
+      "Main.f.<anon fun>.<bridge>(x: String): Boolean"
+    )
+    debuggee.assertFormat(
+      "example.Main$$anon$2",
+      "java.lang.Object applyOrElse(java.lang.String x, scala.Function1 default)",
+      "Main.f.<anon fun>(String): Int"
+    )
+    debuggee.assertFormat(
+      "example.Main$$anon$2",
+      "java.lang.Object applyOrElse(java.lang.Object x, scala.Function1 default)",
+      "Main.f.<anon fun>.<bridge>[A1, B1](x: A1, default: A1 => B1): B1"
+    )
   }
 
   test("default values") {
@@ -1387,4 +1404,4 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       val cls = loader(loadExtraInfo = false).loadClass(declaringType)
       val binarySymbol = unpickler.findClass(cls)
       assertEquals(unpickler.formatter.format(binarySymbol), expected)
-      assertEquals(unpickler.findClass(cls, false).symbolKind, kind)
+      assertEquals(unpickler.findClass(cls, false).kind, kind)

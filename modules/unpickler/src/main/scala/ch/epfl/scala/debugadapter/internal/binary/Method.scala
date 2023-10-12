@@ -15,3 +15,4 @@ trait Method extends Symbol:
     name.endsWith("$") && !isTraitInitializer && declaringClass.isInterface && isStatic
   def isTraitInitializer: Boolean = name == "$init$"
   def isClassInitializer: Boolean = name == "<init>"
+  def isPartialFunctionApplyOrElse: Boolean = declaringClass.isPartialFunction && name == "applyOrElse"

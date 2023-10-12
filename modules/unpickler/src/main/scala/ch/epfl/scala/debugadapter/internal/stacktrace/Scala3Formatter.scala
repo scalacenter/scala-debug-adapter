@@ -21,9 +21,10 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
         s"$prefix.<anon class>"
 
   def format(method: BinaryMethodSymbol): String =
+    def separator(tpe: TypeOrMethodic): String =
+      if !tpe.isInstanceOf[MethodicType] then ": " else ""
     method match
       case BinaryMethod(binaryOwner, term, kind) =>
-        val sep = if !term.declaredType.isInstanceOf[MethodicType] then ": " else ""
         val symbolStr = kind match
           case BinaryMethodKind.AdaptedAnonFun => formatSymbol(term) + ".<adapted>"
           case BinaryMethodKind.Setter => formatSymbol(term).stripSuffix("_=") + ".<setter>"
@@ -35,6 +36,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
           case BinaryMethodKind.TraitParamSetter =>
             formatSymbol(binaryOwner.symbol, term.name).stripSuffix("_=") + ".<setter>"
           case _ => formatSymbol(term)
+        val sep = separator(term.declaredType)
         s"$symbolStr$sep${formatType(term.declaredType)}"
       case BinaryOuter(owner, outer) => s"${format(owner)}.<outer>: ${formatOwner(outer)}"
       case BinarySuperArg(_, init, tpe) => s"${formatSymbol(init)}.<super arg>: ${formatType(tpe)}"
@@ -42,6 +44,9 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
       case BinaryByNameArg(owner, tpe, adapted) =>
         val adaptedSuffix = if adapted then ".<adapted>" else ""
         s"${format(owner)}.<by-name arg>$adaptedSuffix: ${formatType(tpe)}"
+      case BinaryMethodBridge(owner, term, tpe) =>
+        val sep = separator(tpe)
+        s"${formatSymbol(term)}.<bridge>$sep${formatType(tpe)}"
 
   private def formatSymbol(sym: Symbol): String =
     formatSymbol(sym.owner, sym.name)
