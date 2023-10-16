@@ -14,6 +14,10 @@ enum BinaryClassSymbol(val symbol: Symbol, val kind: BinaryClassKind) extends Bi
   case BinaryPartialFunction(term: TermSymbol, tpe: Type)
       extends BinaryClassSymbol(term, BinaryClassKind.PartialFunction)
 
+  def classSymbol: Option[ClassSymbol] = this match
+    case BinaryClass(sym, _) => Some(sym)
+    case _ => None
+
   override def toString: String =
     val span = symbol.tree.map(tree => s"(${tree.pos.startLine}, ${tree.pos.endLine})").getOrElse("")
     this match
