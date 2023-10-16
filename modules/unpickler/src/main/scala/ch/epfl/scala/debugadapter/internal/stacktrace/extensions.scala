@@ -27,6 +27,8 @@ extension (symbol: TermSymbol)
   private def isGetterOrSetter = !symbol.isMethod || symbol.isSetter
   private def isLazyValInTrait: Boolean = symbol.owner.isTrait && symbol.isLazyVal
   private def isLazyVal: Boolean = symbol.kind == TermSymbolKind.LazyVal
+  def declaredTypeAsSeenFrom(tpe: Type)(using Context): TypeOrMethodic =
+    symbol.declaredType.asSeenFrom(tpe, symbol.owner)
 
 extension [A](xs: Seq[A])
   def singleOrElse[B >: A](x: => B): B =

@@ -65,11 +65,9 @@ class Scala3Unpickler(
 
   def findMethod(binaryClass: BinaryClassSymbol, method: binary.Method): BinaryMethodSymbol =
     binaryClass match
-      case samClass @ BinarySAMClass(term, _, samType) =>
-        if method.isBridge then findSAMBridge(samClass, method).getOrElse(notFound(method))
-        else if method.declaringClass.isPartialFunction then BinaryMethod(binaryClass, term, AnonFun)
-        else if matchSignature(method, term) then BinaryMethod(binaryClass, term, AnonFun)
-        else notFound(method)
+      case samClass: BinarySAMClass =>
+        findAnonOverride(samClass, method).getOrElse(notFound(method))
+      case partialFun: BinaryPartialFunction => findAnonOverride(partialFun, method)
       case binaryClass: BinaryClass =>
         val candidates = method match
           case Patterns.LocalLazyInit(name, _) =>
@@ -100,7 +98,6 @@ class Scala3Unpickler(
               else outerClass(sym.owner)
             val outer = binaryClass.symbol.owner.owner
             List(BinaryOuter(binaryClass, outerClass(binaryClass.symbol)))
-
           case _ if method.isBridge => findBridgeAndMixinForwarders(binaryClass, method)
           case _ => findInstanceMethods(binaryClass, method)
 
@@ -148,31 +145,35 @@ class Scala3Unpickler(
   private def findBridgeAndMixinForwarders(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
     val bridges =
       for
-        term <- binaryClass.symbol.declarations
+        overridingTerm <- binaryClass.symbol.declarations
           .collect { case term: TermSymbol if matchTargetName(method, term) => term }
-        overridenTerm <- term.allOverriddenSymbols.find(matchSignature(method, _))
+        overriddenTerm <- overridingTerm.allOverriddenSymbols.find(matchSignature(method, _))
       yield
-        val tpe = overridenTerm.declaredType.asSeenFrom(binaryClass.symbol.thisType, overridenTerm.owner.asClass)
-        BinaryMethodBridge(binaryClass, term, tpe)
+        val tpe = overriddenTerm.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
+        val target = BinaryMethod(binaryClass, overridingTerm, BinaryMethodKind.InstanceDef)
+        BinaryMethodBridge(target, tpe)
     if bridges.nonEmpty then bridges else findMethodsFromTraits(binaryClass, method)
 
-  private def findSAMBridge(binarySamClass: BinarySAMClass, method: binary.Method): Option[BinaryMethodBridge] =
-    val tpe =
-      if method.isPartialFunctionApplyOrElse then
-        binarySamClass.samClassSymbol.declarations.collect {
-          case term: TermSymbol if term.nameStr == "applyOrElse" =>
-            term.declaredType.asSeenFrom(SkolemType(binarySamClass.samType), binarySamClass.samClassSymbol)
-        }.headOption
-      else
-        val types = for
-          parentCls <- binarySamClass.samClassSymbol.linearization
-          term <- parentCls.declarations.collect { case term: TermSymbol if matchSymbol(method, term) => term }
-          if term
-            .overridingSymbol(binarySamClass.samClassSymbol)
-            .exists(_.isAbstractMember) || method.name == "applyOrElse"
-        yield term.declaredType.asSeenFrom(SkolemType(binarySamClass.samType), parentCls)
-        types.headOption
-    tpe.map(BinaryMethodBridge(binarySamClass, binarySamClass.term, _))
+  private def findAnonOverride(binaryClass: BinarySAMClass, method: binary.Method): Option[BinaryMethodSymbol] =
+    val types =
+      for
+        parentCls <- binaryClass.parentClass.linearization.iterator
+        overridden <- parentCls.declarations.collect { case term: TermSymbol if matchTargetName(method, term) => term }
+        if overridden.overridingSymbol(binaryClass.parentClass).exists(_.isAbstractMember)
+      yield
+        val anonOverride = BinaryAnonOverride(binaryClass, overridden, binaryClass.term.declaredType)
+        if method.isBridge then
+          val bridgeTpe = overridden.declaredTypeAsSeenFrom(SkolemType(binaryClass.tpe))
+          BinaryMethodBridge(anonOverride, bridgeTpe)
+        else anonOverride
+    types.nextOption
+
+  private def findAnonOverride(binaryClass: BinaryPartialFunction, method: binary.Method): BinaryMethodSymbol =
+    val overriddenMethod = defn.partialFunction.findNonOverloadedDecl(SimpleName(method.name))
+    val tpe = overriddenMethod.declaredTypeAsSeenFrom(SkolemType(binaryClass.tpe))
+    val anonOverride = BinaryAnonOverride(binaryClass, overriddenMethod, tpe)
+    if method.isBridge then BinaryMethodBridge(anonOverride, tpe)
+    else anonOverride
 
   private def findMethodsFromTraits(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethod] =
     def allTraits(cls: ClassSymbol): Seq[ClassSymbol] =
@@ -215,7 +216,8 @@ class Scala3Unpickler(
             .flatMap(cls => collectLocalClasses(cls, localClassName, sourceLines))
             .collect {
               case cls: BinaryClass if matchParents(cls.symbol, parents, javaClass.isInterface) => cls
-              case samCls: BinarySAMClass if matchSamClass(samCls.samClassSymbol, parents) => samCls
+              case samClass: BinarySAMClass if parents.contains(samClass.parentClass) => samClass
+              case fun: BinaryPartialFunction if parents == Set(defn.abstractPartialFunction, defn.serializable) => fun
             }
         else Seq.empty
       case Some(remaining) =>
@@ -241,16 +243,18 @@ class Scala3Unpickler(
       name: String,
       lines: Seq[binary.SourceLine]
   ): Seq[BinaryClassSymbol] =
+    object SAMClassOrPartialFunction:
+      def unapply(lambda: Lambda): Option[BinaryPartialFunction | BinarySAMClass] =
+        (lambda.meth.symbol, lambda.tpe) match
+          case (term: TermSymbol, tpe: Type) =>
+            if lambda.samClassSymbol == defn.partialFunction then Some(BinaryPartialFunction(term, tpe))
+            else Some(BinarySAMClass(term, lambda.samClassSymbol, tpe))
+          case _ => None
     collectTrees(cls, lines) {
       case ClassDef(_, _, cls) if cls.isLocal && cls.matchName(name) =>
         val kind = if name == "$anon" then Anon else Local
         BinaryClass(cls, kind)
-      case lambda: Lambda if lambda.meth.symbol.isInstanceOf[TermSymbol] && lambda.tpe.isInstanceOf[Type] =>
-        BinarySAMClass(
-          lambda.meth.symbol.asInstanceOf[TermSymbol],
-          lambda.samClassSymbol,
-          lambda.tpe.asInstanceOf[Type]
-        )
+      case SAMClassOrPartialFunction(binaryCls) => binaryCls
     }
 
   private def findAdaptedAnonFun(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
@@ -483,13 +487,6 @@ class Scala3Unpickler(
     else if classSymbol.isAnonClass then classSymbol.parentClasses.forall(expectedParents.contains)
     else expectedParents == classSymbol.parentClasses.toSet
 
-  private def matchSamClass(samClass: ClassSymbol, expectedParents: Set[ClassSymbol]): Boolean =
-    if samClass == defn.partialFunction then
-      expectedParents.size == 2 &&
-      expectedParents.exists(_ == defn.abstractPartialFunction) &&
-      expectedParents.exists(_ == defn.serializable)
-    else expectedParents.contains(samClass)
-
   private def matchSymbol(method: binary.Method, symbol: TermSymbol): Boolean =
     matchTargetName(method, symbol) && (method.isTraitInitializer || matchSignature(method, symbol))
 
@@ -612,5 +609,5 @@ class Scala3Unpickler(
             true
           case _ => sym.isSynthetic || sym.isExport
       case BinaryByNameArg(_, _, isAdapted) => isAdapted
-      case BinaryMethodBridge(_, _, _) => true
+      case BinaryMethodBridge(_, _) => true
       case _ => false

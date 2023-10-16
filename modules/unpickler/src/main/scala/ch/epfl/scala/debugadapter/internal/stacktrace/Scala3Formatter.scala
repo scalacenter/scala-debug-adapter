@@ -16,37 +16,47 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
   def format(binaryClass: BinaryClassSymbol) =
     binaryClass match
       case BinaryClass(symbol, _) => formatSymbol(symbol)
-      case BinarySAMClass(symbol, _, _) =>
-        val prefix = formatOwner(symbol.owner)
-        s"$prefix.<anon class>"
+      case BinarySAMClass(term, _, _) =>
+        val prefix = formatOwner(term.owner)
+        s"$prefix.<SAM class>"
+      case BinaryPartialFunction(term, _) =>
+        val prefix = formatOwner(term.owner)
+        s"$prefix.<partial function>"
 
   def format(method: BinaryMethodSymbol): String =
+    def formatSym(method: BinaryMethodSymbol): String =
+      method match
+        case BinaryMethod(binaryOwner, term, kind) =>
+          kind match
+            case BinaryMethodKind.AdaptedAnonFun => formatSymbol(term) + ".<adapted>"
+            case BinaryMethodKind.Setter => formatSymbol(term).stripSuffix("_=") + ".<setter>"
+            case BinaryMethodKind.LazyInit => formatSymbol(term) + ".<lazy init>"
+            case BinaryMethodKind.LocalLazyInit => formatSymbol(term) + ".<lazy init>"
+            case BinaryMethodKind.MixinForwarder => formatSymbol(binaryOwner.symbol, term.name) + ".<mixin forwarder>"
+            case BinaryMethodKind.TraitStaticAccessor => formatSymbol(term) + ".<static accessor>"
+            case BinaryMethodKind.TraitParamGetter => formatSymbol(binaryOwner.symbol, term.name)
+            case BinaryMethodKind.TraitParamSetter =>
+              formatSymbol(binaryOwner.symbol, term.name).stripSuffix("_=") + ".<setter>"
+            case _ => formatSymbol(term)
+        case BinaryOuter(owner, _) => format(owner) + ".<outer>"
+        case BinarySuperArg(_, init, _) => formatSymbol(init) + ".<super arg>"
+        case BinaryLiftedTry(owner, _) => format(owner) + ".<try>"
+        case BinaryByNameArg(owner, _, adapted) =>
+          format(owner) + ".<by-name arg>" + (if adapted then ".<adapted>" else "")
+        case BinaryMethodBridge(target, _) => formatSym(target) + ".<bridge>"
+        case BinaryAnonOverride(owner, overridden, _) => format(owner) + "." + formatName(overridden.name)
     def separator(tpe: TypeOrMethodic): String =
       if !tpe.isInstanceOf[MethodicType] then ": " else ""
-    method match
-      case BinaryMethod(binaryOwner, term, kind) =>
-        val symbolStr = kind match
-          case BinaryMethodKind.AdaptedAnonFun => formatSymbol(term) + ".<adapted>"
-          case BinaryMethodKind.Setter => formatSymbol(term).stripSuffix("_=") + ".<setter>"
-          case BinaryMethodKind.LazyInit => formatSymbol(term) + ".<lazy init>"
-          case BinaryMethodKind.LocalLazyInit => formatSymbol(term) + ".<lazy init>"
-          case BinaryMethodKind.MixinForwarder => formatSymbol(binaryOwner.symbol, term.name) + ".<mixin forwarder>"
-          case BinaryMethodKind.TraitStaticAccessor => formatSymbol(term) + ".<static accessor>"
-          case BinaryMethodKind.TraitParamGetter => formatSymbol(binaryOwner.symbol, term.name)
-          case BinaryMethodKind.TraitParamSetter =>
-            formatSymbol(binaryOwner.symbol, term.name).stripSuffix("_=") + ".<setter>"
-          case _ => formatSymbol(term)
-        val sep = separator(term.declaredType)
-        s"$symbolStr$sep${formatType(term.declaredType)}"
-      case BinaryOuter(owner, outer) => s"${format(owner)}.<outer>: ${formatOwner(outer)}"
-      case BinarySuperArg(_, init, tpe) => s"${formatSymbol(init)}.<super arg>: ${formatType(tpe)}"
-      case BinaryLiftedTry(owner, tpe) => s"${format(owner)}.<try>: ${formatType(tpe)}"
-      case BinaryByNameArg(owner, tpe, adapted) =>
-        val adaptedSuffix = if adapted then ".<adapted>" else ""
-        s"${format(owner)}.<by-name arg>$adaptedSuffix: ${formatType(tpe)}"
-      case BinaryMethodBridge(owner, term, tpe) =>
-        val sep = separator(tpe)
-        s"${formatSymbol(term)}.<bridge>$sep${formatType(tpe)}"
+    val typeAscription =
+      method match
+        case BinaryMethod(_, term, _) => separator(term.declaredType) + formatType(term.declaredType)
+        case BinaryOuter(_, outer) => ": " + formatOwner(outer) // TODO fix, get the type
+        case BinarySuperArg(_, _, tpe) => ": " + formatType(tpe)
+        case BinaryLiftedTry(_, tpe) => ": " + formatType(tpe)
+        case BinaryByNameArg(_, tpe, _) => ": " + formatType(tpe)
+        case BinaryMethodBridge(_, tpe) => separator(tpe) + formatType(tpe)
+        case BinaryAnonOverride(_, _, tpe) => separator(tpe) + formatType(tpe)
+    formatSym(method) + typeAscription
 
   private def formatSymbol(sym: Symbol): String =
     formatSymbol(sym.owner, sym.name)
@@ -109,10 +119,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
       case t: AppliedType if t.tycon.isOperatorLike && t.args.size == 2 =>
         val operatorLikeTypeFormat = t.args
           .map(formatType)
-          .mkString(
-            t.tycon match
-              case ref: TypeRef => s" ${ref.name} "
-          )
+          .mkString(" " + t.tycon.asInstanceOf[TypeRef].name.toString + " ")
         operatorLikeTypeFormat
       case t: AppliedType if t.tycon.isVarArg =>
         s"${formatType(t.args.head)}*"
