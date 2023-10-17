@@ -36,9 +36,9 @@ object Patterns:
       val lazyInit = "(.*)\\$lzyINIT\\d+".r
       lazyInit.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0))
 
-  object StaticAccessor:
+  object TraitStaticForwarder:
     def unapply(method: binary.Method): Option[String] =
-      if method.isTraitStaticAccessor then Some(method.name.stripSuffix("$"))
+      if method.isTraitStaticForwarder then Some(method.name.stripSuffix("$"))
       else None
 
   object Outer:
@@ -81,3 +81,11 @@ object Patterns:
     def unapply(method: binary.Method): Boolean =
       val liftedTree = "liftedTree\\d+\\$\\d+".r
       liftedTree.unapplySeq(method.name).isDefined
+
+  object TraitInitializer:
+    def unapply(method: binary.Method): Boolean =
+      method.isTraitInitializer
+
+  object ValueClassExtension:
+    def unapply(method: binary.Method): Boolean =
+      method.isExtensionMethod

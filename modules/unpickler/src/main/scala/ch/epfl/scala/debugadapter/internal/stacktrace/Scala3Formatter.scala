@@ -9,11 +9,7 @@ import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryClassSymbol.*
 import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryMethodSymbol.*
 
 class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends ThrowOrWarn(warnLogger, testMode):
-  private def formatSymbolWithType(symbol: TermSymbol): String =
-    val sep = if !symbol.declaredType.isInstanceOf[MethodicType] then ": " else ""
-    s"${formatSymbol(symbol)}$sep${formatType(symbol.declaredType)}"
-
-  def format(binaryClass: BinaryClassSymbol) =
+  def format(binaryClass: BinaryClassSymbol): String =
     binaryClass match
       case BinaryClass(symbol, _) => formatSymbol(symbol)
       case BinarySAMClass(term, _, _) =>
@@ -26,17 +22,16 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
   def format(method: BinaryMethodSymbol): String =
     def formatSym(method: BinaryMethodSymbol): String =
       method match
-        case BinaryMethod(binaryOwner, term, kind) =>
+        case BinaryMethod(owner, term, kind) =>
           kind match
             case BinaryMethodKind.AdaptedAnonFun => formatSymbol(term) + ".<adapted>"
-            case BinaryMethodKind.Setter => formatSymbol(term).stripSuffix("_=") + ".<setter>"
-            case BinaryMethodKind.LazyInit => formatSymbol(term) + ".<lazy init>"
+            case BinaryMethodKind.Setter => formatSymbol(term)
+            case BinaryMethodKind.LazyInit => formatSymbol(owner.symbol, term.name) + ".<lazy init>"
             case BinaryMethodKind.LocalLazyInit => formatSymbol(term) + ".<lazy init>"
-            case BinaryMethodKind.MixinForwarder => formatSymbol(binaryOwner.symbol, term.name) + ".<mixin forwarder>"
-            case BinaryMethodKind.TraitStaticAccessor => formatSymbol(term) + ".<static accessor>"
-            case BinaryMethodKind.TraitParamGetter => formatSymbol(binaryOwner.symbol, term.name)
-            case BinaryMethodKind.TraitParamSetter =>
-              formatSymbol(binaryOwner.symbol, term.name).stripSuffix("_=") + ".<setter>"
+            case BinaryMethodKind.TraitStaticForwarder => formatSymbol(term) + ".<static forwarder>"
+            case BinaryMethodKind.TraitParamGetter => formatSymbol(owner.symbol, term.name)
+            case BinaryMethodKind.TraitParamSetter => formatSymbol(owner.symbol, term.name)
+            case BinaryMethodKind.MixinForwarder => formatSymbol(owner.symbol, term.name) + ".<mixin forwarder>"
             case _ => formatSymbol(term)
         case BinaryOuter(owner, _) => format(owner) + ".<outer>"
         case BinarySuperArg(_, init, _) => formatSymbol(init) + ".<super arg>"
@@ -45,17 +40,18 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
           format(owner) + ".<by-name arg>" + (if adapted then ".<adapted>" else "")
         case BinaryMethodBridge(target, _) => formatSym(target) + ".<bridge>"
         case BinaryAnonOverride(owner, overridden, _) => format(owner) + "." + formatName(overridden.name)
-    def separator(tpe: TypeOrMethodic): String =
-      if !tpe.isInstanceOf[MethodicType] then ": " else ""
-    val typeAscription =
+        case BinaryStaticForwarder(owner, target) =>
+          formatSymbol(owner.symbol, target.term.name) + ".<static forwarder>"
+    val typeAscription: String =
       method match
-        case BinaryMethod(_, term, _) => separator(term.declaredType) + formatType(term.declaredType)
+        case BinaryMethod(_, term, _) => formatTypeAndSep(term.declaredType)
         case BinaryOuter(_, outer) => ": " + formatOwner(outer) // TODO fix, get the type
-        case BinarySuperArg(_, _, tpe) => ": " + formatType(tpe)
-        case BinaryLiftedTry(_, tpe) => ": " + formatType(tpe)
-        case BinaryByNameArg(_, tpe, _) => ": " + formatType(tpe)
-        case BinaryMethodBridge(_, tpe) => separator(tpe) + formatType(tpe)
-        case BinaryAnonOverride(_, _, tpe) => separator(tpe) + formatType(tpe)
+        case BinarySuperArg(_, _, tpe) => formatTypeAndSep(tpe)
+        case BinaryLiftedTry(_, tpe) => formatTypeAndSep(tpe)
+        case BinaryByNameArg(_, tpe, _) => formatTypeAndSep(tpe)
+        case BinaryMethodBridge(_, tpe) => formatTypeAndSep(tpe)
+        case BinaryAnonOverride(_, _, tpe) => formatTypeAndSep(tpe)
+        case BinaryStaticForwarder(_, target) => formatTypeAndSep(target.term.declaredType)
     formatSym(method) + typeAscription
 
   private def formatSymbol(sym: Symbol): String =
@@ -80,6 +76,10 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
       case SimpleName("$anon") => "<anon class>"
       case _ => name.toString
     rec(name)
+
+  private def formatTypeAndSep(t: TermType): String = t match
+    case _: MethodicType => formatType(t)
+    case _ => ": " + formatType(t)
 
   private def formatType(t: TermType | TypeOrWildcard): String =
     t match

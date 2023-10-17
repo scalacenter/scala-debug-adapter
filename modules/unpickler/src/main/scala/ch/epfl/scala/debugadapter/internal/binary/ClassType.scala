@@ -6,6 +6,6 @@ trait ClassType extends Type:
   def interfaces: Seq[ClassType]
   def declaredMethod(name: String, sig: String): Option[Method]
 
-  def isObject = isPackageObject || name.endsWith("$")
-  def isPackageObject = name.endsWith(".package") || name.endsWith("$package")
+  def isObject = name.endsWith("$")
+  def isPackageObject = name.endsWith(".package$") || name.endsWith("$package$")
   def isPartialFunction = superclass.exists(_.name == "scala.runtime.AbstractPartialFunction")

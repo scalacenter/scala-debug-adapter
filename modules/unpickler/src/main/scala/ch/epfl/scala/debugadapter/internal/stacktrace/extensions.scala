@@ -16,7 +16,6 @@ extension (symbol: Symbol)
   def isTrait = symbol.isClass && symbol.asClass.isTrait
   def isAnonFun = symbol.nameStr == "$anonfun"
   def isAnonClass = symbol.nameStr == "$anon"
-  def matchName(name: String) = symbol.nameStr == name
   def isLocal = symbol.owner.isTerm
   def isModuleClass = symbol.isClass && symbol.asClass.isModuleClass
   def nameStr = symbol.name.toString
@@ -29,6 +28,11 @@ extension (symbol: TermSymbol)
   private def isLazyVal: Boolean = symbol.kind == TermSymbolKind.LazyVal
   def declaredTypeAsSeenFrom(tpe: Type)(using Context): TypeOrMethodic =
     symbol.declaredType.asSeenFrom(tpe, symbol.owner)
+  def targetNameStr(using Context): String = symbol.targetName.toString
+  def isOverridingSymbol(siteClass: ClassSymbol)(using Context): Boolean =
+    val overridingSymbol =
+      siteClass.linearization.iterator.flatMap(inClass => symbol.matchingSymbol(inClass, siteClass)).next
+    overridingSymbol == symbol
 
 extension [A](xs: Seq[A])
   def singleOrElse[B >: A](x: => B): B =

@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter.internal.stacktrace
 import tastyquery.Symbols.*
 import tastyquery.Types.Type
 import tastyquery.Types.TypeOrMethodic
+import tastyquery.Contexts.Context
 
 sealed trait BinarySymbol
 
@@ -13,10 +14,6 @@ enum BinaryClassSymbol(val symbol: Symbol, val kind: BinaryClassKind) extends Bi
       extends BinaryClassSymbol(term, BinaryClassKind.SAMClass)
   case BinaryPartialFunction(term: TermSymbol, tpe: Type)
       extends BinaryClassSymbol(term, BinaryClassKind.PartialFunction)
-
-  def classSymbol: Option[ClassSymbol] = this match
-    case BinaryClass(sym, _) => Some(sym)
-    case _ => None
 
   override def toString: String =
     val span = symbol.tree.map(tree => s"(${tree.pos.startLine}, ${tree.pos.endLine})").getOrElse("")
@@ -38,6 +35,7 @@ enum BinaryMethodSymbol extends BinarySymbol:
   case BinaryByNameArg(binaryOwner: BinaryClassSymbol, tpe: Type, isAdapted: Boolean)
   case BinaryMethodBridge(target: BinaryMethodSymbol, tpe: TypeOrMethodic)
   case BinaryAnonOverride(binaryOwner: BinaryClassSymbol, overriddenMethod: TermSymbol, tpe: TypeOrMethodic)
+  case BinaryStaticForwarder(binaryOwner: BinaryClassSymbol, target: BinaryMethod)
 
   def symbol = this match
     case BinaryMethod(_, term, _) => Some(term)
@@ -45,15 +43,16 @@ enum BinaryMethodSymbol extends BinarySymbol:
 
   def symbolKind = this match
     case BinaryMethod(_, _, kind) => kind
-    case BinaryOuter(_, _) => BinaryMethodKind.Outer
-    case BinarySuperArg(_, _, _) => BinaryMethodKind.SuperArg
-    case BinaryLiftedTry(_, _) => BinaryMethodKind.LiftedTry
+    case _: BinaryOuter => BinaryMethodKind.Outer
+    case _: BinarySuperArg => BinaryMethodKind.SuperArg
+    case _: BinaryLiftedTry => BinaryMethodKind.LiftedTry
     case BinaryByNameArg(_, _, adapted) =>
       if adapted then BinaryMethodKind.AdaptedByNameArg else BinaryMethodKind.ByNameArg
-    case BinaryMethodBridge(_, _) => BinaryMethodKind.Bridge
-    case BinaryAnonOverride(_, _, _) => BinaryMethodKind.AnonOverride
+    case _: BinaryMethodBridge => BinaryMethodKind.Bridge
+    case _: BinaryAnonOverride => BinaryMethodKind.AnonOverride
+    case _: BinaryStaticForwarder => BinaryMethodKind.StaticForwarder
 
 enum BinaryMethodKind:
   case InstanceDef, LocalDef, AnonFun, AdaptedAnonFun, Getter, Setter, LazyInit, LocalLazyInit, Constructor,
-    TraitConstructor, MixinForwarder, TraitStaticAccessor, SuperAccessor, DefaultParameter, Outer, SuperArg,
-    TraitParamGetter, TraitParamSetter, LiftedTry, ByNameArg, AdaptedByNameArg, Bridge, AnonOverride
+    TraitConstructor, MixinForwarder, TraitStaticForwarder, SuperAccessor, DefaultParameter, Outer, SuperArg,
+    TraitParamGetter, TraitParamSetter, LiftedTry, ByNameArg, AdaptedByNameArg, Bridge, AnonOverride, StaticForwarder
