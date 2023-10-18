@@ -1297,6 +1297,33 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.A", "int m$$anonfun$1()", "A.<by-name arg>: Int")
   }
 
+  test("inner object") {
+    val source =
+      """|package example
+         |
+         |trait A:
+         |  object B
+         |
+         |object C extends A:
+         |  object D
+         |
+         |class E extends A:
+         |  object F
+         |""".stripMargin
+
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat("example.A", "example.A$B$ B()", "A.B: B")
+    debuggee.assertFormat("example.A", "example.A$B$ B$(example.A $this)", "A.B.<static forwarder>: B", skip = true)
+    debuggee.assertFormat("example.C$", "example.A$B$ B()", "C.B.<mixin forwarder>: B", skip = true)
+    debuggee.assertFormat("example.E", "example.E$F$ F()", "E.F: F", skip = true)
+    debuggee.assertFormat("example.E", "example.A$B$ B()", "E.B.<mixin forwarder>: B", skip = true)
+
+    if !isScala30 then
+      debuggee.assertFormat("example.C$", "java.lang.Object B$lzyINIT1()", "C.B.<lazy init>: B", skip = true)
+      debuggee.assertFormat("example.E", "java.lang.Object F$lzyINIT1()", "E.F.<lazy init>: F")
+      debuggee.assertFormat("example.E", "java.lang.Object B$lzyINIT2()", "E.B.<lazy init>: B", skip = true)
+  }
+
   extension (debuggee: TestingDebuggee)
     private def loader(loadExtraInfo: Boolean): JavaReflectLoader =
       JavaReflectLoader(debuggee.classLoader, loadExtraInfo = loadExtraInfo)

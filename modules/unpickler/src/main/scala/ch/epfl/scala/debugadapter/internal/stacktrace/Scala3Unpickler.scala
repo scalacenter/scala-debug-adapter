@@ -148,13 +148,13 @@ class Scala3Unpickler(
     if fromClass.nonEmpty then fromClass else findMethodsFromTraits(binaryClass, method)
 
   private def findLazyInit(binaryClass: BinaryClass, name: String): Seq[BinaryMethodSymbol] =
-    val fromClass = binaryClass.symbol.declarations.collect {
-      case sym: TermSymbol if sym.isLazyVal && sym.nameStr == name => BinaryLazyInit(binaryClass, sym)
-    }
+    val matcher: PartialFunction[Symbol, TermSymbol] =
+      case sym: TermSymbol if sym.isModuleOrLazyVal && sym.nameStr == name => sym
+    val fromClass = binaryClass.symbol.declarations.collect(matcher).map(BinaryLazyInit(binaryClass, _))
     def fromTraits =
       for
         traitSym <- binaryClass.symbol.linearization.filter(_.isTrait)
-        term <- traitSym.declarations.collect { case t: TermSymbol if t.isLazyVal && t.nameStr == name => t }
+        term <- traitSym.declarations.collect(matcher)
         if term.isOverridingSymbol(binaryClass.symbol)
       yield BinaryLazyInit(binaryClass, term)
     if fromClass.nonEmpty then fromClass else fromTraits
@@ -384,7 +384,7 @@ class Scala3Unpickler(
       owner <- owners
       term <- collectTrees1(owner, sourceLines) { inlined =>
         val treeMatcher: PartialFunction[Tree, TermSymbol] = {
-          case ValDef(_, _, _, sym) if sym.isLocal && (sym.isLazyVal || sym.isModuleVal) => sym
+          case ValDef(_, _, _, sym) if sym.isLocal && sym.isModuleOrLazyVal => sym
           case DefDef(_, _, _, _, sym) if sym.isLocal => sym
         }
         treeMatcher.andThen(matcher(inlined))
@@ -659,8 +659,8 @@ class Scala3Unpickler(
   private[stacktrace] def skip(method: BinaryMethodSymbol): Boolean =
     method match
       case BinaryMethod(_, sym) =>
-        (sym.isGetter && !sym.isLazyValInTrait) || // getter
-        (sym.isLocal && (sym.isLazyVal || sym.isModuleVal)) || // local def
+        (sym.isGetter && (!sym.owner.isTrait || !sym.isModuleOrLazyVal)) || // getter
+        (sym.isLocal && sym.isModuleOrLazyVal) || // local def
         sym.isSetter ||
         sym.isSynthetic ||
         sym.isExport
