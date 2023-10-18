@@ -100,10 +100,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |    object F extends D
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormatAndKind("example.Main$D$1", "Main.main.D", BinaryClassKind.Local)
-    debuggee.assertFormatAndKind("example.Main$C$1", "Main.main.C", BinaryClassKind.Local)
+    debuggee.assertFormat("example.Main$D$1", "Main.main.D")
+    debuggee.assertFormat("example.Main$C$1", "Main.main.C")
     if isScala30 then
-      debuggee.assertFormatAndKind("example.Main$F$1$", "Main.main.F", BinaryClassKind.Local)
+      debuggee.assertFormat("example.Main$F$1$", "Main.main.F")
       debuggee.assertFormatAndKind(
         "example.Main$",
         "example.Main$F$1$ F$1(scala.runtime.LazyRef F$lzy1$2)",
@@ -117,7 +117,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
         BinaryMethodKind.LocalLazyInit
       )
     else
-      debuggee.assertFormatAndKind("example.Main$F$2$", "Main.main.F", BinaryClassKind.Local)
+      debuggee.assertFormat("example.Main$F$2$", "Main.main.F")
       debuggee.assertFormatAndKind(
         "example.Main$",
         "example.Main$F$2$ F$1(scala.runtime.LazyRef F$lzy1$2)",
@@ -358,8 +358,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |    class G extends A
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormatAndKind("example.Main$C$1", "Main.m.C", BinaryClassKind.Local)
-    debuggee.assertFormatAndKind("example.Main$E$1$F", "Main.m.E.F", BinaryClassKind.TopLevelOrInner)
+    debuggee.assertFormat("example.Main$C$1", "Main.m.C")
+    debuggee.assertFormat("example.Main$E$1$F", "Main.m.E.F")
     debuggee.assertAmbiguous("example.Main$G$1")
   }
 
@@ -594,7 +594,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormatAndKind("example.A$$anon$1", "A.m.b.<anon class>", BinaryClassKind.Anon)
+    debuggee.assertFormat("example.A$$anon$1", "A.m.b.<anon class>")
   }
 
   test("this.type") {
@@ -1088,7 +1088,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
 
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormatAndKind("example.Main$A$1", "Main.m.A", BinaryClassKind.Local)
+    debuggee.assertFormat("example.Main$A$1", "Main.m.A")
   }
 
   test("package object") {
@@ -1331,7 +1331,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     private def loader(loadExtraInfo: Boolean): JavaReflectLoader =
       JavaReflectLoader(debuggee.classLoader, loadExtraInfo = loadExtraInfo)
 
-    private def getUnpickler: Scala3Unpickler =
+    private def initUnpickler(): Scala3Unpickler =
       val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
         case Java8(_, classJars, _) => classJars
         case java9OrAbove: Java9OrAbove =>
@@ -1340,7 +1340,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
       new Scala3Unpickler(debuggeeClasspath, println, testMode = true)
 
-    private def getMethod(declaringType: String, javaSig: String, loadExtraInfo: Boolean)(using
+    private def loadBinaryMethod(declaringType: String, javaSig: String, loadExtraInfo: Boolean)(using
         munit.Location
     ): binary.Method =
       def typeAndName(p: String): (String, String) =
@@ -1377,18 +1377,18 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     private def assertNotFound(declaringType: String, javaSig: String, loadExtraInfo: Boolean = false)(using
         munit.Location
     ): Unit =
-      val m = getMethod(declaringType, javaSig, loadExtraInfo)
-      intercept[NotFoundException](getUnpickler.findMethod(m))
+      val m = loadBinaryMethod(declaringType, javaSig, loadExtraInfo)
+      intercept[NotFoundException](initUnpickler().findMethod(m))
 
     private def assertAmbiguous(declaringType: String, javaSig: String, loadExtraInfo: Boolean = false)(using
         munit.Location
     ): Unit =
-      val m = getMethod(declaringType, javaSig, loadExtraInfo)
-      intercept[AmbiguousException](getUnpickler.findMethod(m))
+      val m = loadBinaryMethod(declaringType, javaSig, loadExtraInfo)
+      intercept[AmbiguousException](initUnpickler().findMethod(m))
 
     private def assertAmbiguous(declaringType: String)(using munit.Location): Unit =
       val cls = loader(loadExtraInfo = false).loadClass(declaringType)
-      intercept[AmbiguousException](getUnpickler.findClass(cls))
+      intercept[AmbiguousException](initUnpickler().findClass(cls))
 
     private def assertFormat(
         declaringType: String,
@@ -1399,8 +1399,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     )(using
         munit.Location
     ): Unit =
-      val m = getMethod(declaringType, javaSig, loadExtraInfo = loadExtraInfo)
-      val unpickler = getUnpickler
+      val m = loadBinaryMethod(declaringType, javaSig, loadExtraInfo = loadExtraInfo)
+      val unpickler = initUnpickler()
       val binarySymbol = unpickler.findMethod(m)
       assertEquals(unpickler.formatter.format(binarySymbol), expected)
       assertEquals(unpickler.skip(binarySymbol), skip)
@@ -1408,21 +1408,12 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     private def assertFormatAndKind(declaringType: String, javaSig: String, expected: String, kind: BinaryMethodKind)(
         using munit.Location
     ): Unit =
-      val m = getMethod(declaringType, javaSig, loadExtraInfo = false)
-      val unpickler = getUnpickler
+      val m = loadBinaryMethod(declaringType, javaSig, loadExtraInfo = false)
+      val unpickler = initUnpickler()
       val binarySymbol = unpickler.findMethod(m)
       assertEquals(unpickler.formatter.format(binarySymbol), expected)
       assertEquals(binarySymbol.symbolKind, kind)
 
     private def assertFormat(declaringType: String, expected: String)(using munit.Location): Unit =
       val cls = loader(loadExtraInfo = false).loadClass(declaringType)
-      assertEquals(getUnpickler.formatClass(cls), expected)
-
-    private def assertFormatAndKind(declaringType: String, expected: String, kind: BinaryClassKind)(using
-        munit.Location
-    ): Unit =
-      val cls = loader(loadExtraInfo = false).loadClass(declaringType)
-      val unpickler = getUnpickler
-      val binarySymbol = unpickler.findClass(cls)
-      assertEquals(unpickler.formatter.format(binarySymbol), expected)
-      assertEquals(unpickler.findClass(cls, false).kind, kind)
+      assertEquals(initUnpickler().formatClass(cls), expected)

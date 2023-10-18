@@ -4,20 +4,16 @@ import tastyquery.Symbols.*
 import tastyquery.Types.*
 import tastyquery.Names.*
 import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryMethodKind.*
-import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryClassKind.*
-import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryClassSymbol.*
+import ch.epfl.scala.debugadapter.internal.stacktrace.*
 import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryMethodSymbol.*
 
 class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends ThrowOrWarn(warnLogger, testMode):
   def format(binaryClass: BinaryClassSymbol): String =
     binaryClass match
-      case BinaryClass(symbol, _) => formatSymbol(symbol)
-      case BinarySAMClass(term, _, _) =>
-        val prefix = formatOwner(term.owner)
-        s"$prefix.<SAM class>"
-      case BinaryPartialFunction(term, _) =>
-        val prefix = formatOwner(term.owner)
-        s"$prefix.<partial function>"
+      case BinaryClass(symbol) => formatSymbol(symbol)
+      case BinarySAMClass(symbol, _, _) => formatOwner(symbol.owner) + ".<SAM class>"
+      case BinaryPartialFunction(symbol, _) => formatOwner(symbol.owner) + ".<partial function>"
+      case BinarySyntheticCompanionClass(symbol) => formatSymbol(symbol)
 
   def format(method: BinaryMethodSymbol): String =
     def formatSym(method: BinaryMethodSymbol): String =

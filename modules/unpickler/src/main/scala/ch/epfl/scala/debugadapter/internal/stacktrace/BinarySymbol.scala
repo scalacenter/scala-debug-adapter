@@ -7,25 +7,22 @@ import tastyquery.Contexts.Context
 
 sealed trait BinarySymbol
 
-enum BinaryClassSymbol(val symbol: Symbol, val kind: BinaryClassKind) extends BinarySymbol:
-  case BinaryClass(override val symbol: ClassSymbol, override val kind: BinaryClassKind)
-      extends BinaryClassSymbol(symbol, kind)
-  case BinarySAMClass(term: TermSymbol, parentClass: ClassSymbol, tpe: Type)
-      extends BinaryClassSymbol(term, BinaryClassKind.SAMClass)
-  case BinaryPartialFunction(term: TermSymbol, tpe: Type)
-      extends BinaryClassSymbol(term, BinaryClassKind.PartialFunction)
-
+sealed trait BinaryClassSymbol extends BinarySymbol:
+  def symbol: Symbol
   override def toString: String =
-    val span = symbol.tree.map(tree => s"(${tree.pos.startLine}, ${tree.pos.endLine})").getOrElse("")
+    def format(sym: Symbol) =
+      val span = sym.tree.map(tree => s"(${tree.pos.startLine}, ${tree.pos.endLine})").getOrElse("")
+      s"$sym $span"
     this match
-      case BinarySAMClass(symbol, _, tpe) =>
-        s"BinarySAMClass($symbol $span, ${tpe.showBasic})"
-      case BinaryClass(symbol, kind) => s"BinaryClass($symbol $span, $kind)"
-      case BinaryPartialFunction(symbol, tpe) =>
-        s"BinaryPartialFunction($symbol $span, ${tpe.showBasic})"
+      case BinaryClass(sym) => s"BinaryClass(${format(sym)})"
+      case BinarySyntheticCompanionClass(symbol) => s"BinarySyntheticCompanionClass(${format(symbol)})"
+      case BinarySAMClass(sym, _, tpe) => s"BinarySAMClass(${format(sym)}, ${tpe.showBasic})"
+      case BinaryPartialFunction(sym, tpe) => s"BinaryPartialFunction(${format(sym)}, ${tpe.showBasic})"
 
-enum BinaryClassKind:
-  case TopLevelOrInner, Local, Anon, SAMClass, SyntheticCompanionClass, PartialFunction
+final case class BinaryClass(symbol: ClassSymbol) extends BinaryClassSymbol
+final case class BinarySyntheticCompanionClass(symbol: ClassSymbol) extends BinaryClassSymbol
+final case class BinarySAMClass(symbol: TermSymbol, parentClass: ClassSymbol, tpe: Type) extends BinaryClassSymbol
+final case class BinaryPartialFunction(symbol: TermSymbol, tpe: Type) extends BinaryClassSymbol
 
 enum BinaryMethodSymbol extends BinarySymbol:
   case BinaryMethod(binaryOwner: BinaryClassSymbol, term: TermSymbol, kind: BinaryMethodKind)
@@ -35,7 +32,7 @@ enum BinaryMethodSymbol extends BinarySymbol:
   case BinaryByNameArg(binaryOwner: BinaryClassSymbol, tpe: Type, isAdapted: Boolean)
   case BinaryMethodBridge(target: BinaryMethodSymbol, tpe: TypeOrMethodic)
   case BinaryAnonOverride(binaryOwner: BinaryClassSymbol, overriddenMethod: TermSymbol, tpe: TypeOrMethodic)
-  case BinaryStaticForwarder(binaryOwner: BinaryClassSymbol, target: BinaryMethod)
+  case BinaryStaticForwarder(binaryOwner: BinaryClass | BinarySyntheticCompanionClass, target: BinaryMethod)
 
   def symbol = this match
     case BinaryMethod(_, term, _) => Some(term)
