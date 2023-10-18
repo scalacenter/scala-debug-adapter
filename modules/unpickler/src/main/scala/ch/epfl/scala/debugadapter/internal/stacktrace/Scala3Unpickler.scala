@@ -79,8 +79,8 @@ class Scala3Unpickler(
           case term if (term.isLazyVal || term.isModuleVal) && term.nameStr == name =>
             BinaryLocalLazyInit(binaryClass, term)
         }))
-      case Patterns.AnonFun(prefix) => findAnonFunAndByNameArgs(binaryClass, method)
-      case Patterns.AdaptedAnonFun(prefix) => findAdaptedAnonFun(binaryClass, method)
+      case Patterns.AnonFun(_) => findAnonFunAndByNameArgs(binaryClass, method)
+      case Patterns.AdaptedAnonFun(_) => findAdaptedAnonFun(binaryClass, method)
       case Patterns.SuperArg() => requiresBinaryClass(findSuperArgs(_, method))
       case Patterns.LiftedTree() => findLiftedTry(binaryClass, method)
       case Patterns.LocalMethod(name, _) =>
@@ -88,10 +88,10 @@ class Scala3Unpickler(
           case term if term.nameStr == name && matchSignature(method, term, checkTypeErasure = !inlined) =>
             BinaryMethod(binaryClass, term)
         })
-        val anonGetters = (name, binaryClass) match
+        val anonTraitParamGetters = (name, binaryClass) match
           case ("x", binaryClass: BinaryClass) => findInstanceMethods(binaryClass, method)
           case _ => Seq.empty
-        localMethods ++ anonGetters
+        localMethods ++ anonTraitParamGetters
       case Patterns.LazyInit(name) => requiresBinaryClass(findLazyInit(_, name))
       case Patterns.TraitStaticForwarder(_) => requiresBinaryClass(findTraitStaticForwarder(_, method))
       case Patterns.Outer(_) =>
@@ -319,7 +319,7 @@ class Scala3Unpickler(
             method.declaringClass.declaredMethod(name, descriptor)
         }
         .flatten
-        .singleOrElse(unexpected(s"$method is not an adapted method: cannot find unerlying invocation"))
+        .singleOrElse(unexpected(s"$method is not an adapted method: cannot find underlying invocation"))
       findAnonFunAndByNameArgs(binaryClass, underlying).map {
         _ match
           case BinaryAnonFun(owner, term, false) => BinaryAnonFun(owner, term, true)
