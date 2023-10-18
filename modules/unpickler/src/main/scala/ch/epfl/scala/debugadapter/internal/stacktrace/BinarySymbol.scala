@@ -24,32 +24,24 @@ final case class BinarySyntheticCompanionClass(symbol: ClassSymbol) extends Bina
 final case class BinarySAMClass(symbol: TermSymbol, parentClass: ClassSymbol, tpe: Type) extends BinaryClassSymbol
 final case class BinaryPartialFunction(symbol: TermSymbol, tpe: Type) extends BinaryClassSymbol
 
-enum BinaryMethodSymbol extends BinarySymbol:
-  case BinaryMethod(binaryOwner: BinaryClassSymbol, term: TermSymbol, kind: BinaryMethodKind)
-  case BinaryOuter(binaryOwner: BinaryClassSymbol, outerClass: ClassSymbol)
-  case BinarySuperArg(binaryOwner: BinaryClassSymbol, init: TermSymbol, tpe: Type)
-  case BinaryLiftedTry(binaryOwner: BinaryClassSymbol, tpe: Type)
-  case BinaryByNameArg(binaryOwner: BinaryClassSymbol, tpe: Type, isAdapted: Boolean)
-  case BinaryMethodBridge(target: BinaryMethodSymbol, tpe: TypeOrMethodic)
-  case BinaryAnonOverride(binaryOwner: BinaryClassSymbol, overriddenMethod: TermSymbol, tpe: TypeOrMethodic)
-  case BinaryStaticForwarder(binaryOwner: BinaryClass | BinarySyntheticCompanionClass, target: BinaryMethod)
+sealed trait BinaryMethodSymbol extends BinarySymbol
 
-  def symbol = this match
-    case BinaryMethod(_, term, _) => Some(term)
-    case _ => None
-
-  def symbolKind = this match
-    case BinaryMethod(_, _, kind) => kind
-    case _: BinaryOuter => BinaryMethodKind.Outer
-    case _: BinarySuperArg => BinaryMethodKind.SuperArg
-    case _: BinaryLiftedTry => BinaryMethodKind.LiftedTry
-    case BinaryByNameArg(_, _, adapted) =>
-      if adapted then BinaryMethodKind.AdaptedByNameArg else BinaryMethodKind.ByNameArg
-    case _: BinaryMethodBridge => BinaryMethodKind.Bridge
-    case _: BinaryAnonOverride => BinaryMethodKind.AnonOverride
-    case _: BinaryStaticForwarder => BinaryMethodKind.StaticForwarder
-
-enum BinaryMethodKind:
-  case InstanceDef, LocalDef, AnonFun, AdaptedAnonFun, Getter, Setter, LazyInit, LocalLazyInit, Constructor,
-    TraitConstructor, MixinForwarder, TraitStaticForwarder, SuperAccessor, DefaultParameter, Outer, SuperArg,
-    TraitParamGetter, TraitParamSetter, LiftedTry, ByNameArg, AdaptedByNameArg, Bridge, AnonOverride, StaticForwarder
+final case class BinaryMethod(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol
+final case class BinaryAnonFun(binaryOwner: BinaryClassSymbol, symbol: TermSymbol, adapted: Boolean)
+    extends BinaryMethodSymbol
+final case class BinaryLocalLazyInit(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol
+final case class BinaryLazyInit(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol
+final case class BinaryTraitParamAccessor(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol
+final case class BinaryMixinForwarder(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol
+final case class BinaryTraitStaticForwarder(binaryOwner: BinaryClassSymbol, symbol: TermSymbol)
+    extends BinaryMethodSymbol
+final case class BinaryOuter(binaryOwner: BinaryClassSymbol, outerClass: ClassSymbol) extends BinaryMethodSymbol
+final case class BinarySuperArg(binaryOwner: BinaryClassSymbol, init: TermSymbol, tpe: Type) extends BinaryMethodSymbol
+final case class BinaryLiftedTry(binaryOwner: BinaryClassSymbol, tpe: Type) extends BinaryMethodSymbol
+final case class BinaryByNameArg(binaryOwner: BinaryClassSymbol, tpe: Type, adapted: Boolean) extends BinaryMethodSymbol
+final case class BinaryMethodBridge(binaryOwner: BinaryClassSymbol, targetSymbol: TermSymbol, tpe: TypeOrMethodic)
+    extends BinaryMethodSymbol
+final case class BinaryAnonOverride(binaryOwner: BinaryClassSymbol, overriddenSymbol: TermSymbol, tpe: TypeOrMethodic)
+    extends BinaryMethodSymbol
+final case class BinaryStaticForwarder(binaryOwner: BinaryClassSymbol, targetSymbol: TermSymbol)
+    extends BinaryMethodSymbol

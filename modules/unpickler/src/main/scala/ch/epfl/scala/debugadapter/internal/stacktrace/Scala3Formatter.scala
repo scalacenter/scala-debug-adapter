@@ -3,68 +3,66 @@ package ch.epfl.scala.debugadapter.internal.stacktrace
 import tastyquery.Symbols.*
 import tastyquery.Types.*
 import tastyquery.Names.*
-import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryMethodKind.*
 import ch.epfl.scala.debugadapter.internal.stacktrace.*
-import ch.epfl.scala.debugadapter.internal.stacktrace.BinaryMethodSymbol.*
 
 class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends ThrowOrWarn(warnLogger, testMode):
   def format(binaryClass: BinaryClassSymbol): String =
     binaryClass match
       case BinaryClass(symbol) => formatSymbol(symbol)
-      case BinarySAMClass(symbol, _, _) => formatOwner(symbol.owner) + ".<SAM class>"
-      case BinaryPartialFunction(symbol, _) => formatOwner(symbol.owner) + ".<partial function>"
+      case BinarySAMClass(symbol, _, _) => formatSymbol(symbol.owner) + ".<SAM class>"
+      case BinaryPartialFunction(symbol, _) => formatSymbol(symbol.owner) + ".<partial function>"
       case BinarySyntheticCompanionClass(symbol) => formatSymbol(symbol)
 
   def format(method: BinaryMethodSymbol): String =
     def formatSym(method: BinaryMethodSymbol): String =
       method match
-        case BinaryMethod(owner, term, kind) =>
-          kind match
-            case BinaryMethodKind.AdaptedAnonFun => formatSymbol(term) + ".<adapted>"
-            case BinaryMethodKind.Setter => formatSymbol(term)
-            case BinaryMethodKind.LazyInit => formatSymbol(owner.symbol, term.name) + ".<lazy init>"
-            case BinaryMethodKind.LocalLazyInit => formatSymbol(term) + ".<lazy init>"
-            case BinaryMethodKind.TraitStaticForwarder => formatSymbol(term) + ".<static forwarder>"
-            case BinaryMethodKind.TraitParamGetter => formatSymbol(owner.symbol, term.name)
-            case BinaryMethodKind.TraitParamSetter => formatSymbol(owner.symbol, term.name)
-            case BinaryMethodKind.MixinForwarder => formatSymbol(owner.symbol, term.name) + ".<mixin forwarder>"
-            case _ => formatSymbol(term)
+        case BinaryMethod(_, sym) => formatSymbol(sym)
+        case BinaryAnonFun(_, sym, adapted) =>
+          formatSymbol(sym) + (if adapted then ".<adapted>" else "")
+        case BinaryLocalLazyInit(_, sym) => formatSymbol(sym) + ".<lazy init>"
+        case BinaryLazyInit(owner, sym) => s"${format(owner)}.${format(sym.name)}.<lazy init>"
+        case BinaryTraitParamAccessor(owner, sym) => s"${format(owner)}.${format(sym.name)}"
+        case BinaryMixinForwarder(owner, sym) => s"${format(owner)}.${format(sym.name)}.<mixin forwarder>"
+        case BinaryTraitStaticForwarder(_, sym) => formatSymbol(sym) + ".<static forwarder>"
         case BinaryOuter(owner, _) => format(owner) + ".<outer>"
         case BinarySuperArg(_, init, _) => formatSymbol(init) + ".<super arg>"
-        case BinaryLiftedTry(owner, _) => format(owner) + ".<try>"
+        case BinaryLiftedTry(owner, tpe) => format(owner) + ".<try>"
         case BinaryByNameArg(owner, _, adapted) =>
           format(owner) + ".<by-name arg>" + (if adapted then ".<adapted>" else "")
-        case BinaryMethodBridge(target, _) => formatSym(target) + ".<bridge>"
-        case BinaryAnonOverride(owner, overridden, _) => format(owner) + "." + formatName(overridden.name)
+        case BinaryMethodBridge(owner, target, _) => s"${format(owner)}.${format(target.name)}.<bridge>"
+        case BinaryAnonOverride(owner, overridden, _) => s"${format(owner)}.${format(overridden.name)}"
         case BinaryStaticForwarder(owner, target) =>
-          formatSymbol(owner.symbol, target.term.name) + ".<static forwarder>"
+          s"${format(owner)}.${format(target.name)}.<static forwarder>"
     val typeAscription: String =
       method match
-        case BinaryMethod(_, term, _) => formatTypeAndSep(term.declaredType)
-        case BinaryOuter(_, outer) => ": " + formatOwner(outer) // TODO fix, get the type
+        case BinaryMethod(_, sym) => formatTypeAndSep(sym.declaredType)
+        case BinaryAnonFun(_, sym, _) => formatTypeAndSep(sym.declaredType)
+        case BinaryLocalLazyInit(_, sym) => formatTypeAndSep(sym.declaredType)
+        case BinaryLazyInit(_, sym) => formatTypeAndSep(sym.declaredType)
+        case BinaryTraitParamAccessor(_, sym) => formatTypeAndSep(sym.declaredType)
+        case BinaryMixinForwarder(_, sym) => formatTypeAndSep(sym.declaredType)
+        case BinaryTraitStaticForwarder(_, sym) => formatTypeAndSep(sym.declaredType)
+        case BinaryOuter(_, outer) => ": " + formatSymbol(outer) // TODO fix, get the type
         case BinarySuperArg(_, _, tpe) => formatTypeAndSep(tpe)
         case BinaryLiftedTry(_, tpe) => formatTypeAndSep(tpe)
         case BinaryByNameArg(_, tpe, _) => formatTypeAndSep(tpe)
-        case BinaryMethodBridge(_, tpe) => formatTypeAndSep(tpe)
+        case BinaryMethodBridge(_, _, tpe) => formatTypeAndSep(tpe)
         case BinaryAnonOverride(_, _, tpe) => formatTypeAndSep(tpe)
-        case BinaryStaticForwarder(_, target) => formatTypeAndSep(target.term.declaredType)
+        case BinaryStaticForwarder(_, target) => formatTypeAndSep(target.declaredType)
     formatSym(method) + typeAscription
 
   private def formatSymbol(sym: Symbol): String =
-    formatSymbol(sym.owner, sym.name)
-
-  private def formatSymbol(owner: Symbol, name: Name): String =
-    val prefix = formatOwner(owner)
-    val nameStr = formatName(name)
-    if prefix.isEmpty then nameStr else s"$prefix.$nameStr"
-
-  private def formatOwner(sym: Symbol): String =
     sym match
       case sym: ClassSymbol if sym.name.isPackageObject => formatSymbol(sym.owner)
-      case sym: TermOrTypeSymbol => formatSymbol(sym)
-      case sym: PackageSymbol => ""
+      case sym =>
+        val prefix = sym.owner match
+          case sym: ClassSymbol if sym.name.isPackageObject => formatSymbol(sym.owner)
+          case sym: TermOrTypeSymbol => formatSymbol(sym)
+          case sym: PackageSymbol => ""
+        val nameStr = format(sym.name)
+        if prefix.isEmpty then nameStr else s"$prefix.$nameStr"
 
-  private def formatName(name: Name): String =
+  private def format(name: Name): String =
     def rec(name: Name): String = name match
       case DefaultGetterName(termName, num) => s"${termName.toString()}.<default ${num + 1}>"
       case TypeName(toTermName) => rec(toTermName)

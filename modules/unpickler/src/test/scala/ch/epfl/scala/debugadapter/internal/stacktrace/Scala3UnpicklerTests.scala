@@ -104,31 +104,29 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.Main$C$1", "Main.main.C")
     if isScala30 then
       debuggee.assertFormat("example.Main$F$1$", "Main.main.F")
-      debuggee.assertFormatAndKind(
+      debuggee.assertFormat(
         "example.Main$",
         "example.Main$F$1$ F$1(scala.runtime.LazyRef F$lzy1$2)",
         "Main.main.F: F",
-        BinaryMethodKind.LocalDef
+        skip = true
       )
-      debuggee.assertFormatAndKind(
+      debuggee.assertFormat(
         "example.Main$",
         "example.Main$F$1$ F$lzyINIT1$1(scala.runtime.LazyRef F$lzy1$1)",
-        "Main.main.F.<lazy init>: F",
-        BinaryMethodKind.LocalLazyInit
+        "Main.main.F.<lazy init>: F"
       )
     else
       debuggee.assertFormat("example.Main$F$2$", "Main.main.F")
-      debuggee.assertFormatAndKind(
+      debuggee.assertFormat(
         "example.Main$",
         "example.Main$F$2$ F$1(scala.runtime.LazyRef F$lzy1$2)",
         "Main.main.F: F",
-        BinaryMethodKind.LocalDef
+        skip = true
       )
-      debuggee.assertFormatAndKind(
+      debuggee.assertFormat(
         "example.Main$",
         "example.Main$F$2$ F$lzyINIT1$1(scala.runtime.LazyRef F$lzy1$1)",
-        "Main.main.F.<lazy init>: F",
-        BinaryMethodKind.LocalLazyInit
+        "Main.main.F.<lazy init>: F"
       )
   }
 
@@ -148,18 +146,16 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     if isScala30 then
-      debuggee.assertFormatAndKind(
+      debuggee.assertFormat(
         "example.Main$",
         "void example$Main$Bar$1$$_$A$1()",
-        "Main.m.Bar.m.A(): Unit",
-        BinaryMethodKind.LocalDef
+        "Main.m.Bar.m.A(): Unit"
       )
     else
-      debuggee.assertFormatAndKind(
+      debuggee.assertFormat(
         "example.Main$",
         "void example$Main$Bar$1$$_$A$3()",
-        "Main.m.Bar.m.A(): Unit",
-        BinaryMethodKind.LocalDef
+        "Main.m.Bar.m.A(): Unit"
       )
   }
 
@@ -191,18 +187,16 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormatAndKind(
+    debuggee.assertFormat(
       "example.A",
       "void m$1(java.lang.String y$1)",
-      "A.m1.m: Unit",
-      BinaryMethodKind.LocalDef
+      "A.m1.m: Unit"
     )
-    debuggee.assertFormatAndKind(
+    debuggee.assertFormat(
       "example.A",
       if isScala30 then "void m$4(java.lang.String y$2, java.lang.String z)"
       else "void m$2(java.lang.String y$2, java.lang.String z)",
-      "A.m1.m.m(z: String): Unit",
-      BinaryMethodKind.LocalDef
+      "A.m1.m.m(z: String): Unit"
     )
     debuggee.assertAmbiguous("example.A", if isScala30 then "void m$2(int i)" else "void m$3(int i)")
   }
@@ -378,25 +372,22 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |              t
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormatAndKind(
+    debuggee.assertFormat(
       "example.Main$",
       "example.Main$D$1 m$1(example.Main$D$1 t)",
-      "Main.A.m.B.C.m.m(t: D): D",
-      BinaryMethodKind.LocalDef
+      "Main.A.m.B.C.m.m(t: D): D"
     )
     if isScala30 then
-      debuggee.assertFormatAndKind(
+      debuggee.assertFormat(
         "example.Main$B$1",
         "example.Main$A$B$1 <init>()",
-        "Main.A.m.B.<init>(): Unit",
-        BinaryMethodKind.Constructor
+        "Main.A.m.B.<init>(): Unit"
       )
     else
-      debuggee.assertFormatAndKind(
+      debuggee.assertFormat(
         "example.Main$A$B$1",
         "example.Main$A$B$1 <init>()",
-        "Main.A.m.B.<init>(): Unit",
-        BinaryMethodKind.Constructor
+        "Main.A.m.B.<init>(): Unit"
       )
   }
 
@@ -449,13 +440,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormatAndKind(
-      "example.A$",
-      "java.lang.String m$2(java.lang.String t)",
-      "A.m.m(t: String): String",
-      BinaryMethodKind.LocalDef
-    )
-    debuggee.assertFormatAndKind("example.A$", "java.lang.String m$1()", "A.m.m: String", BinaryMethodKind.LocalDef)
+    debuggee.assertFormat("example.A$", "java.lang.String m$2(java.lang.String t)", "A.m.m(t: String): String")
+    debuggee.assertFormat("example.A$", "java.lang.String m$1()", "A.m.m: String")
   }
 
   test("multi parameter lists") {
@@ -945,13 +931,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |class B extends A
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormatAndKind(
-      "example.A",
-      "void $init$(example.A $this)",
-      "A.<init>(): Unit",
-      BinaryMethodKind.TraitConstructor
-    )
-    debuggee.assertFormatAndKind("example.B", "example.B <init>()", "B.<init>(): Unit", BinaryMethodKind.Constructor)
+    debuggee.assertFormat("example.A", "void $init$(example.A $this)", "A.<init>(): Unit")
+    debuggee.assertFormat("example.B", "example.B <init>()", "B.<init>(): Unit")
   }
 
   test("vararg type") {
@@ -1029,11 +1010,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       "A.m.y: String",
       skip = true
     )
-    debuggee.assertFormatAndKind(
+    debuggee.assertFormat(
       "example.A",
       "java.lang.String y$lzyINIT1$1(java.lang.String x$1, scala.runtime.LazyRef y$lzy1$1)",
-      "A.m.y.<lazy init>: String",
-      BinaryMethodKind.LocalLazyInit
+      "A.m.y.<lazy init>: String"
     )
   }
 
@@ -1263,22 +1243,12 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |class B(x: Int)(using String) extends A(1, 2, 3)
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    // todo fix: should be TraitParamGetter
-    debuggee.assertFormatAndKind("example.B", "int x()", "B.x: Int", BinaryMethodKind.Getter)
-    debuggee.assertFormatAndKind("example.B", "int y()", "B.y: Int", BinaryMethodKind.TraitParamGetter)
-    debuggee.assertFormatAndKind(
-      "example.B",
-      "void y_$eq(int x$1)",
-      "B.y_=(Int): Unit",
-      BinaryMethodKind.TraitParamSetter
-    )
-    debuggee.assertFormatAndKind("example.B", "int example$A$$z()", "B.z: Int", BinaryMethodKind.TraitParamGetter)
-    debuggee.assertFormatAndKind(
-      "example.B",
-      "java.lang.String example$A$$x$4()",
-      "B.x$4: String",
-      BinaryMethodKind.TraitParamGetter
-    )
+    // todo fix: should be a BinaryTraitParamGetter
+    debuggee.assertFormat("example.B", "int x()", "B.x: Int", skip = true)
+    debuggee.assertFormat("example.B", "int y()", "B.y: Int", skip = true)
+    debuggee.assertFormat("example.B", "void y_$eq(int x$1)", "B.y_=(Int): Unit", skip = true)
+    debuggee.assertFormat("example.B", "int example$A$$z()", "B.z: Int", skip = true)
+    debuggee.assertFormat("example.B", "java.lang.String example$A$$x$4()", "B.x$4: String", skip = true)
   }
 
   test("lifted try") {
@@ -1404,15 +1374,6 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       val binarySymbol = unpickler.findMethod(m)
       assertEquals(unpickler.formatter.format(binarySymbol), expected)
       assertEquals(unpickler.skip(binarySymbol), skip)
-
-    private def assertFormatAndKind(declaringType: String, javaSig: String, expected: String, kind: BinaryMethodKind)(
-        using munit.Location
-    ): Unit =
-      val m = loadBinaryMethod(declaringType, javaSig, loadExtraInfo = false)
-      val unpickler = initUnpickler()
-      val binarySymbol = unpickler.findMethod(m)
-      assertEquals(unpickler.formatter.format(binarySymbol), expected)
-      assertEquals(binarySymbol.symbolKind, kind)
 
     private def assertFormat(declaringType: String, expected: String)(using munit.Location): Unit =
       val cls = loader(loadExtraInfo = false).loadClass(declaringType)
