@@ -65,7 +65,7 @@ class Scala3Unpickler(
     formatter.format(findClass(cls))
 
   def findMethod(method: binary.Method): BinaryMethodSymbol =
-    val binaryClass = findClass(method.declaringClass, method.isExtensionMethod)
+    val binaryClass = findClass(method.declaringClass)
     findMethod(binaryClass, method)
 
   def findMethod(binaryClass: BinaryClassSymbol, method: binary.Method): BinaryMethodSymbol =
@@ -110,7 +110,7 @@ class Scala3Unpickler(
             else Seq.empty
     candidates.singleOrThrow(method)
 
-  def findClass(cls: binary.ClassType, isExtensionMethod: Boolean = false): BinaryClassSymbol =
+  def findClass(cls: binary.ClassType): BinaryClassSymbol =
     val javaParts = cls.name.split('.')
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
@@ -129,12 +129,12 @@ class Scala3Unpickler(
         findLocalClasses(cls, packageSym, declaringClassName, localClassName, remaining)
       case _ => findClassRecursively(packageSym, decodedClassName)
 
-    if cls.isObject && !isExtensionMethod then allSymbols.filter(_.symbol.isModuleClass).singleOrThrow(cls)
-    else if cls.sourceLines.isEmpty && allSymbols.forall(_.symbol.isModuleClass) then
-      allSymbols.singleOrThrow(cls) match
-        case BinaryClass(symbol) => BinarySyntheticCompanionClass(symbol)
-        case _ => notFound(cls)
-    else allSymbols.filter(!_.symbol.isModuleClass).singleOrThrow(cls)
+    val candidates =
+      if cls.isObject then allSymbols.filter(_.symbol.isModuleClass)
+      else if cls.sourceLines.isEmpty && allSymbols.forall(_.symbol.isModuleClass) then
+        allSymbols.collect { case BinaryClass(symbol) => BinarySyntheticCompanionClass(symbol) }
+      else allSymbols.filter(!_.symbol.isModuleClass)
+    candidates.singleOrThrow(cls)
 
   private def findInstanceMethods(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
     val fromClass: Seq[BinaryMethod] = binaryClass.symbol.declarations
@@ -177,7 +177,8 @@ class Scala3Unpickler(
 
   private def findValueClassExtension(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethod] =
     val expectedName = method.unexpandedDecodedName.stripSuffix("$extension")
-    binaryClass.symbol.declarations.collect {
+    val companionClassOpt = binaryClass.symbol.companionClass
+    companionClassOpt.toSeq.flatMap(_.declarations).collect {
       case sym: TermSymbol if sym.targetNameStr == expectedName && matchSignature(method, sym) =>
         if !sym.isMethod then BinaryMethod(binaryClass, sym, Getter)
         else if sym.isSetter then BinaryMethod(binaryClass, sym, Setter)
