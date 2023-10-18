@@ -99,6 +99,7 @@ class Scala3Unpickler(
         List(BinaryOuter(binaryClass, outerClass(binaryClass.symbol.owner)))
       case Patterns.TraitInitializer() => requiresBinaryClass(findTraitInitializer(_, method))
       case Patterns.ValueClassExtension() => requiresBinaryClass(findValueClassExtension(_, method))
+      case Patterns.DeserializeLambda() => Seq(BinaryDeserializeLambda(binaryClass))
       case _ =>
         binaryClass match
           case samClass: BinarySAMClass => findAnonOverride(samClass, method).toSeq

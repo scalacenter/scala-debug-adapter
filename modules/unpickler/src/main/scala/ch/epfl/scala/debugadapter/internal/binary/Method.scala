@@ -16,3 +16,7 @@ trait Method extends Symbol:
   def isTraitInitializer: Boolean = name == "$init$" && isStatic
   def isClassInitializer: Boolean = name == "<init>"
   def isPartialFunctionApplyOrElse: Boolean = declaringClass.isPartialFunction && name == "applyOrElse"
+  def isDeserializeLambda: Boolean =
+    isStatic &&
+      name == "$deserializeLambda$" &&
+      allParameters.map(_.`type`.name) == Seq("java.lang.invoke.SerializedLambda")

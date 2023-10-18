@@ -89,3 +89,7 @@ object Patterns:
   object ValueClassExtension:
     def unapply(method: binary.Method): Boolean =
       method.isExtensionMethod
+
+  object DeserializeLambda:
+    def unapply(method: binary.Method): Boolean =
+      method.isDeserializeLambda

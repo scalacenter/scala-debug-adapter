@@ -45,3 +45,4 @@ final case class BinaryAnonOverride(binaryOwner: BinaryClassSymbol, overriddenSy
     extends BinaryMethodSymbol
 final case class BinaryStaticForwarder(binaryOwner: BinaryClassSymbol, targetSymbol: TermSymbol)
     extends BinaryMethodSymbol
+final case class BinaryDeserializeLambda(binaryOnwer: BinaryClassSymbol) extends BinaryMethodSymbol

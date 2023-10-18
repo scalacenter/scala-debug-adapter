@@ -52,6 +52,8 @@ extension (name: Name)
     val nameStr = name.toString
     nameStr == "package" || nameStr.endsWith("$package")
 
+extension (tpe: TermType) def isMethodic: Boolean = tpe.isInstanceOf[MethodicType]
+
 extension (tpe: TypeOrMethodic)
   def allParamsTypes: Seq[Type] = tpe match
     case t: MethodType => t.paramTypes ++ t.resultType.allParamsTypes
