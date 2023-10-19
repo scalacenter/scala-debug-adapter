@@ -98,7 +98,9 @@ class Scala3Unpickler(
         def outerClass(sym: Symbol): ClassSymbol = if sym.isClass then sym.asClass else outerClass(sym.owner)
         List(BinaryOuter(binaryClass, outerClass(binaryClass.symbol.owner)))
       case Patterns.TraitInitializer() => requiresBinaryClass(findTraitInitializer(_, method))
-      case Patterns.ValueClassExtension() => requiresBinaryClass(findValueClassExtension(_, method))
+      case Patterns.ValueClassExtension() =>
+        if method.isStatic then requiresBinaryClass(findValueClassForwarders(_, method))
+        else requiresBinaryClass(findValueClassExtension(_, method))
       case Patterns.DeserializeLambda() => Seq(BinaryDeserializeLambda(binaryClass))
       case _ =>
         binaryClass match
@@ -177,6 +179,15 @@ class Scala3Unpickler(
     companionClassOpt.toSeq.flatMap(_.declarations).collect {
       case sym: TermSymbol if sym.targetNameStr == expectedName && matchSignature(method, sym) =>
         BinaryMethod(binaryClass, sym)
+    }
+
+  private def findValueClassForwarders(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryStaticForwarder] =
+    val expectedName = method.unexpandedDecodedName.stripSuffix("$extension")
+    val companionClassOpt = binaryClass.symbol.companionClass
+    binaryClass.symbol.declarations.collect {
+      case sym: TermSymbol
+          if sym.targetNameStr == expectedName && matchSignature(method, sym, checkParamNames = false) =>
+        BinaryStaticForwarder(binaryClass, sym)
     }
 
   private def findStaticForwarder(

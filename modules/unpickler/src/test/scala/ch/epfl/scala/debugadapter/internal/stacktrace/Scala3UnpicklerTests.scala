@@ -417,6 +417,11 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     debuggee.assertFormat("example.A$", "java.lang.String m$extension(java.lang.String $this)", "A.m(): String")
+    debuggee.assertFormat(
+      "example.A",
+      "java.lang.String m$extension(java.lang.String arg0)",
+      "A.m.<static forwarder>(): String"
+    )
   }
 
   test("local method inside a value class") {
