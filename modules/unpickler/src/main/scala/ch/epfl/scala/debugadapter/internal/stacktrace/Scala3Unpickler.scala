@@ -102,6 +102,7 @@ class Scala3Unpickler(
         if method.isStatic then requiresBinaryClass(findValueClassForwarders(_, method))
         else requiresBinaryClass(findValueClassExtension(_, method))
       case Patterns.DeserializeLambda() => Seq(BinaryDeserializeLambda(binaryClass))
+      case Patterns.ParamForwarder(name) => requiresBinaryClass(findParamForwarder(_, method, name))
       case _ =>
         binaryClass match
           case samClass: BinarySAMClass => findAnonOverride(samClass, method).toSeq
@@ -140,6 +141,12 @@ class Scala3Unpickler(
         allSymbols.collect { case BinaryClass(symbol) => BinarySyntheticCompanionClass(symbol) }
       else allSymbols.filter(!_.symbol.isModuleClass)
     candidates.singleOrThrow(cls)
+
+  private def findParamForwarder(binaryClass: BinaryClass, method: binary.Method, name: String): Seq[BinaryMethod] =
+    binaryClass.symbol.declarations.collect {
+      case sym: TermSymbol if sym.targetNameStr == name && matchSignature(method, sym) =>
+        BinaryMethod(binaryClass, sym)
+    }
 
   private def findInstanceMethods(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
     if method.isConstructor && binaryClass.symbol.isSubClass(ctx.defn.AnyValClass) then

@@ -93,3 +93,8 @@ object Patterns:
   object DeserializeLambda:
     def unapply(method: binary.Method): Boolean =
       method.isDeserializeLambda
+
+  object ParamForwarder:
+    def unapply(method: binary.Method): Option[String] =
+      val paramForwarder = "(.+)\\$accessor".r
+      paramForwarder.unapplySeq(method.name).map(xs => xs(0))

@@ -1350,6 +1350,18 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     )
   }
 
+  test("param forwarders") {
+    val source =
+      """|package example
+         |
+         |class A[T](val foo: T)
+         |
+         |class B(foo: String) extends A(foo)
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat("example.B", "java.lang.String foo$accessor()", "B.foo: String", skip = true)
+  }
+
   extension (debuggee: TestingDebuggee)
     private def loader(loadExtraInfo: Boolean): JavaReflectLoader =
       JavaReflectLoader(debuggee.classLoader, loadExtraInfo = loadExtraInfo)
