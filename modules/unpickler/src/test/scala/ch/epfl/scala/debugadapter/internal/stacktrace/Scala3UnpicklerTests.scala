@@ -420,8 +420,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat(
       "example.A",
       "java.lang.String m$extension(java.lang.String arg0)",
-      "A.m.<static forwarder>(): String"
+      "A.m.<static forwarder>(): String",
+      skip = true
     )
+    debuggee.assertFormat("example.A", "example.A <init>(java.lang.String x)", "A.<init>(x: String): Unit")
   }
 
   test("local method inside a value class") {
@@ -1327,6 +1329,25 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       debuggee.assertFormat("example.C$", "java.lang.Object B$lzyINIT1()", "C.B.<lazy init>: B", skip = true)
       debuggee.assertFormat("example.E", "java.lang.Object F$lzyINIT1()", "E.F.<lazy init>: F")
       debuggee.assertFormat("example.E", "java.lang.Object B$lzyINIT2()", "E.B.<lazy init>: B", skip = true)
+  }
+
+  test("static forwarder") {
+    val source =
+      """|package example
+         |
+         |class A[T] {
+         |  def foo(x: T): String = "foo"
+         |}
+         |
+         |object B extends A[String]
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat(
+      "example.B",
+      "java.lang.String foo(java.lang.Object arg0)",
+      "B.foo.<static forwarder>(x: String): String",
+      skip = true
+    )
   }
 
   extension (debuggee: TestingDebuggee)

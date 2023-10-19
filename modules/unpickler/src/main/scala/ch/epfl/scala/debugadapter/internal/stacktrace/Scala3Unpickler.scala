@@ -142,12 +142,15 @@ class Scala3Unpickler(
     candidates.singleOrThrow(cls)
 
   private def findInstanceMethods(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
-    val fromClass = binaryClass.symbol.declarations
-      .collect { case sym: TermSymbol if matchSymbol(method, sym) => BinaryMethod(binaryClass, sym) }
-    // TODO: can a mixin forwarder not be a bridge? (yes if it's a getter of a lazy val, some other cases?)
-    // Can a trait param accessor be a bridge?
-    // figure out and split findMethodsFromTraits in 2
-    if fromClass.nonEmpty then fromClass else findMethodsFromTraits(binaryClass, method)
+    if method.isConstructor && binaryClass.symbol.isSubClass(ctx.defn.AnyValClass) then
+      binaryClass.symbol.getAllOverloadedDecls(SimpleName("<init>")).map(BinaryMethod(binaryClass, _))
+    else
+      val fromClass = binaryClass.symbol.declarations
+        .collect { case sym: TermSymbol if matchSymbol(method, sym) => BinaryMethod(binaryClass, sym) }
+      // TODO: can a mixin forwarder not be a bridge? (yes if it's a getter of a lazy val, some other cases?)
+      // Can a trait param accessor be a bridge?
+      // figure out and split findMethodsFromTraits in 2
+      if fromClass.nonEmpty then fromClass else findMethodsFromTraits(binaryClass, method)
 
   private def findLazyInit(binaryClass: BinaryClass, name: String): Seq[BinaryMethodSymbol] =
     val matcher: PartialFunction[Symbol, TermSymbol] =
@@ -187,7 +190,7 @@ class Scala3Unpickler(
     binaryClass.symbol.declarations.collect {
       case sym: TermSymbol
           if sym.targetNameStr == expectedName && matchSignature(method, sym, checkParamNames = false) =>
-        BinaryStaticForwarder(binaryClass, sym)
+        BinaryStaticForwarder(binaryClass, sym, sym.declaredType)
     }
 
   private def findStaticForwarder(
@@ -197,23 +200,14 @@ class Scala3Unpickler(
     val companionObjectOpt = binaryClass match
       case BinarySyntheticCompanionClass(symbol) => Some(symbol)
       case BinaryClass(symbol) => symbol.companionClass
-    val fromCompanionObject =
-      for
-        companionObject <- companionObjectOpt.toSeq
-        term <- companionObject.declarations.collect {
-          case sym: TermSymbol if matchSymbol(method, sym, checkParamNames = false) => sym
-        }
-      yield BinaryStaticForwarder(binaryClass, term)
-    def fromTraits =
-      for
-        companionObject <- companionObjectOpt.toSeq
-        traitSym <- companionObject.linearization.filter(_.isTrait)
-        term <- traitSym.declarations.collect {
-          case sym: TermSymbol if matchSymbol(method, sym, checkParamNames = false) => sym
-        }
-        if term.isOverridingSymbol(companionObject)
-      yield BinaryStaticForwarder(binaryClass, term)
-    if fromCompanionObject.nonEmpty then fromCompanionObject else fromTraits
+    for
+      companionObject <- companionObjectOpt.toSeq
+      cls <- companionObject.linearization
+      sym <- cls.declarations.collect {
+        case sym: TermSymbol if matchSymbol(method, sym, checkParamNames = false) => sym
+      }
+      if sym.isOverridingSymbol(companionObject)
+    yield BinaryStaticForwarder(binaryClass, sym, sym.declaredTypeAsSeenFrom(companionObject.thisType))
 
   private def findBridgeAndMixinForwarders(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
     val bridges =
@@ -566,7 +560,7 @@ class Scala3Unpickler(
     else if classSymbol.isAnonClass then classSymbol.parentClasses.forall(expectedParents.contains)
     else expectedParents == classSymbol.parentClasses.toSet
 
-  private def matchSymbol(method: binary.Method, symbol: TermSymbol, checkParamNames: Boolean = false): Boolean =
+  private def matchSymbol(method: binary.Method, symbol: TermSymbol, checkParamNames: Boolean = true): Boolean =
     matchTargetName(method, symbol) &&
       (method.isTraitInitializer || matchSignature(method, symbol, checkParamNames = checkParamNames))
 

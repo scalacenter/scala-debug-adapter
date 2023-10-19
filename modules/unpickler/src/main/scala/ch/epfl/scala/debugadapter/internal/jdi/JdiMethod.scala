@@ -29,6 +29,8 @@ class JdiMethod(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method") 
 
   override def isStatic: Boolean = invokeMethod("isStatic")
 
+  override def isConstructor: Boolean = invokeMethod("isConstructor")
+
   override def sourceLines: Seq[SourceLine] =
     allLineLocations.map(_.lineNumber).distinct.sorted.map(SourceLine(_))
 

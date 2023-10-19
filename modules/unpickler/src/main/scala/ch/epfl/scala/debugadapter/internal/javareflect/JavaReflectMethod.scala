@@ -31,6 +31,8 @@ class JavaReflectMethod(
 
   override def isBridge: Boolean = method.isBridge
 
+  override def isConstructor: Boolean = false
+
   override def sourceLines: Seq[binary.SourceLine] = extraInfos.sourceLines
 
   override def instructions: Seq[binary.Instruction] = extraInfos.instructions

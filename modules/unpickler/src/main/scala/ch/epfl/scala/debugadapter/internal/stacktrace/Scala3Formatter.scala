@@ -30,8 +30,8 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
         formatWithType(owner, "<by-name arg>" + (if adapted then ".<adapted>" else ""), tpe)
       case BinaryMethodBridge(owner, target, tpe) => formatWithType(owner, target, "<bridge>", tpe)
       case BinaryAnonOverride(owner, overridden, tpe) => formatWithType(owner, overridden, "", tpe)
-      case BinaryStaticForwarder(owner, target) =>
-        formatWithType(owner, target, "<static forwarder>", target.declaredType)
+      case BinaryStaticForwarder(owner, target, tpe) =>
+        formatWithType(owner, target, "<static forwarder>", tpe)
       case BinaryDeserializeLambda(owner) =>
         format(owner) + ".$deserializeLambda$(SerializedLambda): Object"
 

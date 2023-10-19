@@ -27,6 +27,8 @@ class JavaReflectConstructor(
 
   override def isStatic: Boolean = false
 
+  override def isConstructor: Boolean = true
+
   override def toString: String = constructor.toString
 
   override def sourceLines: Seq[binary.SourceLine] = extraInfos.sourceLines

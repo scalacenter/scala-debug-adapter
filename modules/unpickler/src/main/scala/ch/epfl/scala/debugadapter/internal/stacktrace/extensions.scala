@@ -66,7 +66,7 @@ extension (tpe: TypeOrMethodic)
     case _ => Seq.empty
 
   def returnType: Type = tpe match
-    case t: LambdaType => t.resultType.returnType
+    case t: (MethodType | PolyType) => t.resultType.returnType
     case t: Type => t
 
 extension (tpe: Type)
