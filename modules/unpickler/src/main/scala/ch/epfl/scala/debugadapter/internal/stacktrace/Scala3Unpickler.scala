@@ -235,14 +235,21 @@ class Scala3Unpickler(
     else BinaryAnonOverride(binaryClass, overriddenMethod, tpe)
 
   private def findMethodsFromTraits(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
-    binaryClass.symbol.linearization
-      .filter(_.isTrait)
-      .flatMap(_.declarations)
+    val traitDeclarations = binaryClass.symbol.linearization.filter(_.isTrait).flatMap(_.declarations)
+    val mixinForwardersAndParamAccessors = traitDeclarations
       .collect { case term: TermSymbol if matchSymbol(method, term) => term }
       .collect {
         case term if term.isParamAccessor => BinaryTraitParamAccessor(binaryClass, term)
         case term if term.isOverridingSymbol(binaryClass.symbol) => BinaryMixinForwarder(binaryClass, term)
       }
+    def bridges =
+      for
+        overridingTerm <- traitDeclarations.collect { case term: TermSymbol if matchTargetName(method, term) => term }
+        overriddenTerm <- overridingTerm.allOverriddenSymbols.find(matchSignature(method, _))
+      yield
+        val tpe = overriddenTerm.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
+        BinaryMethodBridge(binaryClass, overridingTerm, tpe)
+    if mixinForwardersAndParamAccessors.nonEmpty then mixinForwardersAndParamAccessors else bridges
 
   private def notFound(symbol: binary.Symbol): Nothing = throw NotFoundException(symbol)
 
