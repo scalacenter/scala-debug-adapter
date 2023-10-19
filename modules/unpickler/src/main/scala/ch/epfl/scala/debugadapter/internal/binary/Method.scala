@@ -12,7 +12,7 @@ trait Method extends Symbol:
 
   def isExtensionMethod: Boolean = name.endsWith("$extension")
   def isTraitStaticForwarder: Boolean =
-    name.endsWith("$") && !isTraitInitializer && declaringClass.isInterface && isStatic
+    name.endsWith("$") && !isDeserializeLambda && !isTraitInitializer && declaringClass.isInterface && isStatic
   def isTraitInitializer: Boolean = name == "$init$" && isStatic
   def isClassInitializer: Boolean = name == "<init>"
   def isPartialFunctionApplyOrElse: Boolean = declaringClass.isPartialFunction && name == "applyOrElse"
