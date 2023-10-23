@@ -108,7 +108,9 @@ class Scala3Unpickler(
       case Patterns.ParamForwarder(name) => requiresBinaryClass(findParamForwarder(_, method, name))
       case Patterns.TraitSetter(name) => requiresBinaryClass(findTraitSetter(_, method, name))
       case Patterns.SuperAccessor(name) => requiresBinaryClass(findSuperAccessor(_, method, name))
-      case Patterns.SpecializedMethod(name) => requiresBinaryClass(findSpecializedMethod(_, method, name))
+      case Patterns.SpecializedMethod(name) =>
+        if method.isStatic then findSpecializedForwarder(binaryClass, method, name)
+        else requiresBinaryClass(findSpecializedMethod(_, method, name))
       case _ =>
         binaryClass match
           case samClass: BinarySAMClass => findAnonOverride(samClass, method).toSeq
@@ -190,14 +192,34 @@ class Scala3Unpickler(
   ): Seq[BinarySpecializedMethod] =
     binaryClass.symbol.declarations.collect {
       case sym: TermSymbol
-          if sym.targetNameStr == name && matchSignature(
-            method,
-            sym,
-            checkParamNames = false,
-            checkTypeErasure = false
-          ) =>
+          if sym.targetNameStr == name &&
+            matchSignature(method, sym, checkParamNames = false, checkTypeErasure = false) &&
+            // hack: in Scala 3 only overriding symbols can be specialized (Function and Tuple)
+            sym.allOverriddenSymbols.nonEmpty =>
         BinarySpecializedMethod(binaryClass, sym)
     }
+
+  private def findSpecializedForwarder(
+      binaryClass: BinaryClassSymbol,
+      method: binary.Method,
+      name: String
+  ): Seq[BinaryStaticForwarder] =
+    for
+      binaryObject <- binaryClass.companionClass.toSeq
+      companionObject <- binaryObject.tastyClass.toSeq
+      cls <- companionObject.linearization
+      sym <- cls.declarations.collect {
+        case sym: TermSymbol
+            if sym.targetNameStr == name &&
+              matchSignature(method, sym, checkParamNames = false, checkTypeErasure = false) &&
+              // hack: in Scala 3 only overriding symbols can be specialized (Function and Tuple)
+              sym.allOverriddenSymbols.nonEmpty =>
+          sym
+      }
+      if sym.isOverridingSymbol(companionObject)
+    yield
+    // TODO: BinaryStaticForwarder should wrap a BinarySpecizalizedMethod
+    BinaryStaticForwarder(binaryClass, sym, sym.declaredTypeAsSeenFrom(companionObject.thisType))
 
   private def findInstanceMethods(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
     if method.isConstructor && binaryClass.symbol.isSubClass(ctx.defn.AnyValClass) then
@@ -256,18 +278,14 @@ class Scala3Unpickler(
         BinaryStaticForwarder(binaryClass, sym, sym.declaredType)
     }
 
-  private def findStaticForwarder(
-      binaryClass: BinaryClass | BinarySyntheticCompanionClass,
-      method: binary.Method
-  ): Seq[BinaryStaticForwarder] =
-    val companionObjectOpt = binaryClass match
-      case BinarySyntheticCompanionClass(symbol) => Some(symbol)
-      case BinaryClass(symbol) => symbol.companionClass
+  private def findStaticForwarder(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryStaticForwarder] =
     for
-      companionObject <- companionObjectOpt.toSeq
+      binaryObject <- binaryClass.companionClass.toSeq
+      companionObject <- binaryObject.tastyClass.toSeq
       cls <- companionObject.linearization
       sym <- cls.declarations.collect {
-        case sym: TermSymbol if matchSymbol(method, sym, checkParamNames = false) => sym
+        case sym: TermSymbol if matchTargetName(method, sym) && matchSignature(method, sym, checkParamNames = false) =>
+          sym
       }
       if sym.isOverridingSymbol(companionObject)
     yield BinaryStaticForwarder(binaryClass, sym, sym.declaredTypeAsSeenFrom(companionObject.thisType))
@@ -634,6 +652,7 @@ class Scala3Unpickler(
   private def matchSignature(
       method: binary.Method,
       symbol: TermSymbol,
+      captureAllowed: Boolean = true,
       asJavaVarargs: Boolean = false,
       checkParamNames: Boolean = true,
       checkTypeErasure: Boolean = true
@@ -652,7 +671,7 @@ class Scala3Unpickler(
       method: binary.Method,
       declaredType: TypeOrMethodic,
       isAnonFun: Boolean,
-      asJavaVarargs: Boolean = true,
+      asJavaVarargs: Boolean = false,
       checkParamNames: Boolean = true,
       checkTypeErasure: Boolean = true
   ): Boolean =
@@ -664,17 +683,18 @@ class Scala3Unpickler(
             case res => Option.when(args.nonEmpty)((args, res))
         rec(tpe, Seq.empty)
 
-    val paramsNames = declaredType.allParamNames.map(_.toString)
+    val paramNames = declaredType.allParamNames.map(_.toString)
     val paramsSig = declaredType.allParamTypes.map(_.erasedAsArgType(asJavaVarargs))
     val resSig = declaredType.returnType.erasedAsReturnType
     declaredType.returnType.dealias match
       case CurriedContextFunction(uncurriedArgs, uncurriedReturnType) if !isAnonFun =>
-        val capturedParams = method.allParameters.dropRight(paramsNames.size + uncurriedArgs.size)
+        val capturedParams = method.allParameters.dropRight(paramNames.size + uncurriedArgs.size)
         val declaredParams = method.allParameters.drop(capturedParams.size).dropRight(uncurriedArgs.size)
         val contextParams = method.allParameters.drop(capturedParams.size + declaredParams.size)
 
         (capturedParams ++ contextParams).forall(_.isGenerated) &&
-        (!checkParamNames || declaredParams.map(_.name).corresponds(paramsNames)(_ == _)) &&
+        declaredParams.size == paramNames.size &&
+        (!checkParamNames || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
         (!checkTypeErasure || matchTypeErasure(
           paramsSig ++ uncurriedArgs.map(_.erasedAsArgType(asJavaVarargs)),
           uncurriedReturnType.erasedAsReturnType,
@@ -682,11 +702,12 @@ class Scala3Unpickler(
           method.returnType
         ))
       case _ =>
-        val capturedParams = method.allParameters.dropRight(paramsNames.size)
+        val capturedParams = method.allParameters.dropRight(paramNames.size)
         val declaredParams = method.allParameters.drop(capturedParams.size)
 
         capturedParams.forall(_.isGenerated) &&
-        (!checkParamNames || declaredParams.map(_.name).corresponds(paramsNames)(_ == _)) &&
+        declaredParams.size == paramNames.size &&
+        (!checkParamNames || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
         (!checkTypeErasure || matchTypeErasure(paramsSig, resSig, declaredParams, method.returnType))
 
   private def matchTypeErasure(

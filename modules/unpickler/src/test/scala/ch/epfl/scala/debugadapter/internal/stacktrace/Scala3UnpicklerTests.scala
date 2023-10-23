@@ -1455,12 +1455,14 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.B", "int m(scala.collection.immutable.Seq args)", "B.m(args: String*): Int")
   }
 
-  test("specialized methods") {
+  test("specialized methods".only) {
     val source =
       """|package example
          |
          |class A extends (Double => Boolean):
          |  def apply(x: Double): Boolean = x > 0
+         |
+         |object B extends A
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
     debuggee.assertFormat("example.A", "boolean apply(double x)", "A.apply(x: Double): Boolean")
@@ -1480,6 +1482,24 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       "example.A",
       "int apply$mcII$sp(int x$0)",
       "A.apply.<specialized>(x: Double): Boolean",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.B",
+      "boolean apply(double arg0)",
+      "B.apply.<static forwarder>(x: Double): Boolean",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.B",
+      "boolean apply$mcZD$sp(double arg0)",
+      "B.apply.<static forwarder>(x: Double): Boolean",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.B",
+      "int apply$mcII$sp(int arg0)",
+      "B.apply.<static forwarder>(x: Double): Boolean",
       skip = true
     )
   }

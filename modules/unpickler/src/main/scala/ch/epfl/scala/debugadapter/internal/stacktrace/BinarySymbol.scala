@@ -19,6 +19,16 @@ sealed trait BinaryClassSymbol extends BinarySymbol:
       case BinarySAMClass(sym, _, tpe) => s"BinarySAMClass(${format(sym)}, ${tpe.showBasic})"
       case BinaryPartialFunction(sym, tpe) => s"BinaryPartialFunction(${format(sym)}, ${tpe.showBasic})"
 
+  def tastyClass: Option[ClassSymbol] = this match
+    case BinaryClass(symbol) => Some(symbol)
+    case _ => None
+
+  def companionClass(using Context): Option[BinaryClass] = this match
+    case BinaryClass(symbol) => symbol.companionClass.map(BinaryClass.apply)
+    case BinarySyntheticCompanionClass(symbol) => Some(BinaryClass(symbol))
+    case _: BinarySAMClass => None
+    case _: BinaryPartialFunction => None
+
 final case class BinaryClass(symbol: ClassSymbol) extends BinaryClassSymbol
 final case class BinarySyntheticCompanionClass(symbol: ClassSymbol) extends BinaryClassSymbol
 final case class BinarySAMClass(symbol: TermSymbol, parentClass: ClassSymbol, tpe: Type) extends BinaryClassSymbol
