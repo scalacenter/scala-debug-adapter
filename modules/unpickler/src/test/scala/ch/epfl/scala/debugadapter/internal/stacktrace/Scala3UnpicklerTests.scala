@@ -1384,7 +1384,6 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val source =
       """|package example
          |
-         |
          |class A[T]:
          |  def foo(x: T): String = "foo"
          |
@@ -1413,6 +1412,47 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       "C.foo.<super>.<bridge>(x: String): String",
       skip = true
     )
+  }
+
+  test("java arg bridges") {
+    val javaSource =
+      """|package example;
+         |
+         |class A {
+         |  public String m(Object... args) {
+         |    return "";
+         |  }
+         |}
+         |""".stripMargin
+    val source =
+      """|package example
+         |
+         |class B extends A:
+         |  override def m(args: Any*): String = super.m(args)
+         |
+         |  @scala.annotation.varargs
+         |  def m(args: String*): Int = args.size
+         |""".stripMargin
+    val fromJava = TestingDebuggee.fromJavaSource(javaSource, "example", scalaVersion)
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion, Seq.empty, Seq(fromJava.mainModule))
+    debuggee.assertFormat(
+      "example.B",
+      "java.lang.String m(java.lang.Object[] args)",
+      "B.m.<bridge>(args: Any*): String",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.B",
+      "java.lang.String m(scala.collection.immutable.Seq args)",
+      "B.m(args: Any*): String"
+    )
+    debuggee.assertFormat(
+      "example.B",
+      "int m(java.lang.String[] args)",
+      "B.m.<bridge>(args: String*): Int",
+      skip = true
+    )
+    debuggee.assertFormat("example.B", "int m(scala.collection.immutable.Seq args)", "B.m(args: String*): Int")
   }
 
   extension (debuggee: TestingDebuggee)

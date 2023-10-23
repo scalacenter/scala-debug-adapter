@@ -33,6 +33,8 @@ extension (symbol: TermSymbol)
     val overridingSymbol =
       siteClass.linearization.iterator.flatMap(inClass => symbol.matchingSymbol(inClass, siteClass)).next
     overridingSymbol == symbol
+  def isJavaOverride(using Context): Boolean =
+    symbol.allOverriddenSymbols.exists(_.sourceLanguage == SourceLanguage.Java)
 
 extension [A](xs: Seq[A])
   def singleOrElse[B >: A](x: => B): B =
@@ -55,14 +57,14 @@ extension (name: Name)
 extension (tpe: TermType) def isMethodic: Boolean = tpe.isInstanceOf[MethodicType]
 
 extension (tpe: TypeOrMethodic)
-  def allParamsTypes: Seq[Type] = tpe match
-    case t: MethodType => t.paramTypes ++ t.resultType.allParamsTypes
-    case t: PolyType => t.resultType.allParamsTypes
+  def allParamTypes: Seq[Type] = tpe match
+    case t: MethodType => t.paramTypes ++ t.resultType.allParamTypes
+    case t: PolyType => t.resultType.allParamTypes
     case _ => Seq.empty
 
-  def allParamsNames: Seq[TermName] = tpe match
-    case t: MethodType => t.paramNames ++ t.resultType.allParamsNames
-    case t: PolyType => t.resultType.allParamsNames
+  def allParamNames: Seq[TermName] = tpe match
+    case t: MethodType => t.paramNames ++ t.resultType.allParamNames
+    case t: PolyType => t.resultType.allParamNames
     case _ => Seq.empty
 
   def returnType: Type = tpe match
@@ -85,10 +87,10 @@ extension (tpe: Type)
       case ref: TypeRef =>
         isScalaPackage(ref.prefix) && ref.nameStr.startsWith("Tuple")
       case _ => false
-  def isVarArg: Boolean =
+
+  def isRepeatedParam(using Context): Boolean =
     tpe match
-      case ref: TypeRef =>
-        isScalaPackage(ref.prefix) && ref.nameStr == "<repeated>"
+      case ref: TypeRef => ref.optSymbol.exists(_ == ctx.defn.RepeatedParamClass)
       case _ => false
 
   def isOperatorLike: Boolean =
@@ -102,8 +104,12 @@ extension (tpe: Type)
 extension (tpe: NamedType) def nameStr: String = tpe.name.toString
 
 extension (tpe: TypeOrWildcard)
-  def asErasedReturnType(using Context): FullyQualifiedName = erased(isReturnType = true)
-  def asErasedArgType(using Context): FullyQualifiedName = erased(isReturnType = false)
+  def erasedAsReturnType(using Context): FullyQualifiedName = erased(isReturnType = true)
+  def erasedAsArgType(asJavaVarargs: Boolean = false)(using Context): FullyQualifiedName =
+    tpe match
+      case t: AppliedType if t.tycon.isRepeatedParam && asJavaVarargs =>
+        AppliedType(TypeRef(ctx.defn.scalaPackage.packageRef, ctx.defn.ArrayClass), t.args).erased(isReturnType = false)
+      case _ => tpe.erased(isReturnType = false)
 
   private def erased(isReturnType: Boolean)(using Context): FullyQualifiedName =
     tpe match

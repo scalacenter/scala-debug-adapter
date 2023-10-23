@@ -175,7 +175,8 @@ class Scala3Unpickler(
       expectedTpe =
         if method.isBridge then sym.declaredType
         else sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
-      if sym.isOverridingSymbol(binaryClass.symbol) && matchSignature1(method, expectedTpe, isAnonFun = false)
+      if sym.isOverridingSymbol(binaryClass.symbol) &&
+        matchSignature1(method, expectedTpe, isAnonFun = false)
     yield
       val tpe = sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
       BinarySuperAccessor(binaryClass, sym, tpe, isBridge = method.isBridge)
@@ -185,7 +186,12 @@ class Scala3Unpickler(
       binaryClass.symbol.getAllOverloadedDecls(SimpleName("<init>")).map(BinaryMethod(binaryClass, _))
     else
       val fromClass = binaryClass.symbol.declarations
-        .collect { case sym: TermSymbol if matchSymbol(method, sym) => BinaryMethod(binaryClass, sym) }
+        .collect { case sym: TermSymbol if matchTargetName(method, sym) => sym }
+        .collect {
+          case sym if matchSignature(method, sym) => BinaryMethod(binaryClass, sym)
+          case sym if matchSignature(method, sym, asJavaVarargs = true) =>
+            BinaryMethodBridge(binaryClass, sym, sym.declaredType)
+        }
       // TODO: can a mixin forwarder not be a bridge? (yes if it's a getter of a lazy val, some other cases?)
       // Can a trait param accessor be a bridge?
       // figure out and split findMethodsFromTraits in 2
@@ -401,8 +407,8 @@ class Scala3Unpickler(
   ): Seq[BinaryByNameArg] =
     def matchType0(tpe: TermType): Boolean =
       (tpe, adapted) match
-        case (tpe: Type, false) => method.returnType.exists(matchType(tpe.asErasedReturnType, _))
-        case (tpe: Type, true) => tpe.asErasedReturnType.toString == "void"
+        case (tpe: Type, false) => method.returnType.exists(matchType(tpe.erasedAsReturnType, _))
+        case (tpe: Type, true) => tpe.erasedAsReturnType.toString == "void"
         case _ => false
     val classOwners = getOwners(binaryClass)
     val sourceSpan = removeInlinedLines(method.sourceLines, classOwners).interval
@@ -482,7 +488,7 @@ class Scala3Unpickler(
       parent <- tree.rhs.parents
       superCall <- asSuperCall(parent).toSeq
       superCons <- asSuperCons(superCall.fun).toSeq
-      paramTypes = superCons.declaredType.allParamsTypes
+      paramTypes = superCons.declaredType.allParamTypes
       args = superCall.allArgsFlatten
       if args.size == paramTypes.size
       (arg, paramType) <- args.zip(paramTypes)
@@ -494,14 +500,14 @@ class Scala3Unpickler(
             case tpe: Type => toFunction0(tpe)
             case _ => toFunction0(byName.resultType)
         case _ => argType0
-      if method.returnType.forall(matchType(argType.asErasedArgType, _))
+      if method.returnType.forall(matchType(argType.erasedAsReturnType, _))
     yield BinarySuperArg(binaryOwner, init, argType)
   end findSuperArgs
 
   private def findLiftedTry(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryLiftedTry] =
     def matchType0(tpe: TermType): Boolean =
       tpe match
-        case tpe: Type => method.returnType.exists(matchType(tpe.asErasedReturnType, _))
+        case tpe: Type => method.returnType.exists(matchType(tpe.erasedAsReturnType, _))
         case _ => false
     val classOwners = getOwners(binaryClass)
     val sourceSpan = removeInlinedLines(method.sourceLines, classOwners).interval
@@ -610,6 +616,7 @@ class Scala3Unpickler(
   private def matchSignature(
       method: binary.Method,
       symbol: TermSymbol,
+      asJavaVarargs: Boolean = false,
       checkParamNames: Boolean = true,
       checkTypeErasure: Boolean = true
   ) =
@@ -618,6 +625,7 @@ class Scala3Unpickler(
       method,
       symbol.declaredType,
       isAnonFun = symbol.isAnonFun,
+      asJavaVarargs = asJavaVarargs,
       checkParamNames = checkParamNames,
       checkTypeErasure = checkTypeErasure
     )
@@ -626,6 +634,7 @@ class Scala3Unpickler(
       method: binary.Method,
       declaredType: TypeOrMethodic,
       isAnonFun: Boolean,
+      asJavaVarargs: Boolean = true,
       checkParamNames: Boolean = true,
       checkTypeErasure: Boolean = true
   ): Boolean =
@@ -637,9 +646,9 @@ class Scala3Unpickler(
             case res => Option.when(args.nonEmpty)((args, res))
         rec(tpe, Seq.empty)
 
-    val paramsNames = declaredType.allParamsNames.map(_.toString)
-    val paramsSig = declaredType.allParamsTypes.map(_.erased(isReturnType = false))
-    val resSig = declaredType.returnType.erased(isReturnType = true)
+    val paramsNames = declaredType.allParamNames.map(_.toString)
+    val paramsSig = declaredType.allParamTypes.map(_.erasedAsArgType(asJavaVarargs))
+    val resSig = declaredType.returnType.erasedAsReturnType
     declaredType.returnType.dealias match
       case CurriedContextFunction(uncurriedArgs, uncurriedReturnType) if !isAnonFun =>
         val capturedParams = method.allParameters.dropRight(paramsNames.size + uncurriedArgs.size)
@@ -649,8 +658,8 @@ class Scala3Unpickler(
         (capturedParams ++ contextParams).forall(_.isGenerated) &&
         (!checkParamNames || declaredParams.map(_.name).corresponds(paramsNames)(_ == _)) &&
         (!checkTypeErasure || matchTypeErasure(
-          paramsSig ++ uncurriedArgs.map(_.asErasedArgType),
-          uncurriedReturnType.asErasedReturnType,
+          paramsSig ++ uncurriedArgs.map(_.erasedAsArgType(asJavaVarargs)),
+          uncurriedReturnType.erasedAsReturnType,
           declaredParams ++ contextParams,
           method.returnType
         ))

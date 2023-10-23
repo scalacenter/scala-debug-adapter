@@ -4,8 +4,10 @@ import tastyquery.Symbols.*
 import tastyquery.Types.*
 import tastyquery.Names.*
 import ch.epfl.scala.debugadapter.internal.stacktrace.*
+import tastyquery.Contexts.Context
 
-class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends ThrowOrWarn(warnLogger, testMode):
+class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Context)
+    extends ThrowOrWarn(warnLogger, testMode):
   def format(binaryClass: BinaryClassSymbol): String =
     binaryClass match
       case BinaryClass(symbol) => format(symbol)
@@ -118,7 +120,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean) extends Thr
           .map(format)
           .mkString(" " + t.tycon.asInstanceOf[TypeRef].name.toString + " ")
         operatorLikeTypeFormat
-      case t: AppliedType if t.tycon.isVarArg =>
+      case t: AppliedType if t.tycon.isRepeatedParam =>
         s"${format(t.args.head)}*"
       case t: AppliedType =>
         val tycon = format(t.tycon)

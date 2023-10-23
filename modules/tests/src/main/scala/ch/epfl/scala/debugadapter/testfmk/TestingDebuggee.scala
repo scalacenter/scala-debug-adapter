@@ -293,7 +293,10 @@ object TestingDebuggee {
   val javaHome = Paths.get(Properties.jdkHome)
   private val ext = if (isWin) ".exe" else ""
   private val java = javaHome.resolve(s"bin/java$ext")
-  private val javac = javaHome.resolve(s"bin/javac$ext")
+  private val javac = {
+    val paths = Seq(s"bin/javac$ext", s"../bin/javac$ext")
+    paths.map(javaHome.resolve).find(Files.exists(_)).get
+  }
 
   def fromJavaSource(source: String, mainClassName: String, scalaVersion: ScalaVersion): TestingDebuggee = {
     val tempDir = Files.createTempDirectory("scala-debug-adapter")
