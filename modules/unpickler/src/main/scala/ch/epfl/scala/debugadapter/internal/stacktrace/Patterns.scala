@@ -108,3 +108,8 @@ object Patterns:
     def unapply(method: binary.Method): Option[String] =
       val superAccessor = "super\\$(.+)".r
       superAccessor.unapplySeq(method.unexpandedDecodedName).map(xs => xs(0))
+
+  object SpecializedMethod:
+    def unapply(method: binary.Method): Option[String] =
+      val specializedMethod = "(.+)\\$mc.+\\$sp".r
+      specializedMethod.unapplySeq(method.unexpandedDecodedName).map(xs => xs(0))

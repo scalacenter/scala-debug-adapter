@@ -1455,6 +1455,35 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.B", "int m(scala.collection.immutable.Seq args)", "B.m(args: String*): Int")
   }
 
+  test("specialized methods") {
+    val source =
+      """|package example
+         |
+         |class A extends (Double => Boolean):
+         |  def apply(x: Double): Boolean = x > 0
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat("example.A", "boolean apply(double x)", "A.apply(x: Double): Boolean")
+    debuggee.assertFormat(
+      "example.A",
+      "java.lang.Object apply(java.lang.Object v1)",
+      "A.apply.<bridge>(v1: Double): Boolean",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.A",
+      "boolean apply$mcZD$sp(double x)",
+      "A.apply.<specialized>(x: Double): Boolean",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.A",
+      "int apply$mcII$sp(int x$0)",
+      "A.apply.<specialized>(x: Double): Boolean",
+      skip = true
+    )
+  }
+
   extension (debuggee: TestingDebuggee)
     private def loader(loadExtraInfo: Boolean): JavaReflectLoader =
       JavaReflectLoader(debuggee.classLoader, loadExtraInfo = loadExtraInfo)

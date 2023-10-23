@@ -54,3 +54,4 @@ final case class BinarySuperAccessor(
     tpe: TypeOrMethodic,
     isBridge: Boolean
 ) extends BinaryMethodSymbol
+final case class BinarySpecializedMethod(binaryOwner: BinaryClassSymbol, sym: TermSymbol) extends BinaryMethodSymbol

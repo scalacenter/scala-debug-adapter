@@ -61,6 +61,7 @@ class Scala3Unpickler(
       case _: BinaryStaticForwarder => None
       case _: BinaryTraitSetter => None
       case _: BinarySuperAccessor => None
+      case _: BinarySpecializedMethod => None
       case m => Some(formatter.format(m))
 
   def formatClass(cls: binary.ClassType): String =
@@ -107,6 +108,7 @@ class Scala3Unpickler(
       case Patterns.ParamForwarder(name) => requiresBinaryClass(findParamForwarder(_, method, name))
       case Patterns.TraitSetter(name) => requiresBinaryClass(findTraitSetter(_, method, name))
       case Patterns.SuperAccessor(name) => requiresBinaryClass(findSuperAccessor(_, method, name))
+      case Patterns.SpecializedMethod(name) => requiresBinaryClass(findSpecializedMethod(_, method, name))
       case _ =>
         binaryClass match
           case samClass: BinarySAMClass => findAnonOverride(samClass, method).toSeq
@@ -180,6 +182,22 @@ class Scala3Unpickler(
     yield
       val tpe = sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
       BinarySuperAccessor(binaryClass, sym, tpe, isBridge = method.isBridge)
+
+  private def findSpecializedMethod(
+      binaryClass: BinaryClass,
+      method: binary.Method,
+      name: String
+  ): Seq[BinarySpecializedMethod] =
+    binaryClass.symbol.declarations.collect {
+      case sym: TermSymbol
+          if sym.targetNameStr == name && matchSignature(
+            method,
+            sym,
+            checkParamNames = false,
+            checkTypeErasure = false
+          ) =>
+        BinarySpecializedMethod(binaryClass, sym)
+    }
 
   private def findInstanceMethods(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
     if method.isConstructor && binaryClass.symbol.isSubClass(ctx.defn.AnyValClass) then
@@ -751,4 +769,5 @@ class Scala3Unpickler(
       case _: BinaryOuter => true
       case _: BinaryTraitSetter => true
       case _: BinarySuperAccessor => true
+      case _: BinarySpecializedMethod => true
       case _ => false

@@ -41,6 +41,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case BinarySuperAccessor(owner, sym, tpe, isBridge) =>
         val suffix = if isBridge then "<super>.<bridge>" else "<super>"
         formatWithType(owner, sym, suffix, tpe)
+      case BinarySpecializedMethod(_, sym) => formatWithType(sym, "<specialized>")
 
   private def format(sym: Symbol): String =
     sym match
