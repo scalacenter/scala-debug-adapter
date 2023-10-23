@@ -59,6 +59,8 @@ class Scala3Unpickler(
       case _: BinaryTraitStaticForwarder => None
       case _: BinaryMethodBridge => None
       case _: BinaryStaticForwarder => None
+      case _: BinaryTraitSetter => None
+      case _: BinarySuperAccessor => None
       case m => Some(formatter.format(m))
 
   def formatClass(cls: binary.ClassType): String =
@@ -103,6 +105,8 @@ class Scala3Unpickler(
         else requiresBinaryClass(findValueClassExtension(_, method))
       case Patterns.DeserializeLambda() => Seq(BinaryDeserializeLambda(binaryClass))
       case Patterns.ParamForwarder(name) => requiresBinaryClass(findParamForwarder(_, method, name))
+      case Patterns.TraitSetter(name) => requiresBinaryClass(findTraitSetter(_, method, name))
+      case Patterns.SuperAccessor(name) => requiresBinaryClass(findSuperAccessor(_, method, name))
       case _ =>
         binaryClass match
           case samClass: BinarySAMClass => findAnonOverride(samClass, method).toSeq
@@ -147,6 +151,34 @@ class Scala3Unpickler(
       case sym: TermSymbol if sym.targetNameStr == name && matchSignature(method, sym) =>
         BinaryMethod(binaryClass, sym)
     }
+
+  private def findTraitSetter(binaryClass: BinaryClass, method: binary.Method, name: String): Seq[BinaryTraitSetter] =
+    for
+      traitSym <- binaryClass.symbol.linearization.filter(_.isTrait)
+      sym <- traitSym.declarations.collect {
+        case sym: TermSymbol if sym.targetNameStr == name && !sym.isMethod && !sym.isAbstractMember => sym
+      }
+    yield
+      val paramType = sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
+      BinaryTraitSetter(binaryClass, sym, paramType)
+
+  private def findSuperAccessor(
+      binaryClass: BinaryClass,
+      method: binary.Method,
+      name: String
+  ): Seq[BinarySuperAccessor] =
+    for
+      traitSym <- binaryClass.symbol.linearization.filter(_.isTrait)
+      sym <- traitSym.declarations.collect {
+        case sym: TermSymbol if sym.targetNameStr == name && !sym.isAbstractMember => sym
+      }
+      expectedTpe =
+        if method.isBridge then sym.declaredType
+        else sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
+      if sym.isOverridingSymbol(binaryClass.symbol) && matchSignature1(method, expectedTpe, isAnonFun = false)
+    yield
+      val tpe = sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
+      BinarySuperAccessor(binaryClass, sym, tpe, isBridge = method.isBridge)
 
   private def findInstanceMethods(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
     if method.isConstructor && binaryClass.symbol.isSubClass(ctx.defn.AnyValClass) then
@@ -580,6 +612,22 @@ class Scala3Unpickler(
       symbol: TermSymbol,
       checkParamNames: Boolean = true,
       checkTypeErasure: Boolean = true
+  ) =
+    symbol.signature
+    matchSignature1(
+      method,
+      symbol.declaredType,
+      isAnonFun = symbol.isAnonFun,
+      checkParamNames = checkParamNames,
+      checkTypeErasure = checkTypeErasure
+    )
+
+  private def matchSignature1(
+      method: binary.Method,
+      declaredType: TypeOrMethodic,
+      isAnonFun: Boolean,
+      checkParamNames: Boolean = true,
+      checkTypeErasure: Boolean = true
   ): Boolean =
     object CurriedContextFunction:
       def unapply(tpe: Type): Option[(Seq[TypeOrWildcard], TypeOrWildcard)] =
@@ -589,17 +637,17 @@ class Scala3Unpickler(
             case res => Option.when(args.nonEmpty)((args, res))
         rec(tpe, Seq.empty)
 
-    val paramsSig = symbol.signature.paramsSig.collect { case ParamSig.Term(sig) => sig }
-    val resSig = symbol.signature.resSig
-    val paramNames = symbol.declaredType.allParamsNames.map(_.toString)
-    symbol.declaredType.returnType.dealias match
-      case CurriedContextFunction(uncurriedArgs, uncurriedReturnType) if !symbol.isAnonFun =>
-        val capturedParams = method.allParameters.dropRight(paramNames.size + uncurriedArgs.size)
+    val paramsNames = declaredType.allParamsNames.map(_.toString)
+    val paramsSig = declaredType.allParamsTypes.map(_.erased(isReturnType = false))
+    val resSig = declaredType.returnType.erased(isReturnType = true)
+    declaredType.returnType.dealias match
+      case CurriedContextFunction(uncurriedArgs, uncurriedReturnType) if !isAnonFun =>
+        val capturedParams = method.allParameters.dropRight(paramsNames.size + uncurriedArgs.size)
         val declaredParams = method.allParameters.drop(capturedParams.size).dropRight(uncurriedArgs.size)
         val contextParams = method.allParameters.drop(capturedParams.size + declaredParams.size)
 
         (capturedParams ++ contextParams).forall(_.isGenerated) &&
-        (!checkParamNames || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
+        (!checkParamNames || declaredParams.map(_.name).corresponds(paramsNames)(_ == _)) &&
         (!checkTypeErasure || matchTypeErasure(
           paramsSig ++ uncurriedArgs.map(_.asErasedArgType),
           uncurriedReturnType.asErasedReturnType,
@@ -607,11 +655,11 @@ class Scala3Unpickler(
           method.returnType
         ))
       case _ =>
-        val capturedParams = method.allParameters.dropRight(paramNames.size)
+        val capturedParams = method.allParameters.dropRight(paramsNames.size)
         val declaredParams = method.allParameters.drop(capturedParams.size)
 
         capturedParams.forall(_.isGenerated) &&
-        (!checkParamNames || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
+        (!checkParamNames || declaredParams.map(_.name).corresponds(paramsNames)(_ == _)) &&
         (!checkTypeErasure || matchTypeErasure(paramsSig, resSig, declaredParams, method.returnType))
 
   private def matchTypeErasure(
@@ -692,4 +740,6 @@ class Scala3Unpickler(
       case _: BinaryMethodBridge => true
       case _: BinaryStaticForwarder => true
       case _: BinaryOuter => true
+      case _: BinaryTraitSetter => true
+      case _: BinarySuperAccessor => true
       case _ => false

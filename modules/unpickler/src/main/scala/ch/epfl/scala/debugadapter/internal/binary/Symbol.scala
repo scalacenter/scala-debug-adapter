@@ -14,3 +14,6 @@ trait Symbol:
 
   def unexpandedDecodedName: String =
     NameTransformer.decode(unexpandedName)
+
+  def decodedName: String =
+    NameTransformer.decode(name)

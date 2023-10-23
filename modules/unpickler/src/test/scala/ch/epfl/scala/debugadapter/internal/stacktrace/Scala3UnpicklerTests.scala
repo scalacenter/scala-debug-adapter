@@ -1362,6 +1362,59 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.B", "java.lang.String foo$accessor()", "B.foo: String", skip = true)
   }
 
+  test("trait setters") {
+    val source =
+      """|package example
+         |
+         |trait A:
+         |  private val foo = "foo"
+         |
+         |class B extends A
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat(
+      "example.B",
+      "void example$A$_setter_$example$A$$foo_$eq(java.lang.String x$0)",
+      "B.foo.<setter>(String): Unit",
+      skip = true
+    )
+  }
+
+  test("super accessors") {
+    val source =
+      """|package example
+         |
+         |
+         |class A[T]:
+         |  def foo(x: T): String = "foo"
+         |
+         |trait B[T] extends A[T]:
+         |  override def foo(x: T): String = super.foo(x) + "bar"
+         |
+         |class C extends B[String]
+         |""".stripMargin
+
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat(
+      "example.B",
+      "java.lang.String example$B$$super$foo(java.lang.Object x)",
+      "B.foo.<super>(x: T): String",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.C",
+      "java.lang.String example$B$$super$foo(java.lang.String x)",
+      "C.foo.<super>(x: String): String",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.C",
+      "java.lang.String example$B$$super$foo(java.lang.Object x)",
+      "C.foo.<super>.<bridge>(x: String): String",
+      skip = true
+    )
+  }
+
   extension (debuggee: TestingDebuggee)
     private def loader(loadExtraInfo: Boolean): JavaReflectLoader =
       JavaReflectLoader(debuggee.classLoader, loadExtraInfo = loadExtraInfo)
