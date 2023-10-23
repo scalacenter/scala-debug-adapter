@@ -47,14 +47,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
-      // if cls.name == "dotty.tools.dotc.core.SymDenotations$LazyType"
+      // if cls.name == "dotty.tools.dotc.typer.TyperPhase"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethodsAndConstructors
-    // if method.name == "apply$mcZD$sp"
+    // if method.name == "msg$proxy1$1"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -62,7 +62,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case Patterns.LocalLazyInit(_, _) => unpickler.tryFind(method, localLazyInitCounter)
         case Patterns.LocalMethod(_, _) => unpickler.tryFind(method, localMethodCounter)
         case _ => unpickler.tryFind(method, methodCounter)
-    methodCounter.printAmbiguous()
+    methodCounter.printNotFound()
     localClassCounter.printReport()
     anonClassCounter.printReport()
     innerClassCounter.printReport()
@@ -80,7 +80,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(anonFunCounter, 6649, expectedAmbiguous = 331, expectedNotFound = 5)
     checkCounter(adaptedAnonFunCounter, 288, expectedAmbiguous = 83)
     checkCounter(localLazyInitCounter, 107)
-    checkCounter(methodCounter, 57048, expectedAmbiguous = 142, expectedNotFound = 701)
+    checkCounter(methodCounter, 57409, expectedAmbiguous = 143, expectedNotFound = 339)
 
   def checkCounter(
       counter: Counter,

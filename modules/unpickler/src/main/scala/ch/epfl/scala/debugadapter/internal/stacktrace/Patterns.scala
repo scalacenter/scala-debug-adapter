@@ -101,8 +101,8 @@ object Patterns:
 
   object TraitSetter:
     def unapply(method: binary.Method): Option[String] =
-      val traitSetter = ".+\\$_setter_\\$.+\\$\\$(.+)_=".r
-      traitSetter.unapplySeq(method.decodedName).map(xs => xs(0))
+      val traitSetter = ".+\\$_setter_\\$(.+\\$\\$)?(.+)_=".r
+      traitSetter.unapplySeq(method.decodedName).map(xs => xs(1))
 
   object SuperAccessor:
     def unapply(method: binary.Method): Option[String] =
