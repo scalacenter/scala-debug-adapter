@@ -389,10 +389,10 @@ class Scala3Unpickler(
   private def findMethodsFromTraits(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
     val traitDeclarations = binaryClass.symbol.linearization.filter(_.isTrait).flatMap(_.declarations)
     val mixinForwardersAndParamAccessors = traitDeclarations
-      .collect { case term: TermSymbol if matchSymbol(method, term) => term }
+      .collect { case sym: TermSymbol if matchTargetName(method, sym) && matchSignature(method, sym) => sym }
       .collect {
-        case term if term.isParamAccessor => BinaryTraitParamAccessor(binaryClass, term)
-        case term if term.isOverridingSymbol(binaryClass.symbol) => BinaryMixinForwarder(binaryClass, term)
+        case sym if sym.isParamAccessor => BinaryTraitParamAccessor(binaryClass, sym)
+        case sym if sym.isOverridingSymbol(binaryClass.symbol) => BinaryMixinForwarder(binaryClass, sym)
       }
     def bridges =
       for
@@ -747,13 +747,8 @@ class Scala3Unpickler(
     else if classSymbol.isAnonClass then classSymbol.parentClasses.forall(expectedParents.contains)
     else expectedParents == classSymbol.parentClasses.toSet
 
-  private def matchSymbol(method: binary.Method, symbol: TermSymbol, checkParamNames: Boolean = true): Boolean =
-    matchTargetName(method, symbol) &&
-      (method.isTraitInitializer || matchSignature(method, symbol, checkParamNames = checkParamNames))
-
   private def matchTargetName(method: binary.Method, symbol: TermSymbol): Boolean =
-    if method.isExtensionMethod then symbol.targetNameStr == method.unexpandedDecodedName.stripSuffix("$extension")
-    else symbol.targetNameStr == method.unexpandedDecodedName
+    symbol.targetNameStr == method.unexpandedDecodedName
 
   private def matchSignature(
       method: binary.Method,

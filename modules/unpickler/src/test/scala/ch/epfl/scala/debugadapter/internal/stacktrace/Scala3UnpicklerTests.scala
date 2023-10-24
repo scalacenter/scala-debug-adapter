@@ -1534,13 +1534,22 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |    if x == "foo" then x = "bar"
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.A", "java.lang.String example$A$$inline$x()", "A.x.<inline>: String", skip = true)
-    debuggee.assertFormat(
-      "example.A",
-      "void example$A$$inline$x_$eq(java.lang.String x$0)",
-      "A.x_=.<inline>(String): Unit",
-      skip = true
-    )
+    if isScala30 then
+      debuggee.assertFormat("example.A", "java.lang.String inline$x()", "A.x.<inline>: String", skip = true)
+      debuggee.assertFormat(
+        "example.A",
+        "void inline$x_$eq(java.lang.String x$0)",
+        "A.x_=.<inline>(String): Unit",
+        skip = true
+      )
+    else
+      debuggee.assertFormat("example.A", "java.lang.String example$A$$inline$x()", "A.x.<inline>: String", skip = true)
+      debuggee.assertFormat(
+        "example.A",
+        "void example$A$$inline$x_$eq(java.lang.String x$0)",
+        "A.x_=.<inline>(String): Unit",
+        skip = true
+      )
   }
 
   extension (debuggee: TestingDebuggee)
