@@ -56,7 +56,7 @@ final case class BinaryAnonOverride(binaryOwner: BinaryClassSymbol, overriddenSy
 final case class BinaryStaticForwarder(binaryOwner: BinaryClassSymbol, targetSymbol: TermSymbol, tpe: TypeOrMethodic)
     extends BinaryMethodSymbol
 final case class BinaryDeserializeLambda(binaryOnwer: BinaryClassSymbol) extends BinaryMethodSymbol
-final case class BinaryTraitSetter(binaryOwner: BinaryClassSymbol, sym: TermSymbol, paramType: TypeOrMethodic)
+final case class BinarySetter(binaryOwner: BinaryClassSymbol, sym: TermSymbol, paramType: TypeOrMethodic)
     extends BinaryMethodSymbol
 final case class BinarySuperAccessor(
     binaryOwner: BinaryClassSymbol,

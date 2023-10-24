@@ -47,14 +47,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
-      // if cls.name == "dotty.tools.dotc.core.TypeComparer"
+      // if cls.name == "dotty.tools.dotc.reporting.trace"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethodsAndConstructors
-    // if method.name == "op$proxy5$1"
+    // if method.name == "dotty$tools$dotc$reporting$TraceSyntax$_setter_$dotty$tools$dotc$reporting$TraceSyntax$$alwaysToString_$eq"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -80,16 +80,18 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(anonFunCounter, 6649, expectedAmbiguous = 331, expectedNotFound = 5)
     checkCounter(adaptedAnonFunCounter, 288, expectedAmbiguous = 83)
     checkCounter(localLazyInitCounter, 107)
-    checkCounter(methodCounter, 57464, expectedAmbiguous = 143, expectedNotFound = 284)
+    checkCounter(methodCounter, 57505, expectedIgnored = 12, expectedAmbiguous = 143, expectedNotFound = 231)
 
   def checkCounter(
       counter: Counter,
       expectedSuccess: Int,
+      expectedIgnored: Int = 0,
       expectedAmbiguous: Int = 0,
       expectedNotFound: Int = 0,
       expectedExceptions: Int = 0
   )(using munit.Location): Unit =
     assertEquals(counter.success.size, expectedSuccess)
+    assertEquals(counter.ignored.size, expectedIgnored)
     assertEquals(counter.ambiguous.size, expectedAmbiguous)
     assertEquals(counter.notFound.size, expectedNotFound)
     assertEquals(counter.exceptions.size, expectedExceptions)
@@ -138,6 +140,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
       catch
         case notFound: NotFoundException => counter.notFound += notFound
         case ambiguous: AmbiguousException => counter.ambiguous += ambiguous
+        case ignored: IgnoredException => counter.ignored += ignored
         case e: Exception => counter.exceptions += (mthd -> e)
 
   override def munitTimeout: Duration = 2.minutes
@@ -146,9 +149,10 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     val success = mutable.Buffer.empty[binary.Symbol]
     val notFound = mutable.Buffer.empty[NotFoundException]
     val ambiguous = mutable.Buffer.empty[AmbiguousException]
+    val ignored = mutable.Buffer.empty[IgnoredException]
     val exceptions = mutable.Buffer.empty[(binary.Symbol, Exception)]
 
-    def size: Int = success.size + notFound.size + ambiguous.size + exceptions.size
+    def size: Int = success.size + notFound.size + ambiguous.size + ignored.size + exceptions.size
 
     def printReport() =
       def format(kind: String, count: Int): Option[String] =
@@ -157,6 +161,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
       if size > 0 then
         val stats = Seq(
           "success" -> success.size,
+          "ignored" -> ignored.size,
           "ambiguous" -> ambiguous.size,
           "not found" -> notFound.size,
           "exceptions" -> exceptions.size

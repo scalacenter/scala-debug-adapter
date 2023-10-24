@@ -36,8 +36,9 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
         formatWithType(owner, target, "<static forwarder>", tpe)
       case BinaryDeserializeLambda(owner) =>
         format(owner) + ".$deserializeLambda$(SerializedLambda): Object"
-      case BinaryTraitSetter(owner, sym, paramType) =>
-        format(owner) + "." + format(sym.name) + ".<setter>(" + format(paramType) + "): Unit"
+      case BinarySetter(owner, sym, paramType) =>
+        if sym.isMethod then formatWithType(sym, "")
+        else format(owner) + "." + format(sym.name) + "_=(" + format(paramType) + "): Unit"
       case BinarySuperAccessor(owner, sym, tpe, isBridge) =>
         val suffix = if isBridge then "<super>.<bridge>" else "<super>"
         formatWithType(owner, sym, suffix, tpe)

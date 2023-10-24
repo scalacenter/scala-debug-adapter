@@ -1375,7 +1375,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat(
       "example.B",
       "void example$A$_setter_$example$A$$foo_$eq(java.lang.String x$0)",
-      "B.foo.<setter>(String): Unit",
+      "B.foo_=(String): Unit",
       skip = true
     )
   }

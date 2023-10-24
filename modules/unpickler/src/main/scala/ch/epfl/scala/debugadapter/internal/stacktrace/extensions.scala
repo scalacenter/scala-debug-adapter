@@ -26,6 +26,7 @@ extension (symbol: TermSymbol)
   private def isGetter = !symbol.isMethod
   private def isModuleOrLazyVal: Boolean = symbol.isLazyVal || symbol.isModuleVal
   private def isLazyVal: Boolean = symbol.kind == TermSymbolKind.LazyVal
+  private def isVal: Boolean = symbol.kind == TermSymbolKind.Val
   def declaredTypeAsSeenFrom(tpe: Type)(using Context): TypeOrMethodic =
     symbol.declaredType.asSeenFrom(tpe, symbol.owner)
   def targetNameStr(using Context): String = symbol.targetName.toString
@@ -39,6 +40,9 @@ extension (symbol: TermSymbol)
 extension [A](xs: Seq[A])
   def singleOrElse[B >: A](x: => B): B =
     if xs.size == 1 then xs.head else x
+
+  def orIfEmpty[B >: A](ys: => Seq[B]): Seq[B] =
+    if xs.nonEmpty then xs else ys
 
 extension [T <: BinarySymbol](xs: Seq[T])
   def singleOrThrow(symbol: binary.Symbol): T =

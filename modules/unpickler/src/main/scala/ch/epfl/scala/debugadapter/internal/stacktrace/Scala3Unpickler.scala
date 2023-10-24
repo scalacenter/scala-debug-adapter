@@ -59,7 +59,7 @@ class Scala3Unpickler(
       case _: BinaryTraitStaticForwarder => None
       case _: BinaryMethodBridge => None
       case _: BinaryStaticForwarder => None
-      case _: BinaryTraitSetter => None
+      case BinarySetter(_, sym, _) if sym.isVal => None
       case _: BinarySuperAccessor => None
       case _: BinarySpecializedMethod => None
       case m => Some(formatter.format(m))
@@ -107,22 +107,16 @@ class Scala3Unpickler(
         else requiresBinaryClass(findValueClassExtension(_, method))
       case Patterns.DeserializeLambda() => Seq(BinaryDeserializeLambda(binaryClass))
       case Patterns.ParamForwarder(name) => requiresBinaryClass(findParamForwarder(_, method, name))
-      case Patterns.TraitSetter(name) => requiresBinaryClass(findTraitSetter(_, method, name))
+      case Patterns.TraitSetter(name) =>
+        if method.isStatic then ignore(method, "static forwarder of trait setter")
+        else requiresBinaryClass(findTraitSetter(_, method, name))
+      case Patterns.Setter(name) =>
+        findStandardMethod(binaryClass, method).orIfEmpty(requiresBinaryClass(findSetter(_, method, name)))
       case Patterns.SuperAccessor(name) => requiresBinaryClass(findSuperAccessor(_, method, name))
       case Patterns.SpecializedMethod(name) =>
         if method.isStatic then findSpecializedForwarder(binaryClass, method, name)
         else requiresBinaryClass(findSpecializedMethod(_, method, name))
-      case _ =>
-        binaryClass match
-          case samClass: BinarySAMClass => findAnonOverride(samClass, method).toSeq
-          case partialFun: BinaryPartialFunction => Seq(findAnonOverride(partialFun, method))
-          case binaryClass: BinaryClass =>
-            if method.isBridge then findBridgeAndMixinForwarders(binaryClass, method)
-            else if method.isStatic then findStaticForwarder(binaryClass, method)
-            else findInstanceMethods(binaryClass, method)
-          case syntheticClass: BinarySyntheticCompanionClass =>
-            if method.isStatic then findStaticForwarder(syntheticClass, method)
-            else Seq.empty
+      case _ => findStandardMethod(binaryClass, method)
     candidates.singleOrThrow(method)
 
   def findClass(cls: binary.ClassType): BinaryClassSymbol =
@@ -151,13 +145,25 @@ class Scala3Unpickler(
       else allSymbols.filter(!_.symbol.isModuleClass)
     candidates.singleOrThrow(cls)
 
+  private def findStandardMethod(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryMethodSymbol] =
+    binaryClass match
+      case samClass: BinarySAMClass => findAnonOverride(samClass, method).toSeq
+      case partialFun: BinaryPartialFunction => Seq(findAnonOverride(partialFun, method))
+      case binaryClass: BinaryClass =>
+        if method.isBridge then findBridgeAndMixinForwarders(binaryClass, method)
+        else if method.isStatic then findStaticForwarder(binaryClass, method)
+        else findInstanceMethods(binaryClass, method)
+      case syntheticClass: BinarySyntheticCompanionClass =>
+        if method.isStatic then findStaticForwarder(syntheticClass, method)
+        else Seq.empty
+
   private def findParamForwarder(binaryClass: BinaryClass, method: binary.Method, name: String): Seq[BinaryMethod] =
     binaryClass.symbol.declarations.collect {
       case sym: TermSymbol if sym.targetNameStr == name && matchSignature(method, sym) =>
         BinaryMethod(binaryClass, sym)
     }
 
-  private def findTraitSetter(binaryClass: BinaryClass, method: binary.Method, name: String): Seq[BinaryTraitSetter] =
+  private def findTraitSetter(binaryClass: BinaryClass, method: binary.Method, name: String): Seq[BinarySetter] =
     for
       traitSym <- binaryClass.symbol.linearization.filter(_.isTrait)
       sym <- traitSym.declarations.collect {
@@ -165,7 +171,18 @@ class Scala3Unpickler(
       }
     yield
       val paramType = sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
-      BinaryTraitSetter(binaryClass, sym, paramType)
+      BinarySetter(binaryClass, sym, paramType)
+
+  private def findSetter(binaryClass: BinaryClass, method: binary.Method, name: String): Seq[BinarySetter] =
+    val javaParamType = method.allParameters.head.`type`
+    def matchType0(sym: TermSymbol): Boolean =
+      sym.declaredType match
+        case tpe: Type => matchType(tpe.erasedAsArgType(), javaParamType)
+        case _ => false
+    binaryClass.symbol.declarations.collect {
+      case sym: TermSymbol if !sym.isMethod && sym.targetNameStr == name && matchType0(sym) =>
+        BinarySetter(binaryClass, sym, sym.declaredType.asInstanceOf)
+    }
 
   private def findSuperAccessor(
       binaryClass: BinaryClass,
@@ -236,7 +253,7 @@ class Scala3Unpickler(
       // TODO: can a mixin forwarder not be a bridge? (yes if it's a getter of a lazy val, some other cases?)
       // Can a trait param accessor be a bridge?
       // figure out and split findMethodsFromTraits in 2
-      if fromClass.nonEmpty then fromClass else findMethodsFromTraits(binaryClass, method)
+      fromClass.orIfEmpty(findMethodsFromTraits(binaryClass, method))
 
   private def findLazyInit(binaryClass: BinaryClass, name: String): Seq[BinaryMethodSymbol] =
     val matcher: PartialFunction[Symbol, TermSymbol] =
@@ -248,7 +265,7 @@ class Scala3Unpickler(
         term <- traitSym.declarations.collect(matcher)
         if term.isOverridingSymbol(binaryClass.symbol)
       yield BinaryLazyInit(binaryClass, term)
-    if fromClass.nonEmpty then fromClass else fromTraits
+    fromClass.orIfEmpty(fromTraits)
 
   private def findTraitStaticForwarder(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
     val expectedName = method.unexpandedDecodedName.stripSuffix("$")
@@ -300,7 +317,7 @@ class Scala3Unpickler(
       yield
         val tpe = overriddenTerm.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
         BinaryMethodBridge(binaryClass, overridingTerm, tpe)
-    if bridges.nonEmpty then bridges else findMethodsFromTraits(binaryClass, method)
+    bridges.orIfEmpty(findMethodsFromTraits(binaryClass, method))
 
   private def findAnonOverride(binaryClass: BinarySAMClass, method: binary.Method): Option[BinaryMethodSymbol] =
     val types =
@@ -336,9 +353,11 @@ class Scala3Unpickler(
       yield
         val tpe = overriddenTerm.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
         BinaryMethodBridge(binaryClass, overridingTerm, tpe)
-    if mixinForwardersAndParamAccessors.nonEmpty then mixinForwardersAndParamAccessors else bridges
+    mixinForwardersAndParamAccessors.orIfEmpty(bridges)
 
   private def notFound(symbol: binary.Symbol): Nothing = throw NotFoundException(symbol)
+
+  private def ignore(symbol: binary.Symbol, reason: String): Nothing = throw IgnoredException(symbol, reason)
 
   private def unexpected(message: String): Nothing = throw UnexpectedException(message)
 
@@ -492,7 +511,7 @@ class Scala3Unpickler(
           case t @ ByNameApply(args) if isInlineTree(t) =>
             args.collect {
               case (arg, _) if inlined || (matchType0(arg.tpe) && matchLines(arg, sourceSpan)) =>
-                BinaryByNameArg(binaryClass, arg.tpe.asInstanceOf[Type], false)
+                BinaryByNameArg(binaryClass, arg.tpe.asInstanceOf, false)
             }
         }).flatten
       yield byNameArg
@@ -597,7 +616,7 @@ class Scala3Unpickler(
       classOwner <- classOwners
       liftedTry <- collectTrees[BinaryLiftedTry](classOwner, sourceSpan) {
         case tryTree: Try if matchType0(tryTree.tpe) =>
-          BinaryLiftedTry(binaryClass, tryTree.tpe.asInstanceOf[Type])
+          BinaryLiftedTry(binaryClass, tryTree.tpe.asInstanceOf)
       }
     yield liftedTry
 
@@ -827,7 +846,7 @@ class Scala3Unpickler(
       case _: BinaryMethodBridge => true
       case _: BinaryStaticForwarder => true
       case _: BinaryOuter => true
-      case _: BinaryTraitSetter => true
+      case _: BinarySetter => true
       case _: BinarySuperAccessor => true
       case _: BinarySpecializedMethod => true
       case _ => false
