@@ -113,3 +113,8 @@ object Patterns:
     def unapply(method: binary.Method): Option[String] =
       val specializedMethod = "(.+)\\$mc.+\\$sp".r
       specializedMethod.unapplySeq(method.unexpandedDecodedName).map(xs => xs(0))
+
+  object ByNameArgProxy:
+    def unapply(method: binary.Method): Boolean =
+      val byNameArgProxy = ".+\\$proxy\\d+\\$\\d+".r
+      byNameArgProxy.unapplySeq(method.unexpandedDecodedName).isDefined

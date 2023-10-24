@@ -1455,7 +1455,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.B", "int m(scala.collection.immutable.Seq args)", "B.m(args: String*): Int")
   }
 
-  test("specialized methods".only) {
+  test("specialized methods") {
     val source =
       """|package example
          |
@@ -1502,6 +1502,25 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       "B.apply.<static forwarder>(x: Double): Boolean",
       skip = true
     )
+  }
+
+  test("by-name arg proxy") {
+    val source =
+      """|package example
+         |
+         |trait A:
+         |  def m[T](x: => T): T
+         |
+         |class B:
+         |  def m(s: String): String =
+         |    B.m(s * 2)
+         |
+         |object B extends A:
+         |  inline override def m[T](x: => T): T = x
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat("example.B", "java.lang.String x$proxy2$1(java.lang.String s$1)", "B.<by-name arg>: String")
+    debuggee.assertFormat("example.B$", "java.lang.Object x$proxy1$1(scala.Function0 x$1)", "B.<by-name arg>: T")
   }
 
   extension (debuggee: TestingDebuggee)

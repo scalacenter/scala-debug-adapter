@@ -84,6 +84,7 @@ class Scala3Unpickler(
         }))
       case Patterns.AnonFun(_) => findAnonFunAndByNameArgs(binaryClass, method)
       case Patterns.AdaptedAnonFun(_) => findAdaptedAnonFun(binaryClass, method)
+      case Patterns.ByNameArgProxy() => findByNameArgsProxy(binaryClass, method)
       case Patterns.SuperArg() => requiresBinaryClass(findSuperArgs(_, method))
       case Patterns.LiftedTree() => findLiftedTry(binaryClass, method)
       case Patterns.LocalMethod(name, _) =>
@@ -436,34 +437,79 @@ class Scala3Unpickler(
       else Seq.empty
     anonFuns ++ byNameArgs
 
+  private object ByNameApply:
+    def unapply(tree: Apply): Option[Seq[(TermTree, Type)]] =
+      tree.fun.tpe.widenTermRef match
+        case m: MethodType =>
+          Some(tree.args.zip(m.paramTypes).collect { case (arg, t: ByNameType) => (arg, t.resultType) })
+            .filter(_.nonEmpty)
+        case _ => None
+
+  private object InlineTree:
+    def unapply(tree: Tree): Option[Symbol] =
+      tree match
+        case tree: TermReferenceTree if tree.symbol.isInline && tree.symbol.asTerm.isMethod =>
+          Some(tree.symbol)
+        case Apply(fun, _) => unapply(fun)
+        case TypeApply(fun, _) => unapply(fun)
+        case _ => None
+
+  private def isInlineTree(tree: Tree): Boolean =
+    InlineTree.unapply(tree).isDefined
+
   private def findByNameArgs(
       binaryClass: BinaryClassSymbol,
       method: binary.Method,
       adapted: Boolean
   ): Seq[BinaryByNameArg] =
+    def matchType0(tpe: Type): Boolean =
+      if adapted then tpe.erasedAsReturnType.toString == "void"
+      else method.returnType.exists(matchType(tpe.erasedAsReturnType, _))
+    val classOwners = getOwners(binaryClass)
+    val sourceSpan = removeInlinedLines(method.sourceLines, classOwners).interval
+    for
+      classOwner <- classOwners
+      byNameArg <- collectTrees1[Seq[BinaryByNameArg]](classOwner, sourceSpan)(inlined => {
+        case t @ ByNameApply(args) if !isInlineTree(t) =>
+          args.collect {
+            case (arg, paramTpe) if matchType0(paramTpe) && (inlined || matchLines(arg, sourceSpan)) =>
+              BinaryByNameArg(binaryClass, paramTpe, adapted)
+          }
+      }).flatten
+    yield byNameArg
+
+  private def findByNameArgsProxy(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryByNameArg] =
     def matchType0(tpe: TermType): Boolean =
-      (tpe, adapted) match
-        case (tpe: Type, false) => method.returnType.exists(matchType(tpe.erasedAsReturnType, _))
-        case (tpe: Type, true) => tpe.erasedAsReturnType.toString == "void"
+      tpe match
+        case tpe: Type => method.returnType.exists(matchType(tpe.erasedAsReturnType, _))
         case _ => false
     val classOwners = getOwners(binaryClass)
     val sourceSpan = removeInlinedLines(method.sourceLines, classOwners).interval
-    object ByNameApply:
-      def unapply(tree: Apply): Option[Seq[(TermTree, Type)]] =
-        tree.fun.tpe.widenTermRef match
-          case m: MethodType if m.paramTypes.size == tree.args.size =>
-            Some(tree.args.zip(m.paramTypes).collect { case (arg, t: ByNameType) => (arg, t.resultType) })
-              .filter(_.nonEmpty)
-          case _ => None
-    for
-      classOwner <- classOwners
-      byNameArg <- collectTrees1[Seq[BinaryByNameArg]](classOwner, sourceSpan)(inlined => { case ByNameApply(args) =>
-        args.collect {
-          case (arg, tpe) if matchType0(tpe) && (inlined || matchLines(arg, sourceSpan)) =>
-            BinaryByNameArg(binaryClass, tpe, adapted)
-        }
-      }).flatten
-    yield byNameArg
+    val explicitByNameArgs =
+      for
+        classOwner <- classOwners
+        byNameArg <- collectTrees1[Seq[BinaryByNameArg]](classOwner, sourceSpan)(inlined => {
+          case t @ ByNameApply(args) if isInlineTree(t) =>
+            args.collect {
+              case (arg, _) if inlined || (matchType0(arg.tpe) && matchLines(arg, sourceSpan)) =>
+                BinaryByNameArg(binaryClass, arg.tpe.asInstanceOf[Type], false)
+            }
+        }).flatten
+      yield byNameArg
+    val inlineOverrides = binaryClass.tastyClass.toSeq
+      .flatMap(_.declarations)
+      .collect {
+        case term: TermSymbol
+            if term.allOverriddenSymbols.nonEmpty &&
+              term.isInline &&
+              term.tree.exists(matchLines(_, method.sourceLines.interval)) =>
+          term.declaredType.allParamTypes.collect {
+            case byName: ByNameType if matchType0(byName.resultType) =>
+              BinaryByNameArg(binaryClass, byName.resultType, false)
+          }
+      }
+      .flatten
+    explicitByNameArgs ++ inlineOverrides
 
   private def collectLocalMethods(
       binaryClass: BinaryClassSymbol,
@@ -563,27 +609,20 @@ class Scala3Unpickler(
   ): Seq[S] =
     val span = lines.interval
     val collectors = Buffer.empty[Collector]
-    var inlinedSymbols = Set.empty[Symbol]
-
-    object InlinedTree:
-      def unapply(tree: Tree): Option[Symbol] =
-        tree match
-          case tree: TermReferenceTree if tree.symbol.isInline => Some(tree.symbol)
-          case Apply(fun, _) => unapply(fun)
-          case TypeApply(fun, _) => unapply(fun)
-          case _ => None
+    var inlineSymbols = Set.empty[Symbol]
 
     class Collector(inlined: Boolean = false) extends TreeTraverser:
       collectors += this
       private var buffer = Map.empty[Tree, S]
       override def traverse(tree: Tree): Unit =
         if inlined || matchLines(tree, span) then
+          matchTree(tree)
           tree match
-            case InlinedTree(symbol) if !inlinedSymbols.contains(symbol) =>
-              inlinedSymbols += symbol
+            case InlineTree(symbol) if !inlineSymbols.contains(symbol) =>
+              inlineSymbols += symbol
               val collector = new Collector(inlined = true)
               symbol.tree.foreach(collector.traverse)
-            case tree => matchTree(tree)
+            case _ => ()
           super.traverse(tree)
         else
           // bug in dotty: wrong pos of `def $new` in the companion object of an enum
