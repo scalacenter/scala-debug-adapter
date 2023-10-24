@@ -65,3 +65,4 @@ final case class BinarySuperAccessor(
     isBridge: Boolean
 ) extends BinaryMethodSymbol
 final case class BinarySpecializedMethod(binaryOwner: BinaryClassSymbol, sym: TermSymbol) extends BinaryMethodSymbol
+final case class BinaryInlineAccessor(target: BinaryMethodSymbol) extends BinaryMethodSymbol

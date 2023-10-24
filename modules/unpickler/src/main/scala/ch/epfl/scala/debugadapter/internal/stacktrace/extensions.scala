@@ -75,6 +75,8 @@ extension (tpe: TypeOrMethodic)
     case t: (MethodType | PolyType) => t.resultType.returnType
     case t: Type => t
 
+  def isByName: Boolean = tpe.isInstanceOf[ByNameType]
+
 extension (tpe: Type)
   def isFunction: Boolean =
     tpe match

@@ -46,6 +46,29 @@ class Scala3Unpickler(
       skip(findMethod(method))
     catch case _ => true
 
+  private[stacktrace] def skip(method: BinaryMethodSymbol): Boolean =
+    method match
+      case BinaryMethod(_, sym) =>
+        (sym.isGetter && (!sym.owner.isTrait || !sym.isModuleOrLazyVal)) || // getter
+        (sym.isLocal && sym.isModuleOrLazyVal) || // local def
+        sym.isSetter ||
+        sym.isSynthetic ||
+        sym.isExport
+      case BinaryLazyInit(_, sym) => sym.owner.isTrait
+      case BinaryAnonFun(_, _, adapted) => adapted
+      case BinaryByNameArg(_, _, adapted) => adapted
+      case _: BinaryTraitStaticForwarder => true
+      case _: BinaryTraitParamAccessor => true
+      case _: BinaryMixinForwarder => true
+      case _: BinaryMethodBridge => true
+      case _: BinaryStaticForwarder => true
+      case _: BinaryOuter => true
+      case _: BinarySetter => true
+      case _: BinarySuperAccessor => true
+      case _: BinarySpecializedMethod => true
+      case _: BinaryInlineAccessor => true
+      case _ => false
+
   def formatMethod(obj: Any): Optional[String] =
     formatMethod(JdiMethod(obj)).toJava
 
@@ -62,6 +85,7 @@ class Scala3Unpickler(
       case BinarySetter(_, sym, _) if sym.isVal => None
       case _: BinarySuperAccessor => None
       case _: BinarySpecializedMethod => None
+      case _: BinaryInlineAccessor => None
       case m => Some(formatter.format(m))
 
   def formatClass(cls: binary.ClassType): String =
@@ -97,7 +121,6 @@ class Scala3Unpickler(
           case _ => Seq.empty
         localMethods ++ anonTraitParamGetters
       case Patterns.LazyInit(name) => requiresBinaryClass(findLazyInit(_, name))
-      case Patterns.TraitStaticForwarder(_) => requiresBinaryClass(findTraitStaticForwarder(_, method))
       case Patterns.Outer(_) =>
         def outerClass(sym: Symbol): ClassSymbol = if sym.isClass then sym.asClass else outerClass(sym.owner)
         List(BinaryOuter(binaryClass, outerClass(binaryClass.symbol.owner)))
@@ -107,6 +130,9 @@ class Scala3Unpickler(
         else requiresBinaryClass(findValueClassExtension(_, method))
       case Patterns.DeserializeLambda() => Seq(BinaryDeserializeLambda(binaryClass))
       case Patterns.ParamForwarder(name) => requiresBinaryClass(findParamForwarder(_, method, name))
+      case Patterns.InlineAccessor(name) =>
+        if method.isStatic then ignore(method, "trait static forwarder of inline accessor")
+        else requiresBinaryClass(findInlineAccessor(_, method, name))
       case Patterns.TraitSetter(name) =>
         if method.isStatic then ignore(method, "static forwarder of trait setter")
         else requiresBinaryClass(findTraitSetter(_, method, name))
@@ -116,6 +142,7 @@ class Scala3Unpickler(
       case Patterns.SpecializedMethod(name) =>
         if method.isStatic then findSpecializedForwarder(binaryClass, method, name)
         else requiresBinaryClass(findSpecializedMethod(_, method, name))
+      case Patterns.TraitStaticForwarder(_) => requiresBinaryClass(findTraitStaticForwarder(_, method))
       case _ => findStandardMethod(binaryClass, method)
     candidates.singleOrThrow(method)
 
@@ -216,6 +243,27 @@ class Scala3Unpickler(
             sym.allOverriddenSymbols.nonEmpty =>
         BinarySpecializedMethod(binaryClass, sym)
     }
+
+  private def findInlineAccessor(
+      binaryClass: BinaryClass,
+      method: binary.Method,
+      name: String
+  ): Seq[BinaryInlineAccessor] =
+    val standardMethods = binaryClass.symbol.declarations
+      .collect { case sym: TermSymbol if sym.targetNameStr == name => sym }
+      .filter { sym =>
+        val resultType = sym.declaredType match
+          case byName: ByNameType => byName.resultType
+          case tpe => tpe
+        matchSignature1(method, resultType, isAnonFun = false)
+      }
+      .map(sym => BinaryInlineAccessor(BinaryMethod(binaryClass, sym)))
+    def setters =
+      name match
+        case Patterns.Setter(setterName) =>
+          findSetter(binaryClass, method, setterName).map(BinaryInlineAccessor(_))
+        case _ => Seq.empty
+    standardMethods.orIfEmpty(setters)
 
   private def findSpecializedForwarder(
       binaryClass: BinaryClassSymbol,
@@ -483,7 +531,7 @@ class Scala3Unpickler(
   ): Seq[BinaryByNameArg] =
     def matchType0(tpe: Type): Boolean =
       if adapted then tpe.erasedAsReturnType.toString == "void"
-      else method.returnType.exists(matchType(tpe.erasedAsReturnType, _))
+      else method.returnType.forall(matchType(tpe.erasedAsReturnType, _))
     val classOwners = getOwners(binaryClass)
     val sourceSpan = removeInlinedLines(method.sourceLines, classOwners).interval
     for
@@ -500,7 +548,7 @@ class Scala3Unpickler(
   private def findByNameArgsProxy(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryByNameArg] =
     def matchType0(tpe: TermType): Boolean =
       tpe match
-        case tpe: Type => method.returnType.exists(matchType(tpe.erasedAsReturnType, _))
+        case tpe: Type => method.returnType.forall(matchType(tpe.erasedAsReturnType, _))
         case _ => false
     val classOwners = getOwners(binaryClass)
     val sourceSpan = removeInlinedLines(method.sourceLines, classOwners).interval
@@ -608,7 +656,7 @@ class Scala3Unpickler(
   private def findLiftedTry(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryLiftedTry] =
     def matchType0(tpe: TermType): Boolean =
       tpe match
-        case tpe: Type => method.returnType.exists(matchType(tpe.erasedAsReturnType, _))
+        case tpe: Type => method.returnType.forall(matchType(tpe.erasedAsReturnType, _))
         case _ => false
     val classOwners = getOwners(binaryClass)
     val sourceSpan = removeInlinedLines(method.sourceLines, classOwners).interval
@@ -715,7 +763,6 @@ class Scala3Unpickler(
       checkParamNames: Boolean = true,
       checkTypeErasure: Boolean = true
   ) =
-    symbol.signature
     matchSignature1(
       method,
       symbol.declaredType,
@@ -828,25 +875,3 @@ class Scala3Unpickler(
             .map(_ == javaType)
             .getOrElse(regex.matches(javaType))
     rec(scalaType.toString, javaType.name)
-
-  private[stacktrace] def skip(method: BinaryMethodSymbol): Boolean =
-    method match
-      case BinaryMethod(_, sym) =>
-        (sym.isGetter && (!sym.owner.isTrait || !sym.isModuleOrLazyVal)) || // getter
-        (sym.isLocal && sym.isModuleOrLazyVal) || // local def
-        sym.isSetter ||
-        sym.isSynthetic ||
-        sym.isExport
-      case BinaryLazyInit(_, sym) => sym.owner.isTrait
-      case BinaryAnonFun(_, _, adapted) => adapted
-      case BinaryByNameArg(_, _, adapted) => adapted
-      case _: BinaryTraitStaticForwarder => true
-      case _: BinaryTraitParamAccessor => true
-      case _: BinaryMixinForwarder => true
-      case _: BinaryMethodBridge => true
-      case _: BinaryStaticForwarder => true
-      case _: BinaryOuter => true
-      case _: BinarySetter => true
-      case _: BinarySuperAccessor => true
-      case _: BinarySpecializedMethod => true
-      case _ => false

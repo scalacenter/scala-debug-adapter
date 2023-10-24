@@ -1523,6 +1523,26 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.B$", "java.lang.Object x$proxy1$1(scala.Function0 x$1)", "B.<by-name arg>: T")
   }
 
+  test("inline accessor") {
+    val source =
+      """|package example
+         |
+         |class A:
+         |  private var x: String = "foo"
+         |
+         |  inline def m: Unit =
+         |    if x == "foo" then x = "bar"
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat("example.A", "java.lang.String example$A$$inline$x()", "A.x.<inline>: String", skip = true)
+    debuggee.assertFormat(
+      "example.A",
+      "void example$A$$inline$x_$eq(java.lang.String x$0)",
+      "A.x_=.<inline>(String): Unit",
+      skip = true
+    )
+  }
+
   extension (debuggee: TestingDebuggee)
     private def loader(loadExtraInfo: Boolean): JavaReflectLoader =
       JavaReflectLoader(debuggee.classLoader, loadExtraInfo = loadExtraInfo)
