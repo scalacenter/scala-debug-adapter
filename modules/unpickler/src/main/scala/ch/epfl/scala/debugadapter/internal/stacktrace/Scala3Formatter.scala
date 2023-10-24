@@ -27,19 +27,19 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case BinaryTraitParamAccessor(owner, sym) => formatQualifiedName(owner, sym, "")
       case BinaryMixinForwarder(owner, sym) => formatQualifiedName(owner, sym, "<mixin forwarder>")
       case BinaryTraitStaticForwarder(_, sym) => formatQualifiedName(sym, "<static forwarder>")
-      case BinaryOuter(owner, outer) => format(owner) + ".<outer>"
-      case BinarySuperArg(_, init, tpe) => formatQualifiedName(init, "<super arg>")
-      case BinaryLiftedTry(owner, tpe) => formatQualifiedName(owner, "<try>")
-      case BinaryByNameArg(owner, tpe, adapted) =>
+      case BinaryOuter(owner, _) => format(owner) + ".<outer>"
+      case BinarySuperArg(_, init, _) => formatQualifiedName(init, "<super arg>")
+      case BinaryLiftedTry(owner, _) => formatQualifiedName(owner, "<try>")
+      case BinaryByNameArg(owner, _, adapted) =>
         formatQualifiedName(owner, "<by-name arg>" + (if adapted then ".<adapted>" else ""))
-      case BinaryMethodBridge(owner, target, tpe) => formatQualifiedName(owner, target, "<bridge>")
-      case BinaryAnonOverride(owner, overridden, tpe) => formatQualifiedName(owner, overridden, "")
-      case BinaryStaticForwarder(owner, target, tpe) => formatQualifiedName(owner, target, "<static forwarder>")
+      case BinaryMethodBridge(owner, target, _) => formatQualifiedName(owner, target, "<bridge>")
+      case BinaryAnonOverride(owner, overridden, _) => formatQualifiedName(owner, overridden, "")
+      case BinaryStaticForwarder(owner, target, _) => formatQualifiedName(owner, target, "<static forwarder>")
       case BinaryDeserializeLambda(owner) => format(owner) + ".$deserializeLambda$"
-      case BinarySetter(owner, sym, paramType) =>
+      case BinarySetter(owner, sym, _) =>
         if sym.isMethod then formatQualifiedName(sym, "")
         else format(owner) + "." + format(sym.name) + "_="
-      case BinarySuperAccessor(owner, sym, tpe, isBridge) =>
+      case BinarySuperAccessor(owner, sym, _, isBridge) =>
         formatQualifiedName(owner, sym, if isBridge then "<super>.<bridge>" else "<super>")
       case BinarySpecializedMethod(_, sym) => formatQualifiedName(sym, "<specialized>")
       case BinaryInlineAccessor(target) => formatQualifiedName(target) + ".<inline>"
@@ -47,22 +47,22 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
   private def formatTypeAscription(method: BinaryMethodSymbol): String =
     method match
       case BinaryMethod(_, sym) => formatTypeAscription(sym.declaredType)
-      case BinaryAnonFun(_, sym, adapted) => formatTypeAscription(sym.declaredType)
+      case BinaryAnonFun(_, sym, _) => formatTypeAscription(sym.declaredType)
       case BinaryLocalLazyInit(_, sym) => formatTypeAscription(sym.declaredType)
-      case BinaryLazyInit(owner, sym) => formatTypeAscription(sym.declaredType)
-      case BinaryTraitParamAccessor(owner, sym) => formatTypeAscription(sym.declaredType)
-      case BinaryMixinForwarder(owner, sym) => formatTypeAscription(sym.declaredType)
+      case BinaryLazyInit(_, sym) => formatTypeAscription(sym.declaredType)
+      case BinaryTraitParamAccessor(_, sym) => formatTypeAscription(sym.declaredType)
+      case BinaryMixinForwarder(_, sym) => formatTypeAscription(sym.declaredType)
       case BinaryTraitStaticForwarder(_, sym) => formatTypeAscription(sym.declaredType)
-      case BinaryOuter(owner, outer) => ": " + formatQualifiedName(outer) // TODO fix, get the type
-      case BinarySuperArg(_, init, tpe) => formatTypeAscription(tpe)
-      case BinaryLiftedTry(owner, tpe) => formatTypeAscription(tpe)
-      case BinaryByNameArg(owner, tpe, adapted) => formatTypeAscription(tpe)
-      case BinaryMethodBridge(owner, target, tpe) => formatTypeAscription(tpe)
-      case BinaryAnonOverride(owner, overridden, tpe) => formatTypeAscription(tpe)
-      case BinaryStaticForwarder(owner, target, tpe) => formatTypeAscription(tpe)
-      case BinaryDeserializeLambda(owner) => "(SerializedLambda): Object"
-      case BinarySetter(owner, sym, paramType) => "(" + format(paramType) + "): Unit"
-      case BinarySuperAccessor(owner, sym, tpe, isBridge) => formatTypeAscription(tpe)
+      case BinaryOuter(_, tpe) => formatTypeAscription(tpe)
+      case BinarySuperArg(_, _, tpe) => formatTypeAscription(tpe)
+      case BinaryLiftedTry(_, tpe) => formatTypeAscription(tpe)
+      case BinaryByNameArg(_, tpe, _) => formatTypeAscription(tpe)
+      case BinaryMethodBridge(_, _, tpe) => formatTypeAscription(tpe)
+      case BinaryAnonOverride(_, _, tpe) => formatTypeAscription(tpe)
+      case BinaryStaticForwarder(_, _, tpe) => formatTypeAscription(tpe)
+      case _: BinaryDeserializeLambda => "(SerializedLambda): Object"
+      case BinarySetter(_, _, paramType) => "(" + format(paramType) + "): Unit"
+      case BinarySuperAccessor(_, _, tpe, _) => formatTypeAscription(tpe)
       case BinarySpecializedMethod(_, sym) => formatTypeAscription(sym.declaredType)
       case BinaryInlineAccessor(target) => formatTypeAscription(target)
 
@@ -162,7 +162,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
         val first = format(t.first)
         val second = format(t.second)
         s"$first & $second"
-      case t: ThisType => format(t.tref)
+      case t: ThisType => format(t.tref) + ".this.type"
       case t: TermRefinement =>
         val parentType = format(t.parent)
         if parentType == "PolyFunction" then formatPolymorphicFunction(t.refinedType)

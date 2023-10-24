@@ -279,10 +279,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
   test("find outter field") {
     val source =
       """|package example
-         |class A :
+         |class A:
          |  private val x =2 
-         |  class B : 
-         |    class C :
+         |  class B[T]: 
+         |    class C:
          |      private val y = x+2
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
@@ -290,7 +290,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat(
       "example.A$B$C",
       "example.A$B example$A$B$C$$$outer()",
-      "A.B.C.<outer>: A.B",
+      "A.B.C.<outer>: B.this.type",
       skip = true
     )
   }
@@ -600,7 +600,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
 
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.A", "example.A m()", "A.m(): A")
+    debuggee.assertFormat("example.A", "example.A m()", "A.m(): A.this.type")
   }
 
   test("inline def with anonymous class and method") {
@@ -776,7 +776,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     assertFormat("example.A m(example.A a)", "Main.m(a: A): A")
     assertFormat("example.A$B mbis(example.A$B b)", "Main.mbis(b: A.B): A.B")
     assertFormat("example.A$B mbis(example.A a, example.A$B b)", "Main.mbis(a: A)(b: a.B): a.B")
-    assertFormat("example.Main$ m(example.Main$ a)", "Main.m(a: Main): Main")
+    assertFormat("example.Main$ m(example.Main$ a)", "Main.m(a: Main.this.type): Main.this.type")
     assertFormat("example.A mbis(example.A a)", "Main.mbis(a: A {...}): A {...}")
     assertFormat("java.lang.String m(java.lang.String x)", "Main.m(x: String): String")
     assertFormat("java.lang.Object m(java.lang.Object x)", "Main.m[T](x: T): T")

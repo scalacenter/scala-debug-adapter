@@ -45,7 +45,7 @@ final case class BinaryTraitParamAccessor(binaryOwner: BinaryClassSymbol, symbol
 final case class BinaryMixinForwarder(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol
 final case class BinaryTraitStaticForwarder(binaryOwner: BinaryClassSymbol, symbol: TermSymbol)
     extends BinaryMethodSymbol
-final case class BinaryOuter(binaryOwner: BinaryClassSymbol, outerClass: ClassSymbol) extends BinaryMethodSymbol
+final case class BinaryOuter(binaryOwner: BinaryClassSymbol, outerTpe: Type) extends BinaryMethodSymbol
 final case class BinarySuperArg(binaryOwner: BinaryClassSymbol, init: TermSymbol, tpe: Type) extends BinaryMethodSymbol
 final case class BinaryLiftedTry(binaryOwner: BinaryClassSymbol, tpe: Type) extends BinaryMethodSymbol
 final case class BinaryByNameArg(binaryOwner: BinaryClassSymbol, tpe: Type, adapted: Boolean) extends BinaryMethodSymbol

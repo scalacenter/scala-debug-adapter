@@ -121,9 +121,7 @@ class Scala3Unpickler(
           case _ => Seq.empty
         localMethods ++ anonTraitParamGetters
       case Patterns.LazyInit(name) => requiresBinaryClass(findLazyInit(_, name))
-      case Patterns.Outer(_) =>
-        def outerClass(sym: Symbol): ClassSymbol = if sym.isClass then sym.asClass else outerClass(sym.owner)
-        List(BinaryOuter(binaryClass, outerClass(binaryClass.symbol.owner)))
+      case Patterns.Outer(_) => Seq(findOuter(binaryClass))
       case Patterns.TraitInitializer() => requiresBinaryClass(findTraitInitializer(_, method))
       case Patterns.ValueClassExtension() =>
         if method.isStatic then requiresBinaryClass(findValueClassForwarders(_, method))
@@ -321,6 +319,11 @@ class Scala3Unpickler(
       case sym: TermSymbol if sym.targetNameStr == expectedName && matchSignature(method, sym) =>
         BinaryTraitStaticForwarder(binaryClass, sym)
     }
+
+  private def findOuter(binaryClass: BinaryClassSymbol): BinaryOuter =
+    def outerClass(sym: Symbol): ClassSymbol = if sym.isClass then sym.asClass else outerClass(sym.owner)
+    val outerType = outerClass(binaryClass.symbol.owner).thisType
+    BinaryOuter(binaryClass, outerType)
 
   private def findTraitInitializer(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethod] =
     binaryClass.symbol.declarations.collect {
