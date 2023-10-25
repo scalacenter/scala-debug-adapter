@@ -34,35 +34,56 @@ final case class BinarySyntheticCompanionClass(symbol: ClassSymbol) extends Bina
 final case class BinarySAMClass(symbol: TermSymbol, parentClass: ClassSymbol, tpe: Type) extends BinaryClassSymbol
 final case class BinaryPartialFunction(symbol: TermSymbol, tpe: Type) extends BinaryClassSymbol
 
-sealed trait BinaryMethodSymbol extends BinarySymbol
+sealed trait BinaryMethodSymbol extends BinarySymbol:
+  def declaredType: TypeOrMethodic
 
-final case class BinaryMethod(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol
-final case class BinaryAnonFun(binaryOwner: BinaryClassSymbol, symbol: TermSymbol, adapted: Boolean)
-    extends BinaryMethodSymbol
-final case class BinaryLocalLazyInit(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol
-final case class BinaryLazyInit(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol
-final case class BinaryTraitParamAccessor(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol
-final case class BinaryMixinForwarder(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol
+final case class BinaryMethod(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol:
+  override def declaredType: TypeOrMethodic = symbol.declaredType
+
+final case class BinaryLocalLazyInit(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol:
+  override def declaredType: TypeOrMethodic = symbol.declaredType
+
+final case class BinaryLazyInit(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol:
+  override def declaredType: TypeOrMethodic = symbol.declaredType
+
+final case class BinaryTraitParamAccessor(binaryOwner: BinaryClassSymbol, symbol: TermSymbol)
+    extends BinaryMethodSymbol:
+  override def declaredType: TypeOrMethodic = symbol.declaredType
+
+final case class BinaryMixinForwarder(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol:
+  override def declaredType: TypeOrMethodic = symbol.declaredType
+
 final case class BinaryTraitStaticForwarder(binaryOwner: BinaryClassSymbol, symbol: TermSymbol)
+    extends BinaryMethodSymbol:
+  override def declaredType: TypeOrMethodic = symbol.declaredType
+final case class BinaryOuter(binaryOwner: BinaryClassSymbol, declaredType: Type) extends BinaryMethodSymbol
+final case class BinarySuperArg(binaryOwner: BinaryClassSymbol, init: TermSymbol, declaredType: Type)
     extends BinaryMethodSymbol
-final case class BinaryOuter(binaryOwner: BinaryClassSymbol, outerTpe: Type) extends BinaryMethodSymbol
-final case class BinarySuperArg(binaryOwner: BinaryClassSymbol, init: TermSymbol, tpe: Type) extends BinaryMethodSymbol
-final case class BinaryLiftedTry(binaryOwner: BinaryClassSymbol, tpe: Type) extends BinaryMethodSymbol
-final case class BinaryByNameArg(binaryOwner: BinaryClassSymbol, tpe: Type, adapted: Boolean) extends BinaryMethodSymbol
-final case class BinaryMethodBridge(binaryOwner: BinaryClassSymbol, target: BinaryMethodSymbol, tpe: TypeOrMethodic)
-    extends BinaryMethodSymbol
-final case class BinaryAnonOverride(binaryOwner: BinaryClassSymbol, overriddenSymbol: TermSymbol, tpe: TypeOrMethodic)
-    extends BinaryMethodSymbol
-final case class BinaryStaticForwarder(binaryOwner: BinaryClassSymbol, target: BinaryMethodSymbol, tpe: TypeOrMethodic)
-    extends BinaryMethodSymbol
-final case class BinaryDeserializeLambda(binaryOnwer: BinaryClassSymbol) extends BinaryMethodSymbol
-final case class BinarySetter(binaryOwner: BinaryClassSymbol, sym: TermSymbol, paramType: TypeOrMethodic)
-    extends BinaryMethodSymbol
-final case class BinarySuperAccessor(
+final case class BinaryLiftedTry(binaryOwner: BinaryClassSymbol, declaredType: Type) extends BinaryMethodSymbol
+final case class BinaryByNameArg(binaryOwner: BinaryClassSymbol, declaredType: Type) extends BinaryMethodSymbol
+final case class BinaryMethodBridge(target: BinaryMethodSymbol, declaredType: TypeOrMethodic) extends BinaryMethodSymbol
+final case class BinaryAnonOverride(
     binaryOwner: BinaryClassSymbol,
-    sym: TermSymbol,
-    tpe: TypeOrMethodic,
-    isBridge: Boolean
+    overriddenSymbol: TermSymbol,
+    declaredType: TypeOrMethodic
 ) extends BinaryMethodSymbol
-final case class BinarySpecializedMethod(binaryOwner: BinaryClassSymbol, sym: TermSymbol) extends BinaryMethodSymbol
-final case class BinaryInlineAccessor(target: BinaryMethodSymbol) extends BinaryMethodSymbol
+final case class BinaryStaticForwarder(
+    binaryOwner: BinaryClassSymbol,
+    target: BinaryMethodSymbol,
+    declaredType: TypeOrMethodic
+) extends BinaryMethodSymbol
+final case class BinaryDeserializeLambda(binaryOnwer: BinaryClassSymbol, declaredType: TypeOrMethodic)
+    extends BinaryMethodSymbol
+final case class BinarySetter(binaryOwner: BinaryClassSymbol, symbol: TermSymbol, declaredType: TypeOrMethodic)
+    extends BinaryMethodSymbol
+final case class BinarySuperAccessor(binaryOwner: BinaryClassSymbol, sym: TermSymbol, declaredType: TypeOrMethodic)
+    extends BinaryMethodSymbol
+
+final case class BinarySpecializedMethod(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol:
+  override def declaredType: TypeOrMethodic = symbol.declaredType
+
+final case class BinaryInlineAccessor(target: BinaryMethodSymbol) extends BinaryMethodSymbol:
+  override def declaredType: TypeOrMethodic = target.declaredType
+
+final case class BinaryAdaptedFun(target: BinaryMethodSymbol) extends BinaryMethodSymbol:
+  override def declaredType: TypeOrMethodic = target.declaredType

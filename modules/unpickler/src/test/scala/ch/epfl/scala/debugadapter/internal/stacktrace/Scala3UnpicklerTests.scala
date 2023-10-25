@@ -756,7 +756,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |  def m(x: => Int ): Int = 1
          |  def m(x : Int => Int): Int = 1
          |  def m(x : (Int,Int)) : Int = 1
-         |  def mter(x: 1&1): 1|1 = 1
+         |  def m(x: 1 & 1): 1 | 1 = 1
          |  def m(x: Int): Option[?] = Some(x)
          |  def m(a: A { type B })(b: a.type): b.B = new a.B
          |  val x: A = new A {}
@@ -764,7 +764,6 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |  def m(t: Int !: Int) = 1
          |  def m() : [T] => List[T] => Option[T] = ???
          |  def mbis() : [T] => (List[T],List[T]) => Option[T] = ???
-         |
          |}
          |""".stripMargin
 
@@ -785,15 +784,12 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     assertFormat("int m(scala.Function1 x)", "Main.m(x: Int => Int): Int")
     assertFormat("int m(scala.Tuple2 x)", "Main.m(x: (Int, Int)): Int")
     assertFormat("int m(example.$bang$colon t)", "Main.m(t: Int !: Int): Int")
-
-    // TODO fix: should be m
-    assertFormat("int mter(int x)", "Main.mter(x: 1 & 1): 1 | 1")
+    assertFormat("int m(int x)", "Main.m(x: 1 & 1): 1 | 1")
     assertFormat("scala.Option m(int x)", "Main.m(x: Int): Option[?]")
     assertFormat("example.A$B m(example.A a, example.A b)", "Main.m(a: A {...})(b: a.type): b.B")
     assertFormat("example.A m(example.A a, example.A$B b)", "Main.m(a: x.type)(b: x.B): A")
     assertFormat("scala.Function1 m()", "Main.m(): [T] => List[T] => Option[T]")
     assertFormat("scala.Function2 mbis()", "Main.mbis(): [T] => (List[T], List[T]) => Option[T]")
-
   }
 
   test("constant type") {
@@ -1370,12 +1366,26 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |  private val foo = "foo"
          |
          |class B extends A
+         |
+         |object C extends A
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
     debuggee.assertFormat(
       "example.B",
       "void example$A$_setter_$example$A$$foo_$eq(java.lang.String x$0)",
       "B.foo_=(String): Unit",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.C$",
+      "void example$A$_setter_$example$A$$foo_$eq(java.lang.String x$0)",
+      "C.foo_=(String): Unit",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.C",
+      "void example$A$_setter_$example$A$$foo_$eq(java.lang.String arg0)",
+      "C.foo_=.<static forwarder>(String): Unit",
       skip = true
     )
   }
@@ -1529,7 +1539,11 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |
          |class A:
          |  private var x: String = "foo"
+         |  inline def m: Unit =
+         |    if x == "foo" then x = "bar"
          |
+         |object B:
+         |  private var x: String = "foo"
          |  inline def m: Unit =
          |    if x == "foo" then x = "bar"
          |""".stripMargin
@@ -1542,6 +1556,12 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
         "A.x_=.<inline>(String): Unit",
         skip = true
       )
+      debuggee.assertFormat(
+        "example.B",
+        "void inline$x_$eq(java.lang.String arg0)",
+        "B.x_=.<inline>.<static forwarder>(String): Unit",
+        skip = true
+      )
     else
       debuggee.assertFormat("example.A", "java.lang.String example$A$$inline$x()", "A.x.<inline>: String", skip = true)
       debuggee.assertFormat(
@@ -1550,6 +1570,27 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
         "A.x_=.<inline>(String): Unit",
         skip = true
       )
+      debuggee.assertFormat(
+        "example.B",
+        "void inline$x_$eq(java.lang.String arg0)",
+        "B.x_=.<inline>.<static forwarder>(String): Unit",
+        skip = true
+      )
+  }
+
+  test("deserializeLambda") {
+    val source =
+      """|package example
+         |
+         |object A:
+         |  val x: String => String = identity
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat(
+      "example.A$",
+      "java.lang.Object $deserializeLambda$(java.lang.invoke.SerializedLambda arg0)",
+      "A.$deserializeLambda$(arg0: SerializedLambda): Object"
+    )
   }
 
   extension (debuggee: TestingDebuggee)
