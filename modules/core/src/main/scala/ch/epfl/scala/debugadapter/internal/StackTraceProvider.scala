@@ -10,19 +10,16 @@ import com.sun.jdi.Method
 import com.microsoft.java.debug.core.adapter.stacktrace.DecodedMethod
 
 class StackTraceProvider(
-    runtimeFilter: RuntimeStepFilter,
-    decoder: ScalaDecoder,
+    stepFilters: Seq[StepFilter],
     protected val logger: Logger,
     protected val testMode: Boolean
 ) extends JavaStackTraceProvider
     with ThrowOrWarn {
-
-  private val stepFilters: Seq[StepFilter] = Seq(ClassLoadingFilter, runtimeFilter, decoder)
-
-  def reload(): Unit = decoder.reload()
+  val decoder = stepFilters.collectFirst { case u: ScalaDecoder => u }
+  def reload(): Unit = decoder.foreach(_.reload())
 
   override def decode(method: Method): DecodedMethod =
-    decoder.decode(method)
+    decoder.map(_.decode(method)).getOrElse(JavaMethod(method, isGenerated = false))
 
   override def skipOver(method: Method, filters: StepFilters): Boolean = {
     try {
@@ -56,13 +53,11 @@ object StackTraceProvider {
       debuggee: Debuggee,
       tools: DebugTools,
       logger: Logger,
-      testMode: Boolean
+      testMode: Boolean,
+      stepFilters: Seq[StepFilter]
   ): StackTraceProvider = {
-    val decoder: ScalaDecoder = ScalaDecoder(debuggee, tools, logger, testMode)
-    val runtimeStepFilter = RuntimeStepFilter(debuggee.scalaVersion)
     new StackTraceProvider(
-      runtimeStepFilter,
-      decoder,
+      stepFilters,
       logger,
       testMode
     )

@@ -112,7 +112,7 @@ class DebugServerTests extends DebugTestSuite {
     val client = TestingDebugClient.connect(server.uri)
     try {
       val session = server.connect()
-      Await.result(session.getDebugeeAddress, 2.seconds)
+      Await.result(session.getDebuggeeAddress, 2.seconds)
     } finally {
       server.close()
       client.close()

@@ -23,6 +23,8 @@ import ch.epfl.scala.debugadapter.Logger
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
 import scala.concurrent.Await
+import ch.epfl.scala.debugadapter.internal.defaultFilters
+import scala.jdk.CollectionConverters.*
 
 class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     ec: ExecutionContext
@@ -47,8 +49,12 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     Await.result(sendRequest(request), timeout)
   }
 
-  def launch(timeout: Duration = defaultTimeout(16.seconds)): Messages.Response = {
-    val request = createRequest(Command.LAUNCH, new LaunchArguments())
+  def launch(
+      timeout: Duration = defaultTimeout(16.seconds),
+      stepFilters: Map[String, Boolean] = defaultFilters
+  ): Messages.Response = {
+    val request = createRequest(Command.LAUNCH, new PartialLaunchArguments(stepFilters.asJava))
+
     Await.result(sendRequest(request), timeout)
   }
 
@@ -257,8 +263,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
   private def createRequest[T](command: Requests.Command, args: T)(implicit
       tag: ClassTag[T]
   ): Messages.Request = {
-    val json =
-      JsonUtils.toJsonTree(args, tag.runtimeClass).asInstanceOf[JsonObject]
+    val json = JsonUtils.toJsonTree(args, tag.runtimeClass).asInstanceOf[JsonObject]
     new Messages.Request(command.getName, json)
   }
 }

@@ -12,18 +12,29 @@ import com.microsoft.java.debug.core.adapter.IStackTraceProvider
 import com.microsoft.java.debug.core.adapter.IVirtualMachineManagerProvider
 import com.microsoft.java.debug.core.adapter.ProviderContext
 import com.microsoft.java.debug.core.adapter.variables.IVariableProvider
+import ch.epfl.scala.debugadapter.internal.stacktrace.StepFilter
 
-private[debugadapter] class ScalaProviderContext private (debuggee: Debuggee, logger: Logger, config: DebugConfig)
-    extends ProviderContext {
-  def configure(tools: DebugTools): Unit = {
+private[debugadapter] class ScalaProviderContext private (
+    debuggee: Debuggee,
+    logger: Logger,
+    config: DebugConfig
+) extends ProviderContext {
+  def configure(tools: DebugTools, stepFilters: Seq[StepFilter]): Unit = {
     registerProvider(classOf[ISourceLookUpProvider], tools.sourceLookUp)
     registerProvider(classOf[IEvaluationProvider], EvaluationProvider(debuggee, tools, logger, config))
-    registerProvider(classOf[IStackTraceProvider], StackTraceProvider(debuggee, tools, logger, config.testMode))
+    registerProvider(
+      classOf[IStackTraceProvider],
+      StackTraceProvider(debuggee, tools, logger, config.testMode, stepFilters)
+    )
   }
 }
 
 private[debugadapter] object ScalaProviderContext {
-  def apply(debuggee: Debuggee, logger: Logger, config: DebugConfig): ScalaProviderContext = {
+  def apply(
+      debuggee: Debuggee,
+      logger: Logger,
+      config: DebugConfig
+  ): ScalaProviderContext = {
 
     /**
      * Since Scala 2.13, object fields are represented by static fields in JVM byte code.

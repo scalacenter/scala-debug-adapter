@@ -2,14 +2,326 @@ package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testfmk.*
 
-class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.3`)
+class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.3`) {
+  test("Should not skip compiler-generated code when decoder filter is not used") {
+    val source =
+      """|package example
+         |
+         |trait Foo {
+         |  val x: Int
+         |  def m: Int = x
+         |}
+         |
+         |case class Fooo(x: Int) extends Foo
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val fooo = Fooo(42)
+         |    fooo.m
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Array(internal.classLoadingFilterName, internal.runtimeFilterName))(
+      Breakpoint(12),
+      StepIn.line(8),
+      StepIn.line(3),
+      StepIn.line(5)
+    )
+  }
 
-class Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
-class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`)
+  test("Should not skip runtime classes when runtime step filter is not used") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def m1(xs: String*) = println(xs.mkString)
+         |  def m2(xs: Int*) = println(xs.mkString)
+         |  def m3(xs: Unit*) = println(xs.mkString)
+         | 
+         |  def main(args: Array[String]): Unit = {
+         |    m1("a", "b")
+         |    m2(1, 2)
+         |    m3((), ())
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Array(internal.decoderFilterName, internal.classLoadingFilterName))(
+      Breakpoint(9),
+      StepIn.method("ScalaRunTime.wrapRefArray[T](xs: Array[T]): ArraySeq[T]")
+    )
+  }
+
+  test("step into method with @targetName") {
+    val source =
+      """|package example
+         |
+         |import scala.annotation.targetName
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit =
+         |    m("Hello")
+         |
+         |  @targetName("mTarget")
+         |  def m(message: String): Unit =
+         |    println(message)
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(7), StepIn.method(if (isScala3) "Main.m(message: String): Unit" else "Main$.mTarget(String)"))
+  }
+
+  test("skip boxing methods") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val f: Int => String = x => x.toString
+         |    f(1)
+         |  }
+         |}""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(6), StepIn.line(5))
+  }
+
+  test("skip exported methods") {
+    val source =
+      """|package example
+         |
+         |case class A():
+         |  def aa = 42
+         |
+         |case class B(a: A):
+         |  export a.*
+         |
+         |@main def Main = 
+         |  val b = B(A())
+         |  b.aa
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(11),
+      StepIn.line(4)
+    )
+  }
+
+  test("given lazy val") {
+    val source =
+      """|package example
+         |
+         |trait Msg {
+         |  def value: String
+         |}
+         |
+         |object Msg {
+         |  val default = new Msg {
+         |    def value: String = "Hello"
+         |  }
+         |  def greet(using msg: Msg): Unit = println(msg.value)
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    m
+         |    A.m
+         |    B.m
+         |  }
+         |
+         |  def m: Unit =
+         |    given Msg = Msg.default
+         |    Msg.greet
+         |    Msg.greet
+         |}
+         |
+         |object A {
+         |  given Msg = Msg.default
+         |  def m =
+         |    Msg.greet
+         |    Msg.greet
+         |}
+         |
+         |object B {
+         |  given Msg with
+         |    def value: String = "Hello"
+         |  def m =
+         |    Msg.greet
+         |    Msg.greet
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(23),
+      StepIn.line(22),
+      StepIn.line(23),
+      StepIn.line(11),
+      StepOut.line(24),
+      StepIn.line(11),
+      Breakpoint(30),
+      StepIn.line(28),
+      StepIn.line(30),
+      StepIn.line(11),
+      StepOut.line(31),
+      StepIn.line(11),
+      Breakpoint(38),
+      StepIn.line(11),
+      StepOut.line(39),
+      StepIn.line(11)
+    )
+  }
+}
+class Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`) {
+  test("Should not skip compiler-generated code when decoder filter is not used") {
+    val source =
+      """|package example
+         |
+         |trait Foo {
+         |  val x: Int
+         |  def m: Int = x
+         |}
+         |
+         |case class Fooo(x: Int) extends Foo
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val fooo = Fooo(42)
+         |    fooo.m
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Array(internal.classLoadingFilterName, internal.runtimeFilterName))(
+      Breakpoint(12),
+      StepIn.line(8),
+      StepIn.line(5)
+    )
+  }
+
+  test("Should not skip runtime classes when runtime step filter is not used") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def m1(xs: String*) = println(xs.mkString)
+         |  def m2(xs: Int*) = println(xs.mkString)
+         |  def m3(xs: Unit*) = println(xs.mkString)
+         | 
+         |  def main(args: Array[String]): Unit = {
+         |    m1("a", "b")
+         |    m2(1, 2)
+         |    m3((), ())
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Array(internal.decoderFilterName, internal.classLoadingFilterName))(
+      Breakpoint(9),
+      StepIn.method("LowPriorityImplicits.wrapRefArray(Object[]): WrappedArray")
+    )
+  }
+}
+class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`) {
+  test("Should not skip compiler-generated code when decoder filter is not used") {
+    val source =
+      """|package example
+         |
+         |trait Foo {
+         |  val x: Int
+         |  def m: Int = x
+         |}
+         |
+         |case class Fooo(x: Int) extends Foo
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val fooo = Fooo(42)
+         |    fooo.m
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Array(internal.classLoadingFilterName, internal.runtimeFilterName))(
+      Breakpoint(12),
+      StepIn.line(8),
+      StepIn.line(5)
+    )
+  }
+
+  test("Should not skip runtime classes when runtime step filter is not used") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def m1(xs: String*) = println(xs.mkString)
+         |  def m2(xs: Int*) = println(xs.mkString)
+         |  def m3(xs: Unit*) = println(xs.mkString)
+         | 
+         |  def main(args: Array[String]): Unit = {
+         |    m1("a", "b")
+         |    m2(1, 2)
+         |    m3((), ())
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Array(internal.decoderFilterName, internal.classLoadingFilterName))(
+      Breakpoint(9),
+      StepIn.method("ScalaRunTime$.wrapRefArray(Object[]): ArraySeq")
+    )
+  }
+
+  test("should match all kinds of Scala 2 types (not valid in Scala 3)") {
+    val source =
+      """|package example
+         |
+         |trait A {
+         |  class B
+         |}
+         |
+         |object Main extends A {
+         |  class B
+         |  def m(b: Main.super[A].B): Main.super[A].B = b
+         |  def m(x: Either[Int, X] forSome { type X }): Either[Y, Int] forSome { type Y } = x.swap
+         |
+         |  def main(args: Array[String]): Unit = {
+         |    val b0: super[A].B = new super[A].B
+         |    m(b0)
+         |    val x = Right(2)
+         |    m(x)
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`2.13`)
+    check(Breakpoint(14), StepIn.line(9), Breakpoint(16), StepIn.line(10))
+  }
+}
 
 abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends DebugTestSuite {
   private val printlnMethod =
     if (scalaVersion.isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void"
+
+  test("Should not skip class loading when class loader filter is not used") {
+    val source =
+      """|package example
+         |
+         |trait Foo {
+         |  val x: Int
+         |  def m: Int = x
+         |}
+         |
+         |case class Fooo(x: Int) extends Foo
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val fooo = Fooo(42)
+         |    fooo.m
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Array(internal.decoderFilterName, internal.runtimeFilterName))(
+      Breakpoint(11),
+      StepIn.method("ClassLoader.loadClass(String): Class")
+    )
+  }
+
   test("should not step into mixin forwarder") {
     val source =
       """|package example
