@@ -282,8 +282,8 @@ class Scala3Unpickler(
       }
       if sym.isOverridingSymbol(companionObject)
     yield
-    // TODO: BinaryStaticForwarder should wrap a BinarySpecizalizedMethod
-    BinaryStaticForwarder(binaryClass, sym, sym.declaredTypeAsSeenFrom(companionObject.thisType))
+      val target = BinarySpecializedMethod(BinaryClass(companionObject), sym)
+      BinaryStaticForwarder(binaryClass, target, sym.declaredTypeAsSeenFrom(companionObject.thisType))
 
   private def findInstanceMethods(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
     if method.isConstructor && binaryClass.symbol.isSubClass(ctx.defn.AnyValClass) then
@@ -340,12 +340,15 @@ class Scala3Unpickler(
 
   private def findValueClassForwarders(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryStaticForwarder] =
     val expectedName = method.unexpandedDecodedName.stripSuffix("$extension")
-    val companionClassOpt = binaryClass.symbol.companionClass
-    binaryClass.symbol.declarations.collect {
-      case sym: TermSymbol
-          if sym.targetNameStr == expectedName && matchSignature(method, sym, checkParamNames = false) =>
-        BinaryStaticForwarder(binaryClass, sym, sym.declaredType)
-    }
+    for
+      companionObject <- binaryClass.symbol.companionClass.toSeq
+      sym <- binaryClass.symbol.declarations.collect {
+        case sym: TermSymbol if sym.targetNameStr == expectedName => sym
+      }
+      if matchSignature(method, sym, checkParamNames = false)
+    yield
+      val target = BinaryMethod(BinaryClass(companionObject), sym)
+      BinaryStaticForwarder(binaryClass, target, sym.declaredType)
 
   private def findStaticForwarder(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryStaticForwarder] =
     for
@@ -357,7 +360,9 @@ class Scala3Unpickler(
           sym
       }
       if sym.isOverridingSymbol(companionObject)
-    yield BinaryStaticForwarder(binaryClass, sym, sym.declaredTypeAsSeenFrom(companionObject.thisType))
+    yield
+      val target = BinaryMethod(BinaryClass(cls), sym)
+      BinaryStaticForwarder(binaryClass, target, sym.declaredTypeAsSeenFrom(companionObject.thisType))
 
   private def findBridgeAndMixinForwarders(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
     val bridges =

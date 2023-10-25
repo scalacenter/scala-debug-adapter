@@ -34,7 +34,12 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
         formatQualifiedName(owner, "<by-name arg>" + (if adapted then ".<adapted>" else ""))
       case BinaryMethodBridge(owner, target, _) => formatQualifiedName(owner, target, "<bridge>")
       case BinaryAnonOverride(owner, overridden, _) => formatQualifiedName(owner, overridden, "")
-      case BinaryStaticForwarder(owner, target, _) => formatQualifiedName(owner, target, "<static forwarder>")
+      case BinaryStaticForwarder(owner, target, _) =>
+        target match
+          case BinaryMethod(_, sym) => formatQualifiedName(owner, sym, "<static forwarder>")
+          case BinarySpecializedMethod(_, sym) =>
+            formatQualifiedName(owner, sym, "<specialized>.<static forwarder>")
+          case _ => formatQualifiedName(target) + ".<static forwarder>"
       case BinaryDeserializeLambda(owner) => format(owner) + ".$deserializeLambda$"
       case BinarySetter(owner, sym, _) =>
         if sym.isMethod then formatQualifiedName(sym, "")

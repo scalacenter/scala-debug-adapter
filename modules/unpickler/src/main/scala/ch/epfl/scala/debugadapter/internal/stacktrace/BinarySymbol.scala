@@ -53,7 +53,7 @@ final case class BinaryMethodBridge(binaryOwner: BinaryClassSymbol, targetSymbol
     extends BinaryMethodSymbol
 final case class BinaryAnonOverride(binaryOwner: BinaryClassSymbol, overriddenSymbol: TermSymbol, tpe: TypeOrMethodic)
     extends BinaryMethodSymbol
-final case class BinaryStaticForwarder(binaryOwner: BinaryClassSymbol, targetSymbol: TermSymbol, tpe: TypeOrMethodic)
+final case class BinaryStaticForwarder(binaryOwner: BinaryClassSymbol, target: BinaryMethodSymbol, tpe: TypeOrMethodic)
     extends BinaryMethodSymbol
 final case class BinaryDeserializeLambda(binaryOnwer: BinaryClassSymbol) extends BinaryMethodSymbol
 final case class BinarySetter(binaryOwner: BinaryClassSymbol, sym: TermSymbol, paramType: TypeOrMethodic)

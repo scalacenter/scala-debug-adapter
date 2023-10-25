@@ -1493,13 +1493,13 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat(
       "example.B",
       "boolean apply$mcZD$sp(double arg0)",
-      "B.apply.<static forwarder>(x: Double): Boolean",
+      "B.apply.<specialized>.<static forwarder>(x: Double): Boolean",
       skip = true
     )
     debuggee.assertFormat(
       "example.B",
       "int apply$mcII$sp(int arg0)",
-      "B.apply.<static forwarder>(x: Double): Boolean",
+      "B.apply.<specialized>.<static forwarder>(x: Double): Boolean",
       skip = true
     )
   }
