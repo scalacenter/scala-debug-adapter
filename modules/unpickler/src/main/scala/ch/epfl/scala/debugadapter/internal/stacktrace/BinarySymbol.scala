@@ -49,7 +49,7 @@ final case class BinaryOuter(binaryOwner: BinaryClassSymbol, outerTpe: Type) ext
 final case class BinarySuperArg(binaryOwner: BinaryClassSymbol, init: TermSymbol, tpe: Type) extends BinaryMethodSymbol
 final case class BinaryLiftedTry(binaryOwner: BinaryClassSymbol, tpe: Type) extends BinaryMethodSymbol
 final case class BinaryByNameArg(binaryOwner: BinaryClassSymbol, tpe: Type, adapted: Boolean) extends BinaryMethodSymbol
-final case class BinaryMethodBridge(binaryOwner: BinaryClassSymbol, targetSymbol: TermSymbol, tpe: TypeOrMethodic)
+final case class BinaryMethodBridge(binaryOwner: BinaryClassSymbol, target: BinaryMethodSymbol, tpe: TypeOrMethodic)
     extends BinaryMethodSymbol
 final case class BinaryAnonOverride(binaryOwner: BinaryClassSymbol, overriddenSymbol: TermSymbol, tpe: TypeOrMethodic)
     extends BinaryMethodSymbol

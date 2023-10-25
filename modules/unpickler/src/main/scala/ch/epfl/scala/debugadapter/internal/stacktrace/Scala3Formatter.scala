@@ -11,43 +11,57 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
   def format(binaryClass: BinaryClassSymbol): String =
     binaryClass match
       case BinaryClass(symbol) => formatQualifiedName(symbol)
-      case BinarySAMClass(symbol, _, _) => formatQualifiedName(symbol.owner) + ".<SAM class>"
-      case BinaryPartialFunction(symbol, _) => formatQualifiedName(symbol.owner) + ".<partial function>"
+      case BinarySAMClass(symbol, _, _) => formatQualifiedName(symbol.owner).dot("<SAM class>")
+      case BinaryPartialFunction(symbol, _) => formatQualifiedName(symbol.owner).dot("<partial function>")
       case BinarySyntheticCompanionClass(symbol) => formatQualifiedName(symbol)
 
   def format(method: BinaryMethodSymbol): String =
-    formatQualifiedName(method) + formatTypeAscription(method)
+    formatOwner(method).dot(formatName(method)) + formatTypeAscription(method)
 
-  private def formatQualifiedName(method: BinaryMethodSymbol): String =
+  private def formatOwner(method: BinaryMethodSymbol): String =
     method match
-      case BinaryMethod(_, sym) => formatQualifiedName(sym, "")
-      case BinaryAnonFun(_, sym, adapted) => formatQualifiedName(sym, if adapted then "<adapted>" else "")
-      case BinaryLocalLazyInit(_, sym) => formatQualifiedName(sym, "<lazy init>")
-      case BinaryLazyInit(owner, sym) => formatQualifiedName(owner, sym, "<lazy init>")
-      case BinaryTraitParamAccessor(owner, sym) => formatQualifiedName(owner, sym, "")
-      case BinaryMixinForwarder(owner, sym) => formatQualifiedName(owner, sym, "<mixin forwarder>")
-      case BinaryTraitStaticForwarder(_, sym) => formatQualifiedName(sym, "<static forwarder>")
-      case BinaryOuter(owner, _) => format(owner) + ".<outer>"
-      case BinarySuperArg(_, init, _) => formatQualifiedName(init, "<super arg>")
-      case BinaryLiftedTry(owner, _) => formatQualifiedName(owner, "<try>")
-      case BinaryByNameArg(owner, _, adapted) =>
-        formatQualifiedName(owner, "<by-name arg>" + (if adapted then ".<adapted>" else ""))
-      case BinaryMethodBridge(owner, target, _) => formatQualifiedName(owner, target, "<bridge>")
-      case BinaryAnonOverride(owner, overridden, _) => formatQualifiedName(owner, overridden, "")
-      case BinaryStaticForwarder(owner, target, _) =>
-        target match
-          case BinaryMethod(_, sym) => formatQualifiedName(owner, sym, "<static forwarder>")
-          case BinarySpecializedMethod(_, sym) =>
-            formatQualifiedName(owner, sym, "<specialized>.<static forwarder>")
-          case _ => formatQualifiedName(target) + ".<static forwarder>"
-      case BinaryDeserializeLambda(owner) => format(owner) + ".$deserializeLambda$"
-      case BinarySetter(owner, sym, _) =>
-        if sym.isMethod then formatQualifiedName(sym, "")
-        else format(owner) + "." + format(sym.name) + "_="
+      case BinaryMethod(_, sym) => formatOwner(sym)
+      case BinaryAnonFun(_, sym, adapted) => formatOwner(sym)
+      case BinaryLocalLazyInit(_, sym) => formatOwner(sym)
+      case BinaryLazyInit(owner, sym) => format(owner)
+      case BinaryTraitParamAccessor(owner, sym) => format(owner)
+      case BinaryMixinForwarder(owner, sym) => format(owner)
+      case BinaryTraitStaticForwarder(_, sym) => formatOwner(sym)
+      case BinaryOuter(owner, _) => format(owner)
+      case BinarySuperArg(_, init, _) => formatOwner(init)
+      case BinaryLiftedTry(owner, _) => format(owner)
+      case BinaryByNameArg(owner, _, adapted) => format(owner)
+      case BinaryMethodBridge(owner, target, _) => format(owner)
+      case BinaryAnonOverride(owner, overridden, _) => format(owner)
+      case BinaryStaticForwarder(owner, target, _) => format(owner)
+      case BinaryDeserializeLambda(owner) => format(owner)
+      case BinarySetter(owner, sym, _) => format(owner)
+      case BinarySuperAccessor(owner, sym, _, isBridge) => format(owner)
+      case BinarySpecializedMethod(_, sym) => formatOwner(sym)
+      case BinaryInlineAccessor(target) => formatOwner(target)
+
+  private def formatName(method: BinaryMethodSymbol): String =
+    method match
+      case BinaryMethod(_, sym) => formatName(sym)
+      case BinaryAnonFun(_, sym, adapted) => formatName(sym).dot(if adapted then "<adapted>" else "")
+      case BinaryLocalLazyInit(_, sym) => formatName(sym).dot("<lazy init>")
+      case BinaryLazyInit(owner, sym) => formatName(sym).dot("<lazy init>")
+      case BinaryTraitParamAccessor(owner, sym) => formatName(sym)
+      case BinaryMixinForwarder(owner, sym) => formatName(sym).dot("<mixin forwarder>")
+      case BinaryTraitStaticForwarder(_, sym) => formatName(sym).dot("<static forwarder>")
+      case BinaryOuter(owner, _) => "<outer>"
+      case BinarySuperArg(_, init, _) => formatName(init).dot("<super arg>")
+      case BinaryLiftedTry(owner, _) => "<try>"
+      case BinaryByNameArg(owner, _, adapted) => "<by-name arg>".dot(if adapted then ".<adapted>" else "")
+      case BinaryMethodBridge(owner, target, _) => formatName(target).dot("<bridge>")
+      case BinaryAnonOverride(owner, overridden, _) => formatName(overridden)
+      case BinaryStaticForwarder(owner, target, _) => formatName(target).dot("<static forwarder>")
+      case BinaryDeserializeLambda(owner) => "$deserializeLambda$"
+      case BinarySetter(owner, sym, _) => if sym.isMethod then formatName(sym) else formatName(sym) + "_="
       case BinarySuperAccessor(owner, sym, _, isBridge) =>
-        formatQualifiedName(owner, sym, if isBridge then "<super>.<bridge>" else "<super>")
-      case BinarySpecializedMethod(_, sym) => formatQualifiedName(sym, "<specialized>")
-      case BinaryInlineAccessor(target) => formatQualifiedName(target) + ".<inline>"
+        formatName(sym).dot(if isBridge then "<super>.<bridge>" else "<super>")
+      case BinarySpecializedMethod(_, sym) => formatName(sym).dot("<specialized>")
+      case BinaryInlineAccessor(target) => formatName(target).dot("<inline>")
 
   private def formatTypeAscription(method: BinaryMethodSymbol): String =
     method match
@@ -71,28 +85,23 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case BinarySpecializedMethod(_, sym) => formatTypeAscription(sym.declaredType)
       case BinaryInlineAccessor(target) => formatTypeAscription(target)
 
-  private def formatQualifiedName(term: TermSymbol, suffix: String): String =
-    val suffixSep = if suffix.isEmpty then "" else "."
-    formatQualifiedName(term) + suffixSep + suffix
-
-  private def formatQualifiedName(owner: BinaryClassSymbol, term: TermSymbol, suffix: String): String =
-    val suffixSep = if suffix.isEmpty then "" else "."
-    format(owner) + "." + format(term.name) + suffixSep + suffix
-
-  private def formatQualifiedName(owner: BinaryClassSymbol, suffix: String): String =
-    val suffixSep = if suffix.isEmpty then "" else "."
-    format(owner) + suffixSep + suffix
-
   private def formatQualifiedName(sym: Symbol): String =
+    formatOwner(sym).dot(formatName(sym))
+
+  private def formatOwner(sym: Symbol): String =
+    sym.owner match
+      case owner: ClassSymbol if owner.name.isPackageObject => format(owner.owner.name)
+      case owner: TermOrTypeSymbol => formatOwner(owner).dot(formatName(owner))
+      case owner: PackageSymbol => ""
+
+  private def formatName(sym: Symbol): String =
     sym match
-      case sym: ClassSymbol if sym.name.isPackageObject => formatQualifiedName(sym.owner)
-      case sym =>
-        val prefix = sym.owner match
-          case sym: ClassSymbol if sym.name.isPackageObject => formatQualifiedName(sym.owner)
-          case sym: TermOrTypeSymbol => formatQualifiedName(sym)
-          case sym: PackageSymbol => ""
-        val nameStr = format(sym.name)
-        if prefix.isEmpty then nameStr else s"$prefix.$nameStr"
+      case sym: ClassSymbol if sym.name.isPackageObject => format(sym.owner.name)
+      case _ => format(sym.name)
+
+  extension (prefix: String)
+    def dot(suffix: String): String =
+      if prefix.nonEmpty && suffix.nonEmpty then s"$prefix.$suffix" else prefix + suffix
 
   private def formatTypeAscription(tpe: TypeOrMethodic): String =
     tpe match
