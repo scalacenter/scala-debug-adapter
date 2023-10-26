@@ -17,14 +17,14 @@ concurrency:
 
 jobs:
   scalafmt:
-    if: ${{!contains(github.event.head_commit.message, '[skip ci]') || (github.event_name == 'pull_request' && !contains(github.event.pull_request.body, '[skip ci]'))}}
+    if: ${{(github.event_name == 'pull_request' && !contains(github.event.pull_request.body, '[skip ci]'))}}
     name: Check Formatting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: ./bin/scalafmt --test
   cross-compilation:
-    if: ${{!contains(github.event.head_commit.message, '[skip ci]') || (github.event_name == 'pull_request' && !contains(github.event.pull_request.body, '[skip ci]'))}}
+    if: ${{(github.event_name == 'pull_request' && !contains(github.event.pull_request.body, '[skip ci]'))}}
     name: Cross Compilation
     runs-on: ubuntu-latest
     steps:
@@ -36,7 +36,7 @@ jobs:
           apps: sbt
       - run: sbt +Test/compile
   test:
-    if: ${{!contains(github.event.head_commit.message, '[skip ci]') || (github.event_name == 'pull_request' && !contains(github.event.pull_request.body, '[skip ci]'))}}
+    if: ${{(github.event_name == 'pull_request' && !contains(github.event.pull_request.body, '[skip ci]'))}}
     strategy:
       fail-fast: false
       matrix:
@@ -63,7 +63,7 @@ jobs:
       run: sbt test
       shell: bash
   scripted-test:
-    if: ${{!contains(github.event.head_commit.message, '[skip ci]') || (github.event_name == 'pull_request' && !contains(github.event.pull_request.body, '[skip ci]'))}}
+    if: ${{(github.event_name == 'pull_request' && !contains(github.event.pull_request.body, '[skip ci]'))}}
     strategy:
       fail-fast: false
       matrix:
