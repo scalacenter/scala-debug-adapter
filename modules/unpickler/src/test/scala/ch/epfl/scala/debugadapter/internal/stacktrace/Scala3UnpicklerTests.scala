@@ -380,13 +380,13 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     if isScala30 then
       debuggee.assertFormat(
         "example.Main$B$1",
-        "example.Main$A$B$1 <init>()",
+        "void <init>()",
         "Main.A.m.B.<init>(): Unit"
       )
     else
       debuggee.assertFormat(
         "example.Main$A$B$1",
-        "example.Main$A$B$1 <init>()",
+        "void <init>()",
         "Main.A.m.B.<init>(): Unit"
       )
   }
@@ -423,7 +423,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       "A.m.<static forwarder>(): String",
       skip = true
     )
-    debuggee.assertFormat("example.A", "example.A <init>(java.lang.String x)", "A.<init>(x: String): Unit")
+    debuggee.assertFormat("example.A", "void <init>(java.lang.String x)", "A.<init>(x: String): Unit")
   }
 
   test("local method inside a value class") {
@@ -935,7 +935,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     debuggee.assertFormat("example.A", "void $init$(example.A $this)", "A.<init>(): Unit")
-    debuggee.assertFormat("example.B", "example.B <init>()", "B.<init>(): Unit")
+    debuggee.assertFormat("example.B", "void <init>()", "B.<init>(): Unit")
   }
 
   test("vararg type") {
@@ -1551,8 +1551,20 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.A", "java.lang.String example$A$$inline$x()", "A.x.<inline>: String", skip = true)
     debuggee.assertFormat(
       "example.A",
+      "java.lang.String example$A$$inline$x$(example.A $this)",
+      "A.x.<inline>.<static forwarder>: String",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.A",
       "void example$A$$inline$x_$eq(java.lang.String x$0)",
       "A.x_=.<inline>(String): Unit",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.A",
+      "void example$A$$inline$x_$eq$(example.A $this, java.lang.String x$0)",
+      "A.x_=.<inline>.<static forwarder>(String): Unit",
       skip = true
     )
     debuggee.assertFormat(

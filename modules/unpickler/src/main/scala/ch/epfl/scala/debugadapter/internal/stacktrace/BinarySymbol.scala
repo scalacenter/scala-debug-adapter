@@ -54,9 +54,8 @@ final case class BinaryMixinForwarder(binaryOwner: BinaryClassSymbol, target: Bi
     extends BinaryMethodSymbol:
   override def declaredType: TypeOrMethodic = target.declaredType
 
-final case class BinaryTraitStaticForwarder(binaryOwner: BinaryClassSymbol, symbol: TermSymbol)
-    extends BinaryMethodSymbol:
-  override def declaredType: TypeOrMethodic = symbol.declaredType
+final case class BinaryTraitStaticForwarder(target: BinaryMethodSymbol) extends BinaryMethodSymbol:
+  override def declaredType: TypeOrMethodic = target.declaredType
 final case class BinaryOuter(binaryOwner: BinaryClassSymbol, declaredType: Type) extends BinaryMethodSymbol
 final case class BinarySuperArg(binaryOwner: BinaryClassSymbol, init: TermSymbol, declaredType: Type)
     extends BinaryMethodSymbol

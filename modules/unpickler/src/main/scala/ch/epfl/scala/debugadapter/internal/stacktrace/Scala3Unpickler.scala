@@ -128,7 +128,10 @@ class Scala3Unpickler(
         Seq(BinaryDeserializeLambda(binaryClass, defn.DeserializeLambdaType))
       case Patterns.ParamForwarder(name) => requiresBinaryClass(findParamForwarder(_, method, name))
       case Patterns.InlineAccessor(name) =>
-        if method.isStatic then findInlineAccessorForwarder(binaryClass, method, name)
+        if method.isTraitStaticForwarder then
+          requiresBinaryClass(findInlineAccessor(_, method, name.stripSuffix("$")))
+            .map(BinaryTraitStaticForwarder.apply)
+        else if method.isStatic then findInlineAccessorForwarder(binaryClass, method, name)
         else requiresBinaryClass(findInlineAccessor(_, method, name))
       case Patterns.TraitSetter(name) =>
         if method.isStatic then findTraitSetterForwarder(binaryClass, method, name)
@@ -139,7 +142,7 @@ class Scala3Unpickler(
       case Patterns.SpecializedMethod(name) =>
         if method.isStatic then findSpecializedForwarder(binaryClass, method, name)
         else requiresBinaryClass(findSpecializedMethod(_, method, name))
-      case Patterns.TraitStaticForwarder(_) => requiresBinaryClass(findTraitStaticForwarder(_, method))
+      case Patterns.TraitStaticForwarder(name) => requiresBinaryClass(findTraitStaticForwarder(_, method, name))
       case _ => findStandardMethod(binaryClass, method)
     candidates.singleOrThrow(method)
 
@@ -211,7 +214,7 @@ class Scala3Unpickler(
     yield BinaryStaticForwarder(binaryClass, target, target.declaredType)
 
   private def findSetter(binaryClass: BinaryClass, method: binary.Method, name: String): Seq[BinarySetter] =
-    val javaParamType = method.allParameters.head.`type`
+    val javaParamType = method.allParameters.last.`type`
     def matchType0(sym: TermSymbol): Boolean =
       sym.declaredType match
         case tpe: Type => matchType(tpe.erasedAsArgType(), javaParamType)
@@ -264,13 +267,14 @@ class Scala3Unpickler(
   ): Seq[BinaryStaticForwarder] =
     for
       binaryObject <- binaryClass.companionClass.toSeq
-      target <- findInlineAccessor(binaryObject, method, name)
+      target <- findInlineAccessor(binaryObject, method, name, checkParamNames = false)
     yield BinaryStaticForwarder(binaryObject, target, target.declaredType)
 
   private def findInlineAccessor(
       binaryClass: BinaryClass,
       method: binary.Method,
-      name: String
+      name: String,
+      checkParamNames: Boolean = true
   ): Seq[BinaryMethodSymbol] =
     val standardMethods =
       binaryClass.symbol.declarations
@@ -279,7 +283,7 @@ class Scala3Unpickler(
           val resultType = sym.declaredType match
             case byName: ByNameType => byName.resultType
             case tpe => tpe
-          matchSignature1(method, resultType, isAnonFun = false)
+          matchSignature1(method, resultType, isAnonFun = false, checkParamNames = checkParamNames)
         }
         .map(sym => BinaryInlineAccessor(BinaryMethod(binaryClass, sym)))
     def setters =
@@ -346,11 +350,14 @@ class Scala3Unpickler(
       yield BinaryLazyInit(binaryClass, term)
     fromClass.orIfEmpty(fromTraits)
 
-  private def findTraitStaticForwarder(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
-    val expectedName = method.unexpandedDecodedName.stripSuffix("$")
+  private def findTraitStaticForwarder(
+      binaryClass: BinaryClass,
+      method: binary.Method,
+      name: String
+  ): Seq[BinaryMethodSymbol] =
     binaryClass.symbol.declarations.collect {
-      case sym: TermSymbol if sym.targetNameStr == expectedName && matchSignature(method, sym) =>
-        BinaryTraitStaticForwarder(binaryClass, sym)
+      case sym: TermSymbol if sym.targetNameStr == name && matchSignature(method, sym) =>
+        BinaryTraitStaticForwarder(BinaryMethod(binaryClass, sym))
     }
 
   private def findOuter(binaryClass: BinaryClassSymbol): BinaryOuter =
