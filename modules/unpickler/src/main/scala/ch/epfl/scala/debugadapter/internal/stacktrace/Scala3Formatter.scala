@@ -27,7 +27,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case BinaryLocalLazyInit(_, sym) => formatOwner(sym)
       case BinaryLazyInit(owner, _) => format(owner)
       case BinaryTraitParamAccessor(owner, _) => format(owner)
-      case BinaryMixinForwarder(owner, _) => format(owner)
+      case BinaryMixinForwarder(owner, target) => format(owner)
       case BinaryTraitStaticForwarder(target) => formatOwner(target)
       case BinaryOuter(owner, _) => format(owner)
       case BinarySuperArg(_, init, _) => formatOwner(init)
@@ -40,7 +40,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case BinarySetter(owner, _, _) => format(owner)
       case BinarySuperAccessor(owner, _, _) => format(owner)
       case BinarySpecializedMethod(_, sym) => formatOwner(sym)
-      case BinaryInlineAccessor(target) => formatOwner(target)
+      case BinaryInlineAccessor(owner, _) => format(owner)
       case BinaryAdaptedFun(target) => formatOwner(target)
 
   private def formatName(method: BinaryMethodSymbol): String =
@@ -62,7 +62,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case BinarySetter(_, sym, _) => if sym.isMethod then formatName(sym) else formatName(sym) + "_="
       case BinarySuperAccessor(_, sym, _) => formatName(sym).dot("<super>")
       case BinarySpecializedMethod(_, sym) => formatName(sym).dot("<specialized>")
-      case BinaryInlineAccessor(target) => formatName(target).dot("<inline>")
+      case BinaryInlineAccessor(_, target) => s"<inline ${formatOwner(target).dot(formatName(target))}>"
       case BinaryAdaptedFun(target) => formatName(target).dot("<adapted>")
 
   private def formatQualifiedName(sym: Symbol): String =

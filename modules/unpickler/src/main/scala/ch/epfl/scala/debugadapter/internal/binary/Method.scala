@@ -10,6 +10,7 @@ trait Method extends Symbol:
   def isStatic: Boolean
   def instructions: Seq[Instruction]
   def isConstructor: Boolean
+  def signature: MethodSig
 
   def isExtensionMethod: Boolean = name.endsWith("$extension")
   def isTraitStaticForwarder: Boolean =

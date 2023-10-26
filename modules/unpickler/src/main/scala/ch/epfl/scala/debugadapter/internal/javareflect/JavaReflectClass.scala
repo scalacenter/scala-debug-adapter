@@ -4,6 +4,7 @@ import ch.epfl.scala.debugadapter.internal.binary
 import scala.util.matching.Regex
 import scala.jdk.CollectionConverters.*
 import ch.epfl.scala.debugadapter.internal.binary.Method
+import ch.epfl.scala.debugadapter.internal.binary.MethodSig
 
 class JavaReflectClass(cls: Class[?], extraInfos: Map[MethodSig, ExtraBytecodeInfo], loader: JavaReflectLoader)
     extends binary.ClassType:
@@ -19,18 +20,12 @@ class JavaReflectClass(cls: Class[?], extraInfos: Map[MethodSig, ExtraBytecodeIn
 
   override def toString: String = cls.toString
 
-  def declaredMethodsAndConstructors: Seq[binary.Method] =
-    declaredConstructors ++ declaredMethods
-
-  private def declaredMethods: Seq[JavaReflectMethod] =
+  override def declaredMethods: Seq[binary.Method] =
     cls.getDeclaredMethods.map { m =>
       val sig = JavaReflectUtils.signature(m)
       val extraInfo = extraInfos.getOrElse(sig, ExtraBytecodeInfo.empty)
       JavaReflectMethod(m, sig, extraInfo, loader)
-    }
-
-  private def declaredConstructors: Seq[JavaReflectConstructor] =
-    cls.getDeclaredConstructors.map { c =>
+    } ++ cls.getDeclaredConstructors.map { c =>
       val sig = JavaReflectUtils.signature(c)
       val extraInfo = extraInfos.getOrElse(sig, ExtraBytecodeInfo.empty)
       JavaReflectConstructor(c, sig, extraInfo, loader)

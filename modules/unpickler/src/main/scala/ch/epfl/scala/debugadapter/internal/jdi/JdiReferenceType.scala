@@ -16,6 +16,8 @@ class JdiReferenceType(obj: Any, className: String = "com.sun.jdi.ReferenceType"
 
   override def declaredMethod(name: String, sig: String): Option[Method] = None
 
+  override def declaredMethods: Seq[Method] = Seq.empty
+
   def asClass: JdiClassType = JdiClassType(obj)
   def asInterface: JdiInterfaceType = JdiInterfaceType(obj)
 

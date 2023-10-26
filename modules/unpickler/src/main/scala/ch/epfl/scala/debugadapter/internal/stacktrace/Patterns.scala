@@ -106,11 +106,8 @@ object Patterns:
 
   object Setter:
     def unapply(method: binary.Method): Option[String] =
-      unapply(method.unexpandedDecodedName)
-
-    def unapply(name: String): Option[String] =
       val setter = "(.+)_=".r
-      setter.unapplySeq(name).map(xs => xs(0))
+      setter.unapplySeq(method.unexpandedDecodedName).map(xs => xs(0))
 
   object SuperAccessor:
     def unapply(method: binary.Method): Option[String] =

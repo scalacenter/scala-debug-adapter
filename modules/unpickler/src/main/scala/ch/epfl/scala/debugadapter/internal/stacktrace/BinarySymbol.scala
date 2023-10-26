@@ -82,7 +82,7 @@ final case class BinarySuperAccessor(binaryOwner: BinaryClassSymbol, sym: TermSy
 final case class BinarySpecializedMethod(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol:
   override def declaredType: TypeOrMethodic = symbol.declaredType
 
-final case class BinaryInlineAccessor(target: BinaryMethodSymbol) extends BinaryMethodSymbol:
+final case class BinaryInlineAccessor(owner: BinaryClass, target: BinaryMethodSymbol) extends BinaryMethodSymbol:
   override def declaredType: TypeOrMethodic = target.declaredType
 
 final case class BinaryAdaptedFun(target: BinaryMethodSymbol) extends BinaryMethodSymbol:

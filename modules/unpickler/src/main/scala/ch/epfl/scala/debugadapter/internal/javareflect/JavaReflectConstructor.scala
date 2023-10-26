@@ -3,10 +3,11 @@ package ch.epfl.scala.debugadapter.internal.javareflect
 import ch.epfl.scala.debugadapter.internal.binary
 import java.lang.reflect.Constructor
 import java.lang.reflect.Method
+import ch.epfl.scala.debugadapter.internal.binary.MethodSig
 
 class JavaReflectConstructor(
     constructor: Constructor[?],
-    signature: MethodSig,
+    val signature: MethodSig,
     extraInfos: ExtraBytecodeInfo,
     loader: JavaReflectLoader
 ) extends binary.Method:

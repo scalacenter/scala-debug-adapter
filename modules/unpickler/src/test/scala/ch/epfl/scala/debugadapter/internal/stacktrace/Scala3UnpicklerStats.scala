@@ -47,14 +47,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
-      // if cls.name == "dotty.tools.dotc.core.Contexts"
+      // if cls.name == "dotty.tools.dotc.transform.sjs.PrepJSInterop$OwnerKind"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
-      method <- cls.declaredMethodsAndConstructors
-    // if method.name == "inline$comparer"
+      method <- cls.declaredMethods
+    // if method.name == "inline$baseKinds$extension"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -76,11 +76,11 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(anonClassCounter, 430)
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
-    checkCounter(localMethodCounter, 2585, expectedAmbiguous = 2, expectedNotFound = 3)
+    checkCounter(localMethodCounter, 2586, expectedAmbiguous = 2, expectedNotFound = 2)
     checkCounter(anonFunCounter, 6649, expectedAmbiguous = 331, expectedNotFound = 5)
     checkCounter(adaptedAnonFunCounter, 288, expectedAmbiguous = 83)
     checkCounter(localLazyInitCounter, 107)
-    checkCounter(methodCounter, 57563, expectedAmbiguous = 143, expectedNotFound = 179)
+    checkCounter(methodCounter, 57573, expectedAmbiguous = 143, expectedNotFound = 175)
 
   def checkCounter(
       counter: Counter,

@@ -2,6 +2,7 @@ package ch.epfl.scala.debugadapter.internal.javareflect
 
 import java.lang.reflect.Method
 import java.lang.reflect.Constructor
+import ch.epfl.scala.debugadapter.internal.binary.MethodSig
 
 object JavaReflectUtils:
   val primitiveSigs = Map[Class[?], String](

@@ -5,6 +5,7 @@ import ch.epfl.scala.debugadapter.internal.binary.*
 import scala.collection.mutable
 import org.objectweb.asm
 import java.io.IOException
+import ch.epfl.scala.debugadapter.internal.binary.MethodSig
 
 class JavaReflectLoader(classLoader: ClassLoader, loadExtraInfo: Boolean = true):
   private val loadedClasses: mutable.Map[Class[?], JavaReflectClass] = mutable.Map.empty

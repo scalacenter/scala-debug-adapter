@@ -4,6 +4,7 @@ import ch.epfl.scala.debugadapter.internal.binary
 
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
+import ch.epfl.scala.debugadapter.internal.binary.MethodSig
 
 class JavaReflectMethod(
     method: Method,

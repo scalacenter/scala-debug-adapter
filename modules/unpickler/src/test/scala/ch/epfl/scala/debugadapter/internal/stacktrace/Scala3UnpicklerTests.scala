@@ -1538,57 +1538,78 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       """|package example
          |
          |trait A:
-         |  private var x: String = "foo"
-         |  inline def m: Unit = if x == "foo" then x = "bar"
+         |  class AA:
+         |    private[A] var x: String = "foo"
+         |  inline def m(aa: AA): Unit = if aa.x == "foo" then aa.x = "bar"
          |
          |class B extends A
          |
          |object B:
          |  private var y: String = "foo"
          |  inline def m: Unit = if y == "foo" then y = "bar"
+         |
+         |class C(x: String) extends AnyVal:
+         |  inline def m: String = x + x
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.A", "java.lang.String example$A$$inline$x()", "A.x.<inline>: String", skip = true)
     debuggee.assertFormat(
       "example.A",
-      "java.lang.String example$A$$inline$x$(example.A $this)",
-      "A.x.<inline>.<static forwarder>: String",
+      "java.lang.String inline$x$i2(example.A$AA x$0)",
+      "A.<inline A.AA.x>: String",
       skip = true
     )
     debuggee.assertFormat(
       "example.A",
-      "void example$A$$inline$x_$eq(java.lang.String x$0)",
-      "A.x_=.<inline>(String): Unit",
+      "java.lang.String inline$x$i2$(example.A $this, example.A$AA x$0)",
+      "A.<inline A.AA.x>.<static forwarder>: String",
       skip = true
     )
     debuggee.assertFormat(
       "example.A",
-      "void example$A$$inline$x_$eq$(example.A $this, java.lang.String x$0)",
-      "A.x_=.<inline>.<static forwarder>(String): Unit",
+      "void inline$x_$eq$i2(example.A$AA x$0, java.lang.String x$0)",
+      "A.<inline A.AA.x_=>(String): Unit",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.A",
+      "void inline$x_$eq$i2$(example.A $this, example.A$AA x$0, java.lang.String x$0)",
+      "A.<inline A.AA.x_=>.<static forwarder>(String): Unit",
       skip = true
     )
     debuggee.assertFormat(
       "example.B",
-      "java.lang.String example$A$$inline$x()",
-      "B.x.<inline>.<mixin forwarder>: String",
+      "java.lang.String inline$x$i2(example.A$AA x$0)",
+      "B.<inline A.AA.x>.<mixin forwarder>: String",
       skip = true
     )
     debuggee.assertFormat(
       "example.B",
-      "void example$A$$inline$x_$eq(java.lang.String x$0)",
-      "B.x_=.<inline>.<mixin forwarder>(String): Unit",
+      "void inline$x_$eq$i2(example.A$AA x$0, java.lang.String x$0)",
+      "B.<inline A.AA.x_=>.<mixin forwarder>(String): Unit",
       skip = true
     )
     debuggee.assertFormat(
       "example.B",
       "java.lang.String inline$y()",
-      "B.y.<inline>.<static forwarder>: String",
+      "B.<inline B.y>.<static forwarder>: String",
       skip = true
     )
     debuggee.assertFormat(
       "example.B",
       "void inline$y_$eq(java.lang.String arg0)",
-      "B.y_=.<inline>.<static forwarder>(String): Unit",
+      "B.<inline B.y_=>.<static forwarder>(String): Unit",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.C$",
+      "java.lang.String inline$x$extension(java.lang.String $this)",
+      "C.<inline C.x>: String",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.C",
+      "java.lang.String inline$x$extension(java.lang.String arg0)",
+      "C.<inline C.x>.<static forwarder>: String",
       skip = true
     )
   }
@@ -1629,7 +1650,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
         val parameters = m.allParameters.map(p => p.`type`.name + " " + p.name).mkString(", ")
         s"$returnType ${m.name}($parameters)"
 
-      val methods = loader(loadExtraInfo).loadClass(declaringType).declaredMethodsAndConstructors
+      val methods = loader(loadExtraInfo).loadClass(declaringType).declaredMethods
       def notFoundMessage: String =
         s"Cannot find method '$javaSig':\n" + methods.map(m => s"  " + formatJavaStyle(m)).mkString("\n")
       methods.find(m => formatJavaStyle(m) == javaSig).getOrElse(throw new Exception(notFoundMessage))
