@@ -1537,45 +1537,48 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val source =
       """|package example
          |
-         |class A:
+         |trait A:
          |  private var x: String = "foo"
-         |  inline def m: Unit =
-         |    if x == "foo" then x = "bar"
+         |  inline def m: Unit = if x == "foo" then x = "bar"
+         |
+         |class B extends A
          |
          |object B:
-         |  private var x: String = "foo"
-         |  inline def m: Unit =
-         |    if x == "foo" then x = "bar"
+         |  private var y: String = "foo"
+         |  inline def m: Unit = if y == "foo" then y = "bar"
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    if isScala30 then
-      debuggee.assertFormat("example.A", "java.lang.String inline$x()", "A.x.<inline>: String", skip = true)
-      debuggee.assertFormat(
-        "example.A",
-        "void inline$x_$eq(java.lang.String x$0)",
-        "A.x_=.<inline>(String): Unit",
-        skip = true
-      )
-      debuggee.assertFormat(
-        "example.B",
-        "void inline$x_$eq(java.lang.String arg0)",
-        "B.x_=.<inline>.<static forwarder>(String): Unit",
-        skip = true
-      )
-    else
-      debuggee.assertFormat("example.A", "java.lang.String example$A$$inline$x()", "A.x.<inline>: String", skip = true)
-      debuggee.assertFormat(
-        "example.A",
-        "void example$A$$inline$x_$eq(java.lang.String x$0)",
-        "A.x_=.<inline>(String): Unit",
-        skip = true
-      )
-      debuggee.assertFormat(
-        "example.B",
-        "void inline$x_$eq(java.lang.String arg0)",
-        "B.x_=.<inline>.<static forwarder>(String): Unit",
-        skip = true
-      )
+    debuggee.assertFormat("example.A", "java.lang.String example$A$$inline$x()", "A.x.<inline>: String", skip = true)
+    debuggee.assertFormat(
+      "example.A",
+      "void example$A$$inline$x_$eq(java.lang.String x$0)",
+      "A.x_=.<inline>(String): Unit",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.B",
+      "java.lang.String example$A$$inline$x()",
+      "B.x.<inline>.<mixin forwarder>: String",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.B",
+      "void example$A$$inline$x_$eq(java.lang.String x$0)",
+      "B.x_=.<inline>.<mixin forwarder>(String): Unit",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.B",
+      "java.lang.String inline$y()",
+      "B.y.<inline>.<static forwarder>: String",
+      skip = true
+    )
+    debuggee.assertFormat(
+      "example.B",
+      "void inline$y_$eq(java.lang.String arg0)",
+      "B.y_=.<inline>.<static forwarder>(String): Unit",
+      skip = true
+    )
   }
 
   test("deserializeLambda") {
@@ -1609,36 +1612,15 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     private def loadBinaryMethod(declaringType: String, javaSig: String, loadExtraInfo: Boolean)(using
         munit.Location
     ): binary.Method =
-      def typeAndName(p: String): (String, String) =
-        val parts = p.split(' ').filter(_.nonEmpty)
-        assert(parts.size == 2)
-        (parts(0), parts(1))
+      def formatJavaStyle(m: binary.Method): String =
+        val returnType = m.returnType.map(_.name).get
+        val parameters = m.allParameters.map(p => p.`type`.name + " " + p.name).mkString(", ")
+        s"$returnType ${m.name}($parameters)"
 
-      val parts = javaSig.split(Array('(', ')', ',')).filter(_.nonEmpty)
-      val (returnType, name) = typeAndName(parts(0))
-      val params = parts.drop(1).map(typeAndName)
-
-      def matchParams(javaParams: Seq[binary.Parameter]): Boolean =
-        javaParams.map(p => (p.`type`.name, p.name)) == params.toSeq
-
-      val cls = loader(loadExtraInfo).loadClass(declaringType)
+      val methods = loader(loadExtraInfo).loadClass(declaringType).declaredMethodsAndConstructors
       def notFoundMessage: String =
-        val allMethods = cls.declaredMethodsAndConstructors
-          .map(m =>
-            s"  ${m.returnType.map(_.name).getOrElse("unknown")} ${m.name}(${m.allParameters.map(p => p.`type`.name + " " + p.name).mkString(", ")})"
-          )
-          .mkString("\n")
-        s"Cannot find method '$javaSig':\n$allMethods"
-      if name == "<init>" then
-        val constructor =
-          cls.declaredMethodsAndConstructors.find(m => m.name == "<init>" && matchParams(m.allParameters))
-        assert(constructor.isDefined, notFoundMessage)
-        constructor.get
-      else
-        val method = cls.declaredMethodsAndConstructors
-          .find(m => m.name == name && m.returnType.exists(_.name == returnType) && matchParams(m.allParameters))
-        assert(method.isDefined, notFoundMessage)
-        method.get
+        s"Cannot find method '$javaSig':\n" + methods.map(m => s"  " + formatJavaStyle(m)).mkString("\n")
+      methods.find(m => formatJavaStyle(m) == javaSig).getOrElse(throw new Exception(notFoundMessage))
 
     private def assertNotFound(declaringType: String, javaSig: String, loadExtraInfo: Boolean = false)(using
         munit.Location

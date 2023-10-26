@@ -50,8 +50,9 @@ final case class BinaryTraitParamAccessor(binaryOwner: BinaryClassSymbol, symbol
     extends BinaryMethodSymbol:
   override def declaredType: TypeOrMethodic = symbol.declaredType
 
-final case class BinaryMixinForwarder(binaryOwner: BinaryClassSymbol, symbol: TermSymbol) extends BinaryMethodSymbol:
-  override def declaredType: TypeOrMethodic = symbol.declaredType
+final case class BinaryMixinForwarder(binaryOwner: BinaryClassSymbol, target: BinaryMethodSymbol)
+    extends BinaryMethodSymbol:
+  override def declaredType: TypeOrMethodic = target.declaredType
 
 final case class BinaryTraitStaticForwarder(binaryOwner: BinaryClassSymbol, symbol: TermSymbol)
     extends BinaryMethodSymbol:
