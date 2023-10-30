@@ -1,6 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.stacktrace
 
 import ch.epfl.scala.debugadapter.internal.binary
+import scala.util.matching.Regex
 
 object Patterns:
   object LocalClass:
@@ -57,20 +58,14 @@ object Patterns:
       adaptedAnonFun.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0).stripSuffix("$"))
 
   object LocalMethod:
-    def unapply(method: binary.Method): Option[(String, Int)] =
+    def unapply(method: binary.Method): Option[Seq[String]] =
       if method.name.contains("$default") || method.name.contains("$proxy") then None
-      else
-        "(.+)\\$(\\d+)".r
-          .unapplySeq(method.unexpandedDecodedName)
-          .map(xs => (xs(0), xs(1).toInt))
+      else method.extractFromDecodedNames("(.+)\\$\\d+".r)(_(0))
 
   object LocalLazyInit:
-    def unapply(method: binary.Method): Option[(String, Int)] =
+    def unapply(method: binary.Method): Option[Seq[String]] =
       if !method.allParameters.forall(_.isGenerated) then None
-      else
-        "(.+)\\$lzyINIT\\d+\\$(\\d+)".r
-          .unapplySeq(method.unexpandedDecodedName)
-          .map(xs => (xs(0), xs(1).toInt))
+      else method.extractFromDecodedNames("(.+)\\$lzyINIT\\d+\\$(\\d+)".r)(_(0))
 
   object SuperArg:
     def unapply(method: binary.Method): Boolean =
@@ -105,26 +100,29 @@ object Patterns:
       traitSetter.unapplySeq(method.decodedName).map(xs => xs(1))
 
   object Setter:
-    def unapply(method: binary.Method): Option[String] =
-      val setter = "(.+)_=".r
-      setter.unapplySeq(method.unexpandedDecodedName).map(xs => xs(0))
+    def unapply(method: binary.Method): Option[Seq[String]] =
+      method.extractFromDecodedNames("(.+)_=".r)(_(0))
 
   object SuperAccessor:
-    def unapply(method: binary.Method): Option[String] =
-      val superAccessor = "super\\$(.+)".r
-      superAccessor.unapplySeq(method.unexpandedDecodedName).map(xs => xs(0))
+    def unapply(method: binary.Method): Option[Seq[String]] =
+      method.extractFromDecodedNames("super\\$(.+)".r)(_(0))
 
   object SpecializedMethod:
-    def unapply(method: binary.Method): Option[String] =
-      val specializedMethod = "(.+)\\$mc.+\\$sp".r
-      specializedMethod.unapplySeq(method.unexpandedDecodedName).map(xs => xs(0))
+    def unapply(method: binary.Method): Option[Seq[String]] =
+      method.extractFromDecodedNames("(.+)\\$mc.+\\$sp".r)(_(0))
 
   object ByNameArgProxy:
     def unapply(method: binary.Method): Boolean =
-      val byNameArgProxy = ".+\\$proxy\\d+\\$\\d+".r
-      byNameArgProxy.unapplySeq(method.unexpandedDecodedName).isDefined
+      ".+\\$proxy\\d+\\$\\d+".r.unapplySeq(method.name).isDefined
 
   object InlineAccessor:
-    def unapply(method: binary.Method): Option[String] =
-      val inlineAccessor = "inline\\$(.+)".r
-      inlineAccessor.unapplySeq(method.unexpandedDecodedName).map(xs => xs(0))
+    def unapply(method: binary.Method): Option[Seq[String]] =
+      method.extractFromDecodedNames("inline\\$(.+)".r)(_(0))
+
+  extension (method: binary.Method)
+    private def extractFromDecodedNames[T](regex: Regex)(extract: List[String] => T): Option[Seq[T]] =
+      val extracted = method.unexpandedDecodedNames
+        .flatMap(regex.unapplySeq)
+        .map(extract)
+        .distinct
+      if extracted.nonEmpty then Some(extracted) else None
