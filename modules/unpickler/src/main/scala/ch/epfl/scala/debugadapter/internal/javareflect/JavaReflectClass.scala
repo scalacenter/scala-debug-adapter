@@ -27,7 +27,11 @@ class JavaReflectClass(cls: Class[?], extraInfos: Map[MethodSig, ExtraBytecodeIn
       yield declaredMethod
     }
 
-  override def toString: String = cls.toString
+  override def toString: String =
+    val span =
+      if sourceLines.size > 2 then Seq(sourceLines.min, sourceLines.max)
+      else sourceLines
+    s"$cls (${span.mkString(", ")})"
 
   override def declaredMethods: Seq[binary.Method] =
     cls.getDeclaredMethods.map { m =>

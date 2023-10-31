@@ -5,23 +5,19 @@ import ch.epfl.scala.debugadapter.internal.jdi.JdiMethod
 import ch.epfl.scala.debugadapter.internal.stacktrace.*
 import tastyquery.Contexts
 import tastyquery.Contexts.Context
-import tastyquery.Flags
 import tastyquery.Names.*
 import tastyquery.Signatures.*
 import tastyquery.Symbols.*
 import tastyquery.Trees.*
 import tastyquery.Types.*
 import tastyquery.jdk.ClasspathLoaders
-import tastyquery.jdk.ClasspathLoaders.FileKind
 
 import java.nio.file.Path
 import java.util.Optional
 import java.util.function.Consumer
 import scala.jdk.OptionConverters.*
 import scala.util.matching.Regex
-import tastyquery.Modifiers.TermSymbolKind
 import tastyquery.SourceLanguage
-import scala.util.control.NonFatal
 import tastyquery.Traversers.TreeTraverser
 import scala.collection.mutable.Buffer
 import ch.epfl.scala.debugadapter.internal.binary.Instruction
@@ -195,7 +191,9 @@ class Scala3Unpickler(
 
   private def findStandardMethod(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryMethodSymbol] =
     binaryClass match
-      case samClass: BinarySAMClass => findAnonOverride(samClass, method).toSeq
+      case samClass: BinarySAMClass =>
+        if method.isBridge then findMethodsFromTraits(samClass, samClass.parentClass, samClass.declaredType, method)
+        else findAnonOverride(samClass, method).toSeq
       case partialFun: BinaryPartialFunction => Seq(findAnonOverride(partialFun, method))
       case binaryClass: BinaryClass =>
         if method.isBridge then findBridgeAndMixinForwarders(binaryClass, method)
@@ -508,51 +506,68 @@ class Scala3Unpickler(
       yield
         val anonOverride = BinaryAnonOverride(binaryClass, overridden, binaryClass.symbol.declaredType)
         if method.isBridge then
-          val tpe = overridden.declaredTypeAsSeenFrom(SkolemType(binaryClass.tpe))
+          val tpe = overridden.declaredTypeAsSeenFrom(SkolemType(binaryClass.declaredType))
           BinaryMethodBridge(anonOverride, tpe)
         else anonOverride
     types.nextOption
 
   private def findAnonOverride(binaryClass: BinaryPartialFunction, method: binary.Method): BinaryMethodSymbol =
     val overriddenSym = defn.PartialFunctionClass.findNonOverloadedDecl(SimpleName(method.name))
-    val tpe = overriddenSym.declaredTypeAsSeenFrom(SkolemType(binaryClass.tpe))
+    val tpe = overriddenSym.declaredTypeAsSeenFrom(SkolemType(binaryClass.declaredType))
     val anonOverride = BinaryAnonOverride(binaryClass, overriddenSym, tpe)
     if method.isBridge then BinaryMethodBridge(anonOverride, tpe)
     else anonOverride
 
   private def findBridgeAndMixinForwarders(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
-    val bridges =
-      for
-        overridingSym <- binaryClass.symbol.declarations
-          .collect { case term: TermSymbol if matchTargetName(method, term) => term }
-        overriddenSym <- overridingSym.allOverriddenSymbols.find(matchSignature(method, _))
-      yield
-        val target = BinaryMethod(binaryClass, overridingSym)
-        val tpe = overriddenSym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
-        BinaryMethodBridge(target, tpe)
-    bridges.orIfEmpty(findMethodsFromTraits(binaryClass, method))
+    findBridgeFromClass(binaryClass, method)
+      .orIfEmpty(findMethodsFromTraits(binaryClass, method))
+
+  def findBridgeFromClass(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodBridge] =
+    for
+      overridingSym <- binaryClass.symbol.declarations
+        .collect { case term: TermSymbol if matchTargetName(method, term) => term }
+      overriddenSym <- overridingSym.allOverriddenSymbols.find(matchSignature(method, _))
+    yield
+      val target = BinaryMethod(binaryClass, overridingSym)
+      val tpe = overriddenSym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
+      BinaryMethodBridge(target, tpe)
 
   private def findMethodsFromTraits(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethodSymbol] =
-    val mixinForwardersAndParamAccessors = for
-      traitSym <- binaryClass.symbol.linearization.filter(_.isTrait)
-      binarySym <- traitSym.declarations
+    if !binaryClass.symbol.isTrait then
+      findMethodsFromTraits(binaryClass, binaryClass.symbol, binaryClass.symbol.thisType, method)
+    else Seq.empty
+
+  private def findMethodsFromTraits(binaryClass: BinaryClassSymbol, fromClass: ClassSymbol, fromType: Type, method: binary.Method): Seq[BinaryMethodSymbol] =
+    val mixinForwarders = findMixinForwarder(binaryClass, fromClass, method)
+    val paramAccessors = findTraitParamAccessors(binaryClass, fromClass, method)
+    def bridges = findBridgesFromTraits(binaryClass, fromClass, fromType, method)
+    (mixinForwarders ++ paramAccessors).orIfEmpty(bridges)
+
+  private def findBridgesFromTraits(binaryClass: BinaryClassSymbol, fromClass: ClassSymbol, fromType: Type, method: binary.Method): Seq[BinaryMethodSymbol] =
+    for
+      traitSym <- fromClass.linearization.filter(_.isTrait)
+      overridingSym <- traitSym.declarations.collect { case sym: TermSymbol if matchTargetName(method, sym) => sym }
+      overriddenSym <- overridingSym.allOverriddenSymbols.find(matchSignature(method, _))
+    yield
+      val target = BinaryMethod(binaryClass, overridingSym)
+      val tpe = overriddenSym.declaredTypeAsSeenFrom(fromType)
+      BinaryMethodBridge(target, tpe)
+
+  private def findMixinForwarder(binaryClass: BinaryClassSymbol, inClass: ClassSymbol, method: binary.Method): Seq[BinaryMixinForwarder] =
+    for
+      traitSym <- inClass.linearization.filter(_.isTrait)
+      sym <- traitSym.declarations
         .collect { case sym: TermSymbol if matchTargetName(method, sym) && matchSignature(method, sym) => sym }
-        .collect {
-          case sym if sym.isParamAccessor => BinaryTraitParamAccessor(binaryClass, sym)
-          case sym if sym.isOverridingSymbol(binaryClass.symbol) =>
-            BinaryMixinForwarder(binaryClass, BinaryMethod(BinaryClass(traitSym), sym))
-        }
-    yield binarySym
-    def bridges =
-      for
-        traitSym <- binaryClass.symbol.linearization.filter(_.isTrait)
-        overridingSym <- traitSym.declarations.collect { case sym: TermSymbol if matchTargetName(method, sym) => sym }
-        overriddenSym <- overridingSym.allOverriddenSymbols.find(matchSignature(method, _))
-      yield
-        val target = BinaryMethod(binaryClass, overridingSym)
-        val tpe = overriddenSym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
-        BinaryMethodBridge(target, tpe)
-    mixinForwardersAndParamAccessors.orIfEmpty(bridges)
+      if sym.isOverridingSymbol(inClass)
+    yield BinaryMixinForwarder(binaryClass, BinaryMethod(BinaryClass(traitSym), sym))
+  
+  private def findTraitParamAccessors(binaryClass: BinaryClassSymbol, fromClass: ClassSymbol, method: binary.Method): Seq[BinaryTraitParamAccessor] =
+    for
+      traitSym <- fromClass.linearization.filter(_.isTrait)
+      sym <- traitSym.declarations
+        .collect { case sym: TermSymbol if matchTargetName(method, sym) && matchSignature(method, sym) => sym }
+      if sym.isParamAccessor
+    yield BinaryTraitParamAccessor(binaryClass, sym)
 
   private def notFound(symbol: binary.Symbol): Nothing = throw NotFoundException(symbol)
 

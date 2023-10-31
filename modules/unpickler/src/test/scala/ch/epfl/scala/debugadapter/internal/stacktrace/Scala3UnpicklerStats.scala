@@ -8,14 +8,12 @@ import ch.epfl.scala.debugadapter.testfmk.TestingResolver
 import org.objectweb.asm
 import tastyquery.Symbols.*
 
-import java.net.URLClassLoader
 import java.nio.file.Files
 import java.nio.file.Path
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 import scala.util.Properties
-import scala.concurrent.duration.Duration
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.*
 import scala.util.control.NonFatal
 
 class Scala3UnpicklerStats extends munit.FunSuite:
@@ -53,14 +51,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0", binaryClassLoader)
-      // if cls.name == "dotty.tools.io.NoAbstractFile"
+      // if cls.name == "dotty.tools.dotc.typer.Implicits$$anon$3"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethods
-    // if method.name == "empty"
+      // if method.name == "tryCompare"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -82,11 +80,11 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(anonClassCounter, 430)
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
-    checkCounter(localMethodCounter, 2604, expectedAmbiguous = 2, expectedNotFound = 2)
+    checkCounter(localMethodCounter, 2601, expectedAmbiguous = 5, expectedNotFound = 2)
     checkCounter(anonFunCounter, 6649, expectedAmbiguous = 331, expectedNotFound = 5)
     checkCounter(adaptedAnonFunCounter, 288, expectedAmbiguous = 83)
     checkCounter(localLazyInitCounter, 107)
-    checkCounter(methodCounter, 57596, expectedAmbiguous = 116, expectedNotFound = 161)
+    checkCounter(methodCounter, 57683, expectedAmbiguous = 120, expectedNotFound = 70)
 
   def checkCounter(
       counter: Counter,
@@ -131,7 +129,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
           counter.ambiguous += ambiguious
           None
         case notFound: NotFoundException =>
-          counter.notFound += notFound
+          counter.notFound += (cls -> notFound)
           None
         case e: Exception =>
           counter.exceptions += (cls -> e)
@@ -142,7 +140,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         val sym = unpickler.findMethod(mthd)
         counter.success += mthd
       catch
-        case notFound: NotFoundException => counter.notFound += notFound
+        case notFound: NotFoundException => counter.notFound += (mthd -> notFound)
         case ambiguous: AmbiguousException => counter.ambiguous += ambiguous
         case ignored: IgnoredException => counter.ignored += ignored
         case e: Exception => counter.exceptions += (mthd -> e)
@@ -151,7 +149,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
   class Counter(name: String):
     val success = mutable.Buffer.empty[binary.Symbol]
-    val notFound = mutable.Buffer.empty[NotFoundException]
+    val notFound = mutable.Buffer.empty[(binary.Symbol, NotFoundException)]
     val ambiguous = mutable.Buffer.empty[AmbiguousException]
     val ignored = mutable.Buffer.empty[IgnoredException]
     val exceptions = mutable.Buffer.empty[(binary.Symbol, Exception)]
@@ -176,15 +174,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         println(s"$size $name: $stats")
 
     def printNotFound() =
-      notFound.foreach { case NotFoundException(symbol) =>
-        val lines = symbol.sourceLines.interval.mkString("(", ", ", ")")
-        println(s"$symbol $lines not found")
+      notFound.foreach { case (s1, NotFoundException(s2)) => 
+        if s1 != s2 then println(s"$s1 not found because of $s2")
+        else println(s"$s1 not found")
       }
 
     def printAmbiguous() =
       ambiguous.foreach { case AmbiguousException(symbol, candidates) =>
-        val lines = symbol.sourceLines.interval.mkString("(", ", ", ")")
-        println(s"$symbol $lines is ambiguous:" + candidates.map(s"\n  - " + _).mkString)
+        println(s"$symbol is ambiguous:" + candidates.map(s"\n  - " + _).mkString)
       }
 
     def printFirstException() = exceptions.headOption.foreach(printException)

@@ -31,8 +31,8 @@ sealed trait BinaryClassSymbol extends BinarySymbol:
 
 final case class BinaryClass(symbol: ClassSymbol) extends BinaryClassSymbol
 final case class BinarySyntheticCompanionClass(symbol: ClassSymbol) extends BinaryClassSymbol
-final case class BinarySAMClass(symbol: TermSymbol, parentClass: ClassSymbol, tpe: Type) extends BinaryClassSymbol
-final case class BinaryPartialFunction(symbol: TermSymbol, tpe: Type) extends BinaryClassSymbol
+final case class BinarySAMClass(symbol: TermSymbol, parentClass: ClassSymbol, declaredType: Type) extends BinaryClassSymbol
+final case class BinaryPartialFunction(symbol: TermSymbol, declaredType: Type) extends BinaryClassSymbol
 
 sealed trait BinaryMethodSymbol extends BinarySymbol:
   def termSymbol: Option[TermSymbol]

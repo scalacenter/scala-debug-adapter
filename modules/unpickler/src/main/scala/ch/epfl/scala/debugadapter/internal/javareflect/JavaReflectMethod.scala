@@ -28,7 +28,11 @@ class JavaReflectMethod(
 
   override def isStatic: Boolean = Modifier.isStatic(method.getModifiers)
 
-  override def toString: String = method.toString
+  override def toString: String = 
+    val span =
+      if sourceLines.size > 2 then Seq(sourceLines.min, sourceLines.max)
+      else sourceLines
+    s"$method (${span.mkString(", ")})"
 
   override def isBridge: Boolean = method.isBridge
 
