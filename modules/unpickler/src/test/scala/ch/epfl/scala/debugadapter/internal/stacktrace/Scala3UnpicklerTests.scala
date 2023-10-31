@@ -1631,7 +1631,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
 
   extension (debuggee: TestingDebuggee)
     private def loader(loadExtraInfo: Boolean): JavaReflectLoader =
-      JavaReflectLoader(debuggee.classLoader, loadExtraInfo = loadExtraInfo)
+      new JavaReflectLoader(debuggee.classLoader, loadExtraInfo = loadExtraInfo)
 
     private def initUnpickler(): Scala3Unpickler =
       val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
@@ -1640,7 +1640,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
           java9OrAbove.classSystems.map(_.fileSystem.getPath("/modules", "java.base"))
       }
       val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
-      new Scala3Unpickler(debuggeeClasspath, println, testMode = true)
+      new Scala3Unpickler(debuggeeClasspath, loader(loadExtraInfo = true), println, testMode = true)
 
     private def loadBinaryMethod(declaringType: String, javaSig: String, loadExtraInfo: Boolean)(using
         munit.Location

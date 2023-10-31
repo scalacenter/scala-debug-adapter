@@ -43,18 +43,24 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     val methodCounter = Counter("methods")
 
     val jars = TestingResolver.fetch("org.scala-lang", "scala3-compiler_3", "3.3.0")
-    val unpickler = new Scala3Unpickler(jars.map(_.absolutePath).toArray ++ javaRuntimeJars, println, testMode = true)
+    val binaryClassLoader = JavaReflectLoader(jars.map(_.absolutePath))
+    val unpickler = new Scala3Unpickler(
+      jars.map(_.absolutePath).toArray ++ javaRuntimeJars,
+      binaryClassLoader,
+      println,
+      testMode = true
+    )
 
     for
-      cls <- loadClasses(jars, "scala3-compiler_3-3.3.0")
-      // if cls.name == "dotty.tools.dotc.transform.sjs.PrepJSInterop$OwnerKind"
+      cls <- loadClasses(jars, "scala3-compiler_3-3.3.0", binaryClassLoader)
+      // if cls.name == "dotty.tools.io.NoAbstractFile"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethods
-    // if method.name == "inline$baseKinds$extension"
+    // if method.name == "empty"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -80,7 +86,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(anonFunCounter, 6649, expectedAmbiguous = 331, expectedNotFound = 5)
     checkCounter(adaptedAnonFunCounter, 288, expectedAmbiguous = 83)
     checkCounter(localLazyInitCounter, 107)
-    checkCounter(methodCounter, 57574, expectedAmbiguous = 143, expectedNotFound = 156)
+    checkCounter(methodCounter, 57596, expectedAmbiguous = 116, expectedNotFound = 161)
 
   def checkCounter(
       counter: Counter,
@@ -96,7 +102,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     assertEquals(counter.notFound.size, expectedNotFound)
     assertEquals(counter.exceptions.size, expectedExceptions)
 
-  def loadClasses(jars: Seq[Library], jarName: String): Seq[JavaReflectClass] =
+  def loadClasses(jars: Seq[Library], jarName: String, binaryLoader: binary.BinaryClassLoader): Seq[binary.ClassType] =
     val jar = jars.find(_.name == jarName).get
     val classNames = IO
       .withinJarFile(jar.absolutePath) { fs =>
@@ -110,9 +116,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
           .toSeq
       }
       .get
-    val classLoader = new URLClassLoader(jars.map(_.absolutePath.toUri.toURL).toArray)
-    val loader = JavaReflectLoader(classLoader)
-    val classes = classNames.map(loader.loadClass)
+    val classes = classNames.map(binaryLoader.loadClass)
     println(s"Loaded ${classes.size} classes in $jarName.")
     classes
 

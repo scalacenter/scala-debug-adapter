@@ -38,6 +38,9 @@ extension (symbol: TermSymbol)
     symbol.allOverriddenSymbols.exists(_.sourceLanguage == SourceLanguage.Java)
 
 extension [A](xs: Seq[A])
+  def singleOpt: Option[A] =
+    Option.when(xs.size == 1)(xs.head)
+
   def singleOrElse[B >: A](x: => B): B =
     if xs.size == 1 then xs.head else x
 

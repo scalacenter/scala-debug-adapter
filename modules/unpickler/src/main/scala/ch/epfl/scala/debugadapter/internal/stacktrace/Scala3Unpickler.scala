@@ -28,6 +28,7 @@ import ch.epfl.scala.debugadapter.internal.binary.Instruction
 
 class Scala3Unpickler(
     classpaths: Array[Path],
+    binaryClassLoader: binary.BinaryClassLoader,
     warnLogger: Consumer[String],
     testMode: Boolean
 ) extends ThrowOrWarn(warnLogger.accept, testMode):
@@ -157,6 +158,11 @@ class Scala3Unpickler(
         .orFind { case Patterns.TraitStaticForwarder(name) =>
           requiresBinaryClass(findTraitStaticForwarder(_, method, name))
         }
+        .orFind {
+          case _ if method.isStatic =>
+            // todo: this should be the only way to create a BinaryStaticForwarder
+            findStaticForwarder(binaryClass, method)
+        }
         .orFind { case _ => findStandardMethod(binaryClass, method) }
     candidates.singleOrThrow(method)
   end findMethod
@@ -193,11 +199,8 @@ class Scala3Unpickler(
       case partialFun: BinaryPartialFunction => Seq(findAnonOverride(partialFun, method))
       case binaryClass: BinaryClass =>
         if method.isBridge then findBridgeAndMixinForwarders(binaryClass, method)
-        else if method.isStatic then findStaticForwarder(binaryClass, method)
         else findInstanceMethods(binaryClass, method)
-      case syntheticClass: BinarySyntheticCompanionClass =>
-        if method.isStatic then findStaticForwarder(syntheticClass, method)
-        else Seq.empty
+      case syntheticClass: BinarySyntheticCompanionClass => Seq.empty
 
   private def findParamForwarder(binaryClass: BinaryClass, method: binary.Method, name: String): Seq[BinaryMethod] =
     binaryClass.symbol.declarations.collect {
@@ -376,7 +379,7 @@ class Scala3Unpickler(
   ): Seq[BinaryStaticForwarder] =
     for
       binaryObject <- binaryClass.companionClass.toSeq
-      companionObject <- binaryObject.tastyClass.toSeq
+      companionObject <- binaryObject.classSymbol.toSeq
       cls <- companionObject.linearization
       sym <- cls.declarations.collect {
         case sym: TermSymbol
@@ -460,18 +463,41 @@ class Scala3Unpickler(
       BinaryStaticForwarder(binaryClass, target, sym.declaredType)
 
   private def findStaticForwarder(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryStaticForwarder] =
-    for
-      binaryObject <- binaryClass.companionClass.toSeq
-      companionObject <- binaryObject.tastyClass.toSeq
-      cls <- companionObject.linearization
-      sym <- cls.declarations.collect {
-        case sym: TermSymbol if matchTargetName(method, sym) && matchSignature(method, sym, checkParamNames = false) =>
-          sym
-      }
-      if sym.isOverridingSymbol(companionObject)
-    yield
-      val target = BinaryMethod(BinaryClass(cls), sym)
-      BinaryStaticForwarder(binaryClass, target, sym.declaredTypeAsSeenFrom(companionObject.thisType))
+    binaryClass.companionClass.toSeq.flatMap(findStaticForwarder(binaryClass, _, method))
+
+  private def findStaticForwarder(
+      binaryClass: BinaryClassSymbol,
+      companionObject: BinaryClass,
+      method: binary.Method
+  ): Seq[BinaryStaticForwarder] =
+    if method.instructions.nonEmpty then
+      method.instructions
+        .collect { case Instruction.Method(_, owner, name, descriptor, _) =>
+          binaryClassLoader.loadClass(owner).method(name, descriptor)
+        }
+        .flatten
+        .singleOpt
+        .toSeq
+        .map { binaryTarget =>
+          val target = findMethod(binaryTarget)
+          val declaredType = target.termSymbol
+            .map(_.declaredTypeAsSeenFrom(companionObject.symbol.thisType))
+            .getOrElse(target.declaredType)
+          BinaryStaticForwarder(binaryClass, target, declaredType)
+        }
+    else
+      for
+        companionSym <- companionObject.classSymbol.toSeq
+        cls <- companionSym.linearization
+        sym <- cls.declarations.collect {
+          case sym: TermSymbol
+              if matchTargetName(method, sym) && matchSignature(method, sym, checkParamNames = false) =>
+            sym
+        }
+        if sym.isOverridingSymbol(companionSym)
+      yield
+        val target = BinaryMethod(BinaryClass(cls), sym)
+        BinaryStaticForwarder(binaryClass, target, sym.declaredTypeAsSeenFrom(companionSym.thisType))
 
   private def findAnonOverride(binaryClass: BinarySAMClass, method: binary.Method): Option[BinaryMethodSymbol] =
     val types =
@@ -687,7 +713,7 @@ class Scala3Unpickler(
             }
         }).flatten
       yield byNameArg
-    val inlineOverrides = binaryClass.tastyClass.toSeq
+    val inlineOverrides = binaryClass.classSymbol.toSeq
       .flatMap(_.declarations)
       .collect {
         case term: TermSymbol

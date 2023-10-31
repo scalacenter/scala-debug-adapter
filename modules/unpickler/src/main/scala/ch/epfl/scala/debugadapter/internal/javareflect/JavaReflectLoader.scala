@@ -6,14 +6,16 @@ import scala.collection.mutable
 import org.objectweb.asm
 import java.io.IOException
 import ch.epfl.scala.debugadapter.internal.binary.MethodSig
+import java.net.URLClassLoader
+import java.nio.file.Path
 
-class JavaReflectLoader(classLoader: ClassLoader, loadExtraInfo: Boolean = true):
+class JavaReflectLoader(classLoader: ClassLoader, loadExtraInfo: Boolean) extends BinaryClassLoader:
   private val loadedClasses: mutable.Map[Class[?], JavaReflectClass] = mutable.Map.empty
 
   def loadClass(cls: Class[?]): JavaReflectClass =
     loadedClasses.getOrElseUpdate(cls, doLoadClass(cls))
 
-  def loadClass(name: String): JavaReflectClass =
+  override def loadClass(name: String): JavaReflectClass =
     val cls = classLoader.loadClass(name)
     loadClass(cls)
 
@@ -59,3 +61,8 @@ class JavaReflectLoader(classLoader: ClassLoader, loadExtraInfo: Boolean = true)
               extraInfos += MethodSig(name, descriptor) -> ExtraBytecodeInfo(sourceLines, instructions.toSeq)
     reader.accept(visitor, asm.Opcodes.ASM9)
     extraInfos.toMap
+
+object JavaReflectLoader:
+  def apply(classPath: Seq[Path], loadExtraInfo: Boolean = true): JavaReflectLoader =
+    val classLoader = URLClassLoader(classPath.map(_.toUri.toURL).toArray, null: ClassLoader)
+    new JavaReflectLoader(classLoader, loadExtraInfo)

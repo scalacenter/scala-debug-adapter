@@ -14,6 +14,8 @@ class JdiReferenceType(obj: Any, className: String = "com.sun.jdi.ReferenceType"
   override def sourceLines: Seq[SourceLine] =
     allLineLocations.map(_.lineNumber).distinct.sorted.map(SourceLine(_))
 
+  override def method(name: String, sig: String): Option[Method] = None
+
   override def declaredMethod(name: String, sig: String): Option[Method] = None
 
   override def declaredMethods: Seq[Method] = Seq.empty

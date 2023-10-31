@@ -18,6 +18,15 @@ class JavaReflectClass(cls: Class[?], extraInfos: Map[MethodSig, ExtraBytecodeIn
   override def declaredMethod(name: String, sig: String): Option[Method] =
     declaredMethods.find(m => m.signature == MethodSig(name, sig))
 
+  override def method(name: String, sig: String): Option[Method] =
+    declaredMethod(name, sig).orElse {
+      for
+        method <- cls.getMethods.find(m => JavaReflectUtils.signature(m) == MethodSig(name, sig))
+        declaringClass = loader.loadClass(method.getDeclaringClass)
+        declaredMethod <- declaringClass.declaredMethod(name, sig)
+      yield declaredMethod
+    }
+
   override def toString: String = cls.toString
 
   override def declaredMethods: Seq[binary.Method] =

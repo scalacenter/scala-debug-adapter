@@ -4,7 +4,8 @@ trait ClassType extends Type:
   def isInterface: Boolean
   def superclass: Option[ClassType]
   def interfaces: Seq[ClassType]
-  def declaredMethod(name: String, sig: String): Option[Method]
+  def method(name: String, descriptor: String): Option[Method]
+  def declaredMethod(name: String, descriptor: String): Option[Method]
   def declaredMethods: Seq[Method]
 
   def isObject = name.endsWith("$")
