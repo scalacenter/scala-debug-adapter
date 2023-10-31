@@ -59,8 +59,14 @@ object Patterns:
 
   object LocalMethod:
     def unapply(method: binary.Method): Option[Seq[String]] =
-      if method.name.contains("$default") || method.name.contains("$proxy") then None
-      else method.extractFromDecodedNames("(.+)\\$\\d+".r)(_(0))
+      method match
+        case ByNameArgProxy() => None
+        case DefaultArg(_) => None
+        case _ => method.extractFromDecodedNames("(.+)\\$\\d+".r)(_(0))
+
+  object DefaultArg:
+    def unapply(method: binary.Method): Option[Seq[String]] =
+      method.extractFromDecodedNames("(.+)\\$default\\$\\d+".r)(_(0))
 
   object LocalLazyInit:
     def unapply(method: binary.Method): Option[Seq[String]] =
