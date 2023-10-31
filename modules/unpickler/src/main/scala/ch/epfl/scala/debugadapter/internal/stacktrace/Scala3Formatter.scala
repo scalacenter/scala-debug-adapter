@@ -88,9 +88,10 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
   private def format(name: Name): String =
     def rec(name: Name): String = name match
       case DefaultGetterName(termName, num) => s"${termName.toString()}.<default ${num + 1}>"
-      case TypeName(toTermName) => rec(toTermName)
+      case name: TypeName => rec(name.toTermName)
       case SimpleName("$anonfun") => "<anon fun>"
       case SimpleName("$anon") => "<anon class>"
+      case ObjectClassName(underlying) => rec(underlying)
       case _ => name.toString
     rec(name)
 
@@ -113,7 +114,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
           else if t.isImplicit then "implicit "
           else ""
         s"($prefix$params)$sep$result"
-      case t: TypeRef => formatPrefix(t.prefix) + t.name
+      case t: TypeRef => formatPrefix(t.prefix) + format(t.name)
       case t: AppliedType if t.tycon.isFunction =>
         val args = t.args.init.map(format).mkString(", ")
         val result = format(t.args.last)
@@ -134,8 +135,6 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
           .map(format)
           .mkString(" " + t.tycon.asInstanceOf[TypeRef].name.toString + " ")
         operatorLikeTypeFormat
-      case t: AppliedType if t.tycon.isRepeatedParam =>
-        s"${format(t.args.head)}*"
       case t: AppliedType =>
         val tycon = format(t.tycon)
         val args = t.args.map(format).mkString(", ")
@@ -170,6 +169,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
             s"classOf[${format(t)}]"
           case v => v.toString
       case t: ByNameType => s"=> " + format(t.resultType)
+      case t: RepeatedType => format(t.elemType) + "*"
       case t: TypeRefinement => format(t.parent) + " {...}"
       case t: RecType => format(t.parent)
       case _: WildcardTypeArg => "?"
@@ -177,12 +177,14 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
         val args = t.paramNames.map(t => t.toString).mkString(", ")
         val result = format(t.resultType)
         s"[$args] =>> $result"
+      case t: NothingType => "Nothing"
+      case t: AnyKindType => "AnyKind"
       case t @ (_: RecThis | _: SkolemType | _: SuperType | _: MatchType | _: CustomTransientGroundType |
           _: PackageRef) =>
         throwOrWarn(s"Cannot format type ${t.getClass.getName}")
         "<unsupported>"
 
-  private def formatPolymorphicFunction(t: TermType): String =
+  private def formatPolymorphicFunction(t: TypeOrMethodic): String =
     t match
       case t: PolyType =>
         val args = t.paramNames.mkString(", ")
@@ -192,13 +194,16 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
         val params = t.paramTypes.map(format(_)).mkString(", ")
         if t.paramTypes.size > 1 then s"($params) => ${format(t.resultType)}"
         else s"$params => ${format(t.resultType)}"
+      case t: Type =>
+        // for exhaustivity
+        format(t)
 
   private def formatPrefix(p: Prefix): String =
     val prefix = p match
       case NoPrefix => ""
       case p: TermRef if isScalaPredef(p) => ""
       case p: TermRef if isPackageObject(p.name) => ""
-      case p: TermRef => formatPrefix(p.prefix) + p.name
+      case p: TermRef => formatPrefix(p.prefix) + format(p.name)
       case p: TermParamRef => p.paramName.toString
       case p: PackageRef => ""
       case p: ThisType => ""

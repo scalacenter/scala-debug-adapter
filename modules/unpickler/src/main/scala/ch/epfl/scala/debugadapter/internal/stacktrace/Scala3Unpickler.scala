@@ -3,7 +3,6 @@ package ch.epfl.scala.debugadapter.internal.stacktrace
 import ch.epfl.scala.debugadapter.internal.binary
 import ch.epfl.scala.debugadapter.internal.jdi.JdiMethod
 import ch.epfl.scala.debugadapter.internal.stacktrace.*
-import tastyquery.Contexts
 import tastyquery.Contexts.Context
 import tastyquery.Names.*
 import tastyquery.Signatures.*
@@ -29,7 +28,7 @@ class Scala3Unpickler(
     testMode: Boolean
 ) extends ThrowOrWarn(warnLogger.accept, testMode):
   private val classpath = ClasspathLoaders.read(classpaths.toList)
-  private given ctx: Context = Contexts.init(classpath)
+  private given ctx: Context = Context.initialize(classpath)
   private val defn = new Definitions
   private[stacktrace] val formatter = new Scala3Formatter(warnLogger.accept, testMode)
 
@@ -1001,8 +1000,8 @@ class Scala3Unpickler(
           (!checkTypeErasure || matchTypeErasure(paramsSig, resSig, declaredParams, method.returnType))
 
   private def matchTypeErasure(
-      scalaParams: Seq[FullyQualifiedName],
-      scalaReturnType: FullyQualifiedName,
+      scalaParams: Seq[SignatureName],
+      scalaReturnType: SignatureName,
       javaParams: Seq[binary.Parameter],
       javaReturnType: Option[binary.Type]
   ): Boolean =
@@ -1025,7 +1024,7 @@ class Scala3Unpickler(
   )
 
   private def matchType(
-      scalaType: FullyQualifiedName,
+      scalaType: SignatureName,
       javaType: binary.Type
   ): Boolean =
     def rec(scalaType: String, javaType: String): Boolean =
@@ -1059,4 +1058,12 @@ class Scala3Unpickler(
             .get(scalaType)
             .map(_ == javaType)
             .getOrElse(regex.matches(javaType))
-    rec(scalaType.toString, javaType.name)
+    rec(signatureNameToString(scalaType), javaType.name)
+
+  private def signatureNameToString(sigName: SignatureName): String =
+    sigName.items
+      .map {
+        case ObjectClassName(underlying) => underlying
+        case name => name
+      }
+      .mkString(".")
