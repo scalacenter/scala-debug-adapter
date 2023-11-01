@@ -12,7 +12,7 @@ trait Method extends Symbol:
   def isConstructor: Boolean
   def signature: MethodSig
 
-  def isExtensionMethod: Boolean = name.endsWith("$extension")
+  def isExtensionMethod: Boolean = name.endsWith("$extension") && !isStatic
   def isTraitStaticForwarder: Boolean =
     name.endsWith("$") && !isDeserializeLambda && !isTraitInitializer && declaringClass.isInterface && isStatic
   def isTraitInitializer: Boolean = name == "$init$" && isStatic

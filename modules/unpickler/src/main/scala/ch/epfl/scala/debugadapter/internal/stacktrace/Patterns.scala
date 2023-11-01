@@ -103,7 +103,8 @@ object Patterns:
 
   object TraitSetter:
     def unapply(method: binary.Method): Option[String] =
-      """.+\$_setter_\$(.+\$\$)?(.+)_=""".r.unapplySeq(method.decodedName).map(xs => xs(1))
+      if method.isStatic then None
+      else """.+\$_setter_\$(.+\$\$)?(.+)_=""".r.unapplySeq(method.decodedName).map(xs => xs(1))
 
   object Setter:
     def unapply(method: binary.Method): Option[Seq[String]] =
@@ -115,7 +116,8 @@ object Patterns:
 
   object SpecializedMethod:
     def unapply(method: binary.Method): Option[Seq[String]] =
-      method.extractFromDecodedNames("(.+)\\$mc.+\\$sp".r)(_(0))
+      if method.isStatic then None
+      else method.extractFromDecodedNames("(.+)\\$mc.+\\$sp".r)(_(0))
 
   object ByNameArgProxy:
     def unapply(method: binary.Method): Boolean =
@@ -123,7 +125,8 @@ object Patterns:
 
   object InlineAccessor:
     def unapply(method: binary.Method): Option[Seq[String]] =
-      method.extractFromDecodedNames("inline\\$(.+)".r)(_(0))
+      if method.isStatic then None
+      else method.extractFromDecodedNames("inline\\$(.+)".r)(_(0))
 
   extension (method: binary.Method)
     private def extractFromDecodedNames[T](regex: Regex)(extract: List[String] => T): Option[Seq[T]] =
