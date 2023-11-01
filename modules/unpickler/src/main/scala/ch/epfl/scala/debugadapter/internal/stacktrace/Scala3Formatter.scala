@@ -42,6 +42,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case BinarySpecializedMethod(_, sym) => formatOwner(sym)
       case BinaryInlineAccessor(owner, _) => format(owner)
       case BinaryAdaptedFun(target) => formatOwner(target)
+      case BinarySAMClassConstructor(owner, _) => format(owner) 
 
   private def formatName(method: BinaryMethodSymbol): String =
     method match
@@ -64,6 +65,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case BinarySpecializedMethod(_, sym) => formatName(sym).dot("<specialized>")
       case BinaryInlineAccessor(_, target) => s"<inline ${formatOwner(target).dot(formatName(target))}>"
       case BinaryAdaptedFun(target) => formatName(target).dot("<adapted>")
+      case _: BinarySAMClassConstructor => "<init>"
 
   private def formatQualifiedName(sym: Symbol): String =
     formatOwner(sym).dot(formatName(sym))

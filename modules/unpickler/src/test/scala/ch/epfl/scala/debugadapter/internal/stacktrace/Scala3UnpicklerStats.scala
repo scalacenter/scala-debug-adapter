@@ -58,7 +58,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethods
-      // if method.name == "tryCompare"
+      // if method.name == "<init>"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -84,7 +84,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(anonFunCounter, 6649, expectedAmbiguous = 331, expectedNotFound = 5)
     checkCounter(adaptedAnonFunCounter, 288, expectedAmbiguous = 83)
     checkCounter(localLazyInitCounter, 107)
-    checkCounter(methodCounter, 57683, expectedAmbiguous = 120, expectedNotFound = 70)
+    checkCounter(methodCounter, 57687, expectedAmbiguous = 120, expectedNotFound = 66)
 
   def checkCounter(
       counter: Counter,

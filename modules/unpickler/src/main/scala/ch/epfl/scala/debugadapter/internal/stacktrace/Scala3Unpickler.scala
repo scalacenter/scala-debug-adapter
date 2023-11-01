@@ -63,6 +63,7 @@ class Scala3Unpickler(
       case _: BinarySpecializedMethod => true
       case _: BinaryInlineAccessor => true
       case _: BinaryAdaptedFun => true
+      case _: BinarySAMClassConstructor => true
       case _ => false
 
   def formatMethod(obj: Any): Optional[String] =
@@ -193,8 +194,11 @@ class Scala3Unpickler(
     binaryClass match
       case samClass: BinarySAMClass =>
         if method.isBridge then findMethodsFromTraits(samClass, samClass.parentClass, samClass.declaredType, method)
+        else if method.isConstructor then Seq(BinarySAMClassConstructor(samClass, samClass.declaredType))
         else findAnonOverride(samClass, method).toSeq
-      case partialFun: BinaryPartialFunction => Seq(findAnonOverride(partialFun, method))
+      case partialFun: BinaryPartialFunction => 
+        if method.isConstructor then Seq(BinarySAMClassConstructor(partialFun, partialFun.declaredType))
+        else Seq(findAnonOverride(partialFun, method))
       case binaryClass: BinaryClass =>
         if method.isBridge then findBridgeAndMixinForwarders(binaryClass, method)
         else findInstanceMethods(binaryClass, method)

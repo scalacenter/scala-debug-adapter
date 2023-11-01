@@ -108,3 +108,6 @@ final case class BinaryInlineAccessor(owner: BinaryClass, target: BinaryMethodSy
 final case class BinaryAdaptedFun(target: BinaryMethodSymbol) extends BinaryMethodSymbol:
   override def declaredType: TypeOrMethodic = target.declaredType
   override def termSymbol: Option[TermSymbol] = target.termSymbol
+
+final case class BinarySAMClassConstructor(binaryClass: BinaryClassSymbol, declaredType: Type) extends BinaryMethodSymbol:
+  override def termSymbol: Option[TermSymbol] = None
