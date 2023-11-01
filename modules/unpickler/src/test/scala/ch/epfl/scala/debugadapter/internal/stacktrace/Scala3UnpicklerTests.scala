@@ -1629,6 +1629,22 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     )
   }
 
+  test("java.lang.Enum constructor") {
+    val source =
+      """|package example
+         |
+         |enum A(x: String) extends java.lang.Enum[A]:
+         |  case B extends A("b")
+         |  case C extends A("c")
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat(
+      "example.A",
+      "void <init>(java.lang.String x, java.lang.String _$name, int _$ordinal)",
+      "A.<init>(x: String): Unit"
+    )
+  }
+
   extension (debuggee: TestingDebuggee)
     private def loader(loadExtraInfo: Boolean): JavaReflectLoader =
       new JavaReflectLoader(debuggee.classLoader, loadExtraInfo = loadExtraInfo)

@@ -11,3 +11,4 @@ trait ClassType extends Type:
   def isObject = name.endsWith("$")
   def isPackageObject = name.endsWith(".package$") || name.endsWith("$package$")
   def isPartialFunction = superclass.exists(_.name == "scala.runtime.AbstractPartialFunction")
+  def isJavaLangEnum = superclass.exists(_.name == "java.lang.Enum")

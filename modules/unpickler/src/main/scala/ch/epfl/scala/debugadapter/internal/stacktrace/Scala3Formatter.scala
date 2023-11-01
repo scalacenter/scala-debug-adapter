@@ -42,7 +42,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case BinarySpecializedMethod(_, sym) => formatOwner(sym)
       case BinaryInlineAccessor(owner, _) => format(owner)
       case BinaryAdaptedFun(target) => formatOwner(target)
-      case BinarySAMClassConstructor(owner, _) => format(owner) 
+      case BinarySAMClassConstructor(owner, _) => format(owner)
 
   private def formatName(method: BinaryMethodSymbol): String =
     method match

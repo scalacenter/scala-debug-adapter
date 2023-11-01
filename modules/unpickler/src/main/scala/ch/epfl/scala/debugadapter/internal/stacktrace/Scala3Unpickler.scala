@@ -196,7 +196,7 @@ class Scala3Unpickler(
         if method.isBridge then findMethodsFromTraits(samClass, samClass.parentClass, samClass.declaredType, method)
         else if method.isConstructor then Seq(BinarySAMClassConstructor(samClass, samClass.declaredType))
         else findAnonOverride(samClass, method).toSeq
-      case partialFun: BinaryPartialFunction => 
+      case partialFun: BinaryPartialFunction =>
         if method.isConstructor then Seq(BinarySAMClassConstructor(partialFun, partialFun.declaredType))
         else Seq(findAnonOverride(partialFun, method))
       case binaryClass: BinaryClass =>
@@ -541,13 +541,23 @@ class Scala3Unpickler(
       findMethodsFromTraits(binaryClass, binaryClass.symbol, binaryClass.symbol.thisType, method)
     else Seq.empty
 
-  private def findMethodsFromTraits(binaryClass: BinaryClassSymbol, fromClass: ClassSymbol, fromType: Type, method: binary.Method): Seq[BinaryMethodSymbol] =
+  private def findMethodsFromTraits(
+      binaryClass: BinaryClassSymbol,
+      fromClass: ClassSymbol,
+      fromType: Type,
+      method: binary.Method
+  ): Seq[BinaryMethodSymbol] =
     val mixinForwarders = findMixinForwarder(binaryClass, fromClass, method)
     val paramAccessors = findTraitParamAccessors(binaryClass, fromClass, method)
     def bridges = findBridgesFromTraits(binaryClass, fromClass, fromType, method)
     (mixinForwarders ++ paramAccessors).orIfEmpty(bridges)
 
-  private def findBridgesFromTraits(binaryClass: BinaryClassSymbol, fromClass: ClassSymbol, fromType: Type, method: binary.Method): Seq[BinaryMethodSymbol] =
+  private def findBridgesFromTraits(
+      binaryClass: BinaryClassSymbol,
+      fromClass: ClassSymbol,
+      fromType: Type,
+      method: binary.Method
+  ): Seq[BinaryMethodSymbol] =
     for
       traitSym <- fromClass.linearization.filter(_.isTrait)
       overridingSym <- traitSym.declarations.collect { case sym: TermSymbol if matchTargetName(method, sym) => sym }
@@ -557,15 +567,23 @@ class Scala3Unpickler(
       val tpe = overriddenSym.declaredTypeAsSeenFrom(fromType)
       BinaryMethodBridge(target, tpe)
 
-  private def findMixinForwarder(binaryClass: BinaryClassSymbol, inClass: ClassSymbol, method: binary.Method): Seq[BinaryMixinForwarder] =
+  private def findMixinForwarder(
+      binaryClass: BinaryClassSymbol,
+      inClass: ClassSymbol,
+      method: binary.Method
+  ): Seq[BinaryMixinForwarder] =
     for
       traitSym <- inClass.linearization.filter(_.isTrait)
       sym <- traitSym.declarations
         .collect { case sym: TermSymbol if matchTargetName(method, sym) && matchSignature(method, sym) => sym }
       if sym.isOverridingSymbol(inClass)
     yield BinaryMixinForwarder(binaryClass, BinaryMethod(BinaryClass(traitSym), sym))
-  
-  private def findTraitParamAccessors(binaryClass: BinaryClassSymbol, fromClass: ClassSymbol, method: binary.Method): Seq[BinaryTraitParamAccessor] =
+
+  private def findTraitParamAccessors(
+      binaryClass: BinaryClassSymbol,
+      fromClass: ClassSymbol,
+      method: binary.Method
+  ): Seq[BinaryTraitParamAccessor] =
     for
       traitSym <- fromClass.linearization.filter(_.isTrait)
       sym <- traitSym.declarations
@@ -949,29 +967,38 @@ class Scala3Unpickler(
     val paramNames = declaredType.allParamNames.map(_.toString)
     val paramsSig = declaredType.allParamTypes.map(_.erasedAsArgType(asJavaVarargs))
     val resSig = declaredType.returnType.erasedAsReturnType
-    declaredType.returnType.dealias match
-      case CurriedContextFunction(uncurriedArgs, uncurriedReturnType) if !isAnonFun =>
-        val capturedParams = method.allParameters.dropRight(paramNames.size + uncurriedArgs.size)
-        val declaredParams = method.allParameters.drop(capturedParams.size).dropRight(uncurriedArgs.size)
-        val contextParams = method.allParameters.drop(capturedParams.size + declaredParams.size)
 
-        (capturedParams ++ contextParams).forall(_.isGenerated) &&
-        declaredParams.size == paramNames.size &&
-        (!checkParamNames || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
-        (!checkTypeErasure || matchTypeErasure(
-          paramsSig ++ uncurriedArgs.map(_.erasedAsArgType(asJavaVarargs)),
-          uncurriedReturnType.erasedAsReturnType,
-          declaredParams ++ contextParams,
-          method.returnType
-        ))
-      case _ =>
-        val capturedParams = method.allParameters.dropRight(paramNames.size)
-        val declaredParams = method.allParameters.drop(capturedParams.size)
+    if method.isConstructor && method.declaringClass.isJavaLangEnum then
+      val declaredParams = method.allParameters.dropRight(2)
+      val javaLangEnumParams = method.allParameters.takeRight(2)
+      javaLangEnumParams.forall(_.isGenerated) &&
+      declaredParams.size == paramNames.size &&
+      (!checkParamNames || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
+      (!checkTypeErasure || matchTypeErasure(paramsSig, resSig, declaredParams, method.returnType))
+    else
+      declaredType.returnType.dealias match
+        case CurriedContextFunction(uncurriedArgs, uncurriedReturnType) if !isAnonFun =>
+          val capturedParams = method.allParameters.dropRight(paramNames.size + uncurriedArgs.size)
+          val declaredParams = method.allParameters.drop(capturedParams.size).dropRight(uncurriedArgs.size)
+          val contextParams = method.allParameters.drop(capturedParams.size + declaredParams.size)
 
-        capturedParams.forall(_.isGenerated) &&
-        declaredParams.size == paramNames.size &&
-        (!checkParamNames || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
-        (!checkTypeErasure || matchTypeErasure(paramsSig, resSig, declaredParams, method.returnType))
+          (capturedParams ++ contextParams).forall(_.isGenerated) &&
+          declaredParams.size == paramNames.size &&
+          (!checkParamNames || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
+          (!checkTypeErasure || matchTypeErasure(
+            paramsSig ++ uncurriedArgs.map(_.erasedAsArgType(asJavaVarargs)),
+            uncurriedReturnType.erasedAsReturnType,
+            declaredParams ++ contextParams,
+            method.returnType
+          ))
+        case _ =>
+          val capturedParams = method.allParameters.dropRight(paramNames.size)
+          val declaredParams = method.allParameters.drop(capturedParams.size)
+
+          capturedParams.forall(_.isGenerated) &&
+          declaredParams.size == paramNames.size &&
+          (!checkParamNames || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
+          (!checkTypeErasure || matchTypeErasure(paramsSig, resSig, declaredParams, method.returnType))
 
   private def matchTypeErasure(
       scalaParams: Seq[FullyQualifiedName],

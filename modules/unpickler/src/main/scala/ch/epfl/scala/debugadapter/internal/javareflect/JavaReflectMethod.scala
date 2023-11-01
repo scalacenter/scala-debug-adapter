@@ -28,7 +28,7 @@ class JavaReflectMethod(
 
   override def isStatic: Boolean = Modifier.isStatic(method.getModifiers)
 
-  override def toString: String = 
+  override def toString: String =
     val span =
       if sourceLines.size > 2 then Seq(sourceLines.min, sourceLines.max)
       else sourceLines
