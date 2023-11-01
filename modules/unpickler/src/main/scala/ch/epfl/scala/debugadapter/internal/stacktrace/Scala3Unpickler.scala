@@ -136,7 +136,7 @@ class Scala3Unpickler(
         .orFind { case Patterns.DeserializeLambda() =>
           Seq(BinaryDeserializeLambda(binaryClass, defn.DeserializeLambdaType))
         }
-        .orFind { case Patterns.ParamForwarder(name) => requiresBinaryClass(findParamForwarder(_, method, name)) }
+        .orFind { case Patterns.ParamForwarder(names) => requiresBinaryClass(findParamForwarder(_, method, names)) }
         .orFind { case Patterns.TraitSetter(name) =>
           if method.isStatic then findTraitSetterForwarder(binaryClass, method, name)
           else requiresBinaryClass(findTraitSetter(_, method, name))
@@ -212,9 +212,13 @@ class Scala3Unpickler(
         else findInstanceMethods(binaryClass, method)
       case syntheticClass: BinarySyntheticCompanionClass => Seq.empty
 
-  private def findParamForwarder(binaryClass: BinaryClass, method: binary.Method, name: String): Seq[BinaryMethod] =
+  private def findParamForwarder(
+      binaryClass: BinaryClass,
+      method: binary.Method,
+      names: Seq[String]
+  ): Seq[BinaryMethod] =
     binaryClass.symbol.declarations.collect {
-      case sym: TermSymbol if sym.targetNameStr == name && matchSignature(method, sym) =>
+      case sym: TermSymbol if names.contains(sym.targetNameStr) && matchSignature(method, sym) =>
         BinaryMethod(binaryClass, sym)
     }
 
