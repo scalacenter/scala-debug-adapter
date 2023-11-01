@@ -84,7 +84,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(anonFunCounter, 6649, expectedAmbiguous = 331, expectedNotFound = 5)
     checkCounter(adaptedAnonFunCounter, 288, expectedAmbiguous = 83)
     checkCounter(localLazyInitCounter, 107)
-    checkCounter(methodCounter, 57696, expectedAmbiguous = 120, expectedNotFound = 57)
+    checkCounter(methodCounter, 57706, expectedAmbiguous = 120, expectedNotFound = 47)
 
   def checkCounter(
       counter: Counter,

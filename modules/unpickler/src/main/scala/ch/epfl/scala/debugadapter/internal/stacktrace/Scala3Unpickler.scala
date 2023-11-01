@@ -598,7 +598,7 @@ class Scala3Unpickler(
 
   private def withCompanionIfExtendsAnyVal(cls: ClassSymbol): Seq[ClassSymbol] =
     cls.companionClass match
-      case Some(companionClass) if companionClass.isSubclass(defn.AnyValClass) =>
+      case Some(companionClass) if companionClass.isSubClass(defn.AnyValClass) =>
         Seq(cls, companionClass)
       case _ => Seq(cls)
 
