@@ -35,10 +35,10 @@ extension (symbol: TermSymbol)
   def declaredTypeAsSeenFrom(tpe: Type)(using Context): TypeOrMethodic =
     symbol.declaredType.asSeenFrom(tpe, symbol.owner)
   def targetNameStr(using Context): String = symbol.targetName.toString
+  def overridingSymbolInLinearization(siteClass: ClassSymbol)(using Context): TermSymbol =
+    siteClass.linearization.iterator.flatMap(inClass => symbol.matchingSymbol(inClass, siteClass)).next
   def isOverridingSymbol(siteClass: ClassSymbol)(using Context): Boolean =
-    val overridingSymbol =
-      siteClass.linearization.iterator.flatMap(inClass => symbol.matchingSymbol(inClass, siteClass)).next
-    overridingSymbol == symbol
+    overridingSymbolInLinearization(siteClass) == symbol
   def isJavaOverride(using Context): Boolean =
     symbol.allOverriddenSymbols.exists(_.sourceLanguage == SourceLanguage.Java)
 
