@@ -10,7 +10,7 @@ object Patterns:
       unapply(decodedClassName)
 
     def unapply(decodedClassName: String): Option[(String, String, Option[String])] =
-      "(.+)\\$([^$]+)\\$\\d+(\\$.*)?".r
+      """(.+)\$([^$]+)\$\d+(\$.*)?""".r
         .unapplySeq(decodedClassName)
         .filter(xs => xs(1) != "anon")
         .map(xs => (xs(0), xs(1), Option(xs(2)).map(_.stripPrefix("$")).filter(_.nonEmpty)))
@@ -21,7 +21,7 @@ object Patterns:
       unapply(decodedClassName)
 
     def unapply(decodedClassName: String): Option[(String, Option[String])] =
-      "(.+)\\$\\$anon\\$\\d+(\\$.*)?".r
+      """(.+)\$\$anon\$\d+(\$.*)?""".r
         .unapplySeq(decodedClassName)
         .map(xs => (xs(0), Option(xs(1)).map(_.stripPrefix("$")).filter(_.nonEmpty)))
 
@@ -34,8 +34,7 @@ object Patterns:
 
   object LazyInit:
     def unapply(method: binary.Method): Option[String] =
-      val lazyInit = "(.*)\\$lzyINIT\\d+".r
-      lazyInit.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0))
+      """(.*)\$lzyINIT\d+""".r.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0).stripSuffix("$"))
 
   object TraitStaticForwarder:
     def unapply(method: binary.Method): Option[Seq[String]] =
@@ -44,25 +43,24 @@ object Patterns:
 
   object Outer:
     def unapply(method: binary.Method): Option[String] =
-      val anonFun = "(.*)\\$\\$\\$outer".r
-      anonFun.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0))
+      "(.*)\\$\\$\\$outer".r.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0))
 
   object AnonFun:
     def unapply(method: binary.Method): Option[String] =
-      val anonFun = "(.*)\\$anonfun\\$\\d+".r
-      anonFun.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0).stripSuffix("$"))
+      "(.*)\\$anonfun\\$\\d+".r.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0).stripSuffix("$"))
 
   object AdaptedAnonFun:
     def unapply(method: binary.Method): Option[String] =
-      val adaptedAnonFun = "(.*)\\$anonfun\\$adapted\\$\\d+".r
-      adaptedAnonFun.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0).stripSuffix("$"))
+      """(.*)\$anonfun\$adapted\$\d+""".r
+        .unapplySeq(NameTransformer.decode(method.name))
+        .map(xs => xs(0).stripSuffix("$"))
 
   object LocalMethod:
     def unapply(method: binary.Method): Option[Seq[String]] =
       method match
         case ByNameArgProxy() => None
         case DefaultArg(_) => None
-        case _ => method.extractFromDecodedNames("(.+)\\$\\d+".r)(_(0))
+        case _ => method.extractFromDecodedNames("(.+)\\$\\d+".r)(_(0).stripSuffix("$"))
 
   object DefaultArg:
     def unapply(method: binary.Method): Option[Seq[String]] =
@@ -71,12 +69,11 @@ object Patterns:
   object LocalLazyInit:
     def unapply(method: binary.Method): Option[Seq[String]] =
       if !method.allParameters.forall(_.isGenerated) then None
-      else method.extractFromDecodedNames("(.+)\\$lzyINIT\\d+\\$(\\d+)".r)(_(0))
+      else method.extractFromDecodedNames("""(.+)\$lzyINIT\d+\$(\d+)""".r)(_(0).stripSuffix("$"))
 
   object SuperArg:
     def unapply(method: binary.Method): Boolean =
-      val superArg = "(.*)\\$superArg\\$\\d+(\\$\\d+)?".r
-      superArg.unapplySeq(method.name).isDefined
+      """(.*)\$superArg\$\d+(\$\d+)?""".r.unapplySeq(method.name).isDefined
 
   object LiftedTree:
     def unapply(method: binary.Method): Boolean =
@@ -97,13 +94,11 @@ object Patterns:
 
   object ParamForwarder:
     def unapply(method: binary.Method): Option[String] =
-      val paramForwarder = "(.+)\\$accessor".r
-      paramForwarder.unapplySeq(method.name).map(xs => xs(0))
+      "(.+)\\$accessor".r.unapplySeq(method.name).map(xs => xs(0))
 
   object TraitSetter:
     def unapply(method: binary.Method): Option[String] =
-      val traitSetter = ".+\\$_setter_\\$(.+\\$\\$)?(.+)_=".r
-      traitSetter.unapplySeq(method.decodedName).map(xs => xs(1))
+      """.+\$_setter_\$(.+\$\$)?(.+)_=""".r.unapplySeq(method.decodedName).map(xs => xs(1))
 
   object Setter:
     def unapply(method: binary.Method): Option[Seq[String]] =

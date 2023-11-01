@@ -173,4 +173,3 @@ extension (binaryClass: BinaryClassSymbol)
     binaryClass match
       case BinaryClass(symbol) => symbol.sourceLanguage == SourceLanguage.Java
       case _ => false
-    

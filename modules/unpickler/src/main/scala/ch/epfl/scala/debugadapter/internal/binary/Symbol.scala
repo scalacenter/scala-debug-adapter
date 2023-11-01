@@ -12,7 +12,7 @@ trait Symbol:
       name match
         case expanded(_, name) => name
         case _ => name
-    Seq(NameTransformer.decode(unexpand(name)), unexpand(decodedName)).distinct
+    Seq(name, NameTransformer.decode(unexpand(name)), unexpand(decodedName)).distinct
 
   def decodedName: String =
     NameTransformer.decode(name)

@@ -69,8 +69,7 @@ class Scala3Unpickler(
     formatMethod(JdiMethod(obj)).toJava
 
   def formatMethod(method: binary.Method): Option[String] =
-    val binaryMethod = findMethod(method)
-    binaryMethod match
+    findMethod(method) match
       case BinaryLazyInit(_, sym) if sym.owner.isTrait => None
       case _: BinaryMixinForwarder => None
       case _: BinaryTraitStaticForwarder => None
@@ -159,7 +158,9 @@ class Scala3Unpickler(
             findStaticForwarder(binaryClass, method)
         }
         .orFind { case _ => findStandardMethod(binaryClass, method) }
-        .orFind { case _ if method.isStatic && binaryClass.isJava => throw IgnoredException(method, "Java static method") }
+        .orFind {
+          case _ if method.isStatic && binaryClass.isJava => throw IgnoredException(method, "Java static method")
+        }
     candidates.singleOrThrow(method)
   end findMethod
 
@@ -403,7 +404,8 @@ class Scala3Unpickler(
       val fromClass = binaryClass.symbol.declarations
         .collect { case sym: TermSymbol if matchTargetName(method, sym) => sym }
         .collect {
-          case sym if matchSignature(method, sym, checkParamNames = !binaryClass.isJava) => BinaryMethod(binaryClass, sym)
+          case sym if matchSignature(method, sym, checkParamNames = !binaryClass.isJava) =>
+            BinaryMethod(binaryClass, sym)
           case sym if matchSignature(method, sym, asJavaVarargs = true, checkParamNames = !binaryClass.isJava) =>
             val method = BinaryMethod(binaryClass, sym)
             if binaryClass.isJava then method else BinaryMethodBridge(method, sym.declaredType)
@@ -920,7 +922,7 @@ class Scala3Unpickler(
     else expectedParents == classSymbol.parentClasses.toSet
 
   private def matchTargetName(method: binary.Method, symbol: TermSymbol): Boolean =
-    method.unexpandedDecodedNames.contains(symbol.targetNameStr)
+    method.unexpandedDecodedNames.map(_.stripSuffix("$")).contains(symbol.targetNameStr)
 
   private def matchSignature(
       method: binary.Method,
