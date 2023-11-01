@@ -1680,6 +1680,28 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       )
   }
 
+  test("trait local static forwarder") {
+    val source =
+      """|package example
+         |
+         |trait A:
+         |  val x: String
+         |  private def m1 =
+         |    class B:
+         |      def m2 = m3
+         |    def m3: String = x + x
+         |    () 
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat(
+      "example.A",
+      "java.lang.String example$A$$_$m3$1$(example.A $this)",
+      "A.m1.m3.<static forwarder>: String",
+      skip = true,
+      loadExtraInfo = true
+    )
+  }
+
   extension (debuggee: TestingDebuggee)
     private def loader(loadExtraInfo: Boolean): JavaReflectLoader =
       new JavaReflectLoader(debuggee.classLoader, loadExtraInfo = loadExtraInfo)

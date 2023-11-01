@@ -36,6 +36,11 @@ object Patterns:
     def unapply(method: binary.Method): Option[String] =
       """(.*)\$lzyINIT\d+""".r.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0).stripSuffix("$"))
 
+  object TraitLocalStaticForwarder:
+    def unapply(method: binary.Method): Option[Seq[String]] =
+      if method.isTraitStaticForwarder then method.extractFromDecodedNames("(.+)\\$\\d+\\$".r)(_(0))
+      else None
+
   object TraitStaticForwarder:
     def unapply(method: binary.Method): Option[Seq[String]] =
       if method.isTraitStaticForwarder then Some(method.unexpandedDecodedNames.map(_.stripSuffix("$")))

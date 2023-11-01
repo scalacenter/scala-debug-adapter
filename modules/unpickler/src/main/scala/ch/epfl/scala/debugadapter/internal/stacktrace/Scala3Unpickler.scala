@@ -20,6 +20,7 @@ import tastyquery.SourceLanguage
 import tastyquery.Traversers.TreeTraverser
 import scala.collection.mutable.Buffer
 import ch.epfl.scala.debugadapter.internal.binary.Instruction
+import ch.epfl.scala.debugadapter.internal.stacktrace.Patterns.TraitStaticForwarder
 
 class Scala3Unpickler(
     classpaths: Array[Path],
@@ -113,16 +114,8 @@ class Scala3Unpickler(
         .orFind { case Patterns.ByNameArgProxy() => findByNameArgsProxy(binaryClass, method) }
         .orFind { case Patterns.SuperArg() => requiresBinaryClass(findSuperArgs(_, method)) }
         .orFind { case Patterns.LiftedTree() => findLiftedTry(binaryClass, method) }
-        .orFind { case Patterns.LocalMethod(names) =>
-          val localMethods = collectLocalMethods(binaryClass, method)(inlined => {
-            case term if names.contains(term.nameStr) && matchSignature(method, term, checkTypeErasure = !inlined) =>
-              BinaryMethod(binaryClass, term)
-          })
-          val anonTraitParamGetters =
-            if names.contains("x") then requiresBinaryClass(findInstanceMethods(_, method))
-            else Seq.empty
-          localMethods ++ anonTraitParamGetters
-        }
+        .orFind { case Patterns.TraitLocalStaticForwarder(names) => findTraitLocalStaticForwarder(method) }
+        .orFind { case Patterns.LocalMethod(names) => findLocalMethods(binaryClass, method, names) }
         .orFind { case Patterns.LazyInit(name) => requiresBinaryClass(findLazyInit(_, name)) }
         .orFind { case Patterns.Outer(_) => Seq(findOuter(binaryClass)) }
         .orFind { case Patterns.TraitInitializer() => requiresBinaryClass(findTraitInitializer(_, method)) }
@@ -425,6 +418,30 @@ class Scala3Unpickler(
       // Can a trait param accessor be a bridge?
       // figure out and split findMethodsFromTraits in 2
       fromClass.orIfEmpty(findBridgesAndMixinForwarders(binaryClass, method))
+
+  private def findTraitLocalStaticForwarder(method: binary.Method): Seq[BinaryMethodSymbol] =
+    method.instructions
+      .collect {
+        case Instruction.Method(_, owner, name, descriptor, _) if method.declaringClass.name == owner =>
+          method.declaringClass.method(name, descriptor)
+      }
+      .flatten
+      .singleOpt
+      .toSeq
+      .map { binaryTarget =>
+        val target = findMethod(binaryTarget)
+        BinaryTraitStaticForwarder(target)
+      }
+
+  private def findLocalMethods(
+      binaryClass: BinaryClassSymbol,
+      method: binary.Method,
+      names: Seq[String]
+  ): Seq[BinaryMethodSymbol] =
+    collectLocalMethods(binaryClass, method)(inlined => {
+      case term if names.contains(term.nameStr) && matchSignature(method, term, checkTypeErasure = !inlined) =>
+        BinaryMethod(binaryClass, term)
+    })
 
   private def findLazyInit(binaryClass: BinaryClass, name: String): Seq[BinaryMethodSymbol] =
     val matcher: PartialFunction[Symbol, TermSymbol] =
