@@ -102,7 +102,6 @@ class Scala3Unpickler(
     extension (xs: Seq[BinaryMethodSymbol])
       def orFind(f: PartialFunction[binary.Method, Seq[BinaryMethodSymbol]]): Seq[BinaryMethodSymbol] =
         if xs.nonEmpty then xs else f.applyOrElse(method, _ => Seq.empty[BinaryMethodSymbol])
-
     val candidates =
       find { case Patterns.LocalLazyInit(names) =>
         requiresBinaryClass(collectLocalMethods(_, method)(inlined => {
@@ -160,6 +159,7 @@ class Scala3Unpickler(
             findStaticForwarder(binaryClass, method)
         }
         .orFind { case _ => findStandardMethod(binaryClass, method) }
+        .orFind { case _ if method.isStatic && binaryClass.isJava => throw IgnoredException(method, "Java static method") }
     candidates.singleOrThrow(method)
   end findMethod
 
@@ -403,9 +403,10 @@ class Scala3Unpickler(
       val fromClass = binaryClass.symbol.declarations
         .collect { case sym: TermSymbol if matchTargetName(method, sym) => sym }
         .collect {
-          case sym if matchSignature(method, sym) => BinaryMethod(binaryClass, sym)
-          case sym if matchSignature(method, sym, asJavaVarargs = true) =>
-            BinaryMethodBridge(BinaryMethod(binaryClass, sym), sym.declaredType)
+          case sym if matchSignature(method, sym, checkParamNames = !binaryClass.isJava) => BinaryMethod(binaryClass, sym)
+          case sym if matchSignature(method, sym, asJavaVarargs = true, checkParamNames = !binaryClass.isJava) =>
+            val method = BinaryMethod(binaryClass, sym)
+            if binaryClass.isJava then method else BinaryMethodBridge(method, sym.declaredType)
         }
       // TODO: can a mixin forwarder not be a bridge? (yes if it's a getter of a lazy val, some other cases?)
       // Can a trait param accessor be a bridge?

@@ -167,3 +167,10 @@ extension (sourceLines: Seq[binary.SourceLine])
   def interval: Seq[binary.SourceLine] =
     if sourceLines.size > 2 then Seq(sourceLines.min, sourceLines.max)
     else sourceLines
+
+extension (binaryClass: BinaryClassSymbol)
+  def isJava: Boolean =
+    binaryClass match
+      case BinaryClass(symbol) => symbol.sourceLanguage == SourceLanguage.Java
+      case _ => false
+    
