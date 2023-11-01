@@ -740,7 +740,11 @@ class Scala3Unpickler(
       if adapted then tpe.erasedAsReturnType.toString == "void"
       else method.returnType.forall(matchType(tpe.erasedAsReturnType, _))
     val classOwners = getOwners(binaryClass)
-    val sourceSpan = removeInlinedLines(method.sourceLines, classOwners).interval
+    val sourceSpan =
+      if classOwners.size == 2 && method.allParameters.filter(p => p.name.matches("\\$this\\$\\d+")).nonEmpty then
+        // workaround of https://github.com/lampepfl/dotty/issues/18816
+        removeInlinedLines(method.sourceLines, classOwners).maxOption.toSeq
+      else removeInlinedLines(method.sourceLines, classOwners)
     for
       classOwner <- classOwners
       byNameArg <- collectTrees1(classOwner, sourceSpan)(inlined => {
@@ -793,7 +797,11 @@ class Scala3Unpickler(
       matcher: Boolean => PartialFunction[TermSymbol, BinaryMethodSymbol]
   ): Seq[BinaryMethodSymbol] =
     val owners = getOwners(binaryClass)
-    val sourceLines = removeInlinedLines(javaMethod.sourceLines, owners)
+    val sourceLines =
+      if owners.size == 2 && javaMethod.allParameters.filter(p => p.name.matches("\\$this\\$\\d+")).nonEmpty then
+        // workaround of https://github.com/lampepfl/dotty/issues/18816
+        removeInlinedLines(javaMethod.sourceLines, owners).maxOption.toSeq
+      else removeInlinedLines(javaMethod.sourceLines, owners)
     for
       owner <- owners
       term <- collectTrees1(owner, sourceLines) { inlined =>

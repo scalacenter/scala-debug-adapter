@@ -51,14 +51,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0", binaryClassLoader)
-      // if cls.name == "dotty.tools.dotc.core.Types$TermLambda"
+      // if cls.name == "dotty.tools.dotc.transform.ExplicitOuter$OuterOps$"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethods
-    // if method.name == "dotty$tools$dotc$core$Types$TermLambda$$_$compute$1$"
+    // if method.name == "path$extension$$anonfun$1"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -66,7 +66,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case Patterns.LocalLazyInit(_) => unpickler.tryFind(method, localLazyInitCounter)
         case Patterns.LocalMethod(_) => unpickler.tryFind(method, localMethodCounter)
         case _ => unpickler.tryFind(method, methodCounter)
-    localMethodCounter.printNotFound()
+    anonFunCounter.printNotFound()
     methodCounter.printNotFound()
     localClassCounter.printReport()
     anonClassCounter.printReport()
@@ -81,8 +81,8 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(anonClassCounter, 430)
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
-    checkCounter(localMethodCounter, 2605, expectedAmbiguous = 2, expectedNotFound = 1)
-    checkCounter(anonFunCounter, 6649, expectedAmbiguous = 331, expectedNotFound = 5)
+    checkCounter(localMethodCounter, 2606, expectedAmbiguous = 2)
+    checkCounter(anonFunCounter, 6651, expectedAmbiguous = 331, expectedNotFound = 3)
     checkCounter(adaptedAnonFunCounter, 288, expectedAmbiguous = 83)
     checkCounter(localLazyInitCounter, 108)
     checkCounter(methodCounter, 57744, expectedAmbiguous = 128)
