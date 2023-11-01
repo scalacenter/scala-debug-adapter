@@ -92,6 +92,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case SimpleName("$anonfun") => "<anon fun>"
       case SimpleName("$anon") => "<anon class>"
       case ObjectClassName(underlying) => rec(underlying)
+      case UniqueName(SimpleName(""), _, _) => "<anon>"
       case _ => name.toString
     rec(name)
 

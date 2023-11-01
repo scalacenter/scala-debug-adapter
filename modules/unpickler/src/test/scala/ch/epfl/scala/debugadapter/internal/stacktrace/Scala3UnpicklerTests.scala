@@ -1657,25 +1657,25 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
     if isScala30 then
-      debuggee.assertFormat("example.A", "scala.Tuple2 $1$()", "A.$1: (String, String)", skip = true)
+      debuggee.assertFormat("example.A", "scala.Tuple2 $1$()", "A.<anon>: (String, String)", skip = true)
       debuggee.assertFormat(
         "example.A",
         "scala.Tuple2 $2$$lzyINIT1$1(scala.runtime.LazyRef $2$$lzy1$1)",
-        "A.m.$2.<lazy init>: (String, String)"
+        "A.m.<anon>.<lazy init>: (String, String)"
       )
       debuggee.assertNotFound("example.A", "scala.Tuple2 $3$$1(scala.runtime.LazyRef $2$$lzy1$2)")
     else
-      debuggee.assertFormat("example.A", "java.lang.Object $1$$lzyINIT1()", "A.$1.<lazy init>: (String, String)")
-      debuggee.assertFormat("example.A", "scala.Tuple2 $1$()", "A.$1: (String, String)", skip = true)
+      debuggee.assertFormat("example.A", "java.lang.Object $1$$lzyINIT1()", "A.<anon>.<lazy init>: (String, String)")
+      debuggee.assertFormat("example.A", "scala.Tuple2 $1$()", "A.<anon>: (String, String)", skip = true)
       debuggee.assertFormat(
         "example.A",
         "scala.Tuple2 $2$$lzyINIT1$1(scala.runtime.LazyRef $2$$lzy1$1)",
-        "A.m.$2.<lazy init>: (String, String)"
+        "A.m.<anon>.<lazy init>: (String, String)"
       )
       debuggee.assertFormat(
         "example.A",
         "scala.Tuple2 $2$$1(scala.runtime.LazyRef $2$$lzy1$2)",
-        "A.m.$2: (String, String)",
+        "A.m.<anon>: (String, String)",
         skip = true
       )
   }
