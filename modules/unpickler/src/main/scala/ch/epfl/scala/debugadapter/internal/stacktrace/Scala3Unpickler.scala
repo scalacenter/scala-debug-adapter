@@ -260,14 +260,14 @@ class Scala3Unpickler(
   ): Seq[BinaryMethodSymbol] =
     for
       traitSym <- binaryClass.symbol.linearization.filter(_.isTrait)
+      if method.decodedName.contains("$" + traitSym.nameStr + "$")
       sym <- traitSym.declarations.collect {
-        case sym: TermSymbol if names.exists(_ == sym.targetNameStr) && !sym.isAbstractMember => sym
+        case sym: TermSymbol if names.contains(sym.targetNameStr) && !sym.isAbstractMember => sym
       }
       expectedTpe =
         if method.isBridge then sym.declaredType
         else sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
-      if sym.isOverridingSymbol(binaryClass.symbol) &&
-        matchSignature1(method, expectedTpe, isAnonFun = false)
+      if matchSignature1(method, expectedTpe, isAnonFun = false)
     yield
       val tpe = sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
       val accessor = BinarySuperAccessor(binaryClass, sym, tpe)
@@ -281,7 +281,7 @@ class Scala3Unpickler(
   ): Seq[BinarySpecializedMethod] =
     binaryClass.symbol.declarations.collect {
       case sym: TermSymbol
-          if names.exists(_ == sym.targetNameStr) &&
+          if names.contains(sym.targetNameStr) &&
             matchSignature(method, sym, checkParamNames = false, checkTypeErasure = false) &&
             // hack: in Scala 3 only overriding symbols can be specialized (Function and Tuple)
             sym.allOverriddenSymbols.nonEmpty =>
@@ -393,7 +393,7 @@ class Scala3Unpickler(
       cls <- companionObject.linearization
       sym <- cls.declarations.collect {
         case sym: TermSymbol
-            if names.exists(sym.targetNameStr == _) &&
+            if names.contains(sym.targetNameStr) &&
               matchSignature(method, sym, checkParamNames = false, checkTypeErasure = false) &&
               // hack: in Scala 3 only overriding symbols can be specialized (Function and Tuple)
               sym.allOverriddenSymbols.nonEmpty =>
