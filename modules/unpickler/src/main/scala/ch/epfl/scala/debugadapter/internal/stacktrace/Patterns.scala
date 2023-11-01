@@ -38,8 +38,8 @@ object Patterns:
       lazyInit.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0))
 
   object TraitStaticForwarder:
-    def unapply(method: binary.Method): Option[String] =
-      if method.isTraitStaticForwarder then Some(method.name.stripSuffix("$"))
+    def unapply(method: binary.Method): Option[Seq[String]] =
+      if method.isTraitStaticForwarder then Some(method.unexpandedDecodedNames.map(_.stripSuffix("$")))
       else None
 
   object Outer:

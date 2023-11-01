@@ -51,14 +51,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0", binaryClassLoader)
-      // if cls.name == "dotty.tools.dotc.typer.Implicits$$anon$3"
+      // if cls.name == "dotty.tools.dotc.typer.ImplicitRunInfo"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethods
-      // if method.name == "<init>"
+      // if method.name == "dotty$tools$dotc$typer$ImplicitRunInfo$$isExcluded$"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -84,7 +84,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(anonFunCounter, 6649, expectedAmbiguous = 331, expectedNotFound = 5)
     checkCounter(adaptedAnonFunCounter, 288, expectedAmbiguous = 83)
     checkCounter(localLazyInitCounter, 107)
-    checkCounter(methodCounter, 57687, expectedAmbiguous = 120, expectedNotFound = 66)
+    checkCounter(methodCounter, 57695, expectedAmbiguous = 120, expectedNotFound = 58)
 
   def checkCounter(
       counter: Counter,

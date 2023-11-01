@@ -152,8 +152,8 @@ class Scala3Unpickler(
           if method.isStatic then findSpecializedForwarder(binaryClass, method, names)
           else requiresBinaryClass(findSpecializedMethod(_, method, names))
         }
-        .orFind { case Patterns.TraitStaticForwarder(name) =>
-          requiresBinaryClass(findTraitStaticForwarder(_, method, name))
+        .orFind { case Patterns.TraitStaticForwarder(names) =>
+          requiresBinaryClass(findTraitStaticForwarder(_, method, names))
         }
         .orFind {
           case _ if method.isStatic =>
@@ -427,10 +427,10 @@ class Scala3Unpickler(
   private def findTraitStaticForwarder(
       binaryClass: BinaryClass,
       method: binary.Method,
-      name: String
+      names: Seq[String]
   ): Seq[BinaryMethodSymbol] =
     binaryClass.symbol.declarations.collect {
-      case sym: TermSymbol if sym.targetNameStr == name && matchSignature(method, sym) =>
+      case sym: TermSymbol if names.contains(sym.targetNameStr) && matchSignature(method, sym) =>
         BinaryTraitStaticForwarder(BinaryMethod(binaryClass, sym))
     }
 
