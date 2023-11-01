@@ -142,7 +142,7 @@ class Scala3Unpickler(
           else requiresBinaryClass(findTraitSetter(_, method, name))
         }
         .orFind { case Patterns.Setter(names) =>
-          findStandardMethod(binaryClass, method).orIfEmpty(requiresBinaryClass(findSetter(_, method, names)))
+          findStandardMethods(binaryClass, method).orIfEmpty(requiresBinaryClass(findSetter(_, method, names)))
         }
         .orFind { case Patterns.SuperAccessor(names) => requiresBinaryClass(findSuperAccessor(_, method, names)) }
         .orFind { case Patterns.SpecializedMethod(names) =>
@@ -157,10 +157,9 @@ class Scala3Unpickler(
             // todo: this should be the only way to create a BinaryStaticForwarder
             findStaticForwarder(binaryClass, method)
         }
-        .orFind { case _ => findStandardMethod(binaryClass, method) }
-        .orFind {
-          case _ if method.isStatic && binaryClass.isJava => throw IgnoredException(method, "Java static method")
-        }
+        .orFind { case _ if method.isStatic && binaryClass.isJava => findStaticJavaMethods(binaryClass, method) }
+        .orFind { case _ => findStandardMethods(binaryClass, method) }
+
     candidates.singleOrThrow(method)
   end findMethod
 
@@ -190,7 +189,15 @@ class Scala3Unpickler(
       else allSymbols.filter(!_.symbol.isModuleClass)
     candidates.singleOrThrow(cls)
 
-  private def findStandardMethod(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryMethodSymbol] =
+  private def findStaticJavaMethods(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryMethodSymbol] =
+    binaryClass.companionClass.toSeq
+      .flatMap(_.symbol.declarations)
+      .collect {
+        case sym: TermSymbol if matchTargetName(method, sym) && matchSignature(method, sym, checkParamNames = false) =>
+          BinaryMethod(binaryClass, sym)
+      }
+
+  private def findStandardMethods(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryMethodSymbol] =
     binaryClass match
       case samClass: BinarySAMClass =>
         if method.isBridge then
