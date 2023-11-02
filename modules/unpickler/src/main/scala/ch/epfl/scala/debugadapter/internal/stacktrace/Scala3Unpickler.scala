@@ -20,6 +20,7 @@ import tastyquery.SourceLanguage
 import tastyquery.Traversers.TreeTraverser
 import scala.collection.mutable.Buffer
 import ch.epfl.scala.debugadapter.internal.binary.Instruction
+import tastyquery.SourcePosition
 
 class Scala3Unpickler(
     classpaths: Array[Path],
@@ -165,7 +166,7 @@ class Scala3Unpickler(
 
     val candidates =
       if cls.isObject then allSymbols.filter(_.symbol.isModuleClass)
-      else if cls.sourceLines.isEmpty && allSymbols.forall(_.symbol.isModuleClass) then
+      else if cls.sourceLines.forall(_.isEmpty) && allSymbols.forall(_.symbol.isModuleClass) then
         allSymbols.collect { case BinaryClass(symbol) => BinarySyntheticCompanionClass(symbol) }
       else allSymbols.filter(!_.symbol.isModuleClass)
     candidates.singleOrThrow(cls)
@@ -560,7 +561,7 @@ class Scala3Unpickler(
         val parents = (javaClass.superclass.toSet ++ javaClass.interfaces)
           .map(findClass(_))
           .collect { case BinaryClass(sym) => sym }
-        val sourceLines = removeInlinedLines(javaClass.sourceLines, classOwners)
+        val sourceLines = javaClass.sourceLines.map(removeInlinedLines(_, classOwners))
         classOwners
           .flatMap(cls => collectLocalClasses(cls, localClassName, sourceLines))
           .collect {
@@ -572,7 +573,7 @@ class Scala3Unpickler(
           }
       case Some(remaining) =>
         val localClasses = classOwners
-          .flatMap(cls => collectLocalClasses(cls, localClassName, Seq.empty))
+          .flatMap(cls => collectLocalClasses(cls, localClassName, None))
           .collect { case BinaryClass(cls) => cls }
         localClasses.flatMap(s => findClassRecursively(s, remaining))
 
@@ -591,7 +592,7 @@ class Scala3Unpickler(
   private def collectLocalClasses(
       cls: ClassSymbol,
       name: String,
-      lines: Seq[binary.SourceLine]
+      lines: Option[binary.SourceLines]
   ): Seq[BinaryClassSymbol] =
     object SAMClassOrPartialFunction:
       def unapply(lambda: Lambda): Option[BinaryPartialFunction | BinarySAMClass] =
@@ -661,17 +662,17 @@ class Scala3Unpickler(
       if adapted then tpe.erasedAsReturnType.toString == "void"
       else method.returnType.forall(matchType(tpe.erasedAsReturnType, _))
     val classOwners = getOwners(binaryClass)
-    val sourceSpan =
+    val sourceLines =
       if classOwners.size == 2 && method.allParameters.filter(p => p.name.matches("\\$this\\$\\d+")).nonEmpty then
         // workaround of https://github.com/lampepfl/dotty/issues/18816
-        removeInlinedLines(method.sourceLines, classOwners).maxOption.toSeq
-      else removeInlinedLines(method.sourceLines, classOwners)
+        method.sourceLines.map(removeInlinedLines(_, classOwners).last)
+      else method.sourceLines.map(removeInlinedLines(_, classOwners))
     for
       classOwner <- classOwners
-      byNameArg <- collectTrees1(classOwner, sourceSpan)(inlined => {
+      byNameArg <- collectTrees1(classOwner, sourceLines)(inlined => {
         case t @ ByNameApply(args) if !isInlineTree(t) =>
           args.collect {
-            case (arg, paramTpe) if matchType0(paramTpe) && (inlined || matchLines(arg, sourceSpan)) =>
+            case (arg, paramTpe) if matchType0(paramTpe) && (inlined || sourceLines.forall(matchLines(arg, _))) =>
               val byNameArg = BinaryByNameArg(binaryClass, paramTpe)
               if adapted then BinaryAdaptedFun(byNameArg) else byNameArg
           }
@@ -684,14 +685,14 @@ class Scala3Unpickler(
         case tpe: Type => method.returnType.forall(matchType(tpe.erasedAsReturnType, _))
         case _ => false
     val classOwners = getOwners(binaryClass)
-    val sourceSpan = removeInlinedLines(method.sourceLines, classOwners).interval
+    val sourceLines = method.sourceLines.map(removeInlinedLines(_, classOwners))
     val explicitByNameArgs =
       for
         classOwner <- classOwners
-        byNameArg <- collectTrees1(classOwner, sourceSpan)(inlined => {
+        byNameArg <- collectTrees1(classOwner, sourceLines)(inlined => {
           case t @ ByNameApply(args) if isInlineTree(t) =>
             args.collect {
-              case (arg, _) if inlined || (matchType0(arg.tpe) && matchLines(arg, sourceSpan)) =>
+              case (arg, _) if inlined || (matchType0(arg.tpe) && sourceLines.forall(matchLines(arg, _))) =>
                 BinaryByNameArg(binaryClass, arg.tpe.asInstanceOf)
             }
         }).flatten
@@ -702,7 +703,7 @@ class Scala3Unpickler(
         case term: TermSymbol
             if term.allOverriddenSymbols.nonEmpty &&
               term.isInline &&
-              term.tree.exists(matchLines(_, method.sourceLines.interval)) =>
+              method.sourceLines.forall(sourceLines => term.tree.exists(matchLines(_, sourceLines))) =>
           term.declaredType.allParamTypes.collect {
             case byName: ByNameType if matchType0(byName.resultType) =>
               BinaryByNameArg(binaryClass, byName.resultType)
@@ -721,8 +722,8 @@ class Scala3Unpickler(
     val sourceLines =
       if owners.size == 2 && javaMethod.allParameters.filter(p => p.name.matches("\\$this\\$\\d+")).nonEmpty then
         // workaround of https://github.com/lampepfl/dotty/issues/18816
-        removeInlinedLines(javaMethod.sourceLines, owners).maxOption.toSeq
-      else removeInlinedLines(javaMethod.sourceLines, owners)
+        javaMethod.sourceLines.map(removeInlinedLines(_, owners).last)
+      else javaMethod.sourceLines.map(removeInlinedLines(_, owners))
     for
       owner <- owners
       term <- collectTrees1(owner, sourceLines) { inlined =>
@@ -759,10 +760,10 @@ class Scala3Unpickler(
         case s @ Select(_: New, _) if s.symbol.isTerm => Some(s.symbol.asTerm)
         case _ => None
 
-    val span = method.sourceLines.interval
-    val localClasses = collectTrees(binaryOwner.symbol, span) { case ClassDef(_, _, cls) if cls.isLocal => cls }
+    val sourceLines = method.sourceLines
+    val localClasses = collectTrees(binaryOwner.symbol, sourceLines) { case ClassDef(_, _, cls) if cls.isLocal => cls }
     val innerClasses = binaryOwner.symbol.declarations.collect {
-      case cls: ClassSymbol if cls.pos.unknownOrContainsAll(span) => cls
+      case cls: ClassSymbol if sourceLines.forall(matchLines(cls.pos, _)) => cls
     }
     for
       cls <- binaryOwner.symbol +: (localClasses ++ innerClasses)
@@ -775,7 +776,7 @@ class Scala3Unpickler(
       args = superCall.allArgsFlatten
       if args.size == paramTypes.size
       (arg, paramType) <- args.zip(paramTypes)
-      if arg.pos.unknownOrContainsAll(span)
+      if sourceLines.forall(matchLines(arg, _))
       argType0 <- asType(arg.tpe).toSeq
       argType = paramType match
         case byName: ByNameType => defn.Function0Type.appliedTo(byName.resultType)
@@ -790,22 +791,23 @@ class Scala3Unpickler(
         case tpe: Type => method.returnType.forall(matchType(tpe.erasedAsReturnType, _))
         case _ => false
     val classOwners = getOwners(binaryClass)
-    val sourceSpan = removeInlinedLines(method.sourceLines, classOwners).interval
+    val sourceLines = method.sourceLines.map(removeInlinedLines(_, classOwners))
     for
       classOwner <- classOwners
-      liftedTry <- collectTrees[BinaryLiftedTry](classOwner, sourceSpan) {
+      liftedTry <- collectTrees[BinaryLiftedTry](classOwner, sourceLines) {
         case tryTree: Try if matchType0(tryTree.tpe) =>
           BinaryLiftedTry(binaryClass, tryTree.tpe.asInstanceOf)
       }
     yield liftedTry
 
-  private def collectTrees[S](cls: Symbol, lines: Seq[binary.SourceLine])(matcher: PartialFunction[Tree, S]): Seq[S] =
+  private def collectTrees[S](cls: Symbol, lines: Option[binary.SourceLines])(
+      matcher: PartialFunction[Tree, S]
+  ): Seq[S] =
     collectTrees1(cls, lines)(_ => matcher)
 
-  private def collectTrees1[S](root: Symbol, lines: Seq[binary.SourceLine])(
+  private def collectTrees1[S](root: Symbol, sourceLines: Option[binary.SourceLines])(
       matcher: Boolean => PartialFunction[Tree, S]
   ): Seq[S] =
-    val span = lines.interval
     val collectors = Buffer.empty[Collector]
     var inlineSymbols = Set.empty[Symbol]
 
@@ -813,7 +815,7 @@ class Scala3Unpickler(
       collectors += this
       private var buffer = Map.empty[Tree, S]
       override def traverse(tree: Tree): Unit =
-        if inlined || matchLines(tree, span) then
+        if inlined || sourceLines.forall(matchLines(tree, _)) then
           matchTree(tree)
           tree match
             case InlineTree(symbol) if !inlineSymbols.contains(symbol) =>
@@ -831,7 +833,7 @@ class Scala3Unpickler(
             case _ => ()
 
       def collected: Seq[S] =
-        if inlined || lines.isEmpty then buffer.values.toSeq
+        if inlined || sourceLines.forall(_.isEmpty) then buffer.values.toSeq
         else
           buffer
             .filterNot((tree, _) => buffer.keys.exists(other => tree.pos.isEnclosing(other.pos)))
@@ -847,17 +849,23 @@ class Scala3Unpickler(
     collectors.toSeq.flatMap(_.collected)
   end collectTrees1
 
-  private def matchLines(tree: Tree, span: Seq[binary.SourceLine]): Boolean =
+  private def matchLines(tree: Tree, sourceLines: binary.SourceLines): Boolean =
     tree match
-      case lambda: Lambda => lambda.meth.symbol.tree.exists(matchLines(_, span))
-      case tree => tree.pos.unknownOrContainsAll(span)
+      case lambda: Lambda => lambda.meth.symbol.tree.exists(matchLines(_, sourceLines))
+      case tree => matchLines(tree.pos, sourceLines)
+
+  private def matchLines(pos: SourcePosition, sourceLines: binary.SourceLines): Boolean =
+    pos.isUnknown
+      || !pos.hasLineColumnInformation
+      || pos.sourceFile.name != sourceLines.sourceName
+      || sourceLines.tastySpan.forall(line => pos.startLine <= line && pos.endLine >= line)
 
   private def removeInlinedLines(
-      sourceLines: Seq[binary.SourceLine],
+      sourceLines: binary.SourceLines,
       owners: Seq[Symbol]
-  ): Seq[binary.SourceLine] =
+  ): binary.SourceLines =
     val inlineSymbols = owners.flatMap(collectInlineSymbols)
-    sourceLines.filter(line =>
+    sourceLines.filterTasty(line =>
       owners.exists(_.pos.containsLine(line) && !inlineSymbols.exists(_.pos.containsLine(line)))
     )
 

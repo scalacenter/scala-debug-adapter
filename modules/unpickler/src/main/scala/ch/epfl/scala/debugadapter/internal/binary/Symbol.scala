@@ -4,7 +4,7 @@ import ch.epfl.scala.debugadapter.internal.stacktrace.NameTransformer
 
 trait Symbol:
   def name: String
-  def sourceLines: Seq[SourceLine]
+  def sourceLines: Option[SourceLines]
 
   def unexpandedDecodedNames: Seq[String] =
     val expanded = ".+\\$\\$(_\\$)*(.+)".r
@@ -16,3 +16,6 @@ trait Symbol:
 
   def decodedName: String =
     NameTransformer.decode(name)
+
+  protected def showSpan: String =
+    sourceLines.map(_.showSpan).getOrElse("")

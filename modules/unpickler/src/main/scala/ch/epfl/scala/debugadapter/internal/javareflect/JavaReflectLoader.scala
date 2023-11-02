@@ -20,22 +20,25 @@ class JavaReflectLoader(classLoader: ClassLoader, loadExtraInfo: Boolean) extend
     loadClass(cls)
 
   private def doLoadClass(cls: Class[?]): JavaReflectClass =
-    val lines =
+    val extraInfo =
       if loadExtraInfo && !cls.isPrimitive && !cls.isArray then
         try
           val name = cls.getName
           val inputStream = classLoader.getResourceAsStream(name.replace('.', '/') + ".class")
           val asmReader = new asm.ClassReader(inputStream)
           getExtraInfo(asmReader)
-        catch case _: IOException => Map.empty
-      else Map.empty
-    JavaReflectClass(cls, lines, this)
+        catch case _: IOException => ExtraClassInfo.empty
+      else ExtraClassInfo.empty
+    JavaReflectClass(cls, extraInfo, this)
 
-  private def getExtraInfo(reader: asm.ClassReader): Map[MethodSig, ExtraBytecodeInfo] =
+  private def getExtraInfo(reader: asm.ClassReader): ExtraClassInfo =
     assert(loadExtraInfo)
-    val extraInfos = mutable.Map.empty[MethodSig, ExtraBytecodeInfo]
+    var sourceName: String = ""
+    var allLines = mutable.Set.empty[Int]
+    val extraInfos = mutable.Map.empty[MethodSig, ExtraMethodInfo]
     val visitor =
       new asm.ClassVisitor(asm.Opcodes.ASM9):
+        override def visitSource(source: String, debug: String): Unit = sourceName = source
         override def visitMethod(
             access: Int,
             name: String,
@@ -44,7 +47,7 @@ class JavaReflectLoader(classLoader: ClassLoader, loadExtraInfo: Boolean) extend
             exceptions: Array[String]
         ): asm.MethodVisitor =
           new asm.MethodVisitor(asm.Opcodes.ASM9):
-            val lines = mutable.Buffer.empty[Int]
+            val lines = mutable.Set.empty[Int]
             val instructions = mutable.Buffer.empty[Instruction]
             override def visitLineNumber(line: Int, start: asm.Label): Unit =
               lines += line
@@ -57,10 +60,12 @@ class JavaReflectLoader(classLoader: ClassLoader, loadExtraInfo: Boolean) extend
             ): Unit =
               instructions += Instruction.Method(opcode, owner.replace('/', '.'), name, descriptor, isInterface)
             override def visitEnd(): Unit =
-              val sourceLines = lines.toSeq.distinct.sorted.map(SourceLine(_))
-              extraInfos += MethodSig(name, descriptor) -> ExtraBytecodeInfo(sourceLines, instructions.toSeq)
+              allLines ++= lines
+              val sourceLines = Option.when(sourceName.nonEmpty)(SourceLines(sourceName, lines.toSeq))
+              extraInfos += MethodSig(name, descriptor) -> ExtraMethodInfo(sourceLines, instructions.toSeq)
     reader.accept(visitor, asm.Opcodes.ASM9)
-    extraInfos.toMap
+    val sourceLines = Option.when(sourceName.nonEmpty)(SourceLines(sourceName, allLines.toSeq))
+    ExtraClassInfo(sourceLines, extraInfos.toMap)
 
 object JavaReflectLoader:
   def apply(classPath: Seq[Path], loadExtraInfo: Boolean = true): JavaReflectLoader =

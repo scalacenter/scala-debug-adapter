@@ -11,8 +11,8 @@ class JdiReferenceType(obj: Any, className: String = "com.sun.jdi.ReferenceType"
   override def interfaces: Seq[ClassType] = if isClass then asClass.interfaces else asInterface.interfaces
   def isClass = isInstanceOf("com.sun.jdi.ClassType")
   override def isInterface = isInstanceOf("com.sun.jdi.InterfaceType")
-  override def sourceLines: Seq[SourceLine] =
-    allLineLocations.map(_.lineNumber).distinct.sorted.map(SourceLine(_))
+  override def sourceLines: Option[SourceLines] =
+    Some(SourceLines(sourceName, allLineLocations.map(_.lineNumber)))
 
   override def method(name: String, sig: String): Option[Method] = None
 
@@ -25,6 +25,9 @@ class JdiReferenceType(obj: Any, className: String = "com.sun.jdi.ReferenceType"
 
   private def allLineLocations: Seq[JdiLocation] =
     invokeMethod[ju.List[Any]]("allLineLocations").asScala.map(JdiLocation.apply(_)).toSeq
+
+  private[jdi] def sourceName: String =
+    invokeMethod("sourceName")
 
 class JdiClassType(obj: Any) extends JdiReferenceType(obj, "com.sun.jdi.ClassType"):
   override def superclass: Option[ClassType] = Some(JdiReferenceType(invokeMethod[Any]("superclass")))

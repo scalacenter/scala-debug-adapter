@@ -9,7 +9,7 @@ import ch.epfl.scala.debugadapter.internal.binary.MethodSig
 class JavaReflectMethod(
     method: Method,
     val signature: MethodSig,
-    extraInfos: ExtraBytecodeInfo,
+    extraInfos: ExtraMethodInfo,
     loader: JavaReflectLoader
 ) extends binary.Method:
 
@@ -29,15 +29,12 @@ class JavaReflectMethod(
   override def isStatic: Boolean = Modifier.isStatic(method.getModifiers)
 
   override def toString: String =
-    val span =
-      if sourceLines.size > 2 then Seq(sourceLines.min, sourceLines.max)
-      else sourceLines
-    s"$method (${span.mkString(", ")})"
+    if showSpan.isEmpty then method.toString else s"$method $showSpan"
 
   override def isBridge: Boolean = method.isBridge
 
   override def isConstructor: Boolean = false
 
-  override def sourceLines: Seq[binary.SourceLine] = extraInfos.sourceLines
+  override def sourceLines: Option[binary.SourceLines] = extraInfos.sourceLines
 
   override def instructions: Seq[binary.Instruction] = extraInfos.instructions

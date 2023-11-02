@@ -51,7 +51,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0", binaryClassLoader)
-      // if cls.name == "scala.quoted.runtime.impl.QuotesImpl$reflect$report$"
+      // if cls.name == "dotty.tools.dotc.util.LinearSet$package"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
@@ -65,8 +65,8 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case Patterns.LocalLazyInit(_) => unpickler.tryFind(method, localLazyInitCounter)
         case Patterns.LocalMethod(_) => unpickler.tryFind(method, localMethodCounter)
         case _ => unpickler.tryFind(method, methodCounter)
-    // anonFunCounter.printNotFound()
-    localMethodCounter.printAmbiguous()
+    // innerClassCounter.printNotFound()
+    // localMethodCounter.printAmbiguous()
     methodCounter.printNotFound()
     methodCounter.printAmbiguous()
     localClassCounter.printReport()
@@ -83,7 +83,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
     checkCounter(localMethodCounter, 2606, expectedAmbiguous = 2)
-    checkCounter(anonFunCounter, 6651, expectedAmbiguous = 331, expectedNotFound = 3)
+    checkCounter(anonFunCounter, 6653, expectedAmbiguous = 331, expectedNotFound = 1)
     checkCounter(adaptedAnonFunCounter, 288, expectedAmbiguous = 83)
     checkCounter(localLazyInitCounter, 108)
     checkCounter(methodCounter, 57870, expectedAmbiguous = 2)

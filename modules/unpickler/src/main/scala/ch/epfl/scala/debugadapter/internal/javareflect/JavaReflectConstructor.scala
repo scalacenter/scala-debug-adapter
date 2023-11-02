@@ -8,7 +8,7 @@ import ch.epfl.scala.debugadapter.internal.binary.MethodSig
 class JavaReflectConstructor(
     constructor: Constructor[?],
     val signature: MethodSig,
-    extraInfos: ExtraBytecodeInfo,
+    extraInfos: ExtraMethodInfo,
     loader: JavaReflectLoader
 ) extends binary.Method:
 
@@ -32,6 +32,6 @@ class JavaReflectConstructor(
 
   override def toString: String = constructor.toString
 
-  override def sourceLines: Seq[binary.SourceLine] = extraInfos.sourceLines
+  override def sourceLines: Option[binary.SourceLines] = extraInfos.sourceLines
 
   override def instructions: Seq[binary.Instruction] = extraInfos.instructions

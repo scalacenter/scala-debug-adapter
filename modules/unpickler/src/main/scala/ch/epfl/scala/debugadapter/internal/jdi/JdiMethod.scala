@@ -9,7 +9,7 @@ import java.util as ju
 class JdiMethod(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method") with Method:
   override def name: String = invokeMethod("name")
 
-  override def declaringClass: ClassType =
+  override def declaringClass: JdiReferenceType =
     JdiReferenceType(invokeMethod("declaringType"))
 
   override def allParameters: Seq[Parameter] =
@@ -29,8 +29,8 @@ class JdiMethod(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method") 
 
   override def isConstructor: Boolean = invokeMethod("isConstructor")
 
-  override def sourceLines: Seq[SourceLine] =
-    allLineLocations.map(_.lineNumber).distinct.sorted.map(SourceLine(_))
+  override def sourceLines: Option[SourceLines] =
+    Some(SourceLines(declaringClass.sourceName, allLineLocations.map(_.lineNumber)))
 
   override def signature: MethodSig = ???
 

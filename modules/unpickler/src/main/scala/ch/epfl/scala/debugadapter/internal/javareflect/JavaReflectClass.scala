@@ -5,15 +5,14 @@ import scala.util.matching.Regex
 import scala.jdk.CollectionConverters.*
 import ch.epfl.scala.debugadapter.internal.binary.Method
 import ch.epfl.scala.debugadapter.internal.binary.MethodSig
+import ch.epfl.scala.debugadapter.internal.binary.SourceLines
 
-class JavaReflectClass(cls: Class[?], extraInfos: Map[MethodSig, ExtraBytecodeInfo], loader: JavaReflectLoader)
-    extends binary.ClassType:
+class JavaReflectClass(cls: Class[?], extraInfo: ExtraClassInfo, loader: JavaReflectLoader) extends binary.ClassType:
   override def name: String = cls.getTypeName
   override def superclass = Option(cls.getSuperclass).map(loader.loadClass)
   override def interfaces = cls.getInterfaces.toList.map(loader.loadClass)
   override def isInterface: Boolean = cls.isInterface
-  override def sourceLines: Seq[binary.SourceLine] =
-    extraInfos.values.map(_.sourceLines).flatten.toSeq.distinct.sorted
+  override def sourceLines: Option[SourceLines] = extraInfo.sourceLines
 
   override def declaredMethod(name: String, sig: String): Option[Method] =
     declaredMethods.find(m => m.signature == MethodSig(name, sig))
@@ -28,18 +27,15 @@ class JavaReflectClass(cls: Class[?], extraInfos: Map[MethodSig, ExtraBytecodeIn
     }
 
   override def toString: String =
-    val span =
-      if sourceLines.size > 2 then Seq(sourceLines.min, sourceLines.max)
-      else sourceLines
-    s"$cls (${span.mkString(", ")})"
+    if showSpan.isEmpty then cls.toString else s"$cls $showSpan"
 
   override def declaredMethods: Seq[binary.Method] =
     cls.getDeclaredMethods.map { m =>
       val sig = JavaReflectUtils.signature(m)
-      val extraInfo = extraInfos.getOrElse(sig, ExtraBytecodeInfo.empty)
-      JavaReflectMethod(m, sig, extraInfo, loader)
+      val methodInfo = extraInfo.getMethodInfo(sig)
+      JavaReflectMethod(m, sig, methodInfo, loader)
     } ++ cls.getDeclaredConstructors.map { c =>
       val sig = JavaReflectUtils.signature(c)
-      val extraInfo = extraInfos.getOrElse(sig, ExtraBytecodeInfo.empty)
-      JavaReflectConstructor(c, sig, extraInfo, loader)
+      val methodInfo = extraInfo.getMethodInfo(sig)
+      JavaReflectConstructor(c, sig, methodInfo, loader)
     }

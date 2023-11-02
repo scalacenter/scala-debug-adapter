@@ -152,21 +152,11 @@ extension (pos: SourcePosition)
       && pos.startLine < other.startLine
       && pos.endLine > other.endLine
 
-  def containsLine(sourceLine: binary.SourceLine): Boolean =
+  def containsLine(line: Int): Boolean =
     !pos.isUnknown
       && pos.hasLineColumnInformation
-      && pos.startLine <= sourceLine.toTasty
-      && pos.endLine >= sourceLine.toTasty
-
-  def unknownOrContainsAll(span: Seq[binary.SourceLine]): Boolean =
-    pos.isUnknown
-      || !pos.hasLineColumnInformation
-      || span.forall(pos.containsLine)
-
-extension (sourceLines: Seq[binary.SourceLine])
-  def interval: Seq[binary.SourceLine] =
-    if sourceLines.size > 2 then Seq(sourceLines.min, sourceLines.max)
-    else sourceLines
+      && pos.startLine <= line
+      && pos.endLine >= line
 
 extension (binaryClass: BinaryClassSymbol)
   def isJava: Boolean =
