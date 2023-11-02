@@ -352,14 +352,21 @@ class Scala3Unpickler(
     if method.isConstructor && binaryClass.symbol.isSubClass(defn.AnyValClass) then
       binaryClass.symbol.getAllOverloadedDecls(SimpleName("<init>")).map(BinaryMethod(binaryClass, _))
     else
+      val isJava = binaryClass.isJava
       val fromClass = binaryClass.symbol.declarations
         .collect { case sym: TermSymbol if matchTargetName(method, sym) => sym }
         .collect {
-          case sym if matchSignature(method, sym, checkParamNames = !binaryClass.isJava) =>
+          case sym
+              if matchSignature(
+                method,
+                sym,
+                asJavaVarargs = isJava,
+                captureAllowed = !isJava,
+                checkParamNames = !isJava
+              ) =>
             BinaryMethod(binaryClass, sym)
-          case sym if matchSignature(method, sym, asJavaVarargs = true, checkParamNames = !binaryClass.isJava) =>
-            val method = BinaryMethod(binaryClass, sym)
-            if binaryClass.isJava then method else BinaryMethodBridge(method, sym.declaredType)
+          case sym if !isJava && matchSignature(method, sym, asJavaVarargs = true) =>
+            BinaryMethodBridge(BinaryMethod(binaryClass, sym), sym.declaredType)
         }
       // TODO: can a mixin forwarder not be a bridge? (yes if it's a getter of a lazy val, some other cases?)
       // Can a trait param accessor be a bridge?
@@ -923,6 +930,7 @@ class Scala3Unpickler(
           val declaredParams = method.allParameters.drop(capturedParams.size).dropRight(uncurriedArgs.size)
           val contextParams = method.allParameters.drop(capturedParams.size + declaredParams.size)
 
+          (captureAllowed || capturedParams.isEmpty) &&
           (capturedParams ++ contextParams).forall(_.isGenerated) &&
           declaredParams.size == paramNames.size &&
           (!checkParamNames || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
@@ -935,6 +943,7 @@ class Scala3Unpickler(
         case _ =>
           val capturedParams = method.allParameters.dropRight(paramNames.size)
           val declaredParams = method.allParameters.drop(capturedParams.size)
+
           (captureAllowed || capturedParams.isEmpty) &&
           capturedParams.forall(_.isGenerated) &&
           declaredParams.size == paramNames.size &&
