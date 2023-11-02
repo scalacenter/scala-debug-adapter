@@ -635,11 +635,8 @@ class Scala3Unpickler(
 
   private object ByNameApply:
     def unapply(tree: Apply): Option[Seq[(TermTree, Type)]] =
-      tree.fun.tpe.widenTermRef match
-        case m: MethodType =>
-          Some(tree.args.zip(m.paramTypes).collect { case (arg, t: ByNameType) => (arg, t.resultType) })
-            .filter(_.nonEmpty)
-        case _ => None
+      Some(tree.args.zip(tree.methodType.paramTypes).collect { case (arg, t: ByNameType) => (arg, t.resultType) })
+        .filter(_.nonEmpty)
 
   private object InlineTree:
     def unapply(tree: Tree): Option[Symbol] =
