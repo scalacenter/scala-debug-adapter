@@ -241,7 +241,7 @@ class Scala3Unpickler(
       expectedTpe =
         if method.isBridge then sym.declaredType
         else sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
-      if matchSignature1(method, expectedTpe, isAnonFun = false)
+      if matchSignature1(method, expectedTpe)
     yield
       val tpe = sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
       val accessor = BinarySuperAccessor(binaryClass, sym, tpe)
@@ -256,7 +256,7 @@ class Scala3Unpickler(
     binaryClass.symbol.declarations.collect {
       case sym: TermSymbol
           if names.contains(sym.targetNameStr) &&
-            matchSignature(method, sym, checkParamNames = false, checkTypeErasure = false) &&
+            matchSignature(method, sym, captureAllowed = false, checkParamNames = false, checkTypeErasure = false) &&
             // hack: in Scala 3 only overriding symbols can be specialized (Function and Tuple)
             sym.allOverriddenSymbols.nonEmpty =>
         BinarySpecializedMethod(binaryClass, sym)
@@ -325,7 +325,7 @@ class Scala3Unpickler(
         resultType = sym.declaredType match
           case byName: ByNameType => byName.resultType
           case tpe => tpe
-        if matchSignature1(method, resultType, isAnonFun = false, checkParamNames = checkParamNames)
+        if matchSignature1(method, resultType, checkParamNames = checkParamNames)
       yield BinaryMethod(BinaryClass(classSym), sym)
     def setters =
       name match
@@ -881,7 +881,8 @@ class Scala3Unpickler(
     matchSignature1(
       method,
       symbol.declaredType,
-      isAnonFun = symbol.isAnonFun,
+      uncurryContextFunction = !symbol.isAnonFun,
+      captureAllowed = captureAllowed,
       asJavaVarargs = asJavaVarargs,
       checkParamNames = checkParamNames,
       checkTypeErasure = checkTypeErasure
@@ -890,7 +891,8 @@ class Scala3Unpickler(
   private def matchSignature1(
       method: binary.Method,
       declaredType: TypeOrMethodic,
-      isAnonFun: Boolean,
+      uncurryContextFunction: Boolean = true,
+      captureAllowed: Boolean = true,
       asJavaVarargs: Boolean = false,
       checkParamNames: Boolean = true,
       checkTypeErasure: Boolean = true
@@ -901,7 +903,7 @@ class Scala3Unpickler(
           tpe match
             case tpe: AppliedType if tpe.tycon.isContextFunction => rec(tpe.args.last, args ++ tpe.args.init)
             case res => Option.when(args.nonEmpty)((args, res))
-        rec(tpe, Seq.empty)
+        if uncurryContextFunction then rec(tpe, Seq.empty) else None
 
     val paramNames = declaredType.allParamNames.map(_.toString)
     val paramsSig = declaredType.allParamTypes.map(_.erasedAsArgType(asJavaVarargs))
@@ -916,7 +918,7 @@ class Scala3Unpickler(
       (!checkTypeErasure || matchTypeErasure(paramsSig, resSig, declaredParams, method.returnType))
     else
       declaredType.returnType.dealias match
-        case CurriedContextFunction(uncurriedArgs, uncurriedReturnType) if !isAnonFun =>
+        case CurriedContextFunction(uncurriedArgs, uncurriedReturnType) =>
           val capturedParams = method.allParameters.dropRight(paramNames.size + uncurriedArgs.size)
           val declaredParams = method.allParameters.drop(capturedParams.size).dropRight(uncurriedArgs.size)
           val contextParams = method.allParameters.drop(capturedParams.size + declaredParams.size)
@@ -933,7 +935,7 @@ class Scala3Unpickler(
         case _ =>
           val capturedParams = method.allParameters.dropRight(paramNames.size)
           val declaredParams = method.allParameters.drop(capturedParams.size)
-
+          (captureAllowed || capturedParams.isEmpty) &&
           capturedParams.forall(_.isGenerated) &&
           declaredParams.size == paramNames.size &&
           (!checkParamNames || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
