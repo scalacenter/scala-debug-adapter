@@ -917,11 +917,12 @@ class Scala3Unpickler(
       checkTypeErasure: Boolean = true
   ): Boolean =
     object CurriedContextFunction:
-      def unapply(tpe: Type): Option[(Seq[TypeOrWildcard], TypeOrWildcard)] =
-        def rec(tpe: TypeOrWildcard, args: Seq[TypeOrWildcard]): Option[(Seq[TypeOrWildcard], TypeOrWildcard)] =
+      def unapply(tpe: Type): Option[(Seq[Type], Type)] =
+        def rec(tpe: TypeOrWildcard, args: Seq[Type]): Option[(Seq[Type], Type)] =
           tpe match
-            case tpe: AppliedType if tpe.tycon.isContextFunction => rec(tpe.args.last, args ++ tpe.args.init)
-            case res => Option.when(args.nonEmpty)((args, res))
+            case tpe: AppliedType if tpe.tycon.isContextFunction =>
+              rec(tpe.args.last, args ++ tpe.args.init.map(_.highIfWildcard))
+            case res => Option.when(args.nonEmpty)((args, res.highIfWildcard))
         if uncurryContextFunction then rec(tpe, Seq.empty) else None
 
     val paramNames = declaredType.allParamNames.map(_.toString)
