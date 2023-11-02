@@ -38,6 +38,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case BinaryStaticForwarder(owner, _, _) => format(owner)
       case BinaryDeserializeLambda(owner, _) => format(owner)
       case BinarySetter(owner, _, _) => format(owner)
+      case BinaryGetter(owner, _, _) => format(owner)
       case BinarySuperAccessor(owner, _, _) => format(owner)
       case BinarySpecializedMethod(_, sym) => formatOwner(sym)
       case BinaryInlineAccessor(owner, _) => format(owner)
@@ -61,6 +62,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case BinaryStaticForwarder(_, target, _) => formatName(target).dot("<static forwarder>")
       case _: BinaryDeserializeLambda => "$deserializeLambda$"
       case BinarySetter(_, sym, _) => if sym.isMethod then formatName(sym) else formatName(sym) + "_="
+      case BinaryGetter(_, sym, _) => formatName(sym)
       case BinarySuperAccessor(_, sym, _) => formatName(sym).dot("<super>")
       case BinarySpecializedMethod(_, sym) => formatName(sym).dot("<specialized>")
       case BinaryInlineAccessor(_, target) => s"<inline ${formatOwner(target).dot(formatName(target))}>"

@@ -51,14 +51,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0", binaryClassLoader)
-      // if cls.name == "dotty.tools.backend.jvm.MethodNode1"
+      // if cls.name == "dotty.tools.dotc.Run"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethods
-    // if method.name == "<init>"
+      // if method.name == "dotty$tools$dotc$core$ConstraintRunInfo$$maxSize"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -67,6 +67,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case Patterns.LocalMethod(_) => unpickler.tryFind(method, localMethodCounter)
         case _ => unpickler.tryFind(method, methodCounter)
     // anonFunCounter.printNotFound()
+    localMethodCounter.printAmbiguous()
     methodCounter.printNotFound()
     methodCounter.printAmbiguous()
     localClassCounter.printReport()

@@ -42,14 +42,14 @@ extension (symbol: TermSymbol)
   def isJavaOverride(using Context): Boolean =
     symbol.allOverriddenSymbols.exists(_.sourceLanguage == SourceLanguage.Java)
 
-extension [A](xs: Seq[A])
+extension [A, S[+X] <: IterableOnce[X]](xs: S[A])
   def singleOpt: Option[A] =
-    Option.when(xs.size == 1)(xs.head)
+    Option.when(xs.size == 1)(xs.iterator.next)
 
   def singleOrElse[B >: A](x: => B): B =
-    if xs.size == 1 then xs.head else x
+    if xs.size == 1 then xs.iterator.next else x
 
-  def orIfEmpty[B >: A](ys: => Seq[B]): Seq[B] =
+  def orIfEmpty[B >: A](ys: => S[B]): S[B] =
     if xs.nonEmpty then xs else ys
 
 extension [T <: BinarySymbol](xs: Seq[T])
