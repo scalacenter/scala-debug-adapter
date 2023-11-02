@@ -205,6 +205,7 @@ class Scala3Unpickler(
   private def findTraitSetter(binaryClass: BinaryClass, method: binary.Method, name: String): Seq[BinarySetter] =
     for
       traitSym <- binaryClass.symbol.linearization.filter(_.isTrait)
+      if method.decodedName.contains("$" + traitSym.nameStr + "$")
       sym <- traitSym.declarations.collect {
         case sym: TermSymbol if sym.targetNameStr == name && !sym.isMethod && !sym.isAbstractMember => sym
       }
