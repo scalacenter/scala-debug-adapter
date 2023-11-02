@@ -98,7 +98,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case _ => name.toString
     rec(name)
 
-  private def format(t: TermType | TypeOrWildcard): String =
+  private def format(t: TypeOrMethodic | TypeOrWildcard): String =
     t match
       case t: MethodType =>
         val params = t.paramNames
@@ -182,8 +182,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
         s"[$args] =>> $result"
       case t: NothingType => "Nothing"
       case t: AnyKindType => "AnyKind"
-      case t @ (_: RecThis | _: SkolemType | _: SuperType | _: MatchType | _: CustomTransientGroundType |
-          _: PackageRef) =>
+      case t @ (_: RecThis | _: SkolemType | _: SuperType | _: MatchType | _: CustomTransientGroundType) =>
         throwOrWarn(s"Cannot format type ${t.getClass.getName}")
         "<unsupported>"
 
