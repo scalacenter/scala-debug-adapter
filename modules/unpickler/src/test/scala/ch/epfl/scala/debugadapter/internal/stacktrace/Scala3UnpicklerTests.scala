@@ -85,8 +85,13 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat("example.F", javaSig, "F.m.<static forwarder>(): String", skip = true)
     debuggee.assertFormat("example.Main$G", javaSig, "Main.G.m(): String")
     debuggee.assertFormat("example.Main$H", javaSig, "Main.H.m.<mixin forwarder>(): String", skip = true)
-    debuggee.assertAmbiguous("example.Main$$anon$1", javaSig)
-    debuggee.assertAmbiguous("example.Main$$anon$2", javaSig)
+    debuggee.assertFormat(
+      "example.Main$$anon$1",
+      javaSig,
+      "Main.main.a1.<anon class>.m.<mixin forwarder>(): String",
+      skip = true
+    )
+    debuggee.assertFormat("example.Main$$anon$2", javaSig, "Main.main.a2.<anon class>.m(): String")
   }
 
   test("find local class, trait and object by parents") {
@@ -187,18 +192,21 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat(
-      "example.A",
-      "void m$1(java.lang.String y$1)",
-      "A.m1.m: Unit"
-    )
-    debuggee.assertFormat(
-      "example.A",
-      if isScala30 then "void m$4(java.lang.String y$2, java.lang.String z)"
-      else "void m$2(java.lang.String y$2, java.lang.String z)",
-      "A.m1.m.m(z: String): Unit"
-    )
-    debuggee.assertAmbiguous("example.A", if isScala30 then "void m$2(int i)" else "void m$3(int i)")
+    debuggee.assertFormat("example.A", "void m$1(java.lang.String y$1)", "A.m1.m: Unit")
+    if isScala30 then
+      debuggee.assertFormat(
+        "example.A",
+        "void m$4(java.lang.String y$2, java.lang.String z)",
+        "A.m1.m.m(z: String): Unit"
+      )
+      debuggee.assertFormat("example.A", "void m$2(int i)", "A.m2.m(i: Int): Unit")
+    else
+      debuggee.assertFormat(
+        "example.A",
+        "void m$2(java.lang.String y$2, java.lang.String z)",
+        "A.m1.m.m(z: String): Unit"
+      )
+      debuggee.assertFormat("example.A", "void m$3(int i)", "A.m2.m(i: Int): Unit")
   }
 
   test("getters and setters") {
@@ -269,11 +277,11 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
 
-    def javaSig(returnType: String): String = s"$returnType m()"
+    def javaSig(returnType: String): String = s"java.lang.Object m()"
 
-    debuggee.assertFormat("example.A", javaSig("java.lang.Object"), "A.m(): Object")
-    debuggee.assertFormat("example.B", javaSig("java.lang.Object"), "B.m.<bridge>(): Object", skip = true)
-    debuggee.assertFormat("example.B", javaSig("java.lang.String"), "B.m(): String")
+    debuggee.assertFormat("example.A", "java.lang.Object m()", "A.m(): Object")
+    debuggee.assertFormat("example.B", "java.lang.Object m()", "B.m.<bridge>(): String", skip = true)
+    debuggee.assertFormat("example.B", "java.lang.String m()", "B.m(): String")
   }
 
   test("find outter field") {
@@ -354,7 +362,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     debuggee.assertFormat("example.Main$C$1", "Main.m.C")
     debuggee.assertFormat("example.Main$E$1$F", "Main.m.E.F")
-    debuggee.assertAmbiguous("example.Main$G$1")
+    debuggee.assertFormat("example.Main$G$1", "Main.m.G")
   }
 
   test("local class in signature") {
@@ -487,7 +495,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
 
     debuggee.assertFormat("example.A$", "java.lang.String a()", "A.a: String", skip = true)
-    debuggee.assertFormat("example.A$", "java.lang.String b()", "A.b.<mixin forwarder>: String", skip = true)
+    debuggee.assertFormat("example.A$", "java.lang.String b()", "A.b: String", skip = true)
     debuggee.assertFormat("example.B", "java.lang.String b()", "B.b: String")
     debuggee.assertFormat(
       "example.B",
@@ -1178,26 +1186,22 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat(
       "example.C1",
       "scala.Function0 C1$superArg$1()",
-      "C1.<init>.<super arg>: () => String",
-      loadExtraInfo = true
+      "C1.<init>.<super arg>: () => String"
     )
     debuggee.assertFormat(
       "example.C1",
       "scala.Function1 example$C1$$C2$$superArg$1()",
-      "C1.C2.<init>.<super arg>: String => String",
-      loadExtraInfo = true
+      "C1.C2.<init>.<super arg>: String => String"
     )
     debuggee.assertFormat(
       "example.C1",
       "scala.Function0 example$C1$$_$C3$superArg$1$1()",
-      "C1.m.C3.<init>.<super arg>: () => String",
-      loadExtraInfo = true
+      "C1.m.C3.<init>.<super arg>: () => String"
     )
     debuggee.assertFormat(
       "example.C1",
       "scala.Function0 example$C1$$_$$anon$superArg$1$1()",
-      "C1.m.<anon class>.<init>.<super arg>: () => String",
-      loadExtraInfo = true
+      "C1.m.<anon class>.<init>.<super arg>: () => String"
     )
     debuggee.assertFormat(
       "example.C1$C3$1",
@@ -1274,11 +1278,11 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
          |   def m4 = "" + m3
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.A", "java.lang.String liftedTree1$1()", "A.<try>: \"\" | \"\"", loadExtraInfo = true)
-    debuggee.assertFormat("example.A", "java.lang.String liftedTree2$1()", "A.<try>: \"\" | \"\"", loadExtraInfo = true)
-    debuggee.assertFormat("example.A", "java.lang.String liftedTree3$1()", "A.<try>: \"\" | \"\"", loadExtraInfo = true)
-    debuggee.assertFormat("example.A", "int liftedTree4$1()", "A.<try>: 2 | 3", loadExtraInfo = true)
-    debuggee.assertAmbiguous("example.A", "java.lang.String liftedTree5$1()", loadExtraInfo = true)
+    debuggee.assertFormat("example.A", "java.lang.String liftedTree1$1()", "A.<try>: \"\" | \"\"")
+    debuggee.assertFormat("example.A", "java.lang.String liftedTree2$1()", "A.<try>: \"\" | \"\"")
+    debuggee.assertFormat("example.A", "java.lang.String liftedTree3$1()", "A.<try>: \"\" | \"\"")
+    debuggee.assertFormat("example.A", "int liftedTree4$1()", "A.<try>: 2 | 3")
+    debuggee.assertAmbiguous("example.A", "java.lang.String liftedTree5$1()")
   }
 
   test("by-name args") {
@@ -1317,9 +1321,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
     debuggee.assertFormat("example.A", "example.A$B$ B()", "A.B: B")
     debuggee.assertFormat("example.A", "example.A$B$ B$(example.A $this)", "A.B.<static forwarder>: B", skip = true)
-    debuggee.assertFormat("example.C$", "example.A$B$ B()", "C.B.<mixin forwarder>: B", skip = true)
+    debuggee.assertFormat("example.C$", "example.A$B$ B()", "C.B: B", skip = true)
     debuggee.assertFormat("example.E", "example.E$F$ F()", "E.F: F", skip = true)
-    debuggee.assertFormat("example.E", "example.A$B$ B()", "E.B.<mixin forwarder>: B", skip = true)
+    debuggee.assertFormat("example.E", "example.A$B$ B()", "E.B: B", skip = true)
 
     if !isScala30 then
       debuggee.assertFormat("example.C$", "java.lang.Object B$lzyINIT1()", "C.B.<lazy init>: B", skip = true)
@@ -1479,7 +1483,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     debuggee.assertFormat(
       "example.A",
       "java.lang.Object apply(java.lang.Object v1)",
-      "A.apply.<bridge>(v1: Double): Boolean",
+      "A.apply.<bridge>(x: Double): Boolean",
       skip = true
     )
     debuggee.assertFormat(
@@ -1697,14 +1701,13 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
       "example.A",
       "java.lang.String example$A$$_$m3$1$(example.A $this)",
       "A.m1.m3.<static forwarder>: String",
-      skip = true,
-      loadExtraInfo = true
+      skip = true
     )
   }
 
   extension (debuggee: TestingDebuggee)
-    private def loader(loadExtraInfo: Boolean): JavaReflectLoader =
-      new JavaReflectLoader(debuggee.classLoader, loadExtraInfo = loadExtraInfo)
+    private def loader: JavaReflectLoader =
+      new JavaReflectLoader(debuggee.classLoader, loadExtraInfo = true)
 
     private def initUnpickler(): Scala3Unpickler =
       val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
@@ -1713,9 +1716,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
           java9OrAbove.classSystems.map(_.fileSystem.getPath("/modules", "java.base"))
       }
       val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
-      new Scala3Unpickler(debuggeeClasspath, loader(loadExtraInfo = true), println, testMode = true)
+      new Scala3Unpickler(debuggeeClasspath, loader, println, testMode = true)
 
-    private def loadBinaryMethod(declaringType: String, javaSig: String, loadExtraInfo: Boolean)(using
+    private def loadBinaryMethod(declaringType: String, javaSig: String)(using
         munit.Location
     ): binary.Method =
       def formatJavaStyle(m: binary.Method): String =
@@ -1723,42 +1726,43 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
         val parameters = m.allParameters.map(p => p.`type`.name + " " + p.name).mkString(", ")
         s"$returnType ${m.name}($parameters)"
 
-      val methods = loader(loadExtraInfo).loadClass(declaringType).declaredMethods
+      val methods = loader.loadClass(declaringType).declaredMethods
       def notFoundMessage: String =
         s"Cannot find method '$javaSig':\n" + methods.map(m => s"  " + formatJavaStyle(m)).mkString("\n")
       methods.find(m => formatJavaStyle(m) == javaSig).getOrElse(throw new Exception(notFoundMessage))
 
-    private def assertNotFound(declaringType: String, javaSig: String, loadExtraInfo: Boolean = false)(using
+    private def assertNotFound(declaringType: String, javaSig: String)(using
         munit.Location
     ): Unit =
-      val m = loadBinaryMethod(declaringType, javaSig, loadExtraInfo)
+      val m = loadBinaryMethod(declaringType, javaSig)
       intercept[NotFoundException](initUnpickler().findMethod(m))
 
-    private def assertAmbiguous(declaringType: String, javaSig: String, loadExtraInfo: Boolean = false)(using
+    private def assertAmbiguous(declaringType: String, javaSig: String)(using
         munit.Location
     ): Unit =
-      val m = loadBinaryMethod(declaringType, javaSig, loadExtraInfo)
+      val m = loadBinaryMethod(declaringType, javaSig)
       intercept[AmbiguousException](initUnpickler().findMethod(m))
 
     private def assertAmbiguous(declaringType: String)(using munit.Location): Unit =
-      val cls = loader(loadExtraInfo = false).loadClass(declaringType)
+      val cls = loader.loadClass(declaringType)
       intercept[AmbiguousException](initUnpickler().findClass(cls))
 
     private def assertFormat(
         declaringType: String,
         javaSig: String,
         expected: String,
-        skip: Boolean = false,
-        loadExtraInfo: Boolean = false
+        skip: Boolean = false
     )(using
         munit.Location
     ): Unit =
-      val m = loadBinaryMethod(declaringType, javaSig, loadExtraInfo = loadExtraInfo)
+      val m = loadBinaryMethod(declaringType, javaSig)
       val unpickler = initUnpickler()
       val binarySymbol = unpickler.findMethod(m)
       assertEquals(unpickler.formatter.format(binarySymbol), expected)
       assertEquals(unpickler.skip(binarySymbol), skip)
 
     private def assertFormat(declaringType: String, expected: String)(using munit.Location): Unit =
-      val cls = loader(loadExtraInfo = false).loadClass(declaringType)
-      assertEquals(initUnpickler().formatClass(cls), expected)
+      val cls = loader.loadClass(declaringType)
+      val unpickler = initUnpickler()
+      val binarySymbol = unpickler.findClass(cls)
+      assertEquals(unpickler.formatter.format(binarySymbol), expected)

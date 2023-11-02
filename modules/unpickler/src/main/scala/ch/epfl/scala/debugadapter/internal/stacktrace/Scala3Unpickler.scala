@@ -83,9 +83,6 @@ class Scala3Unpickler(
       case _: BinaryAdaptedFun => None
       case m => Some(formatter.format(m))
 
-  def formatClass(cls: binary.ClassType): String =
-    formatter.format(findClass(cls))
-
   def findMethod(method: binary.Method): BinaryMethodSymbol =
     val binaryClass = findClass(method.declaringClass)
     findMethod(binaryClass, method)
@@ -138,9 +135,11 @@ class Scala3Unpickler(
         .orFind { case Patterns.TraitStaticForwarder(names) =>
           requiresBinaryClass(findTraitStaticForwarder(_, method).toSeq)
         }
-        .orFind { case _ if method.isStatic && binaryClass.isJava => findStaticJavaMethods(binaryClass, method) }
-        .orFind { case _ if method.isStatic => findStaticForwarder(binaryClass, method) }
-        .orFind { case _ => findStandardMethods(binaryClass, method) }
+        .orFind {
+          case _ if method.isStatic && binaryClass.isJava => findStaticJavaMethods(binaryClass, method)
+          case _ if method.isStatic => findStaticForwarder(binaryClass, method)
+          case _ => findStandardMethods(binaryClass, method)
+        }
 
     candidates.singleOrThrow(method)
   end findMethod
@@ -455,8 +454,12 @@ class Scala3Unpickler(
       .flatten
       .singleOpt
       .toSeq
-      .map { binaryTarget =>
-        val target = findMethod(binaryTarget)
+      .map(findMethod)
+      .collect {
+        case BinaryMixinForwarder(binaryOwner, target) => target
+        case target => target
+      }
+      .map { target =>
         val declaredType = target.termSymbol
           .map(_.declaredTypeAsSeenFrom(companionObject.symbol.thisType))
           .getOrElse(target.declaredType)
@@ -484,8 +487,10 @@ class Scala3Unpickler(
     binaryClass match
       case BinaryClass(symbol) if !symbol.isTrait =>
         findBridgesAndMixinForwarders(binaryClass, symbol, symbol.thisType, method)
-      case BinarySAMClass(symbol, parentClass, declaredType) =>
+      case BinarySAMClass(_, parentClass, declaredType) =>
         findBridgesAndMixinForwarders(binaryClass, parentClass, SkolemType(declaredType), method)
+      case BinaryPartialFunction(_, declaredType) =>
+        findBridgesAndMixinForwarders(binaryClass, defn.PartialFunctionClass, SkolemType(declaredType), method)
       case _ => None
 
   private def findBridgesAndMixinForwarders(
@@ -527,10 +532,8 @@ class Scala3Unpickler(
       .singleOpt
       .flatten
       .filter(target => target.isStatic && target.declaringClass.isInterface)
-      .map { binaryTarget =>
-        val target = findMethod(binaryTarget)
-        BinaryMixinForwarder(binaryClass, target)
-      }
+      .map(findMethod)
+      .collect { case BinaryTraitStaticForwarder(target) => BinaryMixinForwarder(binaryClass, target) }
 
   private def notFound(symbol: binary.Symbol): Nothing = throw NotFoundException(symbol)
 
@@ -558,17 +561,15 @@ class Scala3Unpickler(
           .map(findClass(_))
           .collect { case BinaryClass(sym) => sym }
         val sourceLines = removeInlinedLines(javaClass.sourceLines, classOwners)
-        if javaClass.sourceLines.isEmpty || sourceLines.nonEmpty then
-          classOwners
-            .flatMap(cls => collectLocalClasses(cls, localClassName, sourceLines))
-            .collect {
-              case cls: BinaryClass if matchParents(cls.symbol, parents, javaClass.isInterface) => cls
-              case samClass: BinarySAMClass if parents.contains(samClass.parentClass) => samClass
-              case fun: BinaryPartialFunction
-                  if parents == Set(defn.AbstractPartialFunctionClass, defn.SerializableClass) =>
-                fun
-            }
-        else Seq.empty
+        classOwners
+          .flatMap(cls => collectLocalClasses(cls, localClassName, sourceLines))
+          .collect {
+            case cls: BinaryClass if matchParents(cls.symbol, parents, javaClass.isInterface) => cls
+            case samClass: BinarySAMClass if parents.contains(samClass.parentClass) => samClass
+            case fun: BinaryPartialFunction
+                if parents == Set(defn.AbstractPartialFunctionClass, defn.SerializableClass) =>
+              fun
+          }
       case Some(remaining) =>
         val localClasses = classOwners
           .flatMap(cls => collectLocalClasses(cls, localClassName, Seq.empty))
