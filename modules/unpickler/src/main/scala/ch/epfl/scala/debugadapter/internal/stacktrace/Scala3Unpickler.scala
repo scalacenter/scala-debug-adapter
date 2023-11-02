@@ -103,12 +103,16 @@ class Scala3Unpickler(
       def orFind(f: PartialFunction[binary.Method, Seq[BinaryMethodSymbol]]): Seq[BinaryMethodSymbol] =
         if xs.nonEmpty then xs else f.applyOrElse(method, _ => Seq.empty[BinaryMethodSymbol])
     val candidates =
-      find { case Patterns.LocalLazyInit(names) =>
-        requiresBinaryClass(collectLocalMethods(_, method)(inlined => {
-          case term if (term.isLazyVal || term.isModuleVal) && names.contains(term.nameStr) =>
-            BinaryLocalLazyInit(binaryClass, term)
-        }))
+      find { case Patterns.SpecializedMethod(names) =>
+        requiresBinaryClass(findSpecializedMethod(_, method, names))
       }
+        .orFind { case _ if method.isBridge => findBridgesAndMixinForwarders(binaryClass, method).toSeq }
+        .orFind { case Patterns.LocalLazyInit(names) =>
+          requiresBinaryClass(collectLocalMethods(_, method)(inlined => {
+            case term if (term.isLazyVal || term.isModuleVal) && names.contains(term.nameStr) =>
+              BinaryLocalLazyInit(binaryClass, term)
+          }))
+        }
         .orFind { case Patterns.AnonFun(_) => findAnonFunAndByNameArgs(binaryClass, method) }
         .orFind { case Patterns.AdaptedAnonFun(_) => findAdaptedAnonFun(binaryClass, method) }
         .orFind { case Patterns.ByNameArgProxy() => findByNameArgsProxy(binaryClass, method) }
@@ -131,14 +135,11 @@ class Scala3Unpickler(
           findStandardMethods(binaryClass, method).orIfEmpty(requiresBinaryClass(findSetter(_, method, names)))
         }
         .orFind { case Patterns.SuperAccessor(names) => requiresBinaryClass(findSuperAccessor(_, method, names)) }
-        .orFind { case Patterns.SpecializedMethod(names) =>
-          requiresBinaryClass(findSpecializedMethod(_, method, names))
-        }
         .orFind { case Patterns.TraitStaticForwarder(names) =>
           requiresBinaryClass(findTraitStaticForwarder(_, method).toSeq)
         }
-        .orFind { case _ if method.isStatic => findStaticForwarder(binaryClass, method) }
         .orFind { case _ if method.isStatic && binaryClass.isJava => findStaticJavaMethods(binaryClass, method) }
+        .orFind { case _ if method.isStatic => findStaticForwarder(binaryClass, method) }
         .orFind { case _ => findStandardMethods(binaryClass, method) }
 
     candidates.singleOrThrow(method)
@@ -181,16 +182,12 @@ class Scala3Unpickler(
   private def findStandardMethods(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryMethodSymbol] =
     binaryClass match
       case samClass: BinarySAMClass =>
-        if method.isBridge then
-          findBridgesAndMixinForwarders(samClass, samClass.parentClass, samClass.declaredType, method).toSeq
-        else if method.isConstructor then Seq(BinarySAMClassConstructor(samClass, samClass.declaredType))
+        if method.isConstructor then Seq(BinarySAMClassConstructor(samClass, samClass.declaredType))
         else findAnonOverride(samClass, method).toSeq
       case partialFun: BinaryPartialFunction =>
         if method.isConstructor then Seq(BinarySAMClassConstructor(partialFun, partialFun.declaredType))
         else Seq(findAnonOverride(partialFun, method))
-      case binaryClass: BinaryClass =>
-        if method.isBridge then findBridgesAndMixinForwarders(binaryClass, method).toSeq
-        else findInstanceMethods(binaryClass, method)
+      case binaryClass: BinaryClass => findInstanceMethods(binaryClass, method)
       case syntheticClass: BinarySyntheticCompanionClass => Seq.empty
 
   private def findParamForwarder(
@@ -240,15 +237,11 @@ class Scala3Unpickler(
       sym <- traitSym.declarations.collect {
         case sym: TermSymbol if names.contains(sym.targetNameStr) && !sym.isAbstractMember => sym
       }
-      expectedTpe =
-        if method.isBridge then sym.declaredType
-        else sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
+      expectedTpe = sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
       if matchSignature1(method, expectedTpe)
     yield
       val tpe = sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
-      val accessor = BinarySuperAccessor(binaryClass, sym, tpe)
-      if method.isBridge then BinaryMethodBridge(accessor, tpe)
-      else accessor
+      BinarySuperAccessor(binaryClass, sym, tpe)
 
   private def findSpecializedMethod(
       binaryClass: BinaryClass,
@@ -358,7 +351,14 @@ class Scala3Unpickler(
       val fromClass = binaryClass.symbol.declarations
         .collect { case sym: TermSymbol if matchTargetName(method, sym) => sym }
         .collect {
-          case sym if matchSignature(method, sym, asJavaVarargs = isJava, captureAllowed = !isJava, checkParamNames = !isJava) =>
+          case sym
+              if matchSignature(
+                method,
+                sym,
+                asJavaVarargs = isJava,
+                captureAllowed = !isJava,
+                checkParamNames = !isJava
+              ) =>
             BinaryMethod(binaryClass, sym)
           case sym if !isJava && matchSignature(method, sym, asJavaVarargs = true) =>
             BinaryMethodBridge(BinaryMethod(binaryClass, sym), sym.declaredType)
@@ -369,14 +369,19 @@ class Scala3Unpickler(
     if binaryClass.symbol.isTrait then Seq.empty
     else findAccessorsFromTraits(binaryClass, binaryClass.symbol, binaryClass.symbol.thisType, method)
 
-  private def findAccessorsFromTraits(binaryClass: BinaryClassSymbol, fromClass: ClassSymbol, fromType: Type, method: binary.Method): Seq[BinaryMethodSymbol] =
+  private def findAccessorsFromTraits(
+      binaryClass: BinaryClassSymbol,
+      fromClass: ClassSymbol,
+      fromType: Type,
+      method: binary.Method
+  ): Seq[BinaryMethodSymbol] =
     for
       traitSym <- fromClass.linearization.filter(_.isTrait)
       sym <- traitSym.declarations
         .collect { case sym: TermSymbol if matchTargetName(method, sym) && matchSignature(method, sym) => sym }
       if sym.isParamAccessor || sym.isSetter || !sym.isMethod
       if sym.isOverridingSymbol(fromClass)
-    yield 
+    yield
       val tpe = sym.declaredTypeAsSeenFrom(fromType)
       if sym.isParamAccessor then BinaryTraitParamAccessor(binaryClass, sym)
       else if sym.isSetter then BinarySetter(binaryClass, sym, tpe)
@@ -464,25 +469,24 @@ class Scala3Unpickler(
         parentCls <- binaryClass.parentClass.linearization.iterator
         overridden <- parentCls.declarations.collect { case term: TermSymbol if matchTargetName(method, term) => term }
         if overridden.overridingSymbol(binaryClass.parentClass).exists(_.isAbstractMember)
-      yield
-        val anonOverride = BinaryAnonOverride(binaryClass, overridden, binaryClass.symbol.declaredType)
-        if method.isBridge then
-          val tpe = overridden.declaredTypeAsSeenFrom(SkolemType(binaryClass.declaredType))
-          BinaryMethodBridge(anonOverride, tpe)
-        else anonOverride
+      yield BinaryAnonOverride(binaryClass, overridden, binaryClass.symbol.declaredType)
     types.nextOption
 
   private def findAnonOverride(binaryClass: BinaryPartialFunction, method: binary.Method): BinaryMethodSymbol =
     val overriddenSym = defn.PartialFunctionClass.findNonOverloadedDecl(SimpleName(method.name))
     val tpe = overriddenSym.declaredTypeAsSeenFrom(SkolemType(binaryClass.declaredType))
-    val anonOverride = BinaryAnonOverride(binaryClass, overriddenSym, tpe)
-    if method.isBridge then BinaryMethodBridge(anonOverride, tpe)
-    else anonOverride
+    BinaryAnonOverride(binaryClass, overriddenSym, tpe)
 
-  private def findBridgesAndMixinForwarders(binaryClass: BinaryClass, method: binary.Method): Option[BinaryMethodSymbol] =
-    if !binaryClass.symbol.isTrait then
-      findBridgesAndMixinForwarders(binaryClass, binaryClass.symbol, binaryClass.symbol.thisType, method)
-    else None
+  private def findBridgesAndMixinForwarders(
+      binaryClass: BinaryClassSymbol,
+      method: binary.Method
+  ): Option[BinaryMethodSymbol] =
+    binaryClass match
+      case BinaryClass(symbol) if !symbol.isTrait =>
+        findBridgesAndMixinForwarders(binaryClass, symbol, symbol.thisType, method)
+      case BinarySAMClass(symbol, parentClass, declaredType) =>
+        findBridgesAndMixinForwarders(binaryClass, parentClass, SkolemType(declaredType), method)
+      case _ => None
 
   private def findBridgesAndMixinForwarders(
       binaryClass: BinaryClassSymbol,
@@ -491,7 +495,7 @@ class Scala3Unpickler(
       method: binary.Method
   ): Option[BinaryMethodSymbol] =
     findBridges(binaryClass, fromClass, fromType, method)
-      .orIfEmpty(findMixinForwarder(binaryClass, fromClass, method))
+      .orIfEmpty(findMixinForwarder(binaryClass, method))
 
   private def findBridges(
       binaryClass: BinaryClassSymbol,
@@ -500,8 +504,9 @@ class Scala3Unpickler(
       method: binary.Method
   ): Option[BinaryMethodSymbol] =
     method.instructions
-      .collect { case Instruction.Method(_, owner, name, descriptor, _) if name == method.name => 
-        binaryClassLoader.loadClass(owner).method(name, descriptor)
+      .collect {
+        case Instruction.Method(_, owner, name, descriptor, _) if name == method.name =>
+          binaryClassLoader.loadClass(owner).method(name, descriptor)
       }
       .singleOpt
       .flatten
@@ -513,11 +518,10 @@ class Scala3Unpickler(
 
   private def findMixinForwarder(
       binaryClass: BinaryClassSymbol,
-      fromClass: ClassSymbol,
       method: binary.Method
   ): Option[BinaryMixinForwarder] =
     method.instructions
-      .collect { case Instruction.Method(_, owner, name, descriptor, _) => 
+      .collect { case Instruction.Method(_, owner, name, descriptor, _) =>
         binaryClassLoader.loadClass(owner).method(name, descriptor)
       }
       .singleOpt

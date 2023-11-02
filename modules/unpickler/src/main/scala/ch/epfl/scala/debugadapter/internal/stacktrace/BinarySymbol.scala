@@ -95,7 +95,7 @@ final case class BinarySetter(binaryOwner: BinaryClassSymbol, symbol: TermSymbol
     extends BinaryMethodSymbol:
   override def termSymbol: Option[TermSymbol] = None
 final case class BinaryGetter(binaryOwner: BinaryClassSymbol, symbol: TermSymbol, declaredType: TypeOrMethodic)
-  extends BinaryMethodSymbol:
+    extends BinaryMethodSymbol:
   override def termSymbol: Option[TermSymbol] = Some(symbol)
 final case class BinarySuperAccessor(binaryOwner: BinaryClassSymbol, symbol: TermSymbol, declaredType: TypeOrMethodic)
     extends BinaryMethodSymbol:
