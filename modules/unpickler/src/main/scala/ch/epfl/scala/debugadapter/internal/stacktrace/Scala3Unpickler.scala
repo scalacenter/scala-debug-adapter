@@ -913,61 +913,63 @@ class Scala3Unpickler(
       checkParamNames: Boolean = true,
       checkTypeErasure: Boolean = true
   ): Boolean =
-    object CurriedContextFunction:
-      def unapply(tpe: Type): Option[(Seq[Type], Type)] =
-        def rec(tpe: TypeOrWildcard, args: Seq[Type]): Option[(Seq[Type], Type)] =
-          tpe match
-            case tpe: AppliedType if tpe.tycon.isContextFunction =>
-              rec(tpe.args.last, args ++ tpe.args.init.map(_.highIfWildcard))
-            case res => Option.when(args.nonEmpty)((args, res.highIfWildcard))
-        if uncurryContextFunction then rec(tpe, Seq.empty) else None
+    /* After code generation, a method ends up with more than its declared parameters.
+     *
+     * It has, in order:
+     *
+     * - capture params,
+     * - declared params,
+     * - "expanded" params (from java.lang.Enum constructors and uncurried context function types).
+     *
+     * We can only check the names of declared params.
+     * We can check the (erased) type of declared and expand params; together we call them "regular" params.
+     */
 
-    val paramNames = declaredType.allParamNames.map(_.toString)
-    val paramsSig = declaredType.allParamTypes.map(_.erasedAsArgType(asJavaVarargs))
-    val resSig = declaredType.returnType.erasedAsReturnType
-
-    if method.isConstructor && method.declaringClass.isJavaLangEnum then
-      val declaredParams = method.allParameters.dropRight(2)
-      val javaLangEnumParams = method.allParameters.takeRight(2)
-      javaLangEnumParams.forall(_.isGenerated) &&
-      declaredParams.size == paramNames.size &&
-      (!checkParamNames || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
-      (!checkTypeErasure || matchTypeErasure(paramsSig, resSig, declaredParams, method.returnType))
-    else
-      declaredType.returnType.dealias match
-        case CurriedContextFunction(uncurriedArgs, uncurriedReturnType) =>
-          val capturedParams = method.allParameters.dropRight(paramNames.size + uncurriedArgs.size)
-          val declaredParams = method.allParameters.drop(capturedParams.size).dropRight(uncurriedArgs.size)
-          val contextParams = method.allParameters.drop(capturedParams.size + declaredParams.size)
-
-          (captureAllowed || capturedParams.isEmpty) &&
-          (capturedParams ++ contextParams).forall(_.isGenerated) &&
-          declaredParams.size == paramNames.size &&
-          (!checkParamNames || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
-          (!checkTypeErasure || matchTypeErasure(
-            paramsSig ++ uncurriedArgs.map(_.erasedAsArgType(asJavaVarargs)),
-            uncurriedReturnType.erasedAsReturnType,
-            declaredParams ++ contextParams,
-            method.returnType
-          ))
+    def expandContextFunctions(tpe: Type, acc: List[Type]): (List[Type], Type) =
+      tpe.dealias match
+        case tpe: AppliedType if tpe.tycon.isContextFunction =>
+          val argsAsTypes = tpe.args.map(_.highIfWildcard)
+          expandContextFunctions(argsAsTypes.last, acc ::: argsAsTypes.init)
         case _ =>
-          val capturedParams = method.allParameters.dropRight(paramNames.size)
-          val declaredParams = method.allParameters.drop(capturedParams.size)
+          (acc, tpe)
 
-          (captureAllowed || capturedParams.isEmpty) &&
-          capturedParams.forall(_.isGenerated) &&
-          declaredParams.size == paramNames.size &&
-          (!checkParamNames || declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
-          (!checkTypeErasure || matchTypeErasure(paramsSig, resSig, declaredParams, method.returnType))
+    val declaredParamTypes = declaredType.allParamTypes
 
-  private def matchTypeErasure(
-      scalaParams: Seq[ErasedTypeRef],
-      scalaReturnType: ErasedTypeRef,
-      javaParams: Seq[binary.Parameter],
-      javaReturnType: Option[binary.Type]
-  ): Boolean =
-    scalaParams.corresponds(javaParams)((scalaParam, javaParam) => matchType(scalaParam, javaParam.`type`)) &&
-      javaReturnType.forall(matchType(scalaReturnType, _))
+    // Compute the expected expanded params and return type
+    val (expandedParamTypes, returnType) =
+      if method.isConstructor && method.declaringClass.isJavaLangEnum then
+        (List(defn.StringType, defn.IntType), declaredType.returnType)
+      else if uncurryContextFunction then expandContextFunctions(declaredType.returnType, acc = Nil)
+      else (Nil, declaredType.returnType)
+
+    val regularParamTypes = declaredParamTypes ::: expandedParamTypes
+
+    // Do the matching
+    val capturedParamCount = method.allParameters.size - regularParamTypes.size
+    if capturedParamCount < 0 then
+      // not enough parameters
+      false
+    else if !captureAllowed && capturedParamCount > 0 then
+      // there are captures but they are not allowed
+      false
+    else
+      // split the method parameters into captured, declared and expanded
+      val (capturedParams, regularParams) = method.allParameters.splitAt(capturedParamCount)
+      val (declaredParams, expandedParams) = regularParams.splitAt(declaredParamTypes.size)
+
+      def matchNames(): Boolean =
+        declaredType.allParamNames.corresponds(declaredParams)((name, javaParam) => name.toString() == javaParam.name)
+
+      def matchErasedTypes(): Boolean =
+        regularParamTypes.corresponds(regularParams)((tpe, javaParam) =>
+          matchType(tpe.erasedAsArgType(asJavaVarargs), javaParam.`type`)
+        ) &&
+          method.returnType.forall(javaReturnType => matchType(returnType.erasedAsReturnType, javaReturnType))
+
+      capturedParams.forall(_.isGenerated) && // captures are generated
+      expandedParams.forall(_.isGenerated) && // expanded params are generated
+      (!checkParamNames || matchNames()) &&
+      (!checkTypeErasure || matchErasedTypes())
 
   private lazy val scalaPrimitivesToJava: Map[ClassSymbol, String] = Map(
     ctx.defn.BooleanClass -> "boolean",

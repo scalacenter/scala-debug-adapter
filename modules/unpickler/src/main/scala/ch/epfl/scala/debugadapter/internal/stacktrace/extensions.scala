@@ -69,15 +69,15 @@ extension (name: Name)
 extension (tpe: TermType) def isMethodic: Boolean = tpe.isInstanceOf[MethodicType]
 
 extension (tpe: TypeOrMethodic)
-  def allParamTypes: Seq[Type] = tpe match
+  def allParamTypes: List[Type] = tpe match
     case t: MethodType => t.paramTypes ++ t.resultType.allParamTypes
     case t: PolyType => t.resultType.allParamTypes
-    case _ => Seq.empty
+    case _ => Nil
 
-  def allParamNames: Seq[TermName] = tpe match
+  def allParamNames: List[UnsignedTermName] = tpe match
     case t: MethodType => t.paramNames ++ t.resultType.allParamNames
     case t: PolyType => t.resultType.allParamNames
-    case _ => Seq.empty
+    case _ => Nil
 
   def returnType: Type = tpe match
     case t: (MethodType | PolyType) => t.resultType.returnType
