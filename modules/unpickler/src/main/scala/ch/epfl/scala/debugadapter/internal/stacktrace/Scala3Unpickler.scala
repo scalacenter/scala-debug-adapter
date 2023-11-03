@@ -652,7 +652,7 @@ class Scala3Unpickler(
       adapted: Boolean
   ): Seq[BinaryMethodSymbol] =
     def matchType0(tpe: Type): Boolean =
-      if adapted then tpe.erasedAsReturnType.toString == "void"
+      if adapted then tpe.erasedAsReturnType == ErasedTypeRef.ClassRef(defn.UnitClass)
       else matchReturnType(tpe, method.returnType)
     val classOwners = getOwners(binaryClass)
     val sourceLines =
