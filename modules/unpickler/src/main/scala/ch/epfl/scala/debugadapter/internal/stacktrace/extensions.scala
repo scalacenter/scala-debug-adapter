@@ -37,8 +37,6 @@ extension (symbol: TermSymbol)
     siteClass.linearization.iterator.flatMap(inClass => symbol.matchingSymbol(inClass, siteClass)).next
   def isOverridingSymbol(siteClass: ClassSymbol)(using Context): Boolean =
     overridingSymbolInLinearization(siteClass) == symbol
-  def isJavaOverride(using Context): Boolean =
-    symbol.allOverriddenSymbols.exists(_.sourceLanguage == SourceLanguage.Java)
 
 extension [A, S[+X] <: IterableOnce[X]](xs: S[A])
   def singleOpt: Option[A] =
