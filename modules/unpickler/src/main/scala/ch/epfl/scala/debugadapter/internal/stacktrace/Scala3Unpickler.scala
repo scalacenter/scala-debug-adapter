@@ -217,9 +217,7 @@ class Scala3Unpickler(
   private def findSetter(binaryClass: BinaryClass, method: binary.Method, names: Seq[String]): Seq[BinarySetter] =
     val javaParamType = method.allParameters.last.`type`
     def matchType0(sym: TermSymbol): Boolean =
-      sym.declaredType match
-        case tpe: Type => matchType(tpe.erasedAsArgType(), javaParamType)
-        case _ => false
+      matchSetterArgType(sym.declaredType, javaParamType)
     binaryClass.symbol.declarations.collect {
       case sym: TermSymbol if !sym.isMethod && names.exists(sym.targetNameStr == _) && matchType0(sym) =>
         val tpe = MethodType(List(SimpleName("x$1")), List(sym.declaredType.asInstanceOf[Type]), defn.UnitType)
@@ -333,9 +331,7 @@ class Scala3Unpickler(
             }
             if sym.isOverridingSymbol(binaryClass.symbol)
             // should I compute the declaredType type as seen from binaryClass.symbol?
-            if sym.declaredType match
-              case tpe: Type => matchType(tpe.erasedAsArgType(), javaParamType)
-              case _ => false
+            if matchSetterArgType(sym.declaredType, javaParamType)
           yield
             val declaredTpe =
               MethodType(List(SimpleName("x$1")), List(sym.declaredType.asInstanceOf[Type]), defn.UnitType)
@@ -657,7 +653,7 @@ class Scala3Unpickler(
   ): Seq[BinaryMethodSymbol] =
     def matchType0(tpe: Type): Boolean =
       if adapted then tpe.erasedAsReturnType.toString == "void"
-      else method.returnType.forall(matchType(tpe.erasedAsReturnType, _))
+      else matchReturnType(tpe, method.returnType)
     val classOwners = getOwners(binaryClass)
     val sourceLines =
       if classOwners.size == 2 && method.allParameters.filter(p => p.name.matches("\\$this\\$\\d+")).nonEmpty then
@@ -678,9 +674,7 @@ class Scala3Unpickler(
 
   private def findByNameArgsProxy(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryByNameArg] =
     def matchType0(tpe: TermType): Boolean =
-      tpe match
-        case tpe: Type => method.returnType.forall(matchType(tpe.erasedAsReturnType, _))
-        case _ => false
+      matchReturnType(tpe, method.returnType)
     val classOwners = getOwners(binaryClass)
     val sourceLines = method.sourceLines.map(removeInlinedLines(_, classOwners))
     val explicitByNameArgs =
@@ -778,15 +772,13 @@ class Scala3Unpickler(
       argType = paramType match
         case byName: ByNameType => defn.Function0Type.appliedTo(byName.resultType)
         case _ => argType0
-      if method.returnType.forall(matchType(argType.erasedAsReturnType, _))
+      if matchReturnType(argType, method.returnType)
     yield BinarySuperArg(binaryOwner, init, argType)
   end findSuperArgs
 
   private def findLiftedTry(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryLiftedTry] =
     def matchType0(tpe: TermType): Boolean =
-      tpe match
-        case tpe: Type => method.returnType.forall(matchType(tpe.erasedAsReturnType, _))
-        case _ => false
+      matchReturnType(tpe, method.returnType)
     val classOwners = getOwners(binaryClass)
     val sourceLines = method.sourceLines.map(removeInlinedLines(_, classOwners))
     for
@@ -962,9 +954,9 @@ class Scala3Unpickler(
 
       def matchErasedTypes(): Boolean =
         regularParamTypes.corresponds(regularParams)((tpe, javaParam) =>
-          matchType(tpe.erasedAsArgType(asJavaVarargs), javaParam.`type`)
+          matchArgType(tpe, javaParam.`type`, asJavaVarargs)
         ) &&
-          method.returnType.forall(javaReturnType => matchType(returnType.erasedAsReturnType, javaReturnType))
+          matchReturnType(returnType, method.returnType)
 
       capturedParams.forall(_.isGenerated) && // captures are generated
       expandedParams.forall(_.isGenerated) && // expanded params are generated
@@ -983,6 +975,19 @@ class Scala3Unpickler(
     ctx.defn.UnitClass -> "void",
     ctx.defn.NullClass -> "scala.runtime.Null$"
   )
+
+  private def matchSetterArgType(scalaVarType: TypeOrMethodic, javaSetterParamType: binary.Type): Boolean =
+    scalaVarType match
+      case scalaVarType: Type => matchType(scalaVarType.erasedAsArgType(asJavaVarargs = false), javaSetterParamType)
+      case _: MethodicType => false
+
+  private def matchArgType(scalaType: Type, javaType: binary.Type, asJavaVarargs: Boolean): Boolean =
+    matchType(scalaType.erasedAsArgType(asJavaVarargs), javaType)
+
+  private def matchReturnType(scalaType: TermType, javaType: Option[binary.Type]): Boolean =
+    scalaType match
+      case scalaType: Type => javaType.forall(matchType(scalaType.erasedAsReturnType, _))
+      case _: MethodicType | _: PackageRef => false
 
   private lazy val dollarDigitsMaybeDollarAtEndRegex = "\\$\\d+\\$?$".r
 
