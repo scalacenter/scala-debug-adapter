@@ -113,18 +113,18 @@ extension (tpe: Type)
 extension (tpe: NamedType) def nameStr: String = tpe.name.toString
 
 extension (tpe: TypeOrWildcard)
-  def erasedAsReturnType(using Context): SignatureName = erased(isReturnType = true)
-  def erasedAsArgType(asJavaVarargs: Boolean = false)(using Context): SignatureName =
+  def erasedAsReturnType(using Context): ErasedTypeRef = erased(isReturnType = true)
+  def erasedAsArgType(asJavaVarargs: Boolean = false)(using Context): ErasedTypeRef =
     tpe match
       case tpe: RepeatedType if asJavaVarargs =>
         ctx.defn.ArrayTypeOf(tpe.elemType).erased(isReturnType = false)
       case _ => tpe.erased(isReturnType = false)
 
-  private def erased(isReturnType: Boolean)(using Context): SignatureName =
+  private def erased(isReturnType: Boolean)(using Context): ErasedTypeRef =
     val tpe1 = tpe match
       case tpe: Type => tpe
       case _: WildcardTypeArg => ctx.defn.ObjectType
-    ErasedTypeRef.erase(tpe1, SourceLanguage.Scala3, keepUnit = isReturnType).toSigFullName
+    ErasedTypeRef.erase(tpe1, SourceLanguage.Scala3, keepUnit = isReturnType)
 
 extension (ref: TermRef)
   def isScalaPredef: Boolean =

@@ -963,72 +963,72 @@ class Scala3Unpickler(
           (!checkTypeErasure || matchTypeErasure(paramsSig, resSig, declaredParams, method.returnType))
 
   private def matchTypeErasure(
-      scalaParams: Seq[SignatureName],
-      scalaReturnType: SignatureName,
+      scalaParams: Seq[ErasedTypeRef],
+      scalaReturnType: ErasedTypeRef,
       javaParams: Seq[binary.Parameter],
       javaReturnType: Option[binary.Type]
   ): Boolean =
     scalaParams.corresponds(javaParams)((scalaParam, javaParam) => matchType(scalaParam, javaParam.`type`)) &&
       javaReturnType.forall(matchType(scalaReturnType, _))
 
-  private val javaToScala: Map[String, String] = Map(
-    "scala.Boolean" -> "boolean",
-    "scala.Byte" -> "byte",
-    "scala.Char" -> "char",
-    "scala.Double" -> "double",
-    "scala.Float" -> "float",
-    "scala.Int" -> "int",
-    "scala.Long" -> "long",
-    "scala.Short" -> "short",
-    "scala.Unit" -> "void",
-    "scala.Any" -> "java.lang.Object",
-    "scala.Null" -> "scala.runtime.Null$",
-    "scala.Nothing" -> "scala.runtime.Nothing$"
+  private lazy val scalaPrimitivesToJava: Map[ClassSymbol, String] = Map(
+    ctx.defn.BooleanClass -> "boolean",
+    ctx.defn.ByteClass -> "byte",
+    ctx.defn.CharClass -> "char",
+    ctx.defn.DoubleClass -> "double",
+    ctx.defn.FloatClass -> "float",
+    ctx.defn.IntClass -> "int",
+    ctx.defn.LongClass -> "long",
+    ctx.defn.ShortClass -> "short",
+    ctx.defn.UnitClass -> "void",
+    ctx.defn.NullClass -> "scala.runtime.Null$"
   )
 
+  private lazy val dollarDigitsMaybeDollarAtEndRegex = "\\$\\d+\\$?$".r
+
   private def matchType(
-      scalaType: SignatureName,
+      scalaType: ErasedTypeRef,
       javaType: binary.Type
   ): Boolean =
-    def rec(scalaType: String, javaType: String): Boolean =
+    def rec(scalaType: ErasedTypeRef, javaType: String): Boolean =
       scalaType match
-        case "scala.Any[]" =>
-          javaType == "java.lang.Object[]" || javaType == "java.lang.Object"
-        case "scala.PolyFunction" =>
-          val regex = s"${Regex.quote("scala.Function")}\\d+".r
-          regex.matches(javaType)
-        case s"$scalaType[]" =>
-          javaType.endsWith("[]") &&
-          rec(scalaType, javaType.stripSuffix("[]"))
-        case s"$scalaOwner._$$$classSig" =>
-          val parts = classSig
-            .split(Regex.quote("_$"))
-            .last
-            .split('.')
-            .map(NameTransformer.encode)
-            .map(Regex.quote)
-          val regex = ("\\$" + parts.head + "\\$\\d+\\$" + parts.tail.map(_ + "\\$").mkString + "?" + "$").r
-          regex.findFirstIn(javaType).exists { suffix =>
-            val prefix = javaType.stripSuffix(suffix).replace('$', '.')
-            scalaOwner.startsWith(prefix)
-          }
-        case _ =>
-          val regex = scalaType
-            .split('.')
-            .map(NameTransformer.encode)
-            .map(Regex.quote)
-            .mkString("", "[\\.\\$]", "\\$?")
-            .r
-          javaToScala
-            .get(scalaType)
-            .map(_ == javaType)
-            .getOrElse(regex.matches(javaType))
-    rec(signatureNameToString(scalaType), javaType.name)
+        case ErasedTypeRef.ArrayTypeRef(base, dimensions) =>
+          javaType.endsWith("[]" * dimensions) &&
+          rec(base, javaType.dropRight(2 * dimensions))
 
-  private def signatureNameToString(sigName: SignatureName): String =
-    sigName.items
-      .map {
-        case ObjectClassName(underlying) => underlying
-        case name => name
-      }
-      .mkString(".")
+        case ErasedTypeRef.ClassRef(scalaClass) =>
+          scalaPrimitivesToJava.get(scalaClass) match
+            case Some(javaPrimitive) => javaPrimitive == javaType
+            case None => matchClassType(scalaClass, javaType, nested = false)
+
+    rec(scalaType, javaType.name)
+
+  private def matchClassType(scalaClass: ClassSymbol, javaType: String, nested: Boolean): Boolean =
+    def encodedName(nested: Boolean): String = scalaClass.name match
+      case ObjectClassTypeName(underlying) if nested => NameTransformer.encode(underlying.toString())
+      case name => NameTransformer.encode(name.toString())
+
+    scalaClass.owner match
+      case owner: PackageSymbol =>
+        javaType == owner.fullName.toString() + "." + encodedName(nested)
+
+      case owner: ClassSymbol =>
+        val encodedName1 = encodedName(nested)
+        javaType.endsWith("$" + encodedName1) &&
+        matchClassType(owner, javaType.dropRight(1 + encodedName1.length()), nested = true)
+
+      case owner: TermOrTypeSymbol =>
+        dollarDigitsMaybeDollarAtEndRegex.findFirstIn(javaType).exists { suffix =>
+          val prefix = javaType.stripSuffix(suffix)
+          val encodedName1 = encodedName(nested = true)
+          prefix.endsWith("$" + encodedName1) && {
+            val ownerJavaType = prefix.dropRight(1 + encodedName1.length())
+            enclosingClassOwners(owner).exists(matchClassType(_, ownerJavaType, nested = true))
+          }
+        }
+
+  private def enclosingClassOwners(sym: TermOrTypeSymbol): List[ClassSymbol] =
+    sym.owner match
+      case owner: ClassSymbol => owner :: enclosingClassOwners(owner)
+      case owner: TermOrTypeSymbol => enclosingClassOwners(owner)
+      case owner: PackageSymbol => Nil
