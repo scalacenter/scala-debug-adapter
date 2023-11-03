@@ -373,8 +373,10 @@ class Scala3Unpickler(
   ): Seq[BinaryMethodSymbol] =
     for
       traitSym <- fromClass.linearization.filter(_.isTrait)
+      if !method.isExpanded || method.decodedName.contains("$" + traitSym.nameStr + "$")
       sym <- traitSym.declarations
         .collect { case sym: TermSymbol if matchTargetName(method, sym) && matchSignature(method, sym) => sym }
+      if method.isExpanded == sym.isPrivate
       if sym.isParamAccessor || sym.isSetter || !sym.isMethod
       if sym.isOverridingSymbol(fromClass)
     yield
