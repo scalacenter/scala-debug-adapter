@@ -91,31 +91,29 @@ extension (tpe: TypeOrMethodic)
   def isByName: Boolean = tpe.isInstanceOf[ByNameType]
 
 extension (tpe: Type)
-  def isFunction: Boolean =
-    tpe match
-      case ref: TypeRef => ref.prefix.isScalaPackage && ref.nameStr.startsWith("Function")
-      case _ => false
-
-  def isContextFunction: Boolean =
-    tpe match
-      case ref: TypeRef => ref.prefix.isScalaPackage && ref.nameStr.startsWith("ContextFunction")
-      case _ => false
-
-  def isTuple: Boolean =
+  private def isNumberedTypeRefInScalaPackage(namePrefix: String): Boolean =
     tpe match
       case ref: TypeRef =>
-        isScalaPackage(ref.prefix) && ref.nameStr.startsWith("Tuple")
-      case _ => false
+        ref.prefix.isScalaPackage &&
+        ref.name.match
+          case SimpleTypeName(nameStr) => nameStr.startsWith(namePrefix)
+          case _: ObjectClassTypeName | _: UniqueTypeName => false
+      case _ =>
+        false
+
+  def isFunction: Boolean = isNumberedTypeRefInScalaPackage("Function")
+
+  def isContextFunction: Boolean = isNumberedTypeRefInScalaPackage("ContextFunction")
+
+  def isTuple: Boolean = isNumberedTypeRefInScalaPackage("Tuple")
 
   def isOperatorLike: Boolean =
     tpe match
       case ref: TypeRef =>
         val operatorChars = "\\+\\-\\*\\/\\%\\&\\|\\^\\<\\>\\=\\!\\~\\#\\:\\@\\?"
         val regex = s"[^$operatorChars]".r
-        !regex.findFirstIn(ref.nameStr).isDefined
+        !regex.findFirstIn(ref.name.toString()).isDefined
       case _ => false
-
-extension (tpe: NamedType) def nameStr: String = tpe.name.toString
 
 extension (tpe: Type)
   def erasedAsReturnType(using Context): ErasedTypeRef = erased(isReturnType = true)
@@ -130,12 +128,12 @@ extension (tpe: Type)
 
 extension (ref: TermRef)
   def isScalaPredef: Boolean =
-    isScalaPackage(ref.prefix) && ref.nameStr == "Predef"
+    isScalaPackage(ref.prefix) && ref.name == CommonNames.Predef
 
 extension (prefix: Prefix)
   def isScalaPackage: Boolean =
     prefix match
-      case p: PackageRef => p.fullyQualifiedName.toString == "scala"
+      case p: PackageRef => p.symbol.name == nme.scalaPackageName && p.symbol.owner.isRootPackage
       case _ => false
 
 extension (tree: Apply)

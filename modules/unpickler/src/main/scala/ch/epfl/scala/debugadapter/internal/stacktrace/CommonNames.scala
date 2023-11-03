@@ -6,3 +6,5 @@ object CommonNames:
   val anonClass: SimpleTypeName = typeName("$anon")
 
   val anonFun: SimpleName = termName("$anonfun")
+
+  val Predef: SimpleName = termName("Predef")
