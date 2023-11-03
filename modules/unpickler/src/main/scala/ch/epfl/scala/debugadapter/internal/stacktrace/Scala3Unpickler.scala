@@ -142,7 +142,7 @@ class Scala3Unpickler(
           case _ => findStandardMethods(binaryClass, method)
         }
 
-    candidates.singleOrThrow(method)
+    candidates.distinct.singleOrThrow(method)
   end findMethod
 
   def findClass(cls: binary.ClassType): BinaryClassSymbol =
