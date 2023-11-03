@@ -14,24 +14,26 @@ import tastyquery.SourceLanguage
 
 extension (symbol: Symbol)
   def isTrait = symbol.isClass && symbol.asClass.isTrait
-  def isAnonFun = symbol.nameStr == "$anonfun"
-  def isAnonClass = symbol.nameStr == "$anon"
   def isLocal = symbol.owner.isTerm
   def isModuleClass = symbol.isClass && symbol.asClass.isModuleClass
 
-  def nameStr = symbol.name match
-    case ObjectClassName(underlying) => underlying.toString()
-    case ObjectClassTypeName(underlying) => underlying.toString()
-    case name => name.toString()
-
   def pos: SourcePosition = symbol.tree.map(_.pos).getOrElse(SourcePosition.NoPosition)
   def isInline = symbol.isTerm && symbol.asTerm.isInline
+
+extension (symbol: ClassSymbol)
+  def isAnonClass = symbol.name == CommonNames.anonClass
+
+  def nameStr: String = symbol.name match
+    case ObjectClassTypeName(underlying) => underlying.toString()
+    case name => name.toString()
 
 extension (symbol: TermSymbol)
   private def isGetter = !symbol.isMethod
   private def isModuleOrLazyVal: Boolean = symbol.isLazyVal || symbol.isModuleVal
   private def isLazyVal: Boolean = symbol.kind == TermSymbolKind.LazyVal
   private def isVal: Boolean = symbol.kind == TermSymbolKind.Val
+  def nameStr: String = symbol.name.toString()
+  def isAnonFun = symbol.name == CommonNames.anonFun
   def targetNameStr(using Context): String = symbol.targetName.toString
   def overridingSymbolInLinearization(siteClass: ClassSymbol)(using Context): TermSymbol =
     siteClass.linearization.iterator.flatMap(inClass => symbol.matchingSymbol(inClass, siteClass)).next

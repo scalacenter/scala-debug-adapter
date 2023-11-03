@@ -425,7 +425,7 @@ class Scala3Unpickler(
 
   private def findTraitInitializer(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethod] =
     binaryClass.symbol.declarations.collect {
-      case sym: TermSymbol if sym.nameStr == "<init>" => BinaryMethod(binaryClass, sym)
+      case sym: TermSymbol if sym.name == nme.Constructor => BinaryMethod(binaryClass, sym)
     }
 
   private def findValueClassExtension(binaryClass: BinaryClass, method: binary.Method): Seq[BinaryMethod] =
