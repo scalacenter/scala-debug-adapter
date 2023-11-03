@@ -207,7 +207,7 @@ class Scala3Unpickler(
       sym <- traitSym.declarations.collect {
         case sym: TermSymbol if sym.targetNameStr == name && !sym.isMethod && !sym.isAbstractMember => sym
       }
-      paramType <- sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType) match
+      paramType <- sym.typeAsSeenFrom(binaryClass.symbol.thisType) match
         case tpe: Type => Some(tpe)
         case _ => None
     yield
@@ -235,10 +235,10 @@ class Scala3Unpickler(
       sym <- traitSym.declarations.collect {
         case sym: TermSymbol if names.contains(sym.targetNameStr) && !sym.isAbstractMember => sym
       }
-      expectedTpe = sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
+      expectedTpe = sym.typeAsSeenFrom(binaryClass.symbol.thisType)
       if matchSignature1(method, expectedTpe)
     yield
-      val tpe = sym.declaredTypeAsSeenFrom(binaryClass.symbol.thisType)
+      val tpe = sym.typeAsSeenFrom(binaryClass.symbol.thisType)
       BinarySuperAccessor(binaryClass, sym, tpe)
 
   private def findSpecializedMethod(
@@ -378,7 +378,7 @@ class Scala3Unpickler(
       if sym.isParamAccessor || sym.isSetter || !sym.isMethod
       if sym.isOverridingSymbol(fromClass)
     yield
-      val tpe = sym.declaredTypeAsSeenFrom(fromType)
+      val tpe = sym.typeAsSeenFrom(fromType)
       if sym.isParamAccessor then BinaryTraitParamAccessor(binaryClass, sym)
       else if sym.isSetter then BinarySetter(binaryClass, sym, tpe)
       else BinaryGetter(binaryClass, sym, tpe)
@@ -458,7 +458,7 @@ class Scala3Unpickler(
       }
       .map { target =>
         val declaredType = target.termSymbol
-          .map(_.declaredTypeAsSeenFrom(companionObject.symbol.thisType))
+          .map(_.typeAsSeenFrom(companionObject.symbol.thisType))
           .getOrElse(target.declaredType)
         BinaryStaticForwarder(binaryClass, target, declaredType)
       }
@@ -474,7 +474,7 @@ class Scala3Unpickler(
 
   private def findAnonOverride(binaryClass: BinaryPartialFunction, method: binary.Method): BinaryMethodSymbol =
     val overriddenSym = defn.PartialFunctionClass.findNonOverloadedDecl(SimpleName(method.name))
-    val tpe = overriddenSym.declaredTypeAsSeenFrom(SkolemType(binaryClass.declaredType))
+    val tpe = overriddenSym.typeAsSeenFrom(SkolemType(binaryClass.declaredType))
     BinaryAnonOverride(binaryClass, overriddenSym, tpe)
 
   private def findBridgesAndMixinForwarders(

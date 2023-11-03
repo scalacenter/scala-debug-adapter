@@ -32,8 +32,6 @@ extension (symbol: TermSymbol)
   private def isModuleOrLazyVal: Boolean = symbol.isLazyVal || symbol.isModuleVal
   private def isLazyVal: Boolean = symbol.kind == TermSymbolKind.LazyVal
   private def isVal: Boolean = symbol.kind == TermSymbolKind.Val
-  def declaredTypeAsSeenFrom(tpe: Type)(using Context): TypeOrMethodic =
-    symbol.declaredType.asSeenFrom(tpe, symbol.owner)
   def targetNameStr(using Context): String = symbol.targetName.toString
   def overridingSymbolInLinearization(siteClass: ClassSymbol)(using Context): TermSymbol =
     siteClass.linearization.iterator.flatMap(inClass => symbol.matchingSymbol(inClass, siteClass)).next
