@@ -577,7 +577,7 @@ class Scala3Unpickler(
     owner.declarations
       .collect { case sym: ClassSymbol => sym }
       .flatMap { sym =>
-        val Symbol = s"${Regex.quote(sym.nameStr)}\\$$?(.*)".r
+        val Symbol = s"${Regex.quote(sym.sourceName)}\\$$?(.*)".r
         decodedName match
           case Symbol(remaining) =>
             if remaining.isEmpty then Some(BinaryClass(sym))
@@ -598,7 +598,7 @@ class Scala3Unpickler(
             else Some(BinarySAMClass(term, lambda.samClassSymbol, tpe))
           case _ => None
     collectTrees(cls, lines) {
-      case ClassDef(_, _, cls) if cls.isLocal && cls.nameStr == name => BinaryClass(cls)
+      case ClassDef(_, _, cls) if cls.isLocal && cls.sourceName == name => BinaryClass(cls)
       case SAMClassOrPartialFunction(binaryCls) => binaryCls
     }
 

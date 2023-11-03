@@ -22,8 +22,10 @@ extension (symbol: Symbol)
 
 extension (symbol: ClassSymbol)
   def isAnonClass = symbol.name == CommonNames.anonClass
+  def nameStr: String = symbol.name.toString()
 
-  def nameStr: String = symbol.name match
+  /** The name of this class in the source, i.e., without the trailing `$` for module classes. */
+  def sourceName: String = symbol.name match
     case ObjectClassTypeName(underlying) => underlying.toString()
     case name => name.toString()
 
@@ -59,10 +61,15 @@ extension [T <: BinarySymbol](xs: Seq[T])
     if xs.size > 1 then throw new AmbiguousException(symbol, xs)
     else xs.headOption
 
-extension (name: Name)
+extension (name: TermName)
   def isPackageObject: Boolean =
-    val nameStr = name.toString.stripSuffix("$")
+    val nameStr = name.toString
     nameStr == "package" || nameStr.endsWith("$package")
+
+extension (name: ClassTypeName)
+  def isPackageObjectClass: Boolean = name match
+    case SimpleTypeName(_) => false
+    case ObjectClassTypeName(underlying) => underlying.toTermName.isPackageObject
 
 extension (tpe: TermType) def isMethodic: Boolean = tpe.isInstanceOf[MethodicType]
 

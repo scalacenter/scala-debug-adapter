@@ -74,13 +74,13 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
 
   private def formatOwner(sym: Symbol): String =
     sym.owner match
-      case owner: ClassSymbol if owner.name.isPackageObject => format(owner.owner.name)
+      case owner: ClassSymbol if owner.name.isPackageObjectClass => format(owner.owner.name)
       case owner: TermOrTypeSymbol => formatOwner(owner).dot(formatName(owner))
       case owner: PackageSymbol => ""
 
   private def formatName(sym: Symbol): String =
     sym match
-      case sym: ClassSymbol if sym.name.isPackageObject => format(sym.owner.name)
+      case sym: ClassSymbol if sym.name.isPackageObjectClass => format(sym.owner.name)
       case _ => format(sym.name)
 
   extension (prefix: String)
