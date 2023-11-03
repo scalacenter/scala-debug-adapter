@@ -71,8 +71,6 @@ extension (name: ClassTypeName)
     case SimpleTypeName(_) => false
     case ObjectClassTypeName(underlying) => underlying.toTermName.isPackageObject
 
-extension (tpe: TermType) def isMethodic: Boolean = tpe.isInstanceOf[MethodicType]
-
 extension (tpe: TypeOrMethodic)
   def allParamTypes: List[Type] = tpe match
     case t: MethodType => t.paramTypes ++ t.resultType.allParamTypes
@@ -87,8 +85,6 @@ extension (tpe: TypeOrMethodic)
   def returnType: Type = tpe match
     case t: (MethodType | PolyType) => t.resultType.returnType
     case t: Type => t
-
-  def isByName: Boolean = tpe.isInstanceOf[ByNameType]
 
 extension (tpe: Type)
   private def isNumberedTypeRefInScalaPackage(namePrefix: String): Boolean =
