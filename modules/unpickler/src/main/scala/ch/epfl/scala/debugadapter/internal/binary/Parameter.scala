@@ -5,5 +5,7 @@ trait Parameter extends Symbol:
 
   def isThis: Boolean = name == "$this"
   def isOuter: Boolean = name == "$outer"
-  def isCapture: Boolean = name.matches(".+\\$\\d+")
-  def isGenerated: Boolean = isCapture || isOuter || isThis || name.matches("arg\\d+") || name.matches("_\\$.+")
+  def isCapture: Boolean = !name.matches("_\\$\\d+") && name.matches(".+\\$\\d+")
+  def isUnknownJavaArg: Boolean = name.matches("arg\\d+")
+  def isJavaLangEnumParam: Boolean = name == "_$name" || name == "_$ordinal"
+  def isGenerated: Boolean = isCapture || isOuter || isThis || isUnknownJavaArg || isJavaLangEnumParam

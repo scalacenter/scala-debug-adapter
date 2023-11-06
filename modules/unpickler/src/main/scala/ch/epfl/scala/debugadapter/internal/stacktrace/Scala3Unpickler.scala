@@ -880,18 +880,21 @@ class Scala3Unpickler(
   private def matchAnonFunSignature(method: binary.Method, symbol: TermSymbol, isInlined: Boolean): Boolean =
     val declaredType = symbol.declaredType
     val paramNames = declaredType.allParamNames.map(_.toString)
-    val paramsSig = declaredType.allParamTypes.map(_.erasedAsArgType())
-    val resSig = declaredType.returnType.erasedAsReturnType
     val capturedParams = method.allParameters.dropRight(paramNames.size)
     val declaredParams = method.allParameters.drop(capturedParams.size)
 
-    declaredParams.size == paramNames.size &&
-    (declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
-    (isInlined || matchTypeErasure(paramsSig, resSig, declaredParams, method.returnType)) &&
-    (
-      (isInlined && capturedParams.forall(_.isGenerated)) ||
-        symbol.tree.forall(matchCapture(_, Some(symbol), symbol.owner, capturedParams))
-    )
+    def matchParamNames = declaredParams.map(_.name).corresponds(paramNames)(_ == _)
+
+    def matchTypeErasure =
+      declaredType.allParamTypes.corresponds(declaredParams)((tpe, javaParam) => matchArgType(tpe, javaParam.`type`, false)) &&
+        matchReturnType(declaredType.returnType, method.returnType)
+
+    def matchCapture0 =
+      symbol.tree.forall(matchCapture(_, Some(symbol), symbol.owner, capturedParams))
+
+    if isInlined then declaredParams.size == paramNames.size && matchParamNames && capturedParams.forall(_.isGenerated)
+    else declaredParams.size == paramNames.size && matchParamNames && matchTypeErasure && matchCapture0
+  end matchAnonFunSignature
 
   private def matchCapture(
       tree: Tree,
@@ -998,19 +1001,14 @@ class Scala3Unpickler(
         case tpe: AppliedType if tpe.tycon.isContextFunction =>
           val argsAsTypes = tpe.args.map(_.highIfWildcard)
           expandContextFunctions(argsAsTypes.last, acc ::: argsAsTypes.init)
-        case _ =>
-          (acc, tpe)
-
-    val declaredParamTypes = declaredType.allParamTypes
+        case _ => (acc, tpe)
 
     // Compute the expected expanded params and return type
     val (expandedParamTypes, returnType) =
-      if method.isConstructor && method.declaringClass.isJavaLangEnum then
-        (List(defn.StringType, defn.IntType), declaredType.returnType)
-      else if uncurryContextFunction then expandContextFunctions(declaredType.returnType, acc = Nil)
-      else (Nil, declaredType.returnType)
+      if method.isConstructor && method.declaringClass.isJavaLangEnum then (List(defn.StringType, defn.IntType), declaredType.returnType)
+      else expandContextFunctions(declaredType.returnType, acc = Nil)
 
-    val regularParamTypes = declaredParamTypes ::: expandedParamTypes
+    val regularParamTypes = declaredType.allParamTypes ::: expandedParamTypes
 
     // Do the matching
     val capturedParamCount = method.allParameters.size - regularParamTypes.size
@@ -1023,15 +1021,13 @@ class Scala3Unpickler(
     else
       // split the method parameters into captured, declared and expanded
       val (capturedParams, regularParams) = method.allParameters.splitAt(capturedParamCount)
-      val (declaredParams, expandedParams) = regularParams.splitAt(declaredParamTypes.size)
+      val (declaredParams, expandedParams) = regularParams.splitAt(declaredType.allParamTypes.size)
 
       def matchNames(): Boolean =
         declaredType.allParamNames.corresponds(declaredParams)((name, javaParam) => name.toString() == javaParam.name)
 
       def matchErasedTypes(): Boolean =
-        regularParamTypes.corresponds(regularParams)((tpe, javaParam) =>
-          matchArgType(tpe, javaParam.`type`, asJavaVarargs)
-        ) &&
+        regularParamTypes.corresponds(regularParams)((tpe, javaParam) => matchArgType(tpe, javaParam.`type`, asJavaVarargs)) &&
           matchReturnType(returnType, method.returnType)
 
       capturedParams.forall(_.isGenerated) && // captures are generated
