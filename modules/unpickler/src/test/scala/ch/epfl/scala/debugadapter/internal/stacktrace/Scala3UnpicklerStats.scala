@@ -51,14 +51,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0", binaryClassLoader)
-      // if cls.name == "dotty.tools.dotc.reporting.ErrorMessageID"
+      // if cls.name == "dotty.tools.dotc.util.ParsedComment"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethods
-    // if method.name == "<init>"
+    // if method.name == "$anonfun$2$$anonfun$2"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -68,7 +68,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case _ => unpickler.tryFind(method, methodCounter)
     // anonFunCounter.printNotFound()
     // anonFunCounter.printFirstThrowable()
-    // adaptedAnonFunCounter.printAmbiguous()
+    anonFunCounter.printAmbiguous()
     methodCounter.printNotFound()
     localClassCounter.printReport()
     anonClassCounter.printReport()
@@ -84,7 +84,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
     checkCounter(localMethodCounter, 2606, expectedAmbiguous = 2)
-    checkCounter(anonFunCounter, 6916, expectedAmbiguous = 68, expectedNotFound = 1)
+    checkCounter(anonFunCounter, 6947, expectedAmbiguous = 37, expectedNotFound = 1)
     checkCounter(adaptedAnonFunCounter, 370, expectedAmbiguous = 1)
     checkCounter(localLazyInitCounter, 108)
     checkCounter(methodCounter, 57872)
@@ -95,13 +95,13 @@ class Scala3UnpicklerStats extends munit.FunSuite:
       expectedIgnored: Int = 0,
       expectedAmbiguous: Int = 0,
       expectedNotFound: Int = 0,
-      expectedExceptions: Int = 0
+      expectedThrowables: Int = 0
   )(using munit.Location): Unit =
     assertEquals(counter.success.size, expectedSuccess)
     assertEquals(counter.ignored.size, expectedIgnored)
     assertEquals(counter.ambiguous.size, expectedAmbiguous)
     assertEquals(counter.notFound.size, expectedNotFound)
-    assertEquals(counter.throwables.size, expectedExceptions)
+    assertEquals(counter.throwables.size, expectedThrowables)
 
   def loadClasses(jars: Seq[Library], jarName: String, binaryLoader: binary.BinaryClassLoader): Seq[binary.ClassType] =
     val jar = jars.find(_.name == jarName).get

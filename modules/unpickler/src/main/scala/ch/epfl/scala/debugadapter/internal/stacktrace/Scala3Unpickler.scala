@@ -111,7 +111,7 @@ class Scala3Unpickler(
               BinaryLocalLazyInit(binaryClass, term)
           }))
         }
-        .orFind { case Patterns.AnonFun(_) => findAnonFunAndByNameArgs(binaryClass, method) }
+        .orFind { case Patterns.AnonFun(_) => findAnonFunsAndReduceAmbiguity(binaryClass, method) }
         .orFind { case Patterns.AdaptedAnonFun(_) => findAdaptedAnonFun(binaryClass, method) }
         .orFind { case Patterns.ByNameArgProxy() => findByNameArgsProxy(binaryClass, method) }
         .orFind { case Patterns.SuperArg() => requiresBinaryClass(findSuperArgs(_, method)) }
@@ -615,6 +615,30 @@ class Scala3Unpickler(
         .singleOrElse(unexpected(s"$method is not an adapted method: cannot find underlying invocation"))
       findAnonFunAndByNameArgs(binaryClass, underlying).map(BinaryAdaptedFun.apply)
     else Seq.empty
+
+  private def findAnonFunsAndReduceAmbiguity(
+      binaryClass: BinaryClassSymbol,
+      method: binary.Method
+  ): Seq[BinaryMethodSymbol] =
+    val candidates = findAnonFunAndByNameArgs(binaryClass, method)
+    if candidates.size > 1 then
+      val clashingMethods = method.declaringClass.declaredMethods
+        .filter(m => m.returnType.zip(method.returnType).forall(_ == _) && m.signature.name != method.signature.name)
+        .collect { case m @ Patterns.AnonFun(_) if m.name != method.name => m }
+        .map(m => m -> findAnonFunAndByNameArgs(binaryClass, m).toSet)
+        .toMap
+      def reduceAmbiguity(
+          methods: Map[binary.Method, Set[BinaryMethodSymbol]]
+      ): Map[binary.Method, Set[BinaryMethodSymbol]] =
+        val found = methods.collect { case (m, syms) if syms.size == 1 => syms.head }
+        val reduced = methods.map { case (m, candidates) =>
+          if candidates.size > 1 then m -> (candidates -- found)
+          else m -> candidates
+        }
+        if reduced.count { case (_, s) => s.size == 1 } == found.size then methods
+        else reduceAmbiguity(reduced)
+      reduceAmbiguity(clashingMethods + (method -> candidates.toSet))(method).toSeq
+    else candidates
 
   private def findAnonFunAndByNameArgs(
       binaryClass: BinaryClassSymbol,

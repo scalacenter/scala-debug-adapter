@@ -1705,6 +1705,33 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunS
     )
   }
 
+  test("reduce ambiguity of anon funs by finding clashing methods") {
+    val source =
+      """|package example
+         |
+         |class A:
+         |  def m =
+         |    for {
+         |      (tag, formatter) <- scala.collection.immutable.ListMap.empty[String, String]
+         |      boundss <- Some(List.empty[(String, String)])
+         |      texts = List.empty[String]
+         |      formatted <- Some("")
+         |    } yield formatted
+         |""".stripMargin
+    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    debuggee.assertFormat(
+      "example.A",
+      "scala.Option m$$anonfun$2(scala.Tuple2 x$1)",
+      "A.m.<anon fun>((String, String)): Option[String]"
+    )
+    debuggee.assertFormat(
+      "example.A",
+      if isScala30 then "scala.Option m$$anonfun$5$$anonfun$3(scala.Tuple2 x$1)"
+      else "scala.Option m$$anonfun$2$$anonfun$2(scala.Tuple2 x$1)",
+      "A.m.<anon fun>.<anon fun>((List[(String, String)], List[String])): Option[String]"
+    )
+  }
+
   extension (debuggee: TestingDebuggee)
     private def loader: JavaReflectLoader =
       new JavaReflectLoader(debuggee.classLoader, loadExtraInfo = true)
