@@ -51,13 +51,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0", binaryClassLoader)
-      // if cls.name == "dotty.tools.dotc.util.LinearSet$package"
+      // if cls.name == "dotty.tools.dotc.core.TyperState"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethods
+    // if method.name == "$anonfun$2$$anonfun$1"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -65,7 +66,8 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case Patterns.LocalLazyInit(_) => unpickler.tryFind(method, localLazyInitCounter)
         case Patterns.LocalMethod(_) => unpickler.tryFind(method, localMethodCounter)
         case _ => unpickler.tryFind(method, methodCounter)
-    anonFunCounter.printAmbiguous()
+    anonFunCounter.printNotFound()
+    anonFunCounter.printFirstThrowable()
     // methodCounter.printNotFound()
     // methodCounter.printAmbiguous()
     localClassCounter.printReport()
@@ -82,8 +84,8 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
     checkCounter(localMethodCounter, 2606, expectedAmbiguous = 2)
-    checkCounter(anonFunCounter, 6685, expectedAmbiguous = 299, expectedNotFound = 1)
-    checkCounter(adaptedAnonFunCounter, 288, expectedAmbiguous = 83)
+    checkCounter(anonFunCounter, 6829, expectedAmbiguous = 155, expectedNotFound = 1)
+    checkCounter(adaptedAnonFunCounter, 290, expectedAmbiguous = 81)
     checkCounter(localLazyInitCounter, 108)
     checkCounter(methodCounter, 57872)
 
@@ -99,7 +101,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     assertEquals(counter.ignored.size, expectedIgnored)
     assertEquals(counter.ambiguous.size, expectedAmbiguous)
     assertEquals(counter.notFound.size, expectedNotFound)
-    assertEquals(counter.exceptions.size, expectedExceptions)
+    assertEquals(counter.throwables.size, expectedExceptions)
 
   def loadClasses(jars: Seq[Library], jarName: String, binaryLoader: binary.BinaryClassLoader): Seq[binary.ClassType] =
     val jar = jars.find(_.name == jarName).get
@@ -132,8 +134,8 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case notFound: NotFoundException =>
           counter.notFound += (cls -> notFound)
           None
-        case e: Exception =>
-          counter.exceptions += (cls -> e)
+        case e =>
+          counter.throwables += (cls -> e)
           None
 
     def tryFind(mthd: binary.Method, counter: Counter): Unit =
@@ -144,7 +146,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case notFound: NotFoundException => counter.notFound += (mthd -> notFound)
         case ambiguous: AmbiguousException => counter.ambiguous += ambiguous
         case ignored: IgnoredException => counter.ignored += ignored
-        case e: Exception => counter.exceptions += (mthd -> e)
+        case e => counter.throwables += (mthd -> e)
 
   override def munitTimeout: Duration = 2.minutes
 
@@ -153,9 +155,9 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     val notFound = mutable.Buffer.empty[(binary.Symbol, NotFoundException)]
     val ambiguous = mutable.Buffer.empty[AmbiguousException]
     val ignored = mutable.Buffer.empty[IgnoredException]
-    val exceptions = mutable.Buffer.empty[(binary.Symbol, Exception)]
+    val throwables = mutable.Buffer.empty[(binary.Symbol, Throwable)]
 
-    def size: Int = success.size + notFound.size + ambiguous.size + ignored.size + exceptions.size
+    def size: Int = success.size + notFound.size + ambiguous.size + ignored.size + throwables.size
 
     def printReport() =
       def format(kind: String, count: Int): Option[String] =
@@ -167,7 +169,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
           "ignored" -> ignored.size,
           "ambiguous" -> ambiguous.size,
           "not found" -> notFound.size,
-          "exceptions" -> exceptions.size
+          "throwables" -> throwables.size
         )
           .flatMap(format)
           .map("\n  - " + _)
@@ -185,9 +187,9 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         println(s"$symbol is ambiguous:" + candidates.map(s"\n  - " + _).mkString)
       }
 
-    def printFirstException() = exceptions.headOption.foreach(printException)
-    def printExceptions() = exceptions.foreach((sym, e) => println(s"$sym $e"))
+    def printFirstThrowable() = throwables.headOption.foreach(printThrowable)
+    def printThrowables() = throwables.foreach((sym, e) => println(s"$sym $e"))
 
-    private def printException(sym: binary.Symbol, e: Exception) =
+    private def printThrowable(sym: binary.Symbol, e: Throwable) =
       println(s"$sym $e")
       e.printStackTrace()

@@ -171,6 +171,64 @@ class Scala3Unpickler(
       else allSymbols.filter(!_.symbol.isModuleClass)
     candidates.singleOrThrow(cls)
 
+  private def findLocalClasses(
+      javaClass: binary.ClassType,
+      packageSym: PackageSymbol,
+      declaringClassName: String,
+      localClassName: String,
+      remaining: Option[String]
+  ): Seq[BinaryClassSymbol] =
+    val classOwners = findClassRecursively(packageSym, declaringClassName).map(_.symbol)
+    remaining match
+      case None =>
+        val parents = (javaClass.superclass.toSet ++ javaClass.interfaces)
+          .map(findClass(_))
+          .collect { case BinaryClass(sym) => sym }
+        val sourceLines = javaClass.sourceLines.map(removeInlinedLines(_, classOwners))
+        classOwners
+          .flatMap(cls => collectLocalClasses(cls, localClassName, sourceLines))
+          .collect {
+            case cls: BinaryClass if matchParents(cls.symbol, parents, javaClass.isInterface) => cls
+            case samClass: BinarySAMClass if parents.contains(samClass.parentClass) => samClass
+            case fun: BinaryPartialFunction
+                if parents == Set(defn.AbstractPartialFunctionClass, defn.SerializableClass) =>
+              fun
+          }
+      case Some(remaining) =>
+        val localClasses = classOwners
+          .flatMap(cls => collectLocalClasses(cls, localClassName, None))
+          .collect { case BinaryClass(cls) => cls }
+        localClasses.flatMap(s => findClassRecursively(s, remaining))
+
+  private def findClassRecursively(owner: DeclaringSymbol, decodedName: String): Seq[BinaryClass] =
+    owner.declarations
+      .collect { case sym: ClassSymbol => sym }
+      .flatMap { sym =>
+        val Symbol = s"${Regex.quote(sym.sourceName)}\\$$?(.*)".r
+        decodedName match
+          case Symbol(remaining) =>
+            if remaining.isEmpty then Some(BinaryClass(sym))
+            else findClassRecursively(sym, remaining)
+          case _ => None
+      }
+
+  private def collectLocalClasses(
+      cls: ClassSymbol,
+      name: String,
+      lines: Option[binary.SourceLines]
+  ): Seq[BinaryClassSymbol] =
+    object SAMClassOrPartialFunction:
+      def unapply(lambda: Lambda): Option[BinaryPartialFunction | BinarySAMClass] =
+        (lambda.meth.symbol, lambda.tpe) match
+          case (term: TermSymbol, tpe: Type) =>
+            if lambda.samClassSymbol == defn.PartialFunctionClass then Some(BinaryPartialFunction(term, tpe))
+            else Some(BinarySAMClass(term, lambda.samClassSymbol, tpe))
+          case _ => None
+    collectTrees(cls, lines) {
+      case ClassDef(_, _, cls) if cls.isLocal && cls.sourceName == name => BinaryClass(cls)
+      case SAMClassOrPartialFunction(binaryCls) => binaryCls
+    }
+
   private def findStaticJavaMethods(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryMethodSymbol] =
     binaryClass.companionClass.toSeq
       .flatMap(_.symbol.declarations)
@@ -546,64 +604,6 @@ class Scala3Unpickler(
         Seq(cls, companionClass)
       case _ => Seq(cls)
 
-  private def findLocalClasses(
-      javaClass: binary.ClassType,
-      packageSym: PackageSymbol,
-      declaringClassName: String,
-      localClassName: String,
-      remaining: Option[String]
-  ): Seq[BinaryClassSymbol] =
-    val classOwners = findClassRecursively(packageSym, declaringClassName).map(_.symbol)
-    remaining match
-      case None =>
-        val parents = (javaClass.superclass.toSet ++ javaClass.interfaces)
-          .map(findClass(_))
-          .collect { case BinaryClass(sym) => sym }
-        val sourceLines = javaClass.sourceLines.map(removeInlinedLines(_, classOwners))
-        classOwners
-          .flatMap(cls => collectLocalClasses(cls, localClassName, sourceLines))
-          .collect {
-            case cls: BinaryClass if matchParents(cls.symbol, parents, javaClass.isInterface) => cls
-            case samClass: BinarySAMClass if parents.contains(samClass.parentClass) => samClass
-            case fun: BinaryPartialFunction
-                if parents == Set(defn.AbstractPartialFunctionClass, defn.SerializableClass) =>
-              fun
-          }
-      case Some(remaining) =>
-        val localClasses = classOwners
-          .flatMap(cls => collectLocalClasses(cls, localClassName, None))
-          .collect { case BinaryClass(cls) => cls }
-        localClasses.flatMap(s => findClassRecursively(s, remaining))
-
-  private def findClassRecursively(owner: DeclaringSymbol, decodedName: String): Seq[BinaryClass] =
-    owner.declarations
-      .collect { case sym: ClassSymbol => sym }
-      .flatMap { sym =>
-        val Symbol = s"${Regex.quote(sym.sourceName)}\\$$?(.*)".r
-        decodedName match
-          case Symbol(remaining) =>
-            if remaining.isEmpty then Some(BinaryClass(sym))
-            else findClassRecursively(sym, remaining)
-          case _ => None
-      }
-
-  private def collectLocalClasses(
-      cls: ClassSymbol,
-      name: String,
-      lines: Option[binary.SourceLines]
-  ): Seq[BinaryClassSymbol] =
-    object SAMClassOrPartialFunction:
-      def unapply(lambda: Lambda): Option[BinaryPartialFunction | BinarySAMClass] =
-        (lambda.meth.symbol, lambda.tpe) match
-          case (term: TermSymbol, tpe: Type) =>
-            if lambda.samClassSymbol == defn.PartialFunctionClass then Some(BinaryPartialFunction(term, tpe))
-            else Some(BinarySAMClass(term, lambda.samClassSymbol, tpe))
-          case _ => None
-    collectTrees(cls, lines) {
-      case ClassDef(_, _, cls) if cls.isLocal && cls.sourceName == name => BinaryClass(cls)
-      case SAMClassOrPartialFunction(binaryCls) => binaryCls
-    }
-
   private def findAdaptedAnonFun(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryMethodSymbol] =
     if method.instructions.nonEmpty then
       val underlying = method.instructions
@@ -614,20 +614,18 @@ class Scala3Unpickler(
         .flatten
         .singleOrElse(unexpected(s"$method is not an adapted method: cannot find underlying invocation"))
       findAnonFunAndByNameArgs(binaryClass, underlying).map(BinaryAdaptedFun.apply)
-    else findAnonFunAndByNameArgs(binaryClass, method, adapted = true)
+    else Seq.empty
 
   private def findAnonFunAndByNameArgs(
       binaryClass: BinaryClassSymbol,
-      method: binary.Method,
-      adapted: Boolean = false
+      method: binary.Method
   ): Seq[BinaryMethodSymbol] =
     val anonFuns = collectLocalMethods(binaryClass, method)(inlined => {
-      case term if term.isAnonFun && matchSignature(method, term, checkTypeErasure = !adapted && !inlined) =>
-        val anonFun = BinaryMethod(binaryClass, term)
-        if adapted then BinaryAdaptedFun(anonFun) else anonFun
+      case term if term.isAnonFun && matchAnonFunSignature(method, term, inlined) =>
+        BinaryMethod(binaryClass, term)
     })
     val byNameArgs =
-      if method.allParameters.forall(_.isCapture) then findByNameArgs(binaryClass, method, adapted)
+      if method.allParameters.forall(_.isCapture) then findByNameArgs(binaryClass, method)
       else Seq.empty
     anonFuns ++ byNameArgs
 
@@ -650,26 +648,25 @@ class Scala3Unpickler(
 
   private def findByNameArgs(
       binaryClass: BinaryClassSymbol,
-      method: binary.Method,
-      adapted: Boolean
+      method: binary.Method
   ): Seq[BinaryMethodSymbol] =
-    def matchType0(tpe: Type): Boolean =
-      if adapted then tpe.erasedAsReturnType == ErasedTypeRef.ClassRef(defn.UnitClass)
-      else matchReturnType(tpe, method.returnType)
     val classOwners = getOwners(binaryClass)
     val sourceLines =
       if classOwners.size == 2 && method.allParameters.filter(p => p.name.matches("\\$this\\$\\d+")).nonEmpty then
         // workaround of https://github.com/lampepfl/dotty/issues/18816
         method.sourceLines.map(removeInlinedLines(_, classOwners).last)
       else method.sourceLines.map(removeInlinedLines(_, classOwners))
+    def matchLinesAndCapture(arg: Tree, classOwner: Symbol): Boolean =
+      sourceLines.forall(matchLines(arg, _)) &&
+        // todo: use a more precise owner
+        matchCapture(arg, None, classOwner, method.allParameters)
     for
       classOwner <- classOwners
       byNameArg <- collectTrees1(classOwner, sourceLines)(inlined => {
         case t @ ByNameApply(args) if !isInlineTree(t) =>
           args.collect {
-            case (arg, paramTpe) if matchType0(paramTpe) && (inlined || sourceLines.forall(matchLines(arg, _))) =>
-              val byNameArg = BinaryByNameArg(binaryClass, paramTpe)
-              if adapted then BinaryAdaptedFun(byNameArg) else byNameArg
+            case (arg, paramTpe) if matchReturnType(paramTpe, method.returnType) && (inlined || matchLinesAndCapture(arg, classOwner)) =>
+              BinaryByNameArg(binaryClass, paramTpe)
           }
       }).flatten
     yield byNameArg
@@ -728,13 +725,6 @@ class Scala3Unpickler(
       }
     yield term
 
-  private def getOwners(binaryClass: BinaryClassSymbol): Seq[Symbol] =
-    binaryClass match
-      case BinaryClass(symbol) => withCompanionIfExtendsAnyVal(symbol)
-      case BinarySyntheticCompanionClass(symbol) => Seq.empty
-      case BinarySAMClass(symbol, _, _) => Seq(symbol)
-      case BinaryPartialFunction(symbol, _) => Seq(symbol)
-
   private def findSuperArgs(binaryOwner: BinaryClass, method: binary.Method): Seq[BinarySuperArg] =
     def asSuperCall(parent: Tree): Option[Apply] =
       parent match
@@ -790,6 +780,13 @@ class Scala3Unpickler(
           BinaryLiftedTry(binaryClass, tryTree.tpe.asInstanceOf)
       }
     yield liftedTry
+
+  private def getOwners(binaryClass: BinaryClassSymbol): Seq[Symbol] =
+    binaryClass match
+      case BinaryClass(symbol) => withCompanionIfExtendsAnyVal(symbol)
+      case BinarySyntheticCompanionClass(symbol) => Seq.empty
+      case BinarySAMClass(symbol, _, _) => Seq(symbol)
+      case BinaryPartialFunction(symbol, _) => Seq(symbol)
 
   private def collectTrees[S](cls: Symbol, lines: Option[binary.SourceLines])(
       matcher: PartialFunction[Tree, S]
@@ -880,6 +877,85 @@ class Scala3Unpickler(
   private def matchTargetName(method: binary.Method, symbol: TermSymbol): Boolean =
     method.unexpandedDecodedNames.map(_.stripSuffix("$")).contains(symbol.targetNameStr)
 
+  private def matchAnonFunSignature(method: binary.Method, symbol: TermSymbol, isInlined: Boolean): Boolean =
+    val declaredType = symbol.declaredType
+    val paramNames = declaredType.allParamNames.map(_.toString)
+    val paramsSig = declaredType.allParamTypes.map(_.erasedAsArgType())
+    val resSig = declaredType.returnType.erasedAsReturnType
+    val capturedParams = method.allParameters.dropRight(paramNames.size)
+    val declaredParams = method.allParameters.drop(capturedParams.size)
+
+    declaredParams.size == paramNames.size &&
+    (declaredParams.map(_.name).corresponds(paramNames)(_ == _)) &&
+    (isInlined || matchTypeErasure(paramsSig, resSig, declaredParams, method.returnType)) &&
+    (
+      (isInlined && capturedParams.forall(_.isGenerated)) ||
+        symbol.tree.forall(matchCapture(_, Some(symbol), symbol.owner, capturedParams))
+    )
+
+  private def matchCapture(
+      tree: Tree,
+      symbol: Option[TermSymbol],
+      owner: Symbol,
+      capturedParams: Seq[binary.Parameter]
+  ): Boolean =
+    def nonLocalOwner(sym: Symbol): Symbol =
+      if sym.isLocal then nonLocalOwner(sym.owner)
+      else sym
+    val variables = collectVariables(tree, symbol) ++ collectVariablesFromInlineArgs(nonLocalOwner(owner))
+    val anonymousPattern = "\\$\\d+".r
+    val evidencePattern = "evidence\\$\\d+".r
+    def toPattern(variable: String): Regex =
+      variable match
+        case anonymousPattern() => "\\$\\d+\\$\\$\\d+".r
+        case evidencePattern() => "evidence\\$\\d+\\$\\d+".r
+        case _ =>
+          val encoded = NameTransformer.encode(variable)
+          s"${Regex.quote(encoded)}(\\$$tailLocal\\d+)?(\\$$lzy\\d+)?\\$$\\d+".r
+    val patterns = variables.map(toPattern)
+    def isCapture(param: String) =
+      patterns.exists(_.unapplySeq(param).nonEmpty)
+    def isProxy(param: String) = "(.+)\\$proxy\\d+\\$\\d+".r.unapplySeq(param).nonEmpty
+    def isThisOrOuter(param: String) = "\\$(this|outer)\\$\\d+".r.unapplySeq(param).nonEmpty
+    capturedParams.forall(p => isProxy(p.name) || isCapture(p.name) || isThisOrOuter(p.name))
+
+  class VariableCollector(sym: Option[TermSymbol]) extends TreeTraverser:
+    var variables = Set.empty[String]
+    var alreadySeen = sym.toSet
+    override def traverse(tree: Tree): Unit =
+      tree match
+        case _: TypeTree => ()
+        case ident: Ident =>
+          ident.symbol match
+            case sym: TermSymbol =>
+              variables += sym.name.toString
+              if sym.isLocal && (sym.isMethod || sym.isLazyVal || sym.isModuleVal) && !alreadySeen.contains(sym) then
+                alreadySeen += sym
+                val treeOpt =
+                  if sym.isModuleVal then sym.moduleClass.flatMap(_.tree)
+                  else sym.tree
+                treeOpt.foreach(traverse)
+            case _ => ()
+        case _ => super.traverse(tree)
+
+  private def collectVariables(tree: Tree, symbol: Option[TermSymbol]): Seq[String] =
+    val collector = new VariableCollector(symbol)
+    collector.traverse(tree)
+    collector.variables.toSeq
+
+  private def collectVariablesFromInlineArgs(sym: Symbol): Seq[String] =
+    val collector = new VariableCollector(None)
+    object ProxyTraverser extends TreeTraverser:
+      override def traverse(tree: Tree): Unit =
+        tree match
+          case _: TypeTree => ()
+          case Apply(inlineTree @ InlineTree(_), args) =>
+            collector.traverse(args)
+            traverse(inlineTree)
+          case _ => super.traverse(tree)
+    sym.tree.foreach(ProxyTraverser.traverse)
+    collector.variables.toSeq
+
   private def matchSignature(
       method: binary.Method,
       symbol: TermSymbol,
@@ -891,7 +967,6 @@ class Scala3Unpickler(
     matchSignature1(
       method,
       symbol.declaredType,
-      uncurryContextFunction = !symbol.isAnonFun,
       captureAllowed = captureAllowed,
       asJavaVarargs = asJavaVarargs,
       checkParamNames = checkParamNames,
@@ -901,7 +976,6 @@ class Scala3Unpickler(
   private def matchSignature1(
       method: binary.Method,
       declaredType: TypeOrMethodic,
-      uncurryContextFunction: Boolean = true,
       captureAllowed: Boolean = true,
       asJavaVarargs: Boolean = false,
       checkParamNames: Boolean = true,
