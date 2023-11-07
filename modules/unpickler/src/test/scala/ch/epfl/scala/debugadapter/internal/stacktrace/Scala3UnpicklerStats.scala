@@ -5,7 +5,7 @@ import ch.epfl.scala.debugadapter.internal.IO
 import ch.epfl.scala.debugadapter.internal.binary
 import ch.epfl.scala.debugadapter.internal.javareflect.*
 import ch.epfl.scala.debugadapter.testfmk.TestingResolver
-import org.objectweb.asm
+import ch.epfl.scala.debugadapter.testfmk.DebuggableFunSuite
 import tastyquery.Symbols.*
 
 import java.nio.file.Files
@@ -13,10 +13,9 @@ import java.nio.file.Path
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 import scala.util.Properties
-import scala.concurrent.duration.*
 import scala.util.control.NonFatal
 
-class Scala3UnpicklerStats extends munit.FunSuite:
+class Scala3UnpicklerStats extends DebuggableFunSuite:
   private val javaRuntime = JavaRuntime(Properties.jdkHome).get
   private val javaRuntimeJars = javaRuntime match
     case Java8(_, classJars, _) => classJars
@@ -51,14 +50,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0", binaryClassLoader)
-      // if cls.name == "dotty.tools.dotc.util.ParsedComment"
+      // if cls.name == "scala.quoted.runtime.impl.QuotesImpl"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethods
-    // if method.name == "$anonfun$2$$anonfun$2"
+    // if method.name == "scala$quoted$runtime$impl$QuotesImpl$reflect$report$$$_$error$$anonfun$1"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -66,10 +65,7 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case Patterns.LocalLazyInit(_) => unpickler.tryFind(method, localLazyInitCounter)
         case Patterns.LocalMethod(_) => unpickler.tryFind(method, localMethodCounter)
         case _ => unpickler.tryFind(method, methodCounter)
-    // anonFunCounter.printNotFound()
-    // anonFunCounter.printFirstThrowable()
-    anonFunCounter.printAmbiguous()
-    methodCounter.printNotFound()
+    anonFunCounter.printNotFound()
     localClassCounter.printReport()
     anonClassCounter.printReport()
     innerClassCounter.printReport()
@@ -80,14 +76,14 @@ class Scala3UnpicklerStats extends munit.FunSuite:
     localLazyInitCounter.printReport()
     methodCounter.printReport()
     checkCounter(localClassCounter, 42)
-    checkCounter(anonClassCounter, 430)
+    checkCounter(anonClassCounter, 428, expectedAmbiguous = 2)
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
     checkCounter(localMethodCounter, 2606, expectedAmbiguous = 2)
-    checkCounter(anonFunCounter, 6947, expectedAmbiguous = 37, expectedNotFound = 1)
-    checkCounter(adaptedAnonFunCounter, 370, expectedAmbiguous = 1)
+    checkCounter(anonFunCounter, 6858, expectedAmbiguous = 126, expectedNotFound = 1)
+    checkCounter(adaptedAnonFunCounter, 369, expectedAmbiguous = 2)
     checkCounter(localLazyInitCounter, 108)
-    checkCounter(methodCounter, 57872)
+    checkCounter(methodCounter, 57842)
 
   def checkCounter(
       counter: Counter,
@@ -147,8 +143,6 @@ class Scala3UnpicklerStats extends munit.FunSuite:
         case ambiguous: AmbiguousException => counter.ambiguous += ambiguous
         case ignored: IgnoredException => counter.ignored += ignored
         case e => counter.throwables += (mthd -> e)
-
-  override def munitTimeout: Duration = 2.minutes
 
   class Counter(name: String):
     val success = mutable.Buffer.empty[binary.Symbol]

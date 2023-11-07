@@ -11,6 +11,7 @@ import tastyquery.Contexts.*
 import tastyquery.Signatures.*
 import scala.util.control.NonFatal
 import tastyquery.SourceLanguage
+import ch.epfl.scala.debugadapter.internal.binary.SourceLines
 
 extension (symbol: Symbol)
   def isTrait = symbol.isClass && symbol.asClass.isTrait
@@ -132,6 +133,12 @@ extension (prefix: Prefix)
       case p: PackageRef => p.symbol.name == nme.scalaPackageName && p.symbol.owner.isRootPackage
       case _ => false
 
+extension (tree: Tree)
+  def matchLines(sourceLines: binary.SourceLines)(using Context): Boolean =
+    tree match
+      case lambda: Lambda => lambda.meth.symbol.pos.matchLines(sourceLines)
+      case tree => tree.pos.matchLines(sourceLines)
+
 extension (tree: Apply)
   def allArgsFlatten: Seq[TermTree] =
     def rec(fun: Tree): Seq[TermTree] = fun match
@@ -153,6 +160,12 @@ extension (pos: SourcePosition)
       && pos.hasLineColumnInformation
       && pos.startLine <= line
       && pos.endLine >= line
+
+  def matchLines(sourceLines: binary.SourceLines): Boolean =
+    pos.isUnknown
+      || !pos.hasLineColumnInformation
+      || pos.sourceFile.name != sourceLines.sourceName
+      || sourceLines.tastySpan.forall(line => pos.startLine <= line && pos.endLine >= line)
 
 extension (binaryClass: BinaryClassSymbol)
   def isJava: Boolean =

@@ -18,22 +18,13 @@ import java.lang.reflect.Parameter
 import java.util as ju
 import scala.jdk.OptionConverters.*
 import java.net.URLClassLoader
-import scala.concurrent.duration.*
-import java.lang.management.ManagementFactory
-import scala.jdk.CollectionConverters.*
+import ch.epfl.scala.debugadapter.testfmk.DebuggableFunSuite
 
 class Scala30UnpicklerTests extends Scala3UnpicklerTests(ScalaVersion.`3.0`)
 class Scala31PlusUnpicklerTests extends Scala3UnpicklerTests(ScalaVersion.`3.1+`)
 
-abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends FunSuite:
+abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends DebuggableFunSuite:
   def isScala30 = scalaVersion.isScala30
-
-  private def isDebug: Boolean =
-    val mxBean = ManagementFactory.getRuntimeMXBean
-    mxBean.getInputArguments.asScala.exists(_.contains("jdwp"))
-
-  override def munitTimeout: Duration =
-    if isDebug then 8.hours else super.munitTimeout
 
   test("mixin and static forwarders") {
     val source =

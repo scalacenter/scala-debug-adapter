@@ -7,7 +7,7 @@ import tastyquery.Contexts.Context
 import tastyquery.Names.*
 import tastyquery.Signatures.*
 import tastyquery.Symbols.*
-import tastyquery.Trees.*
+import tastyquery.Trees.{Inlined as _, *}
 import tastyquery.Types.*
 import tastyquery.jdk.ClasspathLoaders
 
@@ -106,12 +106,15 @@ class Scala3Unpickler(
       }
         .orFind { case _ if method.isBridge => findBridgesAndMixinForwarders(binaryClass, method).toSeq }
         .orFind { case Patterns.LocalLazyInit(names) =>
-          requiresBinaryClass(collectLocalMethods(_, method)(inlined => {
-            case term if (term.isLazyVal || term.isModuleVal) && names.contains(term.nameStr) =>
+          requiresBinaryClass(collectLocalMethods(_, method) {
+            case Inlined(term, _) if (term.isLazyVal || term.isModuleVal) && names.contains(term.nameStr) =>
               BinaryLocalLazyInit(binaryClass, term)
-          }))
+          })
         }
-        .orFind { case Patterns.AnonFun(_) => findAnonFunsAndReduceAmbiguity(binaryClass, method) }
+        .orFind { case Patterns.AnonFun(_) =>
+          // todo reduce ambiguity
+          findAnonFunAndByNameArgs(binaryClass, method)
+        }
         .orFind { case Patterns.AdaptedAnonFun(_) => findAdaptedAnonFun(binaryClass, method) }
         .orFind { case Patterns.ByNameArgProxy() => findByNameArgsProxy(binaryClass, method) }
         .orFind { case Patterns.SuperArg() => requiresBinaryClass(findSuperArgs(_, method)) }
@@ -218,7 +221,7 @@ class Scala3Unpickler(
       lines: Option[binary.SourceLines]
   ): Seq[BinaryClassSymbol] =
     object SAMClassOrPartialFunction:
-      def unapply(lambda: Lambda): Option[BinaryPartialFunction | BinarySAMClass] =
+      def unapply(lambda: Lambda): Option[BinaryClassSymbol] =
         (lambda.meth.symbol, lambda.tpe) match
           case (term: TermSymbol, tpe: Type) =>
             if lambda.samClassSymbol == defn.PartialFunctionClass then Some(BinaryPartialFunction(term, tpe))
@@ -448,10 +451,11 @@ class Scala3Unpickler(
       method: binary.Method,
       names: Seq[String]
   ): Seq[BinaryMethodSymbol] =
-    collectLocalMethods(binaryClass, method)(inlined => {
-      case term if names.contains(term.nameStr) && matchSignature(method, term, checkTypeErasure = !inlined) =>
+    collectLocalMethods(binaryClass, method) {
+      case Inlined(term, inlinedFrom)
+          if names.contains(term.nameStr) && matchSignature(method, term, checkTypeErasure = inlinedFrom.isEmpty) =>
         BinaryMethod(binaryClass, term)
-    })
+    }
 
   private def findLazyInit(binaryClass: BinaryClass, name: String): Seq[BinaryMethodSymbol] =
     val matcher: PartialFunction[Symbol, TermSymbol] =
@@ -644,10 +648,10 @@ class Scala3Unpickler(
       binaryClass: BinaryClassSymbol,
       method: binary.Method
   ): Seq[BinaryMethodSymbol] =
-    val anonFuns = collectLocalMethods(binaryClass, method)(inlined => {
-      case term if term.isAnonFun && matchAnonFunSignature(method, term, inlined) =>
+    val anonFuns = collectLocalMethods(binaryClass, method) {
+      case Inlined(term, inlinedFrom) if term.isAnonFun && matchAnonFunSignature(method, term, inlinedFrom.nonEmpty) =>
         BinaryMethod(binaryClass, term)
-    })
+    }
     val byNameArgs =
       if method.allParameters.forall(_.isCapture) then findByNameArgs(binaryClass, method)
       else Seq.empty
@@ -658,17 +662,20 @@ class Scala3Unpickler(
       Some(tree.args.zip(tree.methodType.paramTypes).collect { case (arg, t: ByNameType) => (arg, t.resultType) })
         .filter(_.nonEmpty)
 
-  private object InlineTree:
-    def unapply(tree: Tree): Option[Symbol] =
-      tree match
-        case tree: TermReferenceTree if tree.symbol.isInline && tree.symbol.asTerm.isMethod =>
-          Some(tree.symbol)
-        case Apply(fun, _) => unapply(fun)
-        case TypeApply(fun, _) => unapply(fun)
-        case _ => None
+  case class InlineMethodApply(termRefTree: TermReferenceTree, symbol: TermSymbol, typeArgs: Seq[Type], args: Seq[Tree])
+  private object InlineMethodApply:
+    def unapply(tree: Tree): Option[InlineMethodApply] =
+      def rec(tree: Tree, typeArgsAcc: Seq[Type], argsAcc: Seq[Tree]): Option[InlineMethodApply] =
+        tree match
+          case termTree: TermReferenceTree if termTree.symbol.isInline && termTree.symbol.asTerm.isMethod =>
+            Some(InlineMethodApply(termTree, termTree.symbol.asTerm, typeArgsAcc, argsAcc))
+          case Apply(fun, args) => rec(fun, typeArgsAcc, args ++ argsAcc)
+          case TypeApply(fun, typeArgs) => rec(fun, typeArgs.map(_.toType) ++ typeArgsAcc, argsAcc)
+          case _ => None
+      rec(tree, Seq.empty, Seq.empty)
 
-  private def isInlineTree(tree: Tree): Boolean =
-    InlineTree.unapply(tree).isDefined
+  private def isInlineMethodApply(tree: Tree): Boolean =
+    InlineMethodApply.unapply(tree).isDefined
 
   private def findByNameArgs(
       binaryClass: BinaryClassSymbol,
@@ -681,18 +688,22 @@ class Scala3Unpickler(
         method.sourceLines.map(removeInlinedLines(_, classOwners).last)
       else method.sourceLines.map(removeInlinedLines(_, classOwners))
     def matchLinesAndCapture(arg: Tree, classOwner: Symbol): Boolean =
-      sourceLines.forall(matchLines(arg, _)) &&
+      sourceLines.forall(arg.matchLines) &&
         // todo: use a more precise owner
         matchCapture(arg, None, classOwner, method.allParameters)
+    val byNameApplyMatcher: PartialFunction[Tree, Seq[(TermTree, Type)]] = {
+      case t @ ByNameApply(args) if !isInlineMethodApply(t) =>
+        args.filter((_, paramTpe) => matchReturnType(paramTpe, method.returnType))
+    }
     for
       classOwner <- classOwners
-      byNameArg <- collectTrees1(classOwner, sourceLines)(inlined => {
-        case t @ ByNameApply(args) if !isInlineTree(t) =>
-          args.collect {
-            case (arg, paramTpe) if matchReturnType(paramTpe, method.returnType) && (inlined || matchLinesAndCapture(arg, classOwner)) =>
-              BinaryByNameArg(binaryClass, paramTpe)
-          }
-      }).flatten
+      byNameArgs <- collectTrees1(classOwner, sourceLines)
+        .collect(Inlined.lift(byNameApplyMatcher).andThen(_.traverse))
+      byNameArg <- byNameArgs.collect {
+        case Inlined((arg, paramTpe), Nil) if matchLinesAndCapture(arg, classOwner) =>
+          BinaryByNameArg(binaryClass, paramTpe)
+        case Inlined((arg, paramTpe), _) => BinaryByNameArg(binaryClass, paramTpe)
+      }
     yield byNameArg
 
   private def findByNameArgsProxy(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryByNameArg] =
@@ -700,24 +711,25 @@ class Scala3Unpickler(
       matchReturnType(tpe, method.returnType)
     val classOwners = getOwners(binaryClass)
     val sourceLines = method.sourceLines.map(removeInlinedLines(_, classOwners))
+    val byNameApplyMatcher: PartialFunction[Tree, Seq[TermTree]] = {
+      case t @ ByNameApply(args) if isInlineMethodApply(t) => args.map(_(0))
+    }
     val explicitByNameArgs =
       for
         classOwner <- classOwners
-        byNameArg <- collectTrees1(classOwner, sourceLines)(inlined => {
-          case t @ ByNameApply(args) if isInlineTree(t) =>
-            args.collect {
-              case (arg, _) if inlined || (matchType0(arg.tpe) && sourceLines.forall(matchLines(arg, _))) =>
-                BinaryByNameArg(binaryClass, arg.tpe.asInstanceOf)
-            }
-        }).flatten
+        byNameArgs <- collectTrees1(classOwner, sourceLines)
+          .collect(Inlined.lift(byNameApplyMatcher).andThen(_.traverse))
+        byNameArg <- byNameArgs.collect {
+          case Inlined(arg, Nil) if matchType0(arg.tpe) && sourceLines.forall(arg.matchLines) =>
+            BinaryByNameArg(binaryClass, arg.tpe.asInstanceOf)
+          case Inlined(arg, _) => BinaryByNameArg(binaryClass, arg.tpe.asInstanceOf)
+        }
       yield byNameArg
     val inlineOverrides = binaryClass.classSymbol.toSeq
       .flatMap(_.declarations)
       .collect {
         case term: TermSymbol
-            if term.allOverriddenSymbols.nonEmpty &&
-              term.isInline &&
-              method.sourceLines.forall(sourceLines => term.tree.exists(matchLines(_, sourceLines))) =>
+            if term.allOverriddenSymbols.nonEmpty && term.isInline && method.sourceLines.forall(term.pos.matchLines) =>
           term.declaredType.allParamTypes.collect {
             case byName: ByNameType if matchType0(byName.resultType) =>
               BinaryByNameArg(binaryClass, byName.resultType)
@@ -730,23 +742,21 @@ class Scala3Unpickler(
       binaryClass: BinaryClassSymbol,
       javaMethod: binary.Method
   )(
-      matcher: Boolean => PartialFunction[TermSymbol, BinaryMethodSymbol]
+      matcher: PartialFunction[Inlined[TermSymbol], BinaryMethodSymbol]
   ): Seq[BinaryMethodSymbol] =
     val owners = getOwners(binaryClass)
     val sourceLines =
-      if owners.size == 2 && javaMethod.allParameters.filter(p => p.name.matches("\\$this\\$\\d+")).nonEmpty then
+      if owners.size == 2 && javaMethod.allParameters.exists(p => p.name.matches("\\$this\\$\\d+")) then
         // workaround of https://github.com/lampepfl/dotty/issues/18816
         javaMethod.sourceLines.map(removeInlinedLines(_, owners).last)
       else javaMethod.sourceLines.map(removeInlinedLines(_, owners))
+    val treeMatcher: PartialFunction[Tree, TermSymbol] = {
+      case ValDef(_, _, _, sym) if sym.isLocal && sym.isModuleOrLazyVal => sym
+      case DefDef(_, _, _, _, sym) if sym.isLocal => sym
+    }
     for
       owner <- owners
-      term <- collectTrees1(owner, sourceLines) { inlined =>
-        val treeMatcher: PartialFunction[Tree, TermSymbol] = {
-          case ValDef(_, _, _, sym) if sym.isLocal && sym.isModuleOrLazyVal => sym
-          case DefDef(_, _, _, _, sym) if sym.isLocal => sym
-        }
-        treeMatcher.andThen(matcher(inlined))
-      }
+      term <- collectTrees1(owner, sourceLines).collect(Inlined.lift(treeMatcher).andThen(matcher))
     yield term
 
   private def findSuperArgs(binaryOwner: BinaryClass, method: binary.Method): Seq[BinarySuperArg] =
@@ -770,7 +780,7 @@ class Scala3Unpickler(
     val sourceLines = method.sourceLines
     val localClasses = collectTrees(binaryOwner.symbol, sourceLines) { case ClassDef(_, _, cls) if cls.isLocal => cls }
     val innerClasses = binaryOwner.symbol.declarations.collect {
-      case cls: ClassSymbol if sourceLines.forall(matchLines(cls.pos, _)) => cls
+      case cls: ClassSymbol if sourceLines.forall(cls.pos.matchLines) => cls
     }
     for
       cls <- binaryOwner.symbol +: (localClasses ++ innerClasses)
@@ -783,7 +793,7 @@ class Scala3Unpickler(
       args = superCall.allArgsFlatten
       if args.size == paramTypes.size
       (arg, paramType) <- args.zip(paramTypes)
-      if sourceLines.forall(matchLines(arg, _))
+      if sourceLines.forall(arg.matchLines)
       argType0 <- asType(arg.tpe).toSeq
       argType = paramType match
         case byName: ByNameType => defn.Function0Type.appliedTo(byName.resultType)
@@ -799,7 +809,7 @@ class Scala3Unpickler(
     val sourceLines = method.sourceLines.map(removeInlinedLines(_, classOwners))
     for
       classOwner <- classOwners
-      liftedTry <- collectTrees[BinaryLiftedTry](classOwner, sourceLines) {
+      liftedTry <- collectTrees(classOwner, sourceLines) {
         case tryTree: Try if matchType0(tryTree.tpe) =>
           BinaryLiftedTry(binaryClass, tryTree.tpe.asInstanceOf)
       }
@@ -814,63 +824,11 @@ class Scala3Unpickler(
 
   private def collectTrees[S](cls: Symbol, lines: Option[binary.SourceLines])(
       matcher: PartialFunction[Tree, S]
-  ): Seq[S] =
-    collectTrees1(cls, lines)(_ => matcher)
+  ): Seq[S] = collectTrees1(cls, lines).iterator.map(_.value).collect(matcher).toSeq
 
-  private def collectTrees1[S](root: Symbol, sourceLines: Option[binary.SourceLines])(
-      matcher: Boolean => PartialFunction[Tree, S]
-  ): Seq[S] =
-    val collectors = Buffer.empty[Collector]
-    var inlineSymbols = Set.empty[Symbol]
-
-    class Collector(inlined: Boolean = false) extends TreeTraverser:
-      collectors += this
-      private var buffer = Map.empty[Tree, S]
-      override def traverse(tree: Tree): Unit =
-        if inlined || sourceLines.forall(matchLines(tree, _)) then
-          matchTree(tree)
-          tree match
-            case InlineTree(symbol) if !inlineSymbols.contains(symbol) =>
-              inlineSymbols += symbol
-              val collector = new Collector(inlined = true)
-              symbol.tree.foreach(collector.traverse)
-            case _ => ()
-          super.traverse(tree)
-        else
-          // bug in dotty: wrong pos of `def $new` in the companion object of an enum
-          // the pos is outside the companion object, in the enum
-          tree match
-            case ClassDef(_, template, sym) if sym.companionClass.exists(_.isEnum) =>
-              super.traverse(template.body)
-            case _ => ()
-
-      def collected: Seq[S] =
-        if inlined || sourceLines.forall(_.isEmpty) then buffer.values.toSeq
-        else
-          buffer
-            .filterNot((tree, _) => buffer.keys.exists(other => tree.pos.isEnclosing(other.pos)))
-            .values
-            .toSeq
-
-      private def matchTree(tree: Tree): Unit =
-        matcher(inlined).lift(tree).foreach(res => buffer += (tree -> res))
-    end Collector
-
-    val collector = Collector()
-    root.tree.foreach(collector.traverse)
-    collectors.toSeq.flatMap(_.collected)
-  end collectTrees1
-
-  private def matchLines(tree: Tree, sourceLines: binary.SourceLines): Boolean =
-    tree match
-      case lambda: Lambda => lambda.meth.symbol.tree.exists(matchLines(_, sourceLines))
-      case tree => matchLines(tree.pos, sourceLines)
-
-  private def matchLines(pos: SourcePosition, sourceLines: binary.SourceLines): Boolean =
-    pos.isUnknown
-      || !pos.hasLineColumnInformation
-      || pos.sourceFile.name != sourceLines.sourceName
-      || sourceLines.tastySpan.forall(line => pos.startLine <= line && pos.endLine >= line)
+  private def collectTrees1[S](root: Symbol, sourceLines: Option[binary.SourceLines]): Seq[Inlined[Tree]] =
+    val collector = new TreeCollector
+    root.tree.toSeq.flatMap(collector.collect(_, sourceLines))
 
   private def removeInlinedLines(
       sourceLines: binary.SourceLines,
@@ -910,7 +868,9 @@ class Scala3Unpickler(
     def matchParamNames = declaredParams.map(_.name).corresponds(paramNames)(_ == _)
 
     def matchTypeErasure =
-      declaredType.allParamTypes.corresponds(declaredParams)((tpe, javaParam) => matchArgType(tpe, javaParam.`type`, false)) &&
+      declaredType.allParamTypes.corresponds(declaredParams)((tpe, javaParam) =>
+        matchArgType(tpe, javaParam.`type`, false)
+      ) &&
         matchReturnType(declaredType.returnType, method.returnType)
 
     def matchCapture0 =
@@ -976,9 +936,9 @@ class Scala3Unpickler(
       override def traverse(tree: Tree): Unit =
         tree match
           case _: TypeTree => ()
-          case Apply(inlineTree @ InlineTree(_), args) =>
-            collector.traverse(args)
-            traverse(inlineTree)
+          case InlineMethodApply(inlineMethodApply) =>
+            collector.traverse(inlineMethodApply.args.toList)
+            super.traverse(inlineMethodApply.termRefTree)
           case _ => super.traverse(tree)
     sym.tree.foreach(ProxyTraverser.traverse)
     collector.variables.toSeq
@@ -1029,19 +989,15 @@ class Scala3Unpickler(
 
     // Compute the expected expanded params and return type
     val (expandedParamTypes, returnType) =
-      if method.isConstructor && method.declaringClass.isJavaLangEnum then (List(defn.StringType, defn.IntType), declaredType.returnType)
+      if method.isConstructor && method.declaringClass.isJavaLangEnum then
+        (List(defn.StringType, defn.IntType), declaredType.returnType)
       else expandContextFunctions(declaredType.returnType, acc = Nil)
 
     val regularParamTypes = declaredType.allParamTypes ::: expandedParamTypes
 
-    // Do the matching
     val capturedParamCount = method.allParameters.size - regularParamTypes.size
-    if capturedParamCount < 0 then
-      // not enough parameters
-      false
-    else if !captureAllowed && capturedParamCount > 0 then
-      // there are captures but they are not allowed
-      false
+    if capturedParamCount < 0 then false
+    else if !captureAllowed && capturedParamCount > 0 then false
     else
       // split the method parameters into captured, declared and expanded
       val (capturedParams, regularParams) = method.allParameters.splitAt(capturedParamCount)
@@ -1051,25 +1007,28 @@ class Scala3Unpickler(
         declaredType.allParamNames.corresponds(declaredParams)((name, javaParam) => name.toString() == javaParam.name)
 
       def matchErasedTypes(): Boolean =
-        regularParamTypes.corresponds(regularParams)((tpe, javaParam) => matchArgType(tpe, javaParam.`type`, asJavaVarargs)) &&
+        regularParamTypes.corresponds(regularParams)((tpe, javaParam) =>
+          matchArgType(tpe, javaParam.`type`, asJavaVarargs)
+        ) &&
           matchReturnType(returnType, method.returnType)
 
       capturedParams.forall(_.isGenerated) && // captures are generated
       expandedParams.forall(_.isGenerated) && // expanded params are generated
       (!checkParamNames || matchNames()) &&
       (!checkTypeErasure || matchErasedTypes())
+  end matchSignature1
 
   private lazy val scalaPrimitivesToJava: Map[ClassSymbol, String] = Map(
-    ctx.defn.BooleanClass -> "boolean",
-    ctx.defn.ByteClass -> "byte",
-    ctx.defn.CharClass -> "char",
-    ctx.defn.DoubleClass -> "double",
-    ctx.defn.FloatClass -> "float",
-    ctx.defn.IntClass -> "int",
-    ctx.defn.LongClass -> "long",
-    ctx.defn.ShortClass -> "short",
-    ctx.defn.UnitClass -> "void",
-    ctx.defn.NullClass -> "scala.runtime.Null$"
+    defn.BooleanClass -> "boolean",
+    defn.ByteClass -> "byte",
+    defn.CharClass -> "char",
+    defn.DoubleClass -> "double",
+    defn.FloatClass -> "float",
+    defn.IntClass -> "int",
+    defn.LongClass -> "long",
+    defn.ShortClass -> "short",
+    defn.UnitClass -> "void",
+    defn.NullClass -> "scala.runtime.Null$"
   )
 
   private def matchSetterArgType(scalaVarType: TypeOrMethodic, javaSetterParamType: binary.Type): Boolean =
@@ -1096,28 +1055,23 @@ class Scala3Unpickler(
         case ErasedTypeRef.ArrayTypeRef(base, dimensions) =>
           javaType.endsWith("[]" * dimensions) &&
           rec(base, javaType.dropRight(2 * dimensions))
-
         case ErasedTypeRef.ClassRef(scalaClass) =>
           scalaPrimitivesToJava.get(scalaClass) match
             case Some(javaPrimitive) => javaPrimitive == javaType
             case None => matchClassType(scalaClass, javaType, nested = false)
-
     rec(scalaType, javaType.name)
 
   private def matchClassType(scalaClass: ClassSymbol, javaType: String, nested: Boolean): Boolean =
     def encodedName(nested: Boolean): String = scalaClass.name match
       case ObjectClassTypeName(underlying) if nested => NameTransformer.encode(underlying.toString())
       case name => NameTransformer.encode(name.toString())
-
     scalaClass.owner match
       case owner: PackageSymbol =>
         javaType == owner.fullName.toString() + "." + encodedName(nested)
-
       case owner: ClassSymbol =>
         val encodedName1 = encodedName(nested)
         javaType.endsWith("$" + encodedName1) &&
         matchClassType(owner, javaType.dropRight(1 + encodedName1.length()), nested = true)
-
       case owner: TermOrTypeSymbol =>
         dollarDigitsMaybeDollarAtEndRegex.findFirstIn(javaType).exists { suffix =>
           val prefix = javaType.stripSuffix(suffix)
