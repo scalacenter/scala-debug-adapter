@@ -685,8 +685,8 @@ class Scala3Unpickler(
         method.sourceLines.map(removeInlinedLines(_, classOwners).last)
       else method.sourceLines.map(removeInlinedLines(_, classOwners))
     def matchLinesAndCapture(liftedFun: LiftedFun[TermTree]): Boolean =
-      if liftedFun.isInline then matchCapture1(liftedFun, method.allParameters)
-      else sourceLines.forall(liftedFun.value.matchLines) && matchCapture1(liftedFun, method.allParameters)
+      if liftedFun.isInline then matchByNameCapture(liftedFun, method.allParameters)
+      else sourceLines.forall(liftedFun.value.matchLines) && matchByNameCapture(liftedFun, method.allParameters)
 
     val byNameApplyMatcher: PartialFunction[Tree, Seq[TermTree]] = {
       case t @ ByNameApply(args) if !isInlineMethodApply(t) =>
@@ -880,16 +880,15 @@ class Scala3Unpickler(
         .corresponds(javaParams.regularParams)((tpe, javaParam) => matchArgType(tpe, javaParam.`type`, false)) &&
         javaParams.returnType.forall(matchReturnType(scalaParams.returnType, _))
 
-    if liftedFun.isInline then matchParamNames && matchTypeErasure && javaParams.capturedParams.forall(_.isGenerated)
-    else matchParamNames && matchTypeErasure && matchCapture(liftedFun, javaParams.capturedParams)
+    matchParamNames && matchTypeErasure && matchCapture(liftedFun, javaParams.capturedParams)
   end matchLiftedFunSignature
 
   private def matchCapture(liftedFun: LiftedFun[TermSymbol], capturedParams: Seq[binary.Parameter]): Boolean =
-    val variables = Capturer.collect(liftedFun.value) ++ liftedFun.inlineCapture
+    val variables = Capturer.collect(liftedFun.value, liftedFun.inlinedFrom.flatMap(_.args) ++ liftedFun.inlineArgs)
     matchCapture(variables, capturedParams)
 
-  private def matchCapture1(liftedFun: LiftedFun[TermTree], capturedParams: Seq[binary.Parameter]): Boolean =
-    val variables = Capturer.collect(liftedFun.value) ++ liftedFun.inlineCapture
+  private def matchByNameCapture(liftedFun: LiftedFun[TermTree], capturedParams: Seq[binary.Parameter]): Boolean =
+    val variables = Capturer.collect(liftedFun.inlinedFrom.flatMap(_.args) :+ liftedFun.value)
     matchCapture(variables, capturedParams)
 
   private def matchCapture(variables: Set[String], capturedParams: Seq[binary.Parameter]): Boolean =

@@ -6,17 +6,12 @@ import tastyquery.Trees.*
 import tastyquery.Contexts.*
 
 object Capturer:
-  def collect(sym: TermSymbol)(using Context): Set[String] =
+  def collect(sym: TermSymbol, trees: Seq[TermTree])(using Context): Set[String] =
     val collector = new Capturer(Some(sym))
     val treeOpt =
       if sym.isLocal && sym.isModuleVal then sym.moduleClass.flatMap(_.tree)
       else sym.tree
-    treeOpt.foreach(collector.traverse)
-    collector.variables
-
-  def collect(tree: TermTree)(using Context): Set[String] =
-    val collector = new Capturer(None)
-    collector.traverse(tree)
+    (trees ++ treeOpt).foreach(collector.traverse)
     collector.variables
 
   def collect(trees: Seq[TermTree])(using Context): Set[String] =

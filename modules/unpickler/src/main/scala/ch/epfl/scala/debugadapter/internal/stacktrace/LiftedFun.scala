@@ -6,7 +6,7 @@ import tastyquery.Symbols.*
 import tastyquery.Contexts.*
 import tastyquery.Types.*
 
-case class LiftedFun[+T](value: T, inlinedFrom: List[InlineMethodApply], inlineCapture: Set[String]):
+case class LiftedFun[+T](value: T, inlinedFrom: List[InlineMethodApply], inlineArgs: Seq[TermTree]):
   def isInline: Boolean = inlinedFrom.nonEmpty
 
 object LiftedFun:
@@ -18,9 +18,9 @@ object LiftedFun:
 
   extension [T](xs: LiftedFun[Seq[T]])
     def traverse: Seq[LiftedFun[T]] =
-      xs.value.map(LiftedFun(_, xs.inlinedFrom, xs.inlineCapture))
+      xs.value.map(LiftedFun(_, xs.inlinedFrom, xs.inlineArgs))
 
   def lift[A, B](pf: PartialFunction[A, B]): PartialFunction[LiftedFun[A], LiftedFun[B]] =
     def f(inlined: LiftedFun[A]): Option[LiftedFun[B]] =
-      pf.lift(inlined.value).map(LiftedFun(_, inlined.inlinedFrom, inlined.inlineCapture))
+      pf.lift(inlined.value).map(LiftedFun(_, inlined.inlinedFrom, inlined.inlineArgs))
     f.unlift

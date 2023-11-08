@@ -81,7 +81,7 @@ class Scala3UnpicklerStats extends DebuggableFunSuite:
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
     checkCounter(localMethodCounter, 2606, expectedAmbiguous = 2)
-    checkCounter(anonFunCounter, 6872, expectedAmbiguous = 112, expectedNotFound = 1)
+    checkCounter(anonFunCounter, 6856, expectedAmbiguous = 128, expectedNotFound = 1)
     checkCounter(adaptedAnonFunCounter, 369, expectedAmbiguous = 2)
     checkCounter(localLazyInitCounter, 108)
     checkCounter(methodCounter, 57842)
