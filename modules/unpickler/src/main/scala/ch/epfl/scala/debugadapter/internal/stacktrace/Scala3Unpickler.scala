@@ -862,7 +862,7 @@ class Scala3Unpickler(
       method: binary.Method,
       symbol: LiftedFun[TermSymbol]
   ): Boolean =
-    val declaredType = symbol.value.declaredType
+    val declaredType = symbol.declaredType
     val paramNames = declaredType.allParamNames.map(_.toString)
     val capturedParams = method.allParameters.dropRight(paramNames.size)
     val declaredParams = method.allParameters.drop(capturedParams.size)
@@ -879,7 +879,9 @@ class Scala3Unpickler(
       symbol.value.tree.forall(matchCapture(_, Some(symbol.value), symbol.inlineCapture, capturedParams))
 
     if symbol.isInline then
-      declaredParams.size == paramNames.size && matchParamNames && capturedParams.forall(_.isGenerated)
+      declaredParams.size == paramNames.size && matchParamNames && matchTypeErasure && capturedParams.forall(
+        _.isGenerated
+      )
     else declaredParams.size == paramNames.size && matchParamNames && matchTypeErasure && matchCapture0
   end matchAnonFunSignature
 

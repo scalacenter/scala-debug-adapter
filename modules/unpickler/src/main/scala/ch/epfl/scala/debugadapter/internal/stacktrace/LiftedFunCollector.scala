@@ -10,21 +10,11 @@ import tastyquery.SourcePosition
 import ch.epfl.scala.debugadapter.internal.stacktrace.LiftedFun
 import tastyquery.Types.*
 
-case class LiftedFun[T](value: T, inlinedFrom: List[InlineMethodApply], inlineCapture: Set[String]):
-  def isInline: Boolean = inlinedFrom.nonEmpty
-
-object LiftedFun:
-  extension (tree: LiftedFun[Tree]) def pos: SourcePosition = tree.value.pos
-
-  extension [T](xs: LiftedFun[Seq[T]])
-    def traverse: Seq[LiftedFun[T]] =
-      xs.value.map(LiftedFun(_, xs.inlinedFrom, xs.inlineCapture))
-
-  def lift[A, B](pf: PartialFunction[A, B]): PartialFunction[LiftedFun[A], LiftedFun[B]] =
-    def f(inlined: LiftedFun[A]): Option[LiftedFun[B]] =
-      pf.lift(inlined.value).map(LiftedFun(_, inlined.inlinedFrom, inlined.inlineCapture))
-    f.unlift
-
+/**
+ * Collect all trees that could be lifted by the compiler: local defs, lambdas, try clauses, by-name applications
+ * Recurse on inline methods. Remember the inline method applications to later substitute the type params,
+ * and compute the capture.
+ */
 object LiftedFunCollector:
   def collect(tree: Tree, sourceLines: Option[SourceLines])(using Context): Seq[LiftedFun[Tree]] =
     val collector = new LiftedFunCollector()
