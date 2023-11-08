@@ -6,7 +6,7 @@ import tastyquery.Symbols.*
 import tastyquery.Contexts.*
 import tastyquery.Types.*
 
-case class LiftedFun[T](value: T, inlinedFrom: List[InlineMethodApply], inlineCapture: Set[String]):
+case class LiftedFun[+T](value: T, inlinedFrom: List[InlineMethodApply], inlineCapture: Set[String]):
   def isInline: Boolean = inlinedFrom.nonEmpty
 
 object LiftedFun:

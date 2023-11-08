@@ -346,8 +346,7 @@ class Scala3Unpickler(
   private def findInlineAccessor(
       binaryClass: BinaryClass,
       method: binary.Method,
-      name: String,
-      checkParamNames: Boolean = true
+      name: String
   ): Seq[BinaryMethodSymbol] =
     val hasReceiver = "(.+)\\$i\\d+".r
     val inlineable = name match
@@ -357,18 +356,17 @@ class Scala3Unpickler(
           receiverClass <- receiverParam.`type` match
             case cls: binary.ClassType => Seq(findClass(cls)).collect { case cls: BinaryClass => cls }
             case _ => Seq.empty
-          inlineable <- findInlineableMethod(receiverClass, method, name, checkParamNames)
+          inlineable <- findInlineableMethod(receiverClass, method, name)
         yield inlineable
       case s"${name}$$extension" =>
-        binaryClass.companionClass.toSeq.flatMap(findInlineableMethod(_, method, name, checkParamNames))
-      case _ => findInlineableMethod(binaryClass, method, name, checkParamNames)
+        binaryClass.companionClass.toSeq.flatMap(findInlineableMethod(_, method, name))
+      case _ => findInlineableMethod(binaryClass, method, name)
     inlineable.map(BinaryInlineAccessor(binaryClass, _))
 
   private def findInlineableMethod(
       binaryClass: BinaryClass,
       method: binary.Method,
-      name: String,
-      checkParamNames: Boolean = true
+      name: String
   ): Seq[BinaryMethodSymbol] =
     val standardMethods =
       for
@@ -379,7 +377,7 @@ class Scala3Unpickler(
         resultType = sym.declaredType match
           case byName: ByNameType => byName.resultType
           case tpe => tpe
-        if matchSignature1(method, resultType, checkParamNames = checkParamNames)
+        if matchSignature1(method, resultType)
       yield BinaryMethod(BinaryClass(classSym), sym)
     def setters =
       name match
@@ -452,9 +450,8 @@ class Scala3Unpickler(
       names: Seq[String]
   ): Seq[BinaryMethodSymbol] =
     collectLocalMethods(binaryClass, method) {
-      case LiftedFun(term, inlinedFrom, _)
-          if names.contains(term.nameStr) && matchSignature(method, term, checkTypeErasure = inlinedFrom.isEmpty) =>
-        BinaryMethod(binaryClass, term)
+      case liftedFun if names.contains(liftedFun.value.nameStr) && matchLiftedFunSignature(method, liftedFun) =>
+        BinaryMethod(binaryClass, liftedFun.value)
     }
 
   private def findLazyInit(binaryClass: BinaryClass, name: String): Seq[BinaryMethodSymbol] =
@@ -649,7 +646,7 @@ class Scala3Unpickler(
       method: binary.Method
   ): Seq[BinaryMethodSymbol] =
     val anonFuns = collectLocalMethods(binaryClass, method) {
-      case sym if sym.value.isAnonFun && matchAnonFunSignature(method, sym) =>
+      case sym if sym.value.isAnonFun && matchLiftedFunSignature(method, sym) =>
         BinaryMethod(binaryClass, sym.value)
     }
     val byNameArgs =
@@ -687,28 +684,26 @@ class Scala3Unpickler(
         // workaround of https://github.com/lampepfl/dotty/issues/18816
         method.sourceLines.map(removeInlinedLines(_, classOwners).last)
       else method.sourceLines.map(removeInlinedLines(_, classOwners))
-    def matchLinesAndCapture(arg: Tree, inlineCapture: Set[String]): Boolean =
-      sourceLines.forall(arg.matchLines) &&
-        // todo: use a more precise owner
-        matchCapture(arg, None, inlineCapture, method.allParameters)
-    val byNameApplyMatcher: PartialFunction[Tree, Seq[(TermTree, Type)]] = {
+    def matchLinesAndCapture(liftedFun: LiftedFun[TermTree]): Boolean =
+      if liftedFun.isInline then matchCapture1(liftedFun, method.allParameters)
+      else sourceLines.forall(liftedFun.value.matchLines) && matchCapture1(liftedFun, method.allParameters)
+
+    val byNameApplyMatcher: PartialFunction[Tree, Seq[TermTree]] = {
       case t @ ByNameApply(args) if !isInlineMethodApply(t) =>
-        args.filter((_, paramTpe) => matchReturnType(paramTpe, method.returnType))
+        args.collect { case (arg, paramTpe) if method.returnType.forall(matchReturnType(paramTpe, _)) => arg }
     }
     for
       classOwner <- classOwners
       byNameArgs <- collectTrees1(classOwner, sourceLines)
         .collect(LiftedFun.lift(byNameApplyMatcher).andThen(_.traverse))
       byNameArg <- byNameArgs.collect {
-        case LiftedFun((arg, paramTpe), Nil, capture) if matchLinesAndCapture(arg, capture) =>
-          BinaryByNameArg(binaryClass, paramTpe)
-        case LiftedFun((arg, paramTpe), _, _) => BinaryByNameArg(binaryClass, paramTpe)
+        case liftedFun if matchLinesAndCapture(liftedFun) =>
+          BinaryByNameArg(binaryClass, liftedFun.value.tpe.asInstanceOf[Type])
       }
     yield byNameArg
 
   private def findByNameArgsProxy(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryByNameArg] =
-    def matchType0(tpe: TermType): Boolean =
-      matchReturnType(tpe, method.returnType)
+    def matchType0(tpe: TermType): Boolean = method.returnType.forall(matchReturnType(tpe, _))
     val classOwners = getOwners(binaryClass)
     val sourceLines = method.sourceLines.map(removeInlinedLines(_, classOwners))
     val byNameApplyMatcher: PartialFunction[Tree, Seq[TermTree]] = {
@@ -798,19 +793,17 @@ class Scala3Unpickler(
       argType = paramType match
         case byName: ByNameType => defn.Function0Type.appliedTo(byName.resultType)
         case _ => argType0
-      if matchReturnType(argType, method.returnType)
+      if method.returnType.forall(matchReturnType(argType, _))
     yield BinarySuperArg(binaryOwner, init, argType)
   end findSuperArgs
 
   private def findLiftedTry(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryLiftedTry] =
-    def matchType0(tpe: TermType): Boolean =
-      matchReturnType(tpe, method.returnType)
     val classOwners = getOwners(binaryClass)
     val sourceLines = method.sourceLines.map(removeInlinedLines(_, classOwners))
     for
       classOwner <- classOwners
       liftedTry <- collectTrees(classOwner, sourceLines) {
-        case tryTree: Try if matchType0(tryTree.tpe) =>
+        case tryTree: Try if method.returnType.forall(matchReturnType(tryTree.tpe, _)) =>
           BinaryLiftedTry(binaryClass, tryTree.tpe.asInstanceOf)
       }
     yield liftedTry
@@ -858,40 +851,48 @@ class Scala3Unpickler(
   private def matchTargetName(method: binary.Method, symbol: TermSymbol): Boolean =
     method.unexpandedDecodedNames.map(_.stripSuffix("$")).contains(symbol.targetNameStr)
 
-  private def matchAnonFunSignature(
-      method: binary.Method,
-      symbol: LiftedFun[TermSymbol]
-  ): Boolean =
-    val declaredType = symbol.declaredType
-    val paramNames = declaredType.allParamNames.map(_.toString)
-    val capturedParams = method.allParameters.dropRight(paramNames.size)
-    val declaredParams = method.allParameters.drop(capturedParams.size)
+  private case class ScalaParams(
+      declaredParamNames: Seq[UnsignedTermName],
+      declaredParamTypes: Seq[Type],
+      expandedParamTypes: Seq[Type],
+      returnType: Type
+  ):
+    def regularParamTypes: Seq[Type] = declaredParamTypes ++ expandedParamTypes
 
-    def matchParamNames = declaredParams.map(_.name).corresponds(paramNames)(_ == _)
+  private case class JavaParams(
+      capturedParams: Seq[binary.Parameter],
+      declaredParams: Seq[binary.Parameter],
+      expandedParams: Seq[binary.Parameter],
+      returnType: Option[binary.Type]
+  ):
+    def regularParams = declaredParams ++ expandedParams
 
-    def matchTypeErasure =
-      declaredType.allParamTypes.corresponds(declaredParams)((tpe, javaParam) =>
-        matchArgType(tpe, javaParam.`type`, false)
-      ) &&
-        matchReturnType(declaredType.returnType, method.returnType)
+  private def matchLiftedFunSignature(method: binary.Method, liftedFun: LiftedFun[TermSymbol]): Boolean =
+    val declaredType = liftedFun.declaredType
+    val (scalaParams, javaParams) = groupParams(method, declaredType)
 
-    def matchCapture0 =
-      symbol.value.tree.forall(matchCapture(_, Some(symbol.value), symbol.inlineCapture, capturedParams))
+    def matchParamNames: Boolean =
+      scalaParams.declaredParamNames
+        .corresponds(javaParams.declaredParams)((name, javaParam) => name.toString == javaParam.name)
 
-    if symbol.isInline then
-      declaredParams.size == paramNames.size && matchParamNames && matchTypeErasure && capturedParams.forall(
-        _.isGenerated
-      )
-    else declaredParams.size == paramNames.size && matchParamNames && matchTypeErasure && matchCapture0
-  end matchAnonFunSignature
+    def matchTypeErasure: Boolean =
+      scalaParams.regularParamTypes
+        .corresponds(javaParams.regularParams)((tpe, javaParam) => matchArgType(tpe, javaParam.`type`, false)) &&
+        javaParams.returnType.forall(matchReturnType(scalaParams.returnType, _))
 
-  private def matchCapture(
-      tree: Tree,
-      symbol: Option[TermSymbol],
-      inlineCapture: Set[String],
-      capturedParams: Seq[binary.Parameter]
-  ): Boolean =
-    val variables = Capturer.collect(tree, symbol) ++ inlineCapture
+    if liftedFun.isInline then matchParamNames && matchTypeErasure && javaParams.capturedParams.forall(_.isGenerated)
+    else matchParamNames && matchTypeErasure && matchCapture(liftedFun, javaParams.capturedParams)
+  end matchLiftedFunSignature
+
+  private def matchCapture(liftedFun: LiftedFun[TermSymbol], capturedParams: Seq[binary.Parameter]): Boolean =
+    val variables = Capturer.collect(liftedFun.value) ++ liftedFun.inlineCapture
+    matchCapture(variables, capturedParams)
+
+  private def matchCapture1(liftedFun: LiftedFun[TermTree], capturedParams: Seq[binary.Parameter]): Boolean =
+    val variables = Capturer.collect(liftedFun.value) ++ liftedFun.inlineCapture
+    matchCapture(variables, capturedParams)
+
+  private def matchCapture(variables: Set[String], capturedParams: Seq[binary.Parameter]): Boolean =
     val anonymousPattern = "\\$\\d+".r
     val evidencePattern = "evidence\\$\\d+".r
     def toPattern(variable: String): Regex =
@@ -906,7 +907,8 @@ class Scala3Unpickler(
       patterns.exists(_.unapplySeq(param).nonEmpty)
     def isProxy(param: String) = "(.+)\\$proxy\\d+\\$\\d+".r.unapplySeq(param).nonEmpty
     def isThisOrOuter(param: String) = "\\$(this|outer)\\$\\d+".r.unapplySeq(param).nonEmpty
-    capturedParams.forall(p => isProxy(p.name) || isCapture(p.name) || isThisOrOuter(p.name))
+    def isLazy(param: String) = "(.+)\\$lzy\\d+\\$\\d+".r.unapplySeq(param).nonEmpty
+    capturedParams.forall(p => isProxy(p.name) || isCapture(p.name) || isThisOrOuter(p.name) || isLazy(p.name))
 
   private def matchSignature(
       method: binary.Method,
@@ -928,60 +930,64 @@ class Scala3Unpickler(
   private def matchSignature1(
       method: binary.Method,
       declaredType: TypeOrMethodic,
+      expandContextFunction: Boolean = true,
       captureAllowed: Boolean = true,
       asJavaVarargs: Boolean = false,
       checkParamNames: Boolean = true,
       checkTypeErasure: Boolean = true
   ): Boolean =
-    /* After code generation, a method ends up with more than its declared parameters.
-     *
-     * It has, in order:
-     *
-     * - capture params,
-     * - declared params,
-     * - "expanded" params (from java.lang.Enum constructors and uncurried context function types).
-     *
-     * We can only check the names of declared params.
-     * We can check the (erased) type of declared and expand params; together we call them "regular" params.
-     */
+    val (scalaParams, javaParams) = groupParams(method, declaredType)
+    if !captureAllowed && javaParams.capturedParams.nonEmpty then false
+    else
+      def matchParamNames: Boolean =
+        scalaParams.declaredParamNames
+          .corresponds(javaParams.declaredParams)((name, javaParam) => name.toString == javaParam.name)
 
-    def expandContextFunctions(tpe: Type, acc: List[Type]): (List[Type], Type) =
-      tpe.dealias match
-        case tpe: AppliedType if tpe.tycon.isContextFunction =>
-          val argsAsTypes = tpe.args.map(_.highIfWildcard)
-          expandContextFunctions(argsAsTypes.last, acc ::: argsAsTypes.init)
-        case _ => (acc, tpe)
+      def matchTypeErasure: Boolean =
+        scalaParams.regularParamTypes
+          .corresponds(javaParams.regularParams)((tpe, javaParam) =>
+            matchArgType(tpe, javaParam.`type`, asJavaVarargs)
+          ) &&
+          javaParams.returnType.forall(matchReturnType(scalaParams.returnType, _))
 
-    // Compute the expected expanded params and return type
+      javaParams.capturedParams.forall(_.isGenerated) && // captures are generated
+      javaParams.expandedParams.forall(_.isGenerated) && // expanded params are generated
+      (!checkParamNames || matchParamNames) && (!checkTypeErasure || matchTypeErasure)
+  end matchSignature1
+
+  /* After code generation, a method ends up with more than its declared parameters.
+   *
+   * It has, in order:
+   *
+   * - capture params,
+   * - declared params,
+   * - "expanded" params (from java.lang.Enum constructors and uncurried context function types).
+   *
+   * We can only check the names of declared params.
+   * We can check the (erased) type of declared and expand params; together we call them "regular" params.
+   */
+  private def groupParams(method: binary.Method, declaredType: TypeOrMethodic): (ScalaParams, JavaParams) =
     val (expandedParamTypes, returnType) =
       if method.isConstructor && method.declaringClass.isJavaLangEnum then
         (List(defn.StringType, defn.IntType), declaredType.returnType)
-      else expandContextFunctions(declaredType.returnType, acc = Nil)
-
+      else if !method.isAnonFun then expandContextFunctions(declaredType.returnType, acc = Nil)
+      else (List.empty, declaredType.returnType)
     val regularParamTypes = declaredType.allParamTypes ::: expandedParamTypes
-
     val capturedParamCount = method.allParameters.size - regularParamTypes.size
-    if capturedParamCount < 0 then false
-    else if !captureAllowed && capturedParamCount > 0 then false
-    else
-      // split the method parameters into captured, declared and expanded
-      val (capturedParams, regularParams) = method.allParameters.splitAt(capturedParamCount)
-      val (declaredParams, expandedParams) = regularParams.splitAt(declaredType.allParamTypes.size)
+    // split the method parameters into captured, declared and expanded
+    val (capturedParams, regularParams) = method.allParameters.splitAt(capturedParamCount)
+    val (declaredParams, expandedParams) = regularParams.splitAt(declaredType.allParamTypes.size)
+    val scalaParams =
+      ScalaParams(declaredType.allParamNames, declaredType.allParamTypes, expandedParamTypes, returnType)
+    val javaParams = JavaParams(capturedParams, declaredParams, expandedParams, method.returnType)
+    (scalaParams, javaParams)
 
-      def matchNames(): Boolean =
-        declaredType.allParamNames.corresponds(declaredParams)((name, javaParam) => name.toString() == javaParam.name)
-
-      def matchErasedTypes(): Boolean =
-        regularParamTypes.corresponds(regularParams)((tpe, javaParam) =>
-          matchArgType(tpe, javaParam.`type`, asJavaVarargs)
-        ) &&
-          matchReturnType(returnType, method.returnType)
-
-      capturedParams.forall(_.isGenerated) && // captures are generated
-      expandedParams.forall(_.isGenerated) && // expanded params are generated
-      (!checkParamNames || matchNames()) &&
-      (!checkTypeErasure || matchErasedTypes())
-  end matchSignature1
+  private def expandContextFunctions(tpe: Type, acc: List[Type]): (List[Type], Type) =
+    tpe.dealias match
+      case tpe: AppliedType if tpe.tycon.isContextFunction =>
+        val argsAsTypes = tpe.args.map(_.highIfWildcard)
+        expandContextFunctions(argsAsTypes.last, acc ::: argsAsTypes.init)
+      case _ => (acc, tpe)
 
   private lazy val scalaPrimitivesToJava: Map[ClassSymbol, String] = Map(
     defn.BooleanClass -> "boolean",
@@ -1004,9 +1010,9 @@ class Scala3Unpickler(
   private def matchArgType(scalaType: Type, javaType: binary.Type, asJavaVarargs: Boolean): Boolean =
     matchType(scalaType.erasedAsArgType(asJavaVarargs), javaType)
 
-  private def matchReturnType(scalaType: TermType, javaType: Option[binary.Type]): Boolean =
+  private def matchReturnType(scalaType: TermType, javaType: binary.Type): Boolean =
     scalaType match
-      case scalaType: Type => javaType.forall(matchType(scalaType.erasedAsReturnType, _))
+      case scalaType: Type => matchType(scalaType.erasedAsReturnType, javaType)
       case _: MethodicType | _: PackageRef => false
 
   private lazy val dollarDigitsMaybeDollarAtEndRegex = "\\$\\d+\\$?$".r

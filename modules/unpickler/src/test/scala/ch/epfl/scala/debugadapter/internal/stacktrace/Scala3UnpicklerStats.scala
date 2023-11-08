@@ -50,14 +50,14 @@ class Scala3UnpicklerStats extends DebuggableFunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0", binaryClassLoader)
-      // if cls.name == "scala.quoted.runtime.impl.QuotesImpl"
+      // if cls.name == "dotty.tools.dotc.typer.Synthesizer"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethods
-    // if method.name == "scala$quoted$runtime$impl$QuotesImpl$reflect$report$$$_$error$$anonfun$1"
+    // if method.name == "$init$$$anonfun$3"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -65,6 +65,7 @@ class Scala3UnpicklerStats extends DebuggableFunSuite:
         case Patterns.LocalLazyInit(_) => unpickler.tryFind(method, localLazyInitCounter)
         case Patterns.LocalMethod(_) => unpickler.tryFind(method, localMethodCounter)
         case _ => unpickler.tryFind(method, methodCounter)
+    localMethodCounter.printNotFound()
     anonFunCounter.printNotFound()
     localClassCounter.printReport()
     anonClassCounter.printReport()
@@ -80,7 +81,7 @@ class Scala3UnpicklerStats extends DebuggableFunSuite:
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
     checkCounter(localMethodCounter, 2606, expectedAmbiguous = 2)
-    checkCounter(anonFunCounter, 6860, expectedAmbiguous = 124, expectedNotFound = 1)
+    checkCounter(anonFunCounter, 6872, expectedAmbiguous = 112, expectedNotFound = 1)
     checkCounter(adaptedAnonFunCounter, 369, expectedAmbiguous = 2)
     checkCounter(localLazyInitCounter, 108)
     checkCounter(methodCounter, 57842)

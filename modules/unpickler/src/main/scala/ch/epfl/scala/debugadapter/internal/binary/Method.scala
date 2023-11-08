@@ -22,3 +22,4 @@ trait Method extends Symbol:
     isStatic &&
       name == "$deserializeLambda$" &&
       allParameters.map(_.`type`.name) == Seq("java.lang.invoke.SerializedLambda")
+  def isAnonFun: Boolean = name.matches("(.*)\\$anonfun\\$\\d+")
