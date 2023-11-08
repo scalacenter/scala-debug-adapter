@@ -7,34 +7,34 @@ import tastyquery.Symbols.*
 import tastyquery.Traversers.*
 import tastyquery.Contexts.*
 import tastyquery.SourcePosition
-import ch.epfl.scala.debugadapter.internal.stacktrace.Inlined
+import ch.epfl.scala.debugadapter.internal.stacktrace.LiftedFun
 import tastyquery.Types.*
 
-case class Inlined[T](value: T, inlinedFrom: List[InlineMethodApply], inlineCapture: Set[String]):
+case class LiftedFun[T](value: T, inlinedFrom: List[InlineMethodApply], inlineCapture: Set[String]):
   def isInline: Boolean = inlinedFrom.nonEmpty
 
-object Inlined:
-  extension (tree: Inlined[Tree]) def pos: SourcePosition = tree.value.pos
+object LiftedFun:
+  extension (tree: LiftedFun[Tree]) def pos: SourcePosition = tree.value.pos
 
-  extension [T](xs: Inlined[Seq[T]])
-    def traverse: Seq[Inlined[T]] =
-      xs.value.map(Inlined(_, xs.inlinedFrom, xs.inlineCapture))
+  extension [T](xs: LiftedFun[Seq[T]])
+    def traverse: Seq[LiftedFun[T]] =
+      xs.value.map(LiftedFun(_, xs.inlinedFrom, xs.inlineCapture))
 
-  def lift[A, B](pf: PartialFunction[A, B]): PartialFunction[Inlined[A], Inlined[B]] =
-    def f(inlined: Inlined[A]): Option[Inlined[B]] =
-      pf.lift(inlined.value).map(Inlined(_, inlined.inlinedFrom, inlined.inlineCapture))
+  def lift[A, B](pf: PartialFunction[A, B]): PartialFunction[LiftedFun[A], LiftedFun[B]] =
+    def f(inlined: LiftedFun[A]): Option[LiftedFun[B]] =
+      pf.lift(inlined.value).map(LiftedFun(_, inlined.inlinedFrom, inlined.inlineCapture))
     f.unlift
 
-object TreeCollector:
-  def collect(tree: Tree, sourceLines: Option[SourceLines])(using Context): Seq[Inlined[Tree]] =
-    val collector = new TreeCollector()
+object LiftedFunCollector:
+  def collect(tree: Tree, sourceLines: Option[SourceLines])(using Context): Seq[LiftedFun[Tree]] =
+    val collector = new LiftedFunCollector()
     collector.collect(tree, sourceLines, Set.empty)
 
-class TreeCollector private (using Context):
-  private val inlinedTrees = mutable.Map.empty[TermSymbol, Seq[Inlined[Tree]]]
+class LiftedFunCollector private (using Context):
+  private val inlinedTrees = mutable.Map.empty[TermSymbol, Seq[LiftedFun[Tree]]]
 
-  def collect(tree: Tree, sourceLines: Option[SourceLines], inlineCapture: Set[String]): Seq[Inlined[Tree]] =
-    val buffer = mutable.Buffer.empty[Inlined[Tree]]
+  def collect(tree: Tree, sourceLines: Option[SourceLines], inlineCapture: Set[String]): Seq[LiftedFun[Tree]] =
+    val buffer = mutable.Buffer.empty[LiftedFun[Tree]]
 
     object Traverser extends TreeTraverser:
       override def traverse(tree: Tree): Unit =
@@ -42,13 +42,13 @@ class TreeCollector private (using Context):
           // add tree to the buffer
           tree match
             case tree: DefTree if tree.symbol.isLocal =>
-              buffer += Inlined(tree, Nil, inlineCapture)
+              buffer += LiftedFun(tree, Nil, inlineCapture)
             case tree: (Lambda | Try) =>
-              buffer += Inlined(tree, Nil, inlineCapture)
+              buffer += LiftedFun(tree, Nil, inlineCapture)
             case tree: Apply =>
               tree.fun.tpe.widenTermRef match
                 case tpe: MethodType if tpe.paramTypes.exists(_.isInstanceOf[ByNameType]) =>
-                  buffer += Inlined(tree, Nil, inlineCapture)
+                  buffer += LiftedFun(tree, Nil, inlineCapture)
                 case _ => ()
             case _ => ()
 
@@ -59,7 +59,8 @@ class TreeCollector private (using Context):
                 inlineMethodApply.symbol.tree.map(collect(_, None, inlineCapture)).getOrElse(Seq.empty)
               val collectedTrees = inlinedTrees.getOrElseUpdate(inlineMethodApply.symbol, collectInline)
               buffer ++= collectedTrees.map(tree => tree.copy(inlinedFrom = inlineMethodApply +: tree.inlinedFrom))
-              val newCapture = VariableCollector.collect(inlineMethodApply.args)
+              val newCapture = Capturer.collect(inlineMethodApply.args)
+              // TODO: should inject newCapture only if the arg is an inline function
               buffer ++= inlineMethodApply.args.flatMap(collect(_, sourceLines, inlineCapture ++ newCapture))
               super.traverse(inlineMethodApply.termRefTree)
             case tree: (StatementTree | Template | CaseDef) => super.traverse(tree)

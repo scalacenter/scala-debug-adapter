@@ -5,18 +5,18 @@ import tastyquery.Traversers.*
 import tastyquery.Trees.*
 import tastyquery.Contexts.*
 
-object VariableCollector:
+object Capturer:
   def collect(tree: Tree, sym: Option[TermSymbol])(using Context): Set[String] =
-    val collector = new VariableCollector(sym)
+    val collector = new Capturer(sym)
     collector.traverse(tree)
     collector.variables
 
   def collect(trees: Seq[Tree])(using Context): Set[String] =
-    val collector = new VariableCollector(None)
+    val collector = new Capturer(None)
     trees.foreach(collector.traverse)
     collector.variables
 
-class VariableCollector private (sym: Option[TermSymbol])(using Context) extends TreeTraverser:
+class Capturer private (sym: Option[TermSymbol])(using Context) extends TreeTraverser:
   var variables = Set.empty[String]
   var alreadySeen = sym.toSet
   override def traverse(tree: Tree): Unit =

@@ -107,7 +107,7 @@ class Scala3Unpickler(
         .orFind { case _ if method.isBridge => findBridgesAndMixinForwarders(binaryClass, method).toSeq }
         .orFind { case Patterns.LocalLazyInit(names) =>
           requiresBinaryClass(collectLocalMethods(_, method) {
-            case Inlined(term, _, _) if (term.isLazyVal || term.isModuleVal) && names.contains(term.nameStr) =>
+            case LiftedFun(term, _, _) if (term.isLazyVal || term.isModuleVal) && names.contains(term.nameStr) =>
               BinaryLocalLazyInit(binaryClass, term)
           })
         }
@@ -452,7 +452,7 @@ class Scala3Unpickler(
       names: Seq[String]
   ): Seq[BinaryMethodSymbol] =
     collectLocalMethods(binaryClass, method) {
-      case Inlined(term, inlinedFrom, _)
+      case LiftedFun(term, inlinedFrom, _)
           if names.contains(term.nameStr) && matchSignature(method, term, checkTypeErasure = inlinedFrom.isEmpty) =>
         BinaryMethod(binaryClass, term)
     }
@@ -698,11 +698,11 @@ class Scala3Unpickler(
     for
       classOwner <- classOwners
       byNameArgs <- collectTrees1(classOwner, sourceLines)
-        .collect(Inlined.lift(byNameApplyMatcher).andThen(_.traverse))
+        .collect(LiftedFun.lift(byNameApplyMatcher).andThen(_.traverse))
       byNameArg <- byNameArgs.collect {
-        case Inlined((arg, paramTpe), Nil, capture) if matchLinesAndCapture(arg, capture) =>
+        case LiftedFun((arg, paramTpe), Nil, capture) if matchLinesAndCapture(arg, capture) =>
           BinaryByNameArg(binaryClass, paramTpe)
-        case Inlined((arg, paramTpe), _, _) => BinaryByNameArg(binaryClass, paramTpe)
+        case LiftedFun((arg, paramTpe), _, _) => BinaryByNameArg(binaryClass, paramTpe)
       }
     yield byNameArg
 
@@ -718,11 +718,11 @@ class Scala3Unpickler(
       for
         classOwner <- classOwners
         byNameArgs <- collectTrees1(classOwner, sourceLines)
-          .collect(Inlined.lift(byNameApplyMatcher).andThen(_.traverse))
+          .collect(LiftedFun.lift(byNameApplyMatcher).andThen(_.traverse))
         byNameArg <- byNameArgs.collect {
-          case Inlined(arg, Nil, _) if matchType0(arg.tpe) && sourceLines.forall(arg.matchLines) =>
+          case LiftedFun(arg, Nil, _) if matchType0(arg.tpe) && sourceLines.forall(arg.matchLines) =>
             BinaryByNameArg(binaryClass, arg.tpe.asInstanceOf)
-          case Inlined(arg, _, _) => BinaryByNameArg(binaryClass, arg.tpe.asInstanceOf)
+          case LiftedFun(arg, _, _) => BinaryByNameArg(binaryClass, arg.tpe.asInstanceOf)
         }
       yield byNameArg
     val inlineOverrides = binaryClass.classSymbol.toSeq
@@ -742,7 +742,7 @@ class Scala3Unpickler(
       binaryClass: BinaryClassSymbol,
       javaMethod: binary.Method
   )(
-      matcher: PartialFunction[Inlined[TermSymbol], BinaryMethodSymbol]
+      matcher: PartialFunction[LiftedFun[TermSymbol], BinaryMethodSymbol]
   ): Seq[BinaryMethodSymbol] =
     val owners = getOwners(binaryClass)
     val sourceLines =
@@ -756,7 +756,7 @@ class Scala3Unpickler(
     }
     for
       owner <- owners
-      term <- collectTrees1(owner, sourceLines).collect(Inlined.lift(treeMatcher).andThen(matcher))
+      term <- collectTrees1(owner, sourceLines).collect(LiftedFun.lift(treeMatcher).andThen(matcher))
     yield term
 
   private def findSuperArgs(binaryOwner: BinaryClass, method: binary.Method): Seq[BinarySuperArg] =
@@ -826,8 +826,8 @@ class Scala3Unpickler(
       matcher: PartialFunction[Tree, S]
   ): Seq[S] = collectTrees1(cls, lines).iterator.map(_.value).collect(matcher).toSeq
 
-  private def collectTrees1[S](root: Symbol, sourceLines: Option[binary.SourceLines]): Seq[Inlined[Tree]] =
-    root.tree.toSeq.flatMap(TreeCollector.collect(_, sourceLines))
+  private def collectTrees1[S](root: Symbol, sourceLines: Option[binary.SourceLines]): Seq[LiftedFun[Tree]] =
+    root.tree.toSeq.flatMap(LiftedFunCollector.collect(_, sourceLines))
 
   private def removeInlinedLines(
       sourceLines: binary.SourceLines,
@@ -860,7 +860,7 @@ class Scala3Unpickler(
 
   private def matchAnonFunSignature(
       method: binary.Method,
-      symbol: Inlined[TermSymbol]
+      symbol: LiftedFun[TermSymbol]
   ): Boolean =
     val declaredType = symbol.value.declaredType
     val paramNames = declaredType.allParamNames.map(_.toString)
@@ -889,7 +889,7 @@ class Scala3Unpickler(
       inlineCapture: Set[String],
       capturedParams: Seq[binary.Parameter]
   ): Boolean =
-    val variables = VariableCollector.collect(tree, symbol) ++ inlineCapture
+    val variables = Capturer.collect(tree, symbol) ++ inlineCapture
     val anonymousPattern = "\\$\\d+".r
     val evidencePattern = "evidence\\$\\d+".r
     def toPattern(variable: String): Regex =
