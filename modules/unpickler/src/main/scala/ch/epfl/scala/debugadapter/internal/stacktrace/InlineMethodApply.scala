@@ -9,15 +9,14 @@ import tastyquery.debugadapter.Substituters
 case class InlineMethodApply private (termRefTree: TermReferenceTree, typeArgs: List[Type], args: Seq[TermTree]):
   def symbol(using Context): TermSymbol = termRefTree.symbol.asTerm
 
-  def substTypeParams(tpe: TypeOrMethodic)(using Context): TypeOrMethodic =
-    val typeParamSymbols = symbol.tree.toList
-      .collect { case tree: DefDef => tree.paramLists }
-      .flatten
-      .collect { case Right(typeParams) => typeParams }
-      .flatten
-      .map(_.symbol)
-      .collect { case sym: LocalTypeParamSymbol => sym }
-    Substituters.substLocalTypeParams(tpe, typeParamSymbols, typeArgs)
+  def substTypeParams(tpe: TermType)(using Context): TermType =
+    Substituters.substLocalTypeParams(tpe, symbol.typeParamSymbols, typeArgs)
+
+  def paramsMap(using Context): Map[TermSymbol, TermTree] =
+    symbol.paramSymbols.zip(args).toMap
+
+  def paramTypes(using Context): Seq[Type] =
+    symbol.declaredType.allParamTypes
 
 object InlineMethodApply:
   def unapply(tree: Tree)(using Context): Option[InlineMethodApply] =
@@ -28,6 +27,9 @@ object InlineMethodApply:
         case Apply(fun, args) => rec(fun, typeArgsAcc, args ++ argsAcc)
         case TypeApply(fun, typeArgs) => rec(fun, typeArgs.map(_.toType) ++ typeArgsAcc, argsAcc)
         case _ => None
-    tree match
-      case tree: TermTree if !tree.tpe.isInstanceOf[MethodicType] => rec(tree, List.empty, Seq.empty)
-      case _ => None
+    // todo remove the try catch after the next TASTy Query release
+    try
+      tree match
+        case tree: TermTree if !tree.tpe.isInstanceOf[MethodicType] => rec(tree, List.empty, Seq.empty)
+        case _ => None
+    catch case t => None

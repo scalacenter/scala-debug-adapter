@@ -5,6 +5,8 @@ final case class SourceLines(sourceName: String, lines: Seq[Int]):
     if lines.size > 2 then Seq(lines.head, lines.last)
     else lines
 
+  def tastyLines = lines.map(_ - 1)
+
   def tastySpan: Seq[Int] =
     span.map(_ - 1)
 

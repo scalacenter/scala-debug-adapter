@@ -15,7 +15,7 @@ sealed trait BinaryClassSymbol extends BinarySymbol:
       s"$sym $span"
     this match
       case BinaryClass(sym) => s"BinaryClass(${format(sym)})"
-      case BinarySyntheticCompanionClass(symbol) => s"BinarySyntheticCompanionClass(${format(symbol)})"
+      case BinarySyntheticCompanionClass(sym) => s"BinarySyntheticCompanionClass(${format(sym)})"
       case BinarySAMClass(sym, _, tpe) => s"BinarySAMClass(${format(sym)}, ${tpe.showBasic})"
       case BinaryPartialFunction(sym, tpe) => s"BinaryPartialFunction(${format(sym)}, ${tpe.showBasic})"
 
