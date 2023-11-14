@@ -15,7 +15,7 @@ import ch.epfl.scala.debugadapter.internal.scalasig.Decompiler
 import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
 import scala.util.Try
 
-private case class SourceLine(uri: URI, lineNumber: Int)
+private case class SourceLineKey(sourceFileKey: SourceFileKey, lineNumber: Int)
 
 private[internal] case class ClassFile(
     fullyQualifiedName: String,
@@ -35,16 +35,16 @@ private[internal] case class ClassFile(
 private class ClassEntryLookUp(
     val entry: ClassEntry,
     fqcnToClassFile: Map[String, ClassFile],
-    sourceUriToSourceFile: Map[URI, SourceFile],
-    sourceUriToClassFiles: Map[URI, Seq[ClassFile]],
+    sourceUriToSourceFile: Map[SourceFileKey, SourceFile],
+    sourceUriToClassFiles: Map[SourceFileKey, Seq[ClassFile]],
     classNameToSourceFile: Map[String, SourceFile],
     missingSourceFileClassFiles: Seq[ClassFile],
     val orphanClassFiles: Seq[ClassFile],
     logger: Logger
 ) {
-  private val cachedSourceLines = mutable.Map[SourceLine, Seq[ClassFile]]()
+  private val cachedSourceLines = mutable.Map[SourceLineKey, Seq[ClassFile]]()
 
-  def sources: Iterable[URI] = sourceUriToSourceFile.keys
+  def sources: Iterable[SourceFileKey] = sourceUriToSourceFile.keys
   def fullyQualifiedNames: Iterable[String] = {
     classNameToSourceFile.keys ++
       orphanClassFiles.map(_.fullyQualifiedName) ++
@@ -55,18 +55,19 @@ private class ClassEntryLookUp(
     fullyQualifiedNames.groupBy[String](NameTransformer.scalaClassName)
 
   def getFullyQualifiedClassName(
-      sourceUri: URI,
+      sourceKey: SourceFileKey,
       lineNumber: Int
   ): Option[String] = {
-    val line = SourceLine(sourceUri, lineNumber)
+    val line = SourceLineKey(sourceKey, lineNumber)
 
     if (!cachedSourceLines.contains(line)) {
       // read and cache line numbers from class files
-      sourceUriToClassFiles(sourceUri)
+      sourceUriToClassFiles
+        .getOrElse(sourceKey, Nil)
         .groupBy(_.classSystem)
         .foreach { case (classSystem, classFiles) =>
           classSystem
-            .within((_, root) => loadLineNumbers(root, classFiles, sourceUri))
+            .within((_, root) => loadLineNumbers(root, classFiles, sourceKey))
             .warnFailure(logger, s"Cannot load line numbers in ${classSystem.name}")
         }
     }
@@ -83,7 +84,7 @@ private class ClassEntryLookUp(
   private def loadLineNumbers(
       root: Path,
       classFiles: Seq[ClassFile],
-      sourceUri: URI
+      sourceKey: SourceFileKey
   ): Unit = {
     for (classFile <- classFiles) {
       val path = root.resolve(classFile.relativePath)
@@ -111,7 +112,7 @@ private class ClassEntryLookUp(
         reader.accept(visitor, 0)
 
         for (n <- lineNumbers) {
-          val line = SourceLine(sourceUri, n)
+          val line = SourceLineKey(sourceKey, n)
           cachedSourceLines.update(
             line,
             cachedSourceLines.getOrElse(line, Seq.empty) :+ classFile
@@ -122,16 +123,16 @@ private class ClassEntryLookUp(
   }
 
   def getSourceContent(sourceUri: URI): Option[String] =
-    sourceUriToSourceFile.get(sourceUri).flatMap(readSourceContent(_, logger))
+    sourceUriToSourceFile.get(SourceFileKey(sourceUri)).flatMap(readSourceContent(_, logger))
 
-  def getSourceFile(fqcn: String): Option[URI] =
+  def getSourceFileURI(fqcn: String): Option[URI] =
     classNameToSourceFile.get(fqcn).map(_.uri)
 
   def getSourceContentFromClassName(fqcn: String): Option[String] =
-    getSourceFile(fqcn).flatMap(getSourceContent)
+    getSourceFileURI(fqcn).flatMap(getSourceContent)
 
   def getClassFiles(sourceUri: URI): Seq[ClassFile] =
-    sourceUriToClassFiles.get(sourceUri).getOrElse(Seq.empty)
+    sourceUriToClassFiles.get(SourceFileKey(sourceUri)).getOrElse(Seq.empty)
 
   def getClassFile(fqcn: String): Option[ClassFile] =
     fqcnToClassFile.get(fqcn)
@@ -146,7 +147,7 @@ private class ClassEntryLookUp(
     def fromSource = {
       val scalaSigs =
         for {
-          sourceFile <- getSourceFile(fqcn).toSeq
+          sourceFile <- getSourceFileURI(fqcn).toSeq
           if sourceFile.toString.endsWith(".scala")
           classFile <- getClassFiles(sourceFile)
           if fqcn.startsWith(classFile.fullyQualifiedName + "$")
@@ -183,11 +184,11 @@ private object ClassEntryLookUp {
       classFiles.map(c => (c.fullyQualifiedName, c)).toMap
 
     val sourceFileToRoot = sourceLookUps.flatMap(l => l.sourceFiles.map(f => (f -> l.root))).toMap
-    val sourceUriToSourceFile = sourceLookUps.flatMap(_.sourceFiles).map(f => (f.uri, f)).toMap
+    val sourceUriToSourceFile = sourceLookUps.flatMap(_.sourceFiles).map(f => (SourceFileKey(f.uri), f)).toMap
     val sourceNameToSourceFile = sourceLookUps.flatMap(_.sourceFiles).groupBy(f => f.fileName)
 
     val classNameToSourceFile = mutable.Map[String, SourceFile]()
-    val sourceUriToClassFiles = mutable.Map[URI, Seq[ClassFile]]()
+    val sourceUriToClassFiles = mutable.Map[SourceFileKey, Seq[ClassFile]]()
     val orphanClassFiles = mutable.Buffer[ClassFile]()
     val missingSourceFileClassFiles = mutable.Buffer[ClassFile]()
 
@@ -195,9 +196,9 @@ private object ClassEntryLookUp {
       def recordSourceFile(sourceFile: SourceFile): Unit = {
         classNameToSourceFile.put(classFile.fullyQualifiedName, sourceFile)
         sourceUriToClassFiles.update(
-          sourceFile.uri,
+          SourceFileKey(sourceFile.uri),
           sourceUriToClassFiles.getOrElse(
-            sourceFile.uri,
+            SourceFileKey(sourceFile.uri),
             Seq.empty
           ) :+ classFile
         )
