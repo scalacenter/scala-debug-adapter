@@ -170,6 +170,14 @@ extension (pos: SourcePosition)
   def inSourceFile(name: String) =
     pos.isFullyDefined && pos.sourceFile.name == name
 
+  def containsStrictly(other: SourcePosition) =
+    pos.isFullyDefined &&
+      other.isFullyDefined &&
+      pos.sourceFile == other.sourceFile && (
+        (pos.startOffset <= other.startOffset && pos.endOffset > other.endOffset) ||
+          (pos.startOffset < other.startOffset && pos.endOffset >= other.endOffset)
+      )
+
   def containsLine(line: Int): Boolean =
     pos.isFullyDefined
       && pos.startLine <= line

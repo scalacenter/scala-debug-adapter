@@ -50,14 +50,14 @@ class Scala3UnpicklerStats extends DebuggableFunSuite:
 
     for
       cls <- loadClasses(jars, "scala3-compiler_3-3.3.0", binaryClassLoader)
-      // if cls.name == "dotty.tools.dotc.core.ConstraintHandling"
+      // if cls.name == "dotty.tools.dotc.printing.RefinedPrinter"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
         case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
         case _ => unpickler.tryFind(cls, topLevelClassCounter)
       method <- cls.declaredMethods
-    // if method.name == "op$proxy2$1"
+    // if method.name == "toTextFunction$1$$anonfun$1"
     do
       method match
         case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
@@ -67,6 +67,8 @@ class Scala3UnpicklerStats extends DebuggableFunSuite:
         case _ => unpickler.tryFind(method, methodCounter)
     // localMethodCounter.printNotFound()
     // methodCounter.printNotFound()
+    anonFunCounter.printAmbiguous()
+    // anonFunCounter.printNotFound()
     localClassCounter.printReport()
     anonClassCounter.printReport()
     innerClassCounter.printReport()
@@ -77,14 +79,14 @@ class Scala3UnpicklerStats extends DebuggableFunSuite:
     localLazyInitCounter.printReport()
     methodCounter.printReport()
     checkCounter(localClassCounter, 42)
-    checkCounter(anonClassCounter, 428, expectedAmbiguous = 2)
+    checkCounter(anonClassCounter, 430)
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
     checkCounter(localMethodCounter, 2606, expectedAmbiguous = 2)
-    checkCounter(anonFunCounter, 6889, expectedAmbiguous = 95, expectedNotFound = 1)
+    checkCounter(anonFunCounter, 6964, expectedAmbiguous = 20, expectedNotFound = 1)
     checkCounter(adaptedAnonFunCounter, 370, expectedAmbiguous = 1)
     checkCounter(localLazyInitCounter, 108)
-    checkCounter(methodCounter, 57842, expectedNotFound = 1)
+    checkCounter(methodCounter, 57871, expectedNotFound = 1)
 
   def checkCounter(
       counter: Counter,
