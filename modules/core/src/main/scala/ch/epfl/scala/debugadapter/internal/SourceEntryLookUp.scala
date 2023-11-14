@@ -15,44 +15,41 @@ import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
 import scala.util.control.NonFatal
 import scala.util.Properties
 
-
 /*SourceFileKey abstracts the URI string used for lookups so that we can control how casing is handled in different OS filesystems, i.e. allowing case-insensitive file lookups on windows and mac, while keeping case-sensitive on linux.
-* Note the URI scheme portion (i.e. "file:") is always case-insensitive, which is currently handled by the URI class.
-*/
-case class SourceFileKey private(private val uri:URI)
+ * Note the URI scheme portion (i.e. "file:") is always case-insensitive, which is currently handled by the URI class.
+ */
+case class SourceFileKey private (private val uri: URI)
 
-object SourceFileKey{
+object SourceFileKey {
 
   val isCaseSensitiveFileSystem = Properties.isWin || Properties.isMac
 
-  def apply(uri:URI): SourceFileKey = {
+  def apply(uri: URI): SourceFileKey = {
 
-    val conditionedUri:URI = 
-      if(isCaseSensitiveFileSystem){
-        uri.getScheme.toLowerCase match{
-          case "file"  => URI.create(uri.toString().toUpperCase())
-          case "jar" => {
-            //The contents of jars are case-sensitive no matter what the filesystem is.
-            
+    val conditionedUri: URI =
+      if (isCaseSensitiveFileSystem) {
+        uri.getScheme.toLowerCase match {
+          case "file" => URI.create(uri.toString().toUpperCase())
+          case "jar" =>
+            // The contents of jars are case-sensitive no matter what the filesystem is.
+
             val tokens = uri.toString().split("!/", 2).toSeq
-            
-            val firstPart = if(tokens.size >= 1) tokens(0).toUpperCase() else ""
-            val secondPart = if(tokens.size >= 2) tokens(1) else ""
-                                    
-            URI.create(s"${firstPart}!/${secondPart}")
-          }
-          case _ => uri //For now, just keep the uri as is if unsupported.
+
+            val firstPart = if (tokens.size >= 1) tokens(0).toUpperCase() else ""
+            val secondPart = if (tokens.size >= 2) tokens(1) else ""
+
+            URI.create(s"$firstPart!/$secondPart")
+          case _ => uri // For now, just keep the uri as is if unsupported.
         }
-      }else{
+      } else {
         uri
       }
 
     new SourceFileKey(conditionedUri)
   }
- }
+}
 
- ///////////////////////////////////////////////////////////////
-
+///////////////////////////////////////////////////////////////
 
 private case class SourceFile(
     entry: SourceEntry,
