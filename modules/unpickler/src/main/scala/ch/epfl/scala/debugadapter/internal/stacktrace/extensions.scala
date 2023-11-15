@@ -170,7 +170,7 @@ extension (pos: SourcePosition)
   def inSourceFile(name: String) =
     pos.isFullyDefined && pos.sourceFile.name == name
 
-  def containsStrictly(other: SourcePosition) =
+  def enclose(other: SourcePosition) =
     pos.isFullyDefined &&
       other.isFullyDefined &&
       pos.sourceFile == other.sourceFile && (

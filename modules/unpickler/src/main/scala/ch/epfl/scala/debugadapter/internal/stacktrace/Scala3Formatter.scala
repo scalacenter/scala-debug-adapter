@@ -14,6 +14,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case BinarySAMClass(symbol, _, _) => formatQualifiedName(symbol.owner).dot("<SAM class>")
       case BinaryPartialFunction(symbol, _) => formatQualifiedName(symbol.owner).dot("<partial function>")
       case BinarySyntheticCompanionClass(symbol) => formatQualifiedName(symbol)
+      case BinaryInlinedClass(underlying, _) => format(underlying)
 
   def format(method: BinaryMethodSymbol): String =
     val typeAscription = method.declaredType match
@@ -44,6 +45,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case BinaryInlineAccessor(owner, _) => format(owner)
       case BinaryAdaptedFun(target) => formatOwner(target)
       case BinarySAMClassConstructor(owner, _) => format(owner)
+      case BinaryInlinedMethod(underlying, _) => formatOwner(underlying)
 
   private def formatName(method: BinaryMethodSymbol): String =
     method match
@@ -68,6 +70,7 @@ class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Conte
       case BinaryInlineAccessor(_, target) => s"<inline ${formatOwner(target).dot(formatName(target))}>"
       case BinaryAdaptedFun(target) => formatName(target).dot("<adapted>")
       case _: BinarySAMClassConstructor => "<init>"
+      case BinaryInlinedMethod(underlying, _) => formatName(underlying)
 
   private def formatQualifiedName(sym: Symbol): String =
     formatOwner(sym).dot(formatName(sym))

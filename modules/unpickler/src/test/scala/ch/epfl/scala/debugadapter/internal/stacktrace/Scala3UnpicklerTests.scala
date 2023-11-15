@@ -1273,7 +1273,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
     debuggee.assertFormat("example.A", "java.lang.String liftedTree2$1()", "A.<try>: \"\" | \"\"")
     debuggee.assertFormat("example.A", "java.lang.String liftedTree3$1()", "A.<try>: \"\" | \"\"")
     debuggee.assertFormat("example.A", "int liftedTree4$1()", "A.<try>: 2 | 3")
-    debuggee.assertAmbiguous("example.A", "java.lang.String liftedTree5$1()")
+    debuggee.assertFormat("example.A", "java.lang.String liftedTree5$1()", "A.<try>: \"\" | \"\"")
   }
 
   test("by-name args") {

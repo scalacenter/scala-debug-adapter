@@ -66,24 +66,28 @@ class Scala3Unpickler(
       case _: BinaryInlineAccessor => true
       case _: BinaryAdaptedFun => true
       case _: BinarySAMClassConstructor => true
+      case BinaryInlinedMethod(underlying, _) => skip(underlying)
       case _ => false
 
   def formatMethod(obj: Any): Optional[String] =
     formatMethod(JdiMethod(obj)).toJava
 
   def formatMethod(method: binary.Method): Option[String] =
-    findMethod(method) match
-      case BinaryLazyInit(_, sym) if sym.owner.isTrait => None
-      case _: BinaryMixinForwarder => None
-      case _: BinaryTraitStaticForwarder => None
-      case _: BinaryMethodBridge => None
-      case _: BinaryStaticForwarder => None
-      case BinarySetter(_, sym, _) if sym.isVal => None
-      case _: BinarySuperAccessor => None
-      case _: BinarySpecializedMethod => None
-      case _: BinaryInlineAccessor => None
-      case _: BinaryAdaptedFun => None
-      case m => Some(formatter.format(m))
+    def rec(method: BinaryMethodSymbol): Option[String] =
+      method match
+        case BinaryLazyInit(_, sym) if sym.owner.isTrait => None
+        case _: BinaryMixinForwarder => None
+        case _: BinaryTraitStaticForwarder => None
+        case _: BinaryMethodBridge => None
+        case _: BinaryStaticForwarder => None
+        case BinarySetter(_, sym, _) if sym.isVal => None
+        case _: BinarySuperAccessor => None
+        case _: BinarySpecializedMethod => None
+        case _: BinaryInlineAccessor => None
+        case _: BinaryAdaptedFun => None
+        case BinaryInlinedMethod(underlying, _) => rec(method)
+        case m => Some(formatter.format(m))
+    rec(findMethod(method))
 
   def findMethod(method: binary.Method): BinaryMethodSymbol =
     val binaryClass = findClass(method.declaringClass)
@@ -109,13 +113,10 @@ class Scala3Unpickler(
         .orFind { case Patterns.LocalLazyInit(names) =>
           requiresBinaryClass(collectLocalMethods(_, method) {
             case term if term.symbol.isModuleOrLazyVal && names.contains(term.symbol.nameStr) =>
-              BinaryLocalLazyInit(binaryClass, term.symbol)
+              wrapIfInline(term, BinaryLocalLazyInit(binaryClass, term.symbol))
           })
         }
-        .orFind { case Patterns.AnonFun(_) =>
-          // todo reduce ambiguity
-          findAnonFunsAndReduceAmbiguity(binaryClass, method)
-        }
+        .orFind { case Patterns.AnonFun(_) => findAnonFunsAndReduceAmbiguity(binaryClass, method) }
         .orFind { case Patterns.AdaptedAnonFun(_) => findAdaptedAnonFun(binaryClass, method) }
         .orFind { case Patterns.ByNameArgProxy() => findByNameArgsProxy(binaryClass, method) }
         .orFind { case Patterns.SuperArg() => requiresBinaryClass(findSuperArgs(_, method)) }
@@ -163,7 +164,7 @@ class Scala3Unpickler(
         val decl = declaringClassName match
           case WithLocalPart(decl, _) => decl.stripSuffix("$")
           case decl => decl
-        reduceAmbiguity(findLocalClasses(cls, packageSym, decl, "$anon", remaining))
+        reduceAmbiguityOnClasses(findLocalClasses(cls, packageSym, decl, "$anon", remaining))
       case Patterns.LocalClass(declaringClassName, localClassName, remaining) =>
         findLocalClasses(cls, packageSym, declaringClassName, localClassName, remaining)
       case _ => findClassRecursively(packageSym, decodedClassName)
@@ -175,12 +176,25 @@ class Scala3Unpickler(
       else allSymbols.filter(!_.symbol.isModuleClass)
     candidates.singleOrThrow(cls)
 
-  private def reduceAmbiguity[S <: BinarySymbol](syms: Seq[S]): Seq[S] =
+  private def reduceAmbiguityOnClasses(syms: Seq[BinaryClassSymbol]): Seq[BinaryClassSymbol] =
     if syms.size > 1 then
-      val positions = syms.map(_.pos).filter(_.isFullyDefined)
-      val reduced = syms.filterNot(sym => positions.exists(_.containsStrictly(sym.pos)))
+      val reduced = syms.filterNot(sym => syms.exists(enclose(sym, _)))
       if reduced.size != 0 then reduced else syms
     else syms
+
+  private def enclose(enclosing: BinaryClassSymbol, enclosed: BinaryClassSymbol): Boolean =
+    (enclosing, enclosed) match
+      case (enclosing: BinaryInlinedClass, enclosed: BinaryInlinedClass) =>
+        enclosing.inliningPos.enclose(enclosed.inliningPos) || (
+          !enclosed.inliningPos.enclose(enclosing.inliningPos) &&
+            enclose(enclosing.underlying, enclosed.underlying)
+        )
+      case (enclosing: BinaryInlinedClass, enclosed) =>
+        enclosing.inliningPos.enclose(enclosed.pos)
+      case (enclosing, enclosed: BinaryInlinedClass) =>
+        enclosing.pos.enclose(enclosed.inliningPos)
+      case (enclosing, enclosed) =>
+        enclosing.pos.enclose(enclosed.pos)
 
   private def findLocalClasses(
       javaClass: binary.ClassType,
@@ -197,17 +211,11 @@ class Scala3Unpickler(
           .collect { case BinaryClass(sym) => sym }
         classOwners
           .flatMap(cls => collectLocalClasses(cls, localClassName, javaClass.sourceLines))
-          .collect {
-            case cls: BinaryClass if matchParents(cls.symbol, parents, javaClass.isInterface) => cls
-            case samClass: BinarySAMClass if parents.contains(samClass.parentClass) => samClass
-            case fun: BinaryPartialFunction
-                if parents == Set(defn.AbstractPartialFunctionClass, defn.SerializableClass) =>
-              fun
-          }
+          .filter(matchParents(_, parents, javaClass.isInterface))
       case Some(remaining) =>
         val localClasses = classOwners
           .flatMap(cls => collectLocalClasses(cls, localClassName, None))
-          .collect { case BinaryClass(cls) => cls }
+          .flatMap(_.classSymbol)
         localClasses.flatMap(s => findClassRecursively(s, remaining))
 
   private def findClassRecursively(owner: DeclaringSymbol, decodedName: String): Seq[BinaryClass] =
@@ -230,14 +238,21 @@ class Scala3Unpickler(
     val localClasses = collectLiftedTrees(cls, sourceLines) {
       case cls: LocalClass if cls.symbol.sourceName == name => cls
     }
-      .map(cls => BinaryClass(cls.symbol))
+      .map(cls => wrapIfInline(cls, BinaryClass(cls.symbol)))
     val samClassesAndPartialFunctions = collectLiftedTrees(cls, sourceLines) { case lambda: LambdaTree => lambda }
-      .flatMap { lambda =>
+      .map { lambda =>
         val (term, samClass) = lambda.symbol
-        if samClass == defn.PartialFunctionClass then Some(BinaryPartialFunction(term, lambda.tpe.asInstanceOf))
-        else Some(BinarySAMClass(term, samClass, lambda.tpe.asInstanceOf))
+        if samClass == defn.PartialFunctionClass then
+          wrapIfInline(lambda, BinaryPartialFunction(term, lambda.tpe.asInstanceOf))
+        else wrapIfInline(lambda, BinarySAMClass(term, samClass, lambda.tpe.asInstanceOf))
       }
     localClasses ++ samClassesAndPartialFunctions
+
+  private def wrapIfInline(liftedTree: LiftedTree[?], binaryClass: BinaryClassSymbol): BinaryClassSymbol =
+    liftedTree match
+      case InlinedTree(underlying, inlineApply) =>
+        BinaryInlinedClass(wrapIfInline(underlying, binaryClass), inlineApply.inliningTree)
+      case _ => binaryClass
 
   private def findStaticJavaMethods(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryMethodSymbol] =
     binaryClass.companionClass.toSeq
@@ -257,6 +272,7 @@ class Scala3Unpickler(
         else Seq(findAnonOverride(partialFun, method))
       case binaryClass: BinaryClass => findInstanceMethods(binaryClass, method)
       case syntheticClass: BinarySyntheticCompanionClass => Seq.empty
+      case BinaryInlinedClass(underlying, _) => findStandardMethods(underlying, method)
 
   private def findParamForwarder(
       binaryClass: BinaryClass,
@@ -458,7 +474,7 @@ class Scala3Unpickler(
   ): Seq[BinaryMethodSymbol] =
     collectLocalMethods(binaryClass, method) {
       case fun if names.contains(fun.symbol.name.toString) && matchLiftedFunSignature(method, fun) =>
-        BinaryMethod(binaryClass, fun.symbol.asTerm)
+        wrapIfInline(fun, BinaryMethod(binaryClass, fun.symbol.asTerm))
     }
 
   private def findLazyInit(binaryClass: BinaryClass, name: String): Seq[BinaryMethodSymbol] =
@@ -648,12 +664,32 @@ class Scala3Unpickler(
   ): Seq[BinaryMethodSymbol] =
     val anonFuns = collectLocalMethods(binaryClass, method) {
       case fun if fun.symbol.isAnonFun && matchLiftedFunSignature(method, fun) =>
-        BinaryMethod(binaryClass, fun.symbol.asTerm)
+        wrapIfInline(fun, BinaryMethod(binaryClass, fun.symbol.asTerm))
     }
     val byNameArgs =
       if method.allParameters.forall(_.isCapture) then findByNameArgs(binaryClass, method)
       else Seq.empty
-    reduceAmbiguity(anonFuns ++ byNameArgs)
+    reduceAmbiguityOnMethods(anonFuns ++ byNameArgs)
+
+  private def reduceAmbiguityOnMethods(syms: Seq[BinaryMethodSymbol]): Seq[BinaryMethodSymbol] =
+    if syms.size > 1 then
+      val reduced = syms.filterNot(sym => syms.exists(enclose(sym, _)))
+      if reduced.size != 0 then reduced else syms
+    else syms
+
+  private def enclose(enclosing: BinaryMethodSymbol, enclosed: BinaryMethodSymbol): Boolean =
+    (enclosing, enclosed) match
+      case (enclosing: BinaryInlinedMethod, enclosed: BinaryInlinedMethod) =>
+        enclosing.inliningPos.enclose(enclosed.inliningPos) || (
+          !enclosed.inliningPos.enclose(enclosing.inliningPos) &&
+            enclose(enclosing.underlying, enclosed.underlying)
+        )
+      case (enclosing: BinaryInlinedMethod, enclosed) =>
+        enclosing.inliningPos.enclose(enclosed.pos)
+      case (enclosing, enclosed: BinaryInlinedMethod) =>
+        enclosing.pos.enclose(enclosed.inliningPos)
+      case (enclosing, enclosed) =>
+        enclosing.pos.enclose(enclosed.pos)
 
   private def isInlineMethodApply(tree: Tree): Boolean =
     tree match
@@ -666,15 +702,15 @@ class Scala3Unpickler(
     collectLiftedTrees(binaryClass, method) { case arg: ByNameArg if !arg.isInlineApply => arg }
       .collect {
         case arg if matchReturnType(arg.tpe, method.returnType) && matchCapture(arg.capture, method.allParameters) =>
-          BinaryByNameArg(binaryClass, arg.tree, arg.tpe.asInstanceOf)
+          wrapIfInline(arg, BinaryByNameArg(binaryClass, arg.tree, arg.tpe.asInstanceOf))
       }
 
-  private def findByNameArgsProxy(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryByNameArg] =
+  private def findByNameArgsProxy(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryMethodSymbol] =
     val explicitByNameArgs =
       collectLiftedTrees(binaryClass, method) { case arg: ByNameArg if arg.isInlineApply => arg }
         .collect {
           case arg if matchReturnType(arg.tpe, method.returnType) && matchCapture(arg.capture, method.allParameters) =>
-            BinaryByNameArg(binaryClass, arg.tree, arg.tpe.asInstanceOf)
+            wrapIfInline(arg, BinaryByNameArg(binaryClass, arg.tree, arg.tpe.asInstanceOf))
         }
     val inlineOverrides = binaryClass.classSymbol.toSeq
       .flatMap(_.declarations)
@@ -715,6 +751,7 @@ class Scala3Unpickler(
         case Apply(fun, _) => asSuperCons(fun)
         case s @ Select(_: New, _) if s.symbol.isTerm => Some(s.symbol.asTerm)
         case _ => None
+
     val localClasses: Seq[ClassSymbol] = collectLiftedTrees(binaryOwner, method) { case cls: LocalClass => cls }
       .map(_.symbol.asClass)
     val innerClasses = binaryOwner.symbol.declarations.collect {
@@ -740,21 +777,31 @@ class Scala3Unpickler(
     yield BinarySuperArg(binaryOwner, init, arg, argType)
   end findSuperArgs
 
-  private def findLiftedTries(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryLiftedTry] =
+  private def findLiftedTries(binaryClass: BinaryClassSymbol, method: binary.Method): Seq[BinaryMethodSymbol] =
     collectLiftedTrees(binaryClass, method) { case tree: LiftedTry => tree }
       .collect {
         case liftedTry if matchReturnType(liftedTry.tpe, method.returnType) =>
-          BinaryLiftedTry(binaryClass, liftedTry.tree, liftedTry.tpe.asInstanceOf)
+          wrapIfInline(liftedTry, BinaryLiftedTry(binaryClass, liftedTry.tree, liftedTry.tpe.asInstanceOf))
       }
+
+  private def wrapIfInline(liftedTree: LiftedTree[?], binaryMethod: BinaryMethodSymbol): BinaryMethodSymbol =
+    liftedTree match
+      case InlinedTree(liftedTree, inlineApply) =>
+        BinaryInlinedMethod(wrapIfInline(liftedTree, binaryMethod), inlineApply.inliningTree)
+      case _ => binaryMethod
 
   private def collectLiftedTrees[S](binaryClass: BinaryClassSymbol, method: binary.Method)(
       matcher: PartialFunction[LiftedTree[?], LiftedTree[S]]
   ): Seq[LiftedTree[S]] =
-    val owners = binaryClass match
-      case BinaryClass(symbol) => withCompanionIfExtendsAnyVal(symbol)
+    def withCompanionIfExtendsAnyVal(binaryClass: BinaryClassSymbol): Seq[Symbol] = binaryClass match
+      case BinaryClass(symbol) =>
+        Seq(symbol) ++ symbol.companionClass.filter(_.isSubClass(defn.AnyValClass))
       case BinarySyntheticCompanionClass(symbol) => Seq.empty
       case BinarySAMClass(symbol, _, _) => Seq(symbol)
       case BinaryPartialFunction(symbol, _) => Seq(symbol)
+      case BinaryInlinedClass(underlying, _) => withCompanionIfExtendsAnyVal(underlying)
+
+    val owners = withCompanionIfExtendsAnyVal(binaryClass)
     val sourceLines =
       if owners.size == 2 && method.allParameters.exists(p => p.name.matches("\\$this\\$\\d+")) then
         // workaround of https://github.com/lampepfl/dotty/issues/18816
@@ -770,6 +817,24 @@ class Scala3Unpickler(
   private def matchLines(liftedFun: LiftedTree[?], sourceLines: binary.SourceLines): Boolean =
     val positions = liftedFun.positionsIn(sourceLines.sourceName)
     sourceLines.tastyLines.forall(line => positions.exists(_.containsLine(line)))
+
+  private def matchParents(
+      binaryClass: BinaryClassSymbol,
+      expectedParents: Set[ClassSymbol],
+      isInterface: Boolean
+  ): Boolean =
+    binaryClass match
+      case cls: BinaryClass =>
+        if cls.symbol.isEnum then expectedParents == cls.symbol.parentClasses.toSet + defn.ProductClass
+        else if isInterface then expectedParents == cls.symbol.parentClasses.filter(_.isTrait).toSet
+        else if cls.symbol.isAnonClass then cls.symbol.parentClasses.forall(expectedParents.contains)
+        else expectedParents == cls.symbol.parentClasses.toSet
+      case _: BinarySyntheticCompanionClass => false
+      case samClass: BinarySAMClass =>
+        expectedParents.contains(samClass.parentClass)
+      case fun: BinaryPartialFunction =>
+        expectedParents == Set(defn.AbstractPartialFunctionClass, defn.SerializableClass)
+      case inlined: BinaryInlinedClass => matchParents(inlined.underlying, expectedParents, isInterface)
 
   private def matchParents(classSymbol: ClassSymbol, expectedParents: Set[ClassSymbol], isInterface: Boolean): Boolean =
     if classSymbol.isEnum then expectedParents == classSymbol.parentClasses.toSet + defn.ProductClass
