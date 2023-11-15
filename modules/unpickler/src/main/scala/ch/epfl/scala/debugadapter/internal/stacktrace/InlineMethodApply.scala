@@ -10,7 +10,7 @@ case class InlineMethodApply private (
     termRefTree: TermReferenceTree,
     typeArgs: List[Type],
     args: Seq[TermTree],
-    inliningTree: Tree
+    callTree: Tree
 ):
   def symbol(using Context): TermSymbol = termRefTree.symbol.asTerm
 

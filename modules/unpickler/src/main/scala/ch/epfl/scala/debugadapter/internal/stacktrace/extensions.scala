@@ -40,6 +40,8 @@ extension (symbol: TermSymbol)
   def targetNameStr(using Context): String = symbol.targetName.toString
   def overridingSymbolInLinearization(siteClass: ClassSymbol)(using Context): TermSymbol =
     siteClass.linearization.iterator.flatMap(inClass => symbol.matchingSymbol(inClass, siteClass)).next
+  def isOverridingSymbol(siteClass: BinaryClassSymbol)(using Context): Boolean =
+    siteClass.classSymbol.exists(symbol.isOverridingSymbol)
   def isOverridingSymbol(siteClass: ClassSymbol)(using Context): Boolean =
     overridingSymbolInLinearization(siteClass) == symbol
 
@@ -189,7 +191,23 @@ extension (pos: SourcePosition)
       || sourceLines.tastySpan.forall(line => pos.startLine <= line && pos.endLine >= line)
 
 extension (binaryClass: BinaryClassSymbol)
-  def isJava: Boolean =
+  def classSymbol: Option[ClassSymbol] =
     binaryClass match
-      case BinaryClass(symbol) => symbol.sourceLanguage == SourceLanguage.Java
-      case _ => false
+      case BinaryClass(symbol) => Some(symbol)
+      case BinaryInlinedClass(underlying, _) => underlying.classSymbol
+      case _ => None
+
+  def isJava: Boolean = classSymbol.exists(_.sourceLanguage == SourceLanguage.Java)
+
+  def isTrait: Boolean = classSymbol.exists(_.isTrait)
+
+  def declarations(using Context): Seq[Symbol] = classSymbol.toSeq.flatMap(_.declarations)
+
+  def linearization(using Context): Seq[ClassSymbol] = classSymbol.toSeq.flatMap(_.linearization)
+
+  def thisType(using Context): Option[ThisType] = classSymbol.map(_.thisType)
+
+  def companionClassSymbol(using Context): Option[ClassSymbol] = binaryClass match
+    case BinaryClass(symbol) => symbol.companionClass
+    case BinarySyntheticCompanionClass(symbol) => Some(symbol)
+    case _ => None
