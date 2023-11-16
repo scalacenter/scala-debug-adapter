@@ -56,10 +56,11 @@ private object DebuggeeProcess {
     val builder = Process(command, forkOptions.workingDirectory, envVars.toSeq: _*)
     val processLogger = new DebuggeeProcessLogger(listener)
 
-    logger.info("Starting debuggee process")
-    logger.debug(command.mkString(" "))
-    logger.debug(s"working directory: ${forkOptions.workingDirectory.getOrElse("null")}")
-    logger.debug(s"env vars:\n${envVars.map { case (key, value) => s"  $key=$value " }.mkString("\n")}")
+    logger.info("Starting debuggee process:")
+    logger.info("- working directory:" + forkOptions.workingDirectory.getOrElse("null"))
+    logger.info("- command: " + command.mkString(" "))
+    val formattedEnvVars = envVars.map { case (key, value) => s"  $key=$value" }.mkString("\n")
+    logger.info("- environment variables:\n" + formattedEnvVars)
 
     val process = new DebuggeeProcess(builder.run(processLogger))
     process.future.onComplete {
