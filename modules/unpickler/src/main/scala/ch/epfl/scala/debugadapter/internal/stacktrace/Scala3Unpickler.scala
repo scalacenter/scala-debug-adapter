@@ -260,8 +260,8 @@ class Scala3Unpickler(
 
   private def wrapIfInline(liftedTree: LiftedTree[?], decodedClass: DecodedClass): DecodedClass =
     liftedTree match
-      case InlinedTree(underlying, inlineApply) =>
-        DecodedClass.InlinedClass(wrapIfInline(underlying, decodedClass), inlineApply.callTree)
+      case InlinedTree(underlying, inlineCall) =>
+        DecodedClass.InlinedClass(wrapIfInline(underlying, decodedClass), inlineCall.callTree)
       case _ => decodedClass
 
   private def findStaticJavaMethods(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
@@ -734,7 +734,7 @@ class Scala3Unpickler(
       case _ => false
 
   private def findByNameArgs(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
-    collectLiftedTrees(decodedClass, method) { case arg: ByNameArg if !arg.isInlineApply => arg }
+    collectLiftedTrees(decodedClass, method) { case arg: ByNameArg if !arg.isInline => arg }
       .collect {
         case arg if matchReturnType(arg.tpe, method.returnType) && matchCapture(arg.capture, method.allParameters) =>
           wrapIfInline(arg, DecodedMethod.ByNameArg(decodedClass, arg.tree, arg.tpe.asInstanceOf))
@@ -742,7 +742,7 @@ class Scala3Unpickler(
 
   private def findByNameArgsProxy(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
     val explicitByNameArgs =
-      collectLiftedTrees(decodedClass, method) { case arg: ByNameArg if arg.isInlineApply => arg }
+      collectLiftedTrees(decodedClass, method) { case arg: ByNameArg if arg.isInline => arg }
         .collect {
           case arg if matchReturnType(arg.tpe, method.returnType) && matchCapture(arg.capture, method.allParameters) =>
             wrapIfInline(arg, DecodedMethod.ByNameArg(decodedClass, arg.tree, arg.tpe.asInstanceOf))
@@ -821,8 +821,8 @@ class Scala3Unpickler(
 
   private def wrapIfInline(liftedTree: LiftedTree[?], decodedMethod: DecodedMethod): DecodedMethod =
     liftedTree match
-      case InlinedTree(liftedTree, inlineApply) =>
-        DecodedMethod.InlinedMethod(wrapIfInline(liftedTree, decodedMethod), inlineApply.callTree)
+      case InlinedTree(liftedTree, inlineCall) =>
+        DecodedMethod.InlinedMethod(wrapIfInline(liftedTree, decodedMethod), inlineCall.callTree)
       case _ => decodedMethod
 
   private def collectLiftedTrees[S](decodedClass: DecodedClass, method: binary.Method)(

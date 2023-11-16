@@ -58,17 +58,17 @@ class LiftedTreeCollector[S] private (matcher: PartialFunction[LiftedTree[?], Li
         // recurse
         tree match
           case tree: DefTree if tree.symbol.isInline => ()
-          case InlineMethodApply(apply) =>
-            val liftedTrees = inlinedTrees.getOrElseUpdate(apply.symbol, collectInlineDef(apply.symbol))
-            buffer ++= liftedTrees.map(InlinedTree(_, apply))
-            buffer ++= apply.args.flatMap { arg =>
+          case InlineCall(inlineCall) =>
+            val liftedTrees = inlinedTrees.getOrElseUpdate(inlineCall.symbol, collectInlineDef(inlineCall.symbol))
+            buffer ++= liftedTrees.map(InlinedTree(_, inlineCall))
+            buffer ++= inlineCall.args.flatMap { arg =>
               extractLambda(arg) match
                 case Some(lambda) =>
                   val params = lambda.meth.symbol.asTerm.paramSymbols
-                  collect(arg).map(InlinedFromLambda(_, params, apply.args))
+                  collect(arg).map(InlinedFromLambda(_, params, inlineCall.args))
                 case None => collect(arg)
             }
-            super.traverse(apply.termRefTree)
+            super.traverse(inlineCall.termRefTree)
           case tree: (StatementTree | Template | CaseDef) => super.traverse(tree)
           case _ => ()
 

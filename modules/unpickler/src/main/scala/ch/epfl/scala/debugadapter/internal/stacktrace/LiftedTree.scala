@@ -13,7 +13,7 @@ sealed trait LiftedTree[S]:
   def symbol: S
   def tpe: TermType
 
-  def inlinedFrom: List[InlineMethodApply] = Nil
+  def inlinedFrom: List[InlineCall] = Nil
   def inlinedArgs: Map[Symbol, Seq[TermTree]] = Map.empty
   def positionsIn(sourceName: String)(using Context): Seq[SourcePosition] =
     LiftedTree.collectInlinePositions(this, sourceName)
@@ -43,17 +43,16 @@ final case class LiftedTry(tree: Try)(using Context) extends LiftedTree[Nothing]
   def tpe: TermType = tree.tpe
   def symbol: Nothing = unexpected("no symbol for lifted try")
 
-final case class ByNameArg(tree: TermTree, paramTpe: TermType, isInlineApply: Boolean)(using Context)
+final case class ByNameArg(tree: TermTree, paramTpe: TermType, isInline: Boolean)(using Context)
     extends LiftedTree[Nothing]:
-  def tpe: TermType = if isInlineApply then tree.tpe.widenTermRef else paramTpe
+  def tpe: TermType = if isInline then tree.tpe.widenTermRef else paramTpe
   def symbol: Nothing = unexpected("no symbol for by name arg")
 
-final case class InlinedTree[S](underlying: LiftedTree[S], inlineApply: InlineMethodApply)(using Context)
-    extends LiftedTree[S]:
+final case class InlinedTree[S](underlying: LiftedTree[S], inlineCall: InlineCall)(using Context) extends LiftedTree[S]:
   def tree: Tree = underlying.tree
   def symbol: S = underlying.symbol
-  def tpe: TermType = inlineApply.substTypeParams(underlying.tpe)
-  override def inlinedFrom: List[InlineMethodApply] = inlineApply :: underlying.inlinedFrom
+  def tpe: TermType = inlineCall.substTypeParams(underlying.tpe)
+  override def inlinedFrom: List[InlineCall] = inlineCall :: underlying.inlinedFrom
   override def inlinedArgs: Map[Symbol, Seq[TermTree]] = underlying.inlinedArgs
 
 final case class InlinedFromLambda[S](underlying: LiftedTree[S], params: Seq[TermSymbol], inlineArgs: Seq[TermTree])
@@ -61,7 +60,7 @@ final case class InlinedFromLambda[S](underlying: LiftedTree[S], params: Seq[Ter
   def tree: Tree = underlying.tree
   def symbol: S = underlying.symbol
   def tpe: TermType = underlying.tpe
-  override def inlinedFrom: List[InlineMethodApply] = underlying.inlinedFrom
+  override def inlinedFrom: List[InlineCall] = underlying.inlinedFrom
   override def inlinedArgs: Map[Symbol, Seq[TermTree]] = underlying.inlinedArgs ++ params.map(_ -> inlineArgs)
 
 object LiftedTree:
@@ -80,8 +79,7 @@ object LiftedTree:
         alreadySeen += symbol
         collect
 
-    class Traverser(inlinedFrom: List[InlineMethodApply], inlinedArgs: Map[Symbol, Seq[TermTree]])
-        extends TreeTraverser:
+    class Traverser(inlinedFrom: List[InlineCall], inlinedArgs: Map[Symbol, Seq[TermTree]]) extends TreeTraverser:
       private val inlineMapping: Map[Symbol, TermTree] = inlinedFrom.headOption.toSeq.flatMap(_.paramsMap).toMap
       override def traverse(tree: Tree): Unit =
         tree match
@@ -114,7 +112,7 @@ object LiftedTree:
         alreadySeen += symbol
         collect
 
-    class Traverser(inlinedFrom: List[InlineMethodApply], inlinedArgs: Map[Symbol, Seq[TermTree]])(using Context)
+    class Traverser(inlinedFrom: List[InlineCall], inlinedArgs: Map[Symbol, Seq[TermTree]])(using Context)
         extends TreeTraverser:
       private val inlineMapping: Map[Symbol, TermTree] = inlinedFrom.headOption.toSeq.flatMap(_.paramsMap).toMap
       override def traverse(tree: Tree): Unit =
@@ -148,7 +146,7 @@ object LiftedTree:
         case term: LocalTermDef =>
           loopCollect(term.symbol)(traverser.traverse(term.tree))
         case lambda: LambdaTree => loopCollect(lambda.symbol(0))(lambda.tree)
-        case InlinedTree(underlying, inlineApply) => traverse(underlying)
+        case InlinedTree(underlying, inlineCall) => traverse(underlying)
         case InlinedFromLambda(underlying, params, inlineArgs) => traverse(underlying)
         case tree => traverser.traverse(tree.tree)
     traverse(liftedTree)

@@ -6,7 +6,7 @@ import tastyquery.Types.*
 import tastyquery.Contexts.*
 import tastyquery.debugadapter.Substituters
 
-case class InlineMethodApply private (
+case class InlineCall private (
     termRefTree: TermReferenceTree,
     typeArgs: List[Type],
     args: Seq[TermTree],
@@ -23,12 +23,12 @@ case class InlineMethodApply private (
   def paramTypes(using Context): Seq[Type] =
     symbol.declaredType.allParamTypes
 
-object InlineMethodApply:
-  def unapply(fullTree: Tree)(using Context): Option[InlineMethodApply] =
-    def rec(tree: Tree, typeArgsAcc: List[Type], argsAcc: Seq[TermTree]): Option[InlineMethodApply] =
+object InlineCall:
+  def unapply(fullTree: Tree)(using Context): Option[InlineCall] =
+    def rec(tree: Tree, typeArgsAcc: List[Type], argsAcc: Seq[TermTree]): Option[InlineCall] =
       tree match
         case termTree: TermReferenceTree if termTree.symbol.isInline && termTree.symbol.asTerm.isMethod =>
-          Some(InlineMethodApply(termTree, typeArgsAcc, argsAcc, fullTree))
+          Some(InlineCall(termTree, typeArgsAcc, argsAcc, fullTree))
         case Apply(fun, args) => rec(fun, typeArgsAcc, args ++ argsAcc)
         case TypeApply(fun, typeArgs) => rec(fun, typeArgs.map(_.toType) ++ typeArgsAcc, argsAcc)
         case _ => None
