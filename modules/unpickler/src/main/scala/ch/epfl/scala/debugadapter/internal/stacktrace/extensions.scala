@@ -16,10 +16,16 @@ import ch.epfl.scala.debugadapter.internal.binary.SourceLines
 extension (symbol: Symbol)
   def isTrait = symbol.isClass && symbol.asClass.isTrait
   def isLocal = symbol.owner.isTerm
-  def isModuleClass = symbol.isClass && symbol.asClass.isModuleClass
-
   def pos: SourcePosition = symbol.tree.map(_.pos).getOrElse(SourcePosition.NoPosition)
   def isInline = symbol.isTerm && symbol.asTerm.isInline
+
+  def showBasic =
+    val span = symbol.tree.map(_.pos) match
+      case Some(pos) if pos.isFullyDefined =>
+        if pos.startLine != pos.endLine then s"(${pos.startLine}, ${pos.endLine}))"
+        else s"(${pos.startLine})"
+      case _ => ""
+    s"$symbol $span"
 
 extension (symbol: ClassSymbol)
   def isAnonClass = symbol.name == CommonNames.anonClass
@@ -40,7 +46,7 @@ extension (symbol: TermSymbol)
   def targetNameStr(using Context): String = symbol.targetName.toString
   def overridingSymbolInLinearization(siteClass: ClassSymbol)(using Context): TermSymbol =
     siteClass.linearization.iterator.flatMap(inClass => symbol.matchingSymbol(inClass, siteClass)).next
-  def isOverridingSymbol(siteClass: BinaryClassSymbol)(using Context): Boolean =
+  def isOverridingSymbol(siteClass: DecodedClass)(using Context): Boolean =
     siteClass.classSymbol.exists(symbol.isOverridingSymbol)
   def isOverridingSymbol(siteClass: ClassSymbol)(using Context): Boolean =
     overridingSymbolInLinearization(siteClass) == symbol
@@ -72,7 +78,7 @@ extension [A, S[+X] <: IterableOnce[X]](xs: S[A])
   def orIfEmpty[B >: A](ys: => S[B]): S[B] =
     if xs.nonEmpty then xs else ys
 
-extension [T <: BinarySymbol](xs: Seq[T])
+extension [T <: DecodedSymbol](xs: Seq[T])
   def singleOrThrow(symbol: binary.Symbol): T =
     singleOptOrThrow(symbol)
       .getOrElse(notFound(symbol))
@@ -190,16 +196,25 @@ extension (pos: SourcePosition)
       || pos.sourceFile.name != sourceLines.sourceName
       || sourceLines.tastySpan.forall(line => pos.startLine <= line && pos.endLine >= line)
 
-extension (binaryClass: BinaryClassSymbol)
+  def showBasic =
+    pos match
+      case pos if pos.isFullyDefined =>
+        if pos.startLine != pos.endLine then s"(${pos.startLine}, ${pos.endLine}))"
+        else s"(${pos.startLine})"
+      case _ => ""
+
+extension (self: DecodedClass)
   def classSymbol: Option[ClassSymbol] =
-    binaryClass match
-      case BinaryClass(symbol) => Some(symbol)
-      case BinaryInlinedClass(underlying, _) => underlying.classSymbol
+    self match
+      case self: DecodedClass.ClassDef => Some(self.symbol)
+      case self: DecodedClass.InlinedClass => self.underlying.classSymbol
       case _ => None
 
   def isJava: Boolean = classSymbol.exists(_.sourceLanguage == SourceLanguage.Java)
 
   def isTrait: Boolean = classSymbol.exists(_.isTrait)
+
+  def isModuleClass: Boolean = classSymbol.exists(_.isModuleClass)
 
   def declarations(using Context): Seq[Symbol] = classSymbol.toSeq.flatMap(_.declarations)
 
@@ -207,7 +222,8 @@ extension (binaryClass: BinaryClassSymbol)
 
   def thisType(using Context): Option[ThisType] = classSymbol.map(_.thisType)
 
-  def companionClassSymbol(using Context): Option[ClassSymbol] = binaryClass match
-    case BinaryClass(symbol) => symbol.companionClass
-    case BinarySyntheticCompanionClass(symbol) => Some(symbol)
+  def companionClassSymbol(using Context): Option[ClassSymbol] = self match
+    case self: DecodedClass.ClassDef => self.symbol.companionClass
+    case self: DecodedClass.SyntheticCompanionClass => Some(self.companionSymbol)
+    case self: DecodedClass.InlinedClass => self.underlying.companionClassSymbol
     case _ => None

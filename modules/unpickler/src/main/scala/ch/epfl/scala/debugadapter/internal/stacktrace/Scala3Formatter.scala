@@ -8,69 +8,69 @@ import tastyquery.Contexts.Context
 
 class Scala3Formatter(warnLogger: String => Unit, testMode: Boolean)(using Context)
     extends ThrowOrWarn(warnLogger, testMode):
-  def format(binaryClass: BinaryClassSymbol): String =
-    binaryClass match
-      case BinaryClass(symbol) => formatQualifiedName(symbol)
-      case BinarySAMClass(symbol, _, _) => formatQualifiedName(symbol.owner).dot("<SAM class>")
-      case BinaryPartialFunction(symbol, _) => formatQualifiedName(symbol.owner).dot("<partial function>")
-      case BinarySyntheticCompanionClass(symbol) => formatQualifiedName(symbol)
-      case BinaryInlinedClass(underlying, _) => format(underlying)
+  def format(cls: DecodedClass): String =
+    cls match
+      case cls: DecodedClass.ClassDef => formatQualifiedName(cls.symbol)
+      case cls: DecodedClass.SAMOrPartialFunction =>
+        formatQualifiedName(cls.symbol.owner).dot(s"<anon ${formatQualifiedName(cls.parentClass)}>")
+      case cls: DecodedClass.SyntheticCompanionClass => formatQualifiedName(cls.companionSymbol)
+      case cls: DecodedClass.InlinedClass => format(cls.underlying)
 
-  def format(method: BinaryMethodSymbol): String =
+  def format(method: DecodedMethod): String =
     val typeAscription = method.declaredType match
       case tpe: Type => ": " + format(tpe)
       case tpe => format(tpe)
     formatOwner(method).dot(formatName(method)) + typeAscription
 
-  private def formatOwner(method: BinaryMethodSymbol): String =
+  private def formatOwner(method: DecodedMethod): String =
     method match
-      case BinaryMethod(_, sym) => formatOwner(sym)
-      case BinaryLocalLazyInit(_, sym) => formatOwner(sym)
-      case BinaryLazyInit(owner, _) => format(owner)
-      case BinaryTraitParamAccessor(owner, _) => format(owner)
-      case BinaryMixinForwarder(owner, target) => format(owner)
-      case BinaryTraitStaticForwarder(target) => formatOwner(target)
-      case BinaryOuter(owner, _) => format(owner)
-      case BinarySuperArg(_, init, _, _) => formatOwner(init)
-      case BinaryLiftedTry(owner, _, _) => format(owner)
-      case BinaryByNameArg(owner, _, _) => format(owner)
-      case BinaryMethodBridge(target, _) => formatOwner(target)
-      case BinaryAnonOverride(owner, _, _) => format(owner)
-      case BinaryStaticForwarder(owner, _, _) => format(owner)
-      case BinaryDeserializeLambda(owner, _) => format(owner)
-      case BinarySetter(owner, _, _) => format(owner)
-      case BinaryGetter(owner, _, _) => format(owner)
-      case BinarySuperAccessor(owner, _, _) => format(owner)
-      case BinarySpecializedMethod(_, sym) => formatOwner(sym)
-      case BinaryInlineAccessor(owner, _) => format(owner)
-      case BinaryAdaptedFun(target) => formatOwner(target)
-      case BinarySAMClassConstructor(owner, _) => format(owner)
-      case BinaryInlinedMethod(underlying, _) => formatOwner(underlying)
+      case method: DecodedMethod.ValOrDefDef => formatOwner(method.symbol)
+      case method: DecodedMethod.LazyInit => formatOwner(method.symbol)
+      case method: DecodedMethod.TraitParamAccessor => format(method.owner)
+      case method: DecodedMethod.MixinForwarder => format(method.owner)
+      case method: DecodedMethod.TraitStaticForwarder => formatOwner(method.target)
+      case method: DecodedMethod.OuterAccessor => format(method.owner)
+      case method: DecodedMethod.SuperConstructorArg => formatOwner(method.constructor)
+      case method: DecodedMethod.LiftedTry => format(method.owner)
+      case method: DecodedMethod.ByNameArg => format(method.owner)
+      case method: DecodedMethod.Bridge => formatOwner(method.target)
+      case method: DecodedMethod.SAMOrPartialFunctionImpl => format(method.owner)
+      case method: DecodedMethod.StaticForwarder => format(method.owner)
+      case method: DecodedMethod.DeserializeLambda => format(method.owner)
+      case method: DecodedMethod.SetterAccessor => format(method.owner)
+      case method: DecodedMethod.GetterAccessor => format(method.owner)
+      case method: DecodedMethod.SuperAccessor => format(method.owner)
+      case method: DecodedMethod.SpecializedMethod => formatOwner(method.symbol)
+      case method: DecodedMethod.InlineAccessor => format(method.owner)
+      case method: DecodedMethod.AdaptedFun => formatOwner(method.target)
+      case method: DecodedMethod.SAMOrPartialFunctionConstructor => format(method.owner)
+      case method: DecodedMethod.InlinedMethod => formatOwner(method.underlying)
 
-  private def formatName(method: BinaryMethodSymbol): String =
+  private def formatName(method: DecodedMethod): String =
     method match
-      case BinaryMethod(_, sym) => formatName(sym)
-      case BinaryLocalLazyInit(_, sym) => formatName(sym).dot("<lazy init>")
-      case BinaryLazyInit(_, sym) => formatName(sym).dot("<lazy init>")
-      case BinaryTraitParamAccessor(_, sym) => formatName(sym)
-      case BinaryMixinForwarder(_, target) => formatName(target).dot("<mixin forwarder>")
-      case BinaryTraitStaticForwarder(target) => formatName(target).dot("<static forwarder>")
-      case _: BinaryOuter => "<outer>"
-      case BinarySuperArg(_, init, _, _) => formatName(init).dot("<super arg>")
-      case BinaryLiftedTry(_, _, _) => "<try>"
-      case _: BinaryByNameArg => "<by-name arg>"
-      case BinaryMethodBridge(target, _) => formatName(target).dot("<bridge>")
-      case BinaryAnonOverride(_, overridden, _) => formatName(overridden)
-      case BinaryStaticForwarder(_, target, _) => formatName(target).dot("<static forwarder>")
-      case _: BinaryDeserializeLambda => "$deserializeLambda$"
-      case BinarySetter(_, sym, _) => if sym.isMethod then formatName(sym) else formatName(sym) + "_="
-      case BinaryGetter(_, sym, _) => formatName(sym)
-      case BinarySuperAccessor(_, sym, _) => formatName(sym).dot("<super>")
-      case BinarySpecializedMethod(_, sym) => formatName(sym).dot("<specialized>")
-      case BinaryInlineAccessor(_, target) => s"<inline ${formatOwner(target).dot(formatName(target))}>"
-      case BinaryAdaptedFun(target) => formatName(target).dot("<adapted>")
-      case _: BinarySAMClassConstructor => "<init>"
-      case BinaryInlinedMethod(underlying, _) => formatName(underlying)
+      case method: DecodedMethod.ValOrDefDef => formatName(method.symbol)
+      case method: DecodedMethod.LazyInit => formatName(method.symbol).dot("<lazy init>")
+      case method: DecodedMethod.TraitParamAccessor => formatName(method.symbol)
+      case method: DecodedMethod.MixinForwarder => formatName(method.target).dot("<mixin forwarder>")
+      case method: DecodedMethod.TraitStaticForwarder => formatName(method.target).dot("<static forwarder>")
+      case _: DecodedMethod.OuterAccessor => "<outer>"
+      case method: DecodedMethod.SuperConstructorArg => formatName(method.constructor).dot("<super arg>")
+      case method: DecodedMethod.LiftedTry => "<try>"
+      case _: DecodedMethod.ByNameArg => "<by-name arg>"
+      case method: DecodedMethod.Bridge => formatName(method.target).dot("<bridge>")
+      case method: DecodedMethod.SAMOrPartialFunctionImpl => formatName(method.implementedSymbol)
+      case method: DecodedMethod.StaticForwarder => formatName(method.target).dot("<static forwarder>")
+      case _: DecodedMethod.DeserializeLambda => "$deserializeLambda$"
+      case method: DecodedMethod.SetterAccessor =>
+        if method.symbol.isMethod then formatName(method.symbol) else formatName(method.symbol) + "_="
+      case method: DecodedMethod.GetterAccessor => formatName(method.symbol)
+      case method: DecodedMethod.SuperAccessor => formatName(method.symbol).dot("<super>")
+      case method: DecodedMethod.SpecializedMethod => formatName(method.symbol).dot("<specialized>")
+      case method: DecodedMethod.InlineAccessor =>
+        s"<inline ${formatOwner(method.target).dot(formatName(method.target))}>"
+      case method: DecodedMethod.AdaptedFun => formatName(method.target).dot("<adapted>")
+      case _: DecodedMethod.SAMOrPartialFunctionConstructor => "<init>"
+      case method: DecodedMethod.InlinedMethod => formatName(method.underlying)
 
   private def formatQualifiedName(sym: Symbol): String =
     formatOwner(sym).dot(formatName(sym))

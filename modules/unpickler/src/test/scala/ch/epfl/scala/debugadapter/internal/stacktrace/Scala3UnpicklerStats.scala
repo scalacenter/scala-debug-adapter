@@ -83,7 +83,7 @@ class Scala3UnpicklerStats extends DebuggableFunSuite:
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
     checkCounter(localMethodCounter, 2606, expectedAmbiguous = 2)
-    checkCounter(anonFunCounter, 6966, expectedAmbiguous = 18, expectedNotFound = 1)
+    checkCounter(anonFunCounter, 6960, expectedAmbiguous = 24, expectedNotFound = 1)
     checkCounter(adaptedAnonFunCounter, 370, expectedAmbiguous = 1)
     checkCounter(localLazyInitCounter, 108)
     checkCounter(methodCounter, 57872)
@@ -121,7 +121,7 @@ class Scala3UnpicklerStats extends DebuggableFunSuite:
     classes
 
   extension (unpickler: Scala3Unpickler)
-    def tryFind(cls: binary.ClassType, counter: Counter): Option[BinaryClassSymbol] =
+    def tryFind(cls: binary.ClassType, counter: Counter): Option[DecodedClass] =
       try
         val sym = unpickler.findClass(cls)
         counter.success += cls

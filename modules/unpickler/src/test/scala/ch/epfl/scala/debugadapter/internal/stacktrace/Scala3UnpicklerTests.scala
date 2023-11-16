@@ -624,7 +624,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
     debuggee.assertFormat("example.B$$anon$1", "example.m.a.<anon class>")
   }
 
-  test("SAM class") {
+  test("SAM and partial functions") {
     val source =
       """|package example
          |object Main {
@@ -639,42 +639,42 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |""".stripMargin
 
     val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$$anon$1", "Main.foo.<SAM class>")
+    debuggee.assertFormat("example.Main$$anon$1", "Main.foo.<anon Ordering>")
     debuggee.assertFormat(
       "example.Main$$anon$1",
       "int compare(java.lang.String x, java.lang.String y)",
-      "Main.foo.<SAM class>.compare(x: String, y: String): Int"
+      "Main.foo.<anon Ordering>.compare(x: String, y: String): Int"
     )
     debuggee.assertFormat(
       "example.Main$$anon$1",
       "int compare(java.lang.Object x, java.lang.Object y)",
-      "Main.foo.<SAM class>.compare.<bridge>(x: String, y: String): Int",
+      "Main.foo.<anon Ordering>.compare.<bridge>(x: String, y: String): Int",
       skip = true
     )
     debuggee.assertFormat(
       "example.Main$$anon$2",
-      "Main.f.<partial function>"
+      "Main.f.<anon PartialFunction>"
     )
     debuggee.assertFormat(
       "example.Main$$anon$2",
       "boolean isDefinedAt(java.lang.String x)",
-      "Main.f.<partial function>.isDefinedAt(x: String): Boolean"
+      "Main.f.<anon PartialFunction>.isDefinedAt(x: String): Boolean"
     )
     debuggee.assertFormat(
       "example.Main$$anon$2",
       "boolean isDefinedAt(java.lang.Object x)",
-      "Main.f.<partial function>.isDefinedAt.<bridge>(x: String): Boolean",
+      "Main.f.<anon PartialFunction>.isDefinedAt.<bridge>(x: String): Boolean",
       skip = true
     )
     debuggee.assertFormat(
       "example.Main$$anon$2",
       "java.lang.Object applyOrElse(java.lang.String x, scala.Function1 default)",
-      "Main.f.<partial function>.applyOrElse[A1, B1](x: A1, default: A1 => B1): B1"
+      "Main.f.<anon PartialFunction>.applyOrElse[A1, B1](x: A1, default: A1 => B1): B1"
     )
     debuggee.assertFormat(
       "example.Main$$anon$2",
       "java.lang.Object applyOrElse(java.lang.Object x, scala.Function1 default)",
-      "Main.f.<partial function>.applyOrElse.<bridge>[A1, B1](x: A1, default: A1 => B1): B1",
+      "Main.f.<anon PartialFunction>.applyOrElse.<bridge>[A1, B1](x: A1, default: A1 => B1): B1",
       skip = true
     )
   }
