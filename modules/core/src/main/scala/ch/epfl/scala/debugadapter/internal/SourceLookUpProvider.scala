@@ -9,7 +9,7 @@ import scala.collection.parallel.immutable.ParVector
 
 private[debugadapter] final class SourceLookUpProvider(
     private[internal] var classPathEntries: Seq[ClassEntryLookUp],
-    private var sourceUriToClassPathEntry: Map[URI, ClassEntryLookUp],
+    private var sourceUriToClassPathEntry: Map[SourceFileKey, ClassEntryLookUp],
     private var fqcnToClassPathEntry: Map[String, ClassEntryLookUp],
     logger: Logger
 ) extends ISourceLookUpProvider {
@@ -18,13 +18,13 @@ private[debugadapter] final class SourceLookUpProvider(
   override def supportsRealtimeBreakpointVerification(): Boolean = true
 
   override def getSourceFileURI(fqcn: String, path: String): String = {
-    getSourceFile(fqcn).map(_.toString).orNull
+    getSourceFileByClassname(fqcn).map(_.toString).orNull
   }
 
   override def getSourceContents(uri: String): String = {
     val sourceUri = URI.create(uri)
     sourceUriToClassPathEntry
-      .get(sourceUri)
+      .get(SourceFileKey(sourceUri))
       .flatMap(_.getSourceContent(sourceUri))
       .orNull
   }
@@ -35,15 +35,17 @@ private[debugadapter] final class SourceLookUpProvider(
       columns: Array[Int]
   ): Array[String] = {
     val uri = URI.create(uriRepr)
+
     uri.getScheme match {
       case "dap-fqcn" =>
         val resolvedName = uri.getSchemeSpecificPart
         lines.map(_ => resolvedName)
       case _ =>
-        sourceUriToClassPathEntry.get(uri) match {
+        val key = SourceFileKey(uri);
+        sourceUriToClassPathEntry.get(key) match {
           case None => lines.map(_ => null)
           case Some(entry) =>
-            lines.map(line => entry.getFullyQualifiedClassName(uri, line).orNull)
+            lines.map(line => entry.getFullyQualifiedClassName(key, line).orNull)
         }
     }
   }
@@ -74,10 +76,10 @@ private[debugadapter] final class SourceLookUpProvider(
     } yield scalaSig
   }
 
-  private def getSourceFile(className: String): Option[URI] = {
+  private def getSourceFileByClassname(className: String): Option[URI] = {
     fqcnToClassPathEntry
       .get(className)
-      .flatMap(_.getSourceFile(className))
+      .flatMap(_.getSourceFileURI(className))
   }
 
   def reload(classesToReplace: Seq[String]): Unit = {
