@@ -1,21 +1,20 @@
 package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter._
+import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
+import ch.epfl.scala.debugadapter.internal.scalasig.Decompiler
+import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSig
 import org.objectweb.asm._
 
 import java.net.URI
 import java.nio.file._
-import scala.jdk.CollectionConverters.*
 import scala.collection.mutable
-import ClassEntryLookUp.readSourceContent
-
-import scala.util.matching.Regex
-import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSig
-import ch.epfl.scala.debugadapter.internal.scalasig.Decompiler
-import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
+import scala.jdk.CollectionConverters.*
+import scala.util.Properties
 import scala.util.Try
+import scala.util.matching.Regex
 
-private case class SourceLineKey(sourceFileKey: SourceFileKey, lineNumber: Int)
+import ClassEntryLookUp.readSourceContent
 
 private[internal] case class ClassFile(
     fullyQualifiedName: String,
@@ -358,3 +357,31 @@ private object ClassEntryLookUp {
     }
   }
 }
+
+/**
+ * On a case-insensitive system we need to sanitize all URIs to use them as Map keys.
+ */
+private case class SourceFileKey private (sanitizeUri: URI)
+
+private object SourceFileKey {
+  private val isCaseSensitiveFileSystem = Properties.isWin || Properties.isMac
+
+  def apply(uri: URI): SourceFileKey = {
+    val sanitizeUri: URI =
+      if (isCaseSensitiveFileSystem) {
+        uri.getScheme match {
+          case "file" => URI.create(uri.toString.toUpperCase)
+          case "jar" | "zip" if uri.toString.contains("!/") =>
+            // The contents of jars are case-sensitive no matter what the filesystem is.
+            val parts = uri.toString.split("!/", 2).toSeq
+            val head = parts.head.toUpperCase()
+            val tail = parts.tail.mkString("!/")
+            URI.create(s"$head!/$tail")
+          case _ => uri
+        }
+      } else uri
+    new SourceFileKey(sanitizeUri)
+  }
+}
+
+private case class SourceLineKey(sourceFile: SourceFileKey, lineNumber: Int)

@@ -91,57 +91,38 @@ class ClassEntryLookUpSpec extends FunSuite {
     assert(lookUp.sources.isEmpty)
   }
 
-  test("project class lookups should accomodate case-sensitivity of the OS filesystem") {
+  test("case-sensitivity of the OS") {
     val debuggee = TestingDebuggee.scalaBreakpointTest(ScalaVersion.`2.12`)
     val lookUp = ClassEntryLookUp(debuggee.mainModule, NoopLogger)
 
-    val sourceFilePath = debuggee.sourceFiles.head;
+    val sourceFile = debuggee.sourceFiles.head.toString
+    assert(sourceFile.contains("scala-debug-adapter"))
 
-    // Change case of file.
-    val sourceFilePathString = sourceFilePath.toString()
-    assert(sourceFilePathString.contains("scala-debug-adapter")) // precondition for this test.
+    val moddedSourceFile = sourceFile.replace("scala-debug-adapter", "SCALA-deBug-Adapter")
+    val sourceFileKey = SourceFileKey(toUri(moddedSourceFile))
+    val className = lookUp.getFullyQualifiedClassName(sourceFileKey, 14)
 
-    // Change some casing of the path uri
-    val lookupKey =
-      SourceFileKey(Paths.get(sourceFilePathString.replace("scala-debug-adapter", "SCALA-deBug-Adapter")).toUri)
-
-    val expectedClassName = "example.Main$Hello$InnerHello$1"
-
-    // Note: The expected result is different based on the OS this test is running on.
-    val className = lookUp.getFullyQualifiedClassName(lookupKey, 14)
-    assertEquals(isFilesystemCaseInsensitive, className.contains(expectedClassName))
+    val expectedClassName = if (isFilesystemCaseInsensitive) Some("example.Main$Hello$InnerHello$1") else None
+    assertEquals(className, expectedClassName)
   }
 
-  test("dependency jar source lookups should accomodate case-sensitivity of the OS filesystem") {
+  test("case-sensitivity in jar path") {
     val catsCore = TestingResolver.fetchOnly("org.typelevel", "cats-core_3", "2.6.1")
     val lookUp = ClassEntryLookUp(catsCore, NoopLogger)
 
-    val sourceJar = catsCore.sourceEntries.collectFirst { case SourceJar(jar) =>
-      jar
-    }.get
+    val sourceJar = catsCore.sourceEntries.collectFirst { case SourceJar(jar) => jar }.get.toString
+    assert(sourceJar.contains("cats-core")) // precondition for this test
 
-    val sourceJarPathString = sourceJar.toString()
-    assert(sourceJarPathString.contains("cats-core")) // precondition for this test
+    val moddedSourceJar = sourceJar.replace("cats-core", "Cats-CoRe")
+    val moddedsourceFile = URI.create(s"jar:${toUri(moddedSourceJar)}!/cats/instances/list.scala")
+    val expectedClassName = if (isFilesystemCaseInsensitive) Some("cats.instances.ListInstances$$anon$1") else None
+    val obtainedClassName = lookUp.getFullyQualifiedClassName(SourceFileKey(moddedsourceFile), 28)
+    assertEquals(obtainedClassName, expectedClassName)
 
-    val expectedClassName = "cats.instances.ListInstances$$anon$1"
-
-    {
-      val moddedSourceJarPath = Paths.get(sourceJarPathString.replace("cats-core", "Cats-CoRe"));
-      val moddedSourceJarUri = URI.create(s"jar:${moddedSourceJarPath.toUri()}!/cats/instances/list.scala")
-
-      // Note: The expected results are different based on the OS this test is running on.
-      val className = lookUp.getFullyQualifiedClassName(SourceFileKey(moddedSourceJarUri), 28)
-      assertEquals(isFilesystemCaseInsensitive, className.contains(expectedClassName))
-    }
-
-    {
-      val moddedSourceJarUri = URI.create(s"jar:${sourceJar.toUri()}!/caTs/Instances/list.scala")
-
-      // The contents of Jar file is case-sensitive regardless of OS filesystem
-      val className = lookUp.getFullyQualifiedClassName(SourceFileKey(moddedSourceJarUri), 28)
-      assert(className.isEmpty)
-    }
-
+    val invalidSourceFile = URI.create(s"jar:file:${toUri(sourceJar)}!/caTs/Instances/list.scala")
+    val notFound = lookUp.getFullyQualifiedClassName(SourceFileKey(invalidSourceFile), 28)
+    assert(notFound.isEmpty)
   }
 
+  private def toUri(path: String): URI = Paths.get(path).toUri
 }

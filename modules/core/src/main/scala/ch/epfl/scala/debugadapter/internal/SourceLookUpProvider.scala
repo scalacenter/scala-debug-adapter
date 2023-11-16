@@ -36,13 +36,12 @@ private[debugadapter] final class SourceLookUpProvider(
   ): Array[String] = {
     val uri = URI.create(uriRepr)
 
-    uri.getScheme.toLowerCase match {
+    uri.getScheme match {
       case "dap-fqcn" =>
         val resolvedName = uri.getSchemeSpecificPart
         lines.map(_ => resolvedName)
       case _ =>
         val key = SourceFileKey(uri);
-
         sourceUriToClassPathEntry.get(key) match {
           case None => lines.map(_ => null)
           case Some(entry) =>
