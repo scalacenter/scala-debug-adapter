@@ -15,9 +15,8 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Properties
 import scala.util.control.NonFatal
 
-class Scala3UnpicklerStats extends DebuggableFunSuite:
-  private val javaRuntime = JavaRuntime(Properties.jdkHome).get
-  private val javaRuntimeJars = javaRuntime match
+class BinaryDecoderStats extends DebuggableFunSuite:
+  private val javaRuntime = JavaRuntime(Properties.jdkHome).get match
     case Java8(_, classJars, _) => classJars
     case java9OrAbove: Java9OrAbove =>
       java9OrAbove.classSystems.flatMap { s =>
@@ -39,32 +38,26 @@ class Scala3UnpicklerStats extends DebuggableFunSuite:
     val localLazyInitCounter = Counter("local lazy initializers")
     val methodCounter = Counter("methods")
 
-    val jars = TestingResolver.fetch("org.scala-lang", "scala3-compiler_3", "3.3.0")
-    val binaryClassLoader = JavaReflectLoader(jars.map(_.absolutePath))
-    val unpickler = new Scala3Unpickler(
-      jars.map(_.absolutePath).toArray ++ javaRuntimeJars,
-      binaryClassLoader,
-      println,
-      testMode = true
-    )
+    val libraries = TestingResolver.fetch("org.scala-lang", "scala3-compiler_3", "3.3.0")
+    val decoder = BinaryDecoder(libraries.map(_.absolutePath), javaRuntime)
 
     for
-      cls <- loadClasses(jars, "scala3-compiler_3-3.3.0", binaryClassLoader)
+      cls <- loadClasses(libraries, "scala3-compiler_3-3.3.0", decoder.classLoader)
       // if cls.name == "dotty.tools.dotc.printing.RefinedPrinter"
       clsSym <- cls match
-        case Patterns.LocalClass(_, _, _) => unpickler.tryFind(cls, localClassCounter)
-        case Patterns.AnonClass(_, _) => unpickler.tryFind(cls, anonClassCounter)
-        case Patterns.InnerClass(_) => unpickler.tryFind(cls, innerClassCounter)
-        case _ => unpickler.tryFind(cls, topLevelClassCounter)
+        case Patterns.LocalClass(_, _, _) => decoder.tryDecode(cls, localClassCounter)
+        case Patterns.AnonClass(_, _) => decoder.tryDecode(cls, anonClassCounter)
+        case Patterns.InnerClass(_) => decoder.tryDecode(cls, innerClassCounter)
+        case _ => decoder.tryDecode(cls, topLevelClassCounter)
       method <- cls.declaredMethods
     // if method.name == "toTextFunction$1$$anonfun$1"
     do
       method match
-        case Patterns.AnonFun(_) => unpickler.tryFind(method, anonFunCounter)
-        case Patterns.AdaptedAnonFun(_) => unpickler.tryFind(method, adaptedAnonFunCounter)
-        case Patterns.LocalLazyInit(_) => unpickler.tryFind(method, localLazyInitCounter)
-        case Patterns.LocalMethod(_) => unpickler.tryFind(method, localMethodCounter)
-        case _ => unpickler.tryFind(method, methodCounter)
+        case Patterns.AnonFun(_) => decoder.tryDecode(method, anonFunCounter)
+        case Patterns.AdaptedAnonFun(_) => decoder.tryDecode(method, adaptedAnonFunCounter)
+        case Patterns.LocalLazyInit(_) => decoder.tryDecode(method, localLazyInitCounter)
+        case Patterns.LocalMethod(_) => decoder.tryDecode(method, localMethodCounter)
+        case _ => decoder.tryDecode(method, methodCounter)
     // localMethodCounter.printNotFound()
     // methodCounter.printNotFound()
     anonFunCounter.printAmbiguous()
@@ -102,10 +95,14 @@ class Scala3UnpicklerStats extends DebuggableFunSuite:
     assertEquals(counter.notFound.size, expectedNotFound)
     assertEquals(counter.throwables.size, expectedThrowables)
 
-  def loadClasses(jars: Seq[Library], jarName: String, binaryLoader: binary.BinaryClassLoader): Seq[binary.ClassType] =
-    val jar = jars.find(_.name == jarName).get
+  def loadClasses(
+      libraries: Seq[Library],
+      libraryName: String,
+      binaryLoader: binary.BinaryClassLoader
+  ): Seq[binary.ClassType] =
+    val libary = libraries.find(_.name == libraryName).get
     val classNames = IO
-      .withinJarFile(jar.absolutePath) { fs =>
+      .withinJarFile(libary.absolutePath) { fs =>
         val classMatcher = fs.getPathMatcher("glob:**.class")
         Files
           .walk(fs.getPath("/"): Path)
@@ -117,13 +114,13 @@ class Scala3UnpicklerStats extends DebuggableFunSuite:
       }
       .get
     val classes = classNames.map(binaryLoader.loadClass)
-    println(s"Loaded ${classes.size} classes in $jarName.")
+    println(s"Loaded ${classes.size} classes in $libraryName.")
     classes
 
-  extension (unpickler: Scala3Unpickler)
-    def tryFind(cls: binary.ClassType, counter: Counter): Option[DecodedClass] =
+  extension (decoder: BinaryDecoder)
+    def tryDecode(cls: binary.ClassType, counter: Counter): Option[DecodedClass] =
       try
-        val sym = unpickler.findClass(cls)
+        val sym = decoder.decodeClass(cls)
         counter.success += cls
         Some(sym)
       catch
@@ -137,9 +134,9 @@ class Scala3UnpicklerStats extends DebuggableFunSuite:
           counter.throwables += (cls -> e)
           None
 
-    def tryFind(mthd: binary.Method, counter: Counter): Unit =
+    def tryDecode(mthd: binary.Method, counter: Counter): Unit =
       try
-        val sym = unpickler.findMethod(mthd)
+        val sym = decoder.decodeMethod(mthd)
         counter.success += mthd
       catch
         case notFound: NotFoundException => counter.notFound += (mthd -> notFound)

@@ -25,6 +25,7 @@ class Scala31PlusUnpicklerTests extends Scala3UnpicklerTests(ScalaVersion.`3.1+`
 
 abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends DebuggableFunSuite:
   def isScala30 = scalaVersion.isScala30
+  val formatter = StackTraceFormatter(println, true)
 
   test("mixin and static forwarders") {
     val source =
@@ -63,26 +64,26 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |
          |object F extends A
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
     val javaSig = "java.lang.String m()"
     val staticTraitAccessor = "java.lang.String m$(example.A $this)"
 
-    debuggee.assertFormat("example.A", javaSig, "A.m(): String")
-    debuggee.assertFormat("example.A", staticTraitAccessor, "A.m.<static forwarder>(): String", skip = true)
-    debuggee.assertFormat("example.B", javaSig, "B.m.<mixin forwarder>(): String", skip = true)
-    debuggee.assertFormat("example.C", javaSig, "C.m.<mixin forwarder>(): String", skip = true)
-    debuggee.assertFormat("example.D", javaSig, "D.m(): String")
-    debuggee.assertFormat("example.F$", javaSig, "F.m.<mixin forwarder>(): String", skip = true)
-    debuggee.assertFormat("example.F", javaSig, "F.m.<static forwarder>(): String", skip = true)
-    debuggee.assertFormat("example.Main$G", javaSig, "Main.G.m(): String")
-    debuggee.assertFormat("example.Main$H", javaSig, "Main.H.m.<mixin forwarder>(): String", skip = true)
-    debuggee.assertFormat(
+    decoder.assertFormat("example.A", javaSig, "A.m(): String")
+    decoder.assertFormat("example.A", staticTraitAccessor, "A.m.<static forwarder>(): String", skip = true)
+    decoder.assertFormat("example.B", javaSig, "B.m.<mixin forwarder>(): String", skip = true)
+    decoder.assertFormat("example.C", javaSig, "C.m.<mixin forwarder>(): String", skip = true)
+    decoder.assertFormat("example.D", javaSig, "D.m(): String")
+    decoder.assertFormat("example.F$", javaSig, "F.m.<mixin forwarder>(): String", skip = true)
+    decoder.assertFormat("example.F", javaSig, "F.m.<static forwarder>(): String", skip = true)
+    decoder.assertFormat("example.Main$G", javaSig, "Main.G.m(): String")
+    decoder.assertFormat("example.Main$H", javaSig, "Main.H.m.<mixin forwarder>(): String", skip = true)
+    decoder.assertFormat(
       "example.Main$$anon$1",
       javaSig,
       "Main.main.a1.<anon class>.m.<mixin forwarder>(): String",
       skip = true
     )
-    debuggee.assertFormat("example.Main$$anon$2", javaSig, "Main.main.a2.<anon class>.m(): String")
+    decoder.assertFormat("example.Main$$anon$2", javaSig, "Main.main.a2.<anon class>.m(): String")
   }
 
   test("find local class, trait and object by parents") {
@@ -95,31 +96,31 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |    class C extends D
          |    object F extends D
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$D$1", "Main.main.D")
-    debuggee.assertFormat("example.Main$C$1", "Main.main.C")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.Main$D$1", "Main.main.D")
+    decoder.assertFormat("example.Main$C$1", "Main.main.C")
     if isScala30 then
-      debuggee.assertFormat("example.Main$F$1$", "Main.main.F")
-      debuggee.assertFormat(
+      decoder.assertFormat("example.Main$F$1$", "Main.main.F")
+      decoder.assertFormat(
         "example.Main$",
         "example.Main$F$1$ F$1(scala.runtime.LazyRef F$lzy1$2)",
         "Main.main.F: F",
         skip = true
       )
-      debuggee.assertFormat(
+      decoder.assertFormat(
         "example.Main$",
         "example.Main$F$1$ F$lzyINIT1$1(scala.runtime.LazyRef F$lzy1$1)",
         "Main.main.F.<lazy init>: F"
       )
     else
-      debuggee.assertFormat("example.Main$F$2$", "Main.main.F")
-      debuggee.assertFormat(
+      decoder.assertFormat("example.Main$F$2$", "Main.main.F")
+      decoder.assertFormat(
         "example.Main$",
         "example.Main$F$2$ F$1(scala.runtime.LazyRef F$lzy1$2)",
         "Main.main.F: F",
         skip = true
       )
-      debuggee.assertFormat(
+      decoder.assertFormat(
         "example.Main$",
         "example.Main$F$2$ F$lzyINIT1$1(scala.runtime.LazyRef F$lzy1$1)",
         "Main.main.F.<lazy init>: F"
@@ -140,15 +141,15 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |        A()
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
     if isScala30 then
-      debuggee.assertFormat(
+      decoder.assertFormat(
         "example.Main$",
         "void example$Main$Bar$1$$_$A$1()",
         "Main.m.Bar.m.A(): Unit"
       )
     else
-      debuggee.assertFormat(
+      decoder.assertFormat(
         "example.Main$",
         "void example$Main$Bar$1$$_$A$3()",
         "Main.m.Bar.m.A(): Unit"
@@ -182,22 +183,22 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  }
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.A", "void m$1(java.lang.String y$1)", "A.m1.m: Unit")
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat("example.A", "void m$1(java.lang.String y$1)", "A.m1.m: Unit")
     if isScala30 then
-      debuggee.assertFormat(
+      decoder.assertFormat(
         "example.A",
         "void m$4(java.lang.String y$2, java.lang.String z)",
         "A.m1.m.m(z: String): Unit"
       )
-      debuggee.assertFormat("example.A", "void m$2(int i)", "A.m2.m(i: Int): Unit")
+      decoder.assertFormat("example.A", "void m$2(int i)", "A.m2.m(i: Int): Unit")
     else
-      debuggee.assertFormat(
+      decoder.assertFormat(
         "example.A",
         "void m$2(java.lang.String y$2, java.lang.String z)",
         "A.m1.m.m(z: String): Unit"
       )
-      debuggee.assertFormat("example.A", "void m$3(int i)", "A.m2.m(i: Int): Unit")
+      decoder.assertFormat("example.A", "void m$3(int i)", "A.m2.m(i: Int): Unit")
   }
 
   test("getters and setters") {
@@ -227,31 +228,31 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |case class D(d1: String)
          |
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
 
     def getter(field: String): String = s"java.lang.String $field()"
     def setter(field: String, param: String = "x$1"): String = s"void ${field}_$$eq(java.lang.String $param)"
 
-    debuggee.assertFormat("example.Main$", getter("x1"), "Main.x1: String", skip = true)
-    debuggee.assertFormat("example.Main$", getter("x2"), "Main.x2: String", skip = true)
-    debuggee.assertFormat("example.Main$", setter("x2"), "Main.x2_=(String): Unit", skip = true)
+    decoder.assertFormat("example.Main$", getter("x1"), "Main.x1: String", skip = true)
+    decoder.assertFormat("example.Main$", getter("x2"), "Main.x2: String", skip = true)
+    decoder.assertFormat("example.Main$", setter("x2"), "Main.x2_=(String): Unit", skip = true)
 
     // static forwarders
-    debuggee.assertFormat("example.Main", getter("x1"), "Main.x1.<static forwarder>: String", skip = true)
-    debuggee.assertFormat("example.Main", getter("x2"), "Main.x2.<static forwarder>: String", skip = true)
-    debuggee.assertFormat(
+    decoder.assertFormat("example.Main", getter("x1"), "Main.x1.<static forwarder>: String", skip = true)
+    decoder.assertFormat("example.Main", getter("x2"), "Main.x2.<static forwarder>: String", skip = true)
+    decoder.assertFormat(
       "example.Main",
       setter("x2", param = "arg0"),
       "Main.x2_=.<static forwarder>(String): Unit",
       skip = true
     )
 
-    debuggee.assertFormat("example.A", getter("a1"), "A.a1: String", skip = true)
-    debuggee.assertFormat("example.A", getter("a2"), "A.a2: String")
-    debuggee.assertFormat("example.B", getter("b1"), "B.b1: String", skip = true)
-    debuggee.assertFormat("example.B", getter("b2"), "B.b2: String", skip = true)
-    debuggee.assertFormat("example.C", getter("c1"), "C.c1: String", skip = true)
-    debuggee.assertFormat("example.D", getter("d1"), "D.d1: String", skip = true)
+    decoder.assertFormat("example.A", getter("a1"), "A.a1: String", skip = true)
+    decoder.assertFormat("example.A", getter("a2"), "A.a2: String")
+    decoder.assertFormat("example.B", getter("b1"), "B.b1: String", skip = true)
+    decoder.assertFormat("example.B", getter("b2"), "B.b2: String", skip = true)
+    decoder.assertFormat("example.C", getter("c1"), "C.c1: String", skip = true)
+    decoder.assertFormat("example.D", getter("d1"), "D.d1: String", skip = true)
   }
 
   test("bridges") {
@@ -266,13 +267,13 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  override def m(): String = "string"
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
 
     def javaSig(returnType: String): String = s"java.lang.Object m()"
 
-    debuggee.assertFormat("example.A", "java.lang.Object m()", "A.m(): Object")
-    debuggee.assertFormat("example.B", "java.lang.Object m()", "B.m.<bridge>(): String", skip = true)
-    debuggee.assertFormat("example.B", "java.lang.String m()", "B.m(): String")
+    decoder.assertFormat("example.A", "java.lang.Object m()", "A.m(): Object")
+    decoder.assertFormat("example.B", "java.lang.Object m()", "B.m.<bridge>(): String", skip = true)
+    decoder.assertFormat("example.B", "java.lang.String m()", "B.m(): String")
   }
 
   test("find outter field") {
@@ -284,9 +285,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |    class C:
          |      private val y = x+2
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
 
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.A$B$C",
       "example.A$B example$A$B$C$$$outer()",
       "A.B.C.<outer>: B.this.type",
@@ -303,29 +304,29 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def m3(using String , Int): Unit = ()
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$", "int m1(int x, int y)", "Main.m1(using x: Int, y: Int): Int")
-    debuggee.assertFormat("example.Main$", "int m2(int x)", "Main.m2(implicit x: Int): Int")
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.Main$", "int m1(int x, int y)", "Main.m1(using x: Int, y: Int): Int")
+    decoder.assertFormat("example.Main$", "int m2(int x)", "Main.m2(implicit x: Int): Int")
+    decoder.assertFormat(
       "example.Main$",
       "void m3(java.lang.String x$1, int x$2)",
       "Main.m3(using String, Int): Unit"
     )
 
     // static forwarders
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.Main",
       "int m1(int arg0, int arg1)",
       "Main.m1.<static forwarder>(using x: Int, y: Int): Int",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.Main",
       "int m2(int arg0)",
       "Main.m2.<static forwarder>(implicit x: Int): Int",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.Main",
       "void m3(java.lang.String arg0, int arg1)",
       "Main.m3.<static forwarder>(using String, Int): Unit",
@@ -350,10 +351,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |    class C extends A 
          |    class G extends A
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$C$1", "Main.m.C")
-    debuggee.assertFormat("example.Main$E$1$F", "Main.m.E.F")
-    debuggee.assertFormat("example.Main$G$1", "Main.m.G")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.Main$C$1", "Main.m.C")
+    decoder.assertFormat("example.Main$E$1$F", "Main.m.E.F")
+    decoder.assertFormat("example.Main$G$1", "Main.m.G")
   }
 
   test("local class in signature") {
@@ -370,20 +371,20 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |            def m(t : D) : D = 
          |              t
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat(
       "example.Main$",
       "example.Main$D$1 m$1(example.Main$D$1 t)",
       "Main.A.m.B.C.m.m(t: D): D"
     )
     if isScala30 then
-      debuggee.assertFormat(
+      decoder.assertFormat(
         "example.Main$B$1",
         "void <init>()",
         "Main.A.m.B.<init>(): Unit"
       )
     else
-      debuggee.assertFormat(
+      decoder.assertFormat(
         "example.Main$A$B$1",
         "void <init>()",
         "Main.A.m.B.<init>(): Unit"
@@ -398,10 +399,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |    def ++ = 1
          |    class ++ 
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.$plus$plus", "int $plus$plus$1()", "++.m.++: Int")
-    if isScala30 then debuggee.assertFormat("example.$plus$plus$$plus$plus$1", "++.m.++")
-    else debuggee.assertFormat("example.$plus$plus$$plus$plus$2", "++.m.++")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.$plus$plus", "int $plus$plus$1()", "++.m.++: Int")
+    if isScala30 then decoder.assertFormat("example.$plus$plus$$plus$plus$1", "++.m.++")
+    else decoder.assertFormat("example.$plus$plus$$plus$plus$2", "++.m.++")
   }
 
   test("extension method of value classes") {
@@ -414,15 +415,15 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  }
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.A$", "java.lang.String m$extension(java.lang.String $this)", "A.m(): String")
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.A$", "java.lang.String m$extension(java.lang.String $this)", "A.m(): String")
+    decoder.assertFormat(
       "example.A",
       "java.lang.String m$extension(java.lang.String arg0)",
       "A.m.<static forwarder>(): String",
       skip = true
     )
-    debuggee.assertFormat("example.A", "void <init>(java.lang.String x)", "A.<init>(x: String): Unit")
+    decoder.assertFormat("example.A", "void <init>(java.lang.String x)", "A.<init>(x: String): Unit")
   }
 
   test("local method inside a value class") {
@@ -445,9 +446,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  }
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.A$", "java.lang.String m$2(java.lang.String t)", "A.m.m(t: String): String")
-    debuggee.assertFormat("example.A$", "java.lang.String m$1()", "A.m.m: String")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.A$", "java.lang.String m$2(java.lang.String t)", "A.m.m(t: String): String")
+    decoder.assertFormat("example.A$", "java.lang.String m$1()", "A.m.m: String")
   }
 
   test("multi parameter lists") {
@@ -462,8 +463,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |
          |class A
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$", "java.lang.String m(example.A a)", "Main.m()(a: A): String")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.Main$", "java.lang.String m(example.A a)", "Main.m()(a: A): String")
   }
 
   test("lazy initializer") {
@@ -483,24 +484,24 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |}
          |""".stripMargin
 
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
 
-    debuggee.assertFormat("example.A$", "java.lang.String a()", "A.a: String", skip = true)
-    debuggee.assertFormat("example.A$", "java.lang.String b()", "A.b: String", skip = true)
-    debuggee.assertFormat("example.B", "java.lang.String b()", "B.b: String")
-    debuggee.assertFormat(
+    decoder.assertFormat("example.A$", "java.lang.String a()", "A.a: String", skip = true)
+    decoder.assertFormat("example.A$", "java.lang.String b()", "A.b: String", skip = true)
+    decoder.assertFormat("example.B", "java.lang.String b()", "B.b: String")
+    decoder.assertFormat(
       "example.B",
       "java.lang.String b$(example.B $this)",
       "B.b.<static forwarder>: String",
       skip = true
     )
     if !isScala30 then // new in Scala 3.3.0
-      debuggee.assertFormat("example.A$", "java.lang.Object a$lzyINIT1()", "A.a.<lazy init>: String")
-      debuggee.assertFormat("example.A$", "java.lang.Object b$lzyINIT1()", "A.b.<lazy init>: String", skip = true)
+      decoder.assertFormat("example.A$", "java.lang.Object a$lzyINIT1()", "A.a.<lazy init>: String")
+      decoder.assertFormat("example.A$", "java.lang.Object b$lzyINIT1()", "A.b.<lazy init>: String", skip = true)
 
     // static forwarders
-    debuggee.assertFormat("example.A", "java.lang.String a()", "A.a.<static forwarder>: String", skip = true)
-    debuggee.assertFormat("example.A", "java.lang.String b()", "A.b.<static forwarder>: String", skip = true)
+    decoder.assertFormat("example.A", "java.lang.String a()", "A.a.<static forwarder>: String", skip = true)
+    decoder.assertFormat("example.A", "java.lang.String b()", "A.b.<static forwarder>: String", skip = true)
   }
 
   test("synthetic methods of case class") {
@@ -509,29 +510,29 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |
          |case class A(a: String)
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
 
-    debuggee.assertFormat("example.A", "java.lang.String toString()", "A.toString(): String", skip = true)
-    debuggee.assertFormat("example.A", "example.A copy(java.lang.String a)", "A.copy(a: String): A", skip = true)
-    debuggee.assertFormat("example.A", "int hashCode()", "A.hashCode(): Int", skip = true)
-    debuggee.assertFormat("example.A", "boolean equals(java.lang.Object x$0)", "A.equals(Any): Boolean", skip = true)
-    debuggee.assertFormat("example.A", "int productArity()", "A.productArity: Int", skip = true)
-    debuggee.assertFormat("example.A", "java.lang.String productPrefix()", "A.productPrefix: String", skip = true)
-    debuggee.assertFormat(
+    decoder.assertFormat("example.A", "java.lang.String toString()", "A.toString(): String", skip = true)
+    decoder.assertFormat("example.A", "example.A copy(java.lang.String a)", "A.copy(a: String): A", skip = true)
+    decoder.assertFormat("example.A", "int hashCode()", "A.hashCode(): Int", skip = true)
+    decoder.assertFormat("example.A", "boolean equals(java.lang.Object x$0)", "A.equals(Any): Boolean", skip = true)
+    decoder.assertFormat("example.A", "int productArity()", "A.productArity: Int", skip = true)
+    decoder.assertFormat("example.A", "java.lang.String productPrefix()", "A.productPrefix: String", skip = true)
+    decoder.assertFormat(
       "example.A",
       "java.lang.Object productElement(int n)",
       "A.productElement(n: Int): Any",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.A",
       "scala.collection.Iterator productIterator()",
       "A.productIterator.<mixin forwarder>: Iterator[Any]",
       skip = true
     )
 
-    debuggee.assertFormat("example.A$", "example.A apply(java.lang.String a)", "A.apply(a: String): A", skip = true)
-    debuggee.assertFormat("example.A$", "example.A unapply(example.A x$1)", "A.unapply(A): A", skip = true)
+    decoder.assertFormat("example.A$", "example.A apply(java.lang.String a)", "A.apply(a: String): A", skip = true)
+    decoder.assertFormat("example.A$", "example.A unapply(example.A x$1)", "A.unapply(A): A", skip = true)
   }
 
   test("anonymous functions") {
@@ -545,27 +546,27 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def m =
          |    List("").map(x => x + 1)
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
     if isScala30 then
-      debuggee.assertFormat(
+      decoder.assertFormat(
         "example.A",
         "java.lang.String m$$anonfun$2(boolean x)",
         "A.B.m.<anon fun>(x: Boolean): String"
       )
-      debuggee.assertFormat("example.A", "java.lang.String $anonfun$1(int x)", "A.B.m.f.<anon fun>(x: Int): String")
-      debuggee.assertFormat(
+      decoder.assertFormat("example.A", "java.lang.String $anonfun$1(int x)", "A.B.m.f.<anon fun>(x: Int): String")
+      decoder.assertFormat(
         "example.A",
         "java.lang.String m$$anonfun$1(java.lang.String x)",
         "A.m.<anon fun>(x: String): String"
       )
     else
-      debuggee.assertFormat(
+      decoder.assertFormat(
         "example.A",
         "java.lang.String m$$anonfun$1(boolean x)",
         "A.B.m.<anon fun>(x: Boolean): String"
       )
-      debuggee.assertFormat("example.A", "java.lang.String $anonfun$1(int x)", "A.B.m.f.<anon fun>(x: Int): String")
-      debuggee.assertFormat(
+      decoder.assertFormat("example.A", "java.lang.String $anonfun$1(int x)", "A.B.m.f.<anon fun>(x: Int): String")
+      decoder.assertFormat(
         "example.A",
         "java.lang.String m$$anonfun$2(java.lang.String x)",
         "A.m.<anon fun>(x: String): String"
@@ -585,8 +586,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |    b.n
          |
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.A$$anon$1", "A.m.b.<anon class>")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.A$$anon$1", "A.m.b.<anon class>")
   }
 
   test("this.type") {
@@ -598,8 +599,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |}
          |""".stripMargin
 
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.A", "example.A m()", "A.m(): A.this.type")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.A", "example.A m()", "A.m(): A.this.type")
   }
 
   test("inline def with anonymous class and method") {
@@ -619,9 +620,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |    m
          |""".stripMargin
 
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.B", "int $anonfun$1(int x)", "example.m.f.<anon fun>(x: Int): Int")
-    debuggee.assertFormat("example.B$$anon$1", "example.m.a.<anon class>")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.B", "int $anonfun$1(int x)", "example.m.f.<anon fun>(x: Int): Int")
+    decoder.assertFormat("example.B$$anon$1", "example.m.a.<anon class>")
   }
 
   test("SAM and partial functions") {
@@ -638,40 +639,40 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |
          |""".stripMargin
 
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$$anon$1", "Main.foo.<anon Ordering>")
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.Main$$anon$1", "Main.foo.<anon Ordering>")
+    decoder.assertFormat(
       "example.Main$$anon$1",
       "int compare(java.lang.String x, java.lang.String y)",
       "Main.foo.<anon Ordering>.compare(x: String, y: String): Int"
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.Main$$anon$1",
       "int compare(java.lang.Object x, java.lang.Object y)",
       "Main.foo.<anon Ordering>.compare.<bridge>(x: String, y: String): Int",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.Main$$anon$2",
       "Main.f.<anon PartialFunction>"
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.Main$$anon$2",
       "boolean isDefinedAt(java.lang.String x)",
       "Main.f.<anon PartialFunction>.isDefinedAt(x: String): Boolean"
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.Main$$anon$2",
       "boolean isDefinedAt(java.lang.Object x)",
       "Main.f.<anon PartialFunction>.isDefinedAt.<bridge>(x: String): Boolean",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.Main$$anon$2",
       "java.lang.Object applyOrElse(java.lang.String x, scala.Function1 default)",
       "Main.f.<anon PartialFunction>.applyOrElse[A1, B1](x: A1, default: A1 => B1): B1"
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.Main$$anon$2",
       "java.lang.Object applyOrElse(java.lang.Object x, scala.Function1 default)",
       "Main.f.<anon PartialFunction>.applyOrElse.<bridge>[A1, B1](x: A1, default: A1 => B1): B1",
@@ -689,16 +690,16 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  }
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
 
-    debuggee.assertFormat("example.A", "java.lang.String m$default$1()", "A.m.<default 1>: String")
-    debuggee.assertFormat("example.A", "int m$default$2()", "A.m.<default 2>: Int")
-    debuggee.assertFormat(
+    decoder.assertFormat("example.A", "java.lang.String m$default$1()", "A.m.<default 1>: String")
+    decoder.assertFormat("example.A", "int m$default$2()", "A.m.<default 2>: Int")
+    decoder.assertFormat(
       "example.A$",
       "java.lang.String $lessinit$greater$default$1()",
       "A.<init>.<default 1>: String"
     )
-    debuggee.assertFormat("example.A$", "int $lessinit$greater$default$2()", "A.<init>.<default 2>: Int")
+    decoder.assertFormat("example.A$", "int $lessinit$greater$default$2()", "A.<init>.<default 2>: Int")
   }
 
   test("matches on return types") {
@@ -713,16 +714,16 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def m(xs: List[String]): String = xs.mkString(", ")
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
 
-    debuggee.assertFormat("example.A", "int m(scala.collection.immutable.List xs)", "A.m(xs: List[Int]): Int")
-    debuggee.assertFormat(
+    decoder.assertFormat("example.A", "int m(scala.collection.immutable.List xs)", "A.m(xs: List[Int]): Int")
+    decoder.assertFormat(
       "example.B",
       "int m(scala.collection.immutable.List xs)",
       "B.m.<mixin forwarder>(xs: List[Int]): Int",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.B",
       "java.lang.String m(scala.collection.immutable.List xs)",
       "B.m(xs: List[String]): String"
@@ -766,10 +767,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |}
          |""".stripMargin
 
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
 
     def assertFormat(javaSig: String, expected: String)(using munit.Location): Unit =
-      debuggee.assertFormat("example.Main$", javaSig, expected)
+      decoder.assertFormat("example.Main$", javaSig, expected)
 
     assertFormat("example.A m(example.A a)", "Main.m(a: A): A")
     assertFormat("example.A$B mbis(example.A$B b)", "Main.mbis(b: A.B): A.B")
@@ -799,8 +800,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def m1(x: "a"): 1 = 1
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.A", "int m1(java.lang.String x)", "A.m1(x: \"a\"): 1")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.A", "int m1(java.lang.String x)", "A.m1(x: \"a\"): 1")
   }
 
   test("type aliases") {
@@ -815,8 +816,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def m(x: Foo): Bar  = x.toString
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$", "java.lang.String m(example.A x)", "Main.m(x: Foo): Bar")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.Main$", "java.lang.String m(example.A x)", "Main.m(x: Foo): Bar")
   }
 
   test("refined types") {
@@ -836,9 +837,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  }
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$", "example.B m1()", "Main.m1(): A & B {...}")
-    debuggee.assertFormat("example.Main$", "java.lang.Object m2()", "Main.m2(): Object {...}")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.Main$", "example.B m1()", "Main.m1(): A & B {...}")
+    decoder.assertFormat("example.Main$", "java.lang.Object m2()", "Main.m2(): Object {...}")
   }
 
   test("type parameters") {
@@ -854,9 +855,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def m2[T <: X](x: T) = x  
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.B", "example.A m1(example.A x)", "B.m1(x: X): X")
-    debuggee.assertFormat("example.B", "example.A m2(example.A x)", "B.m2[T](x: T): T")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.B", "example.A m1(example.A x)", "B.m1(x: X): X")
+    decoder.assertFormat("example.B", "example.A m2(example.A x)", "B.m2[T](x: T): T")
   }
 
   test("nested classes") {
@@ -872,8 +873,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def today(): Enumeration#Value = WeekDay.Mon
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$", "scala.Enumeration$Value today()", "Main.today(): Enumeration.Value")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.Main$", "scala.Enumeration$Value today()", "Main.today(): Enumeration.Value")
   }
 
   test("matches Null and Nothing") {
@@ -885,9 +886,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def m(xs: Array[String]): Null = null
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$", "scala.runtime.Nothing$ m(int[] xs)", "Main.m(xs: Array[Int]): Nothing")
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.Main$", "scala.runtime.Nothing$ m(int[] xs)", "Main.m(xs: Array[Int]): Nothing")
+    decoder.assertFormat(
       "example.Main$",
       "scala.runtime.Null$ m(java.lang.String[] xs)",
       "Main.m(xs: Array[String]): Null"
@@ -902,8 +903,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def m[T](xs: Array[T]): Array[T] = xs
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat(
       "example.Main$",
       "java.lang.Object m(java.lang.Object xs)",
       "Main.m[T](xs: Array[T]): Array[T]"
@@ -918,8 +919,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def m[T](x: B[T]): B[T] = x
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.A", "java.lang.Object m(java.lang.Object x)", "A.m[T](x: B[T]): B[T]")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.A", "java.lang.Object m(java.lang.Object x)", "A.m[T](x: B[T]): B[T]")
   }
 
   test("constructors and trait constructors") {
@@ -932,9 +933,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |
          |class B extends A
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.A", "void $init$(example.A $this)", "A.<init>(): Unit")
-    debuggee.assertFormat("example.B", "void <init>()", "B.<init>(): Unit")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.A", "void $init$(example.A $this)", "A.<init>(): Unit")
+    decoder.assertFormat("example.B", "void <init>()", "B.<init>(): Unit")
   }
 
   test("vararg type") {
@@ -945,8 +946,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def m(as: String*): String = as.mkString(", ")
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat(
       "example.A",
       "java.lang.String m(scala.collection.immutable.Seq as)",
       "A.m(as: String*): String"
@@ -966,9 +967,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |}
          |""".stripMargin
 
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$", "java.lang.String $amp(example.$less$greater x)", "Main.&(x: <>): String")
-    debuggee.assertFormat("example.$less$greater", "example.$less$greater m()", "<>.m: <>")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.Main$", "java.lang.String $amp(example.$less$greater x)", "Main.&(x: <>): String")
+    decoder.assertFormat("example.$less$greater", "example.$less$greater m()", "<>.m: <>")
   }
 
   test("local recursive method") {
@@ -986,8 +987,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |}
          |""".stripMargin
 
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$", "int rec$1(int x, int acc)", "Main.fac.rec(x: Int, acc: Int): Int")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.Main$", "int rec$1(int x, int acc)", "Main.fac.rec(x: Int, acc: Int): Int")
   }
 
   test("local lazy initializer") {
@@ -1005,14 +1006,14 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |}
          |""".stripMargin
 
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat(
       "example.A",
       "java.lang.String y$1(java.lang.String x$2, scala.runtime.LazyRef y$lzy1$2)",
       "A.m.y: String",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.A",
       "java.lang.String y$lzyINIT1$1(java.lang.String x$1, scala.runtime.LazyRef y$lzy1$1)",
       "A.m.y.<lazy init>: String"
@@ -1040,9 +1041,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  private def m: Int = 1
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Outer", "java.lang.String example$Outer$$foo()", "Outer.foo: String")
-    debuggee.assertFormat("example.A$", "int example$A$$$m()", "A.m: Int")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.Outer", "java.lang.String example$Outer$$foo()", "Outer.foo: String")
+    decoder.assertFormat("example.A$", "int example$A$$$m()", "A.m: Int")
   }
 
   test("type lambda") {
@@ -1055,8 +1056,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def foo : Foo[[X] =>> Either[X, Int]] = ???
          |""".stripMargin
 
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$", "example.Foo foo()", "Main.foo: Foo[[X] =>> Either[X, Int]]")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.Main$", "example.Foo foo()", "Main.foo: Foo[[X] =>> Either[X, Int]]")
   }
 
   test("local enum") {
@@ -1069,8 +1070,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |    ()
          |""".stripMargin
 
-    val debuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    debuggee.assertFormat("example.Main$A$1", "Main.m.A")
+    val decoder = TestingDebuggee.mainClass(source, "example.Main", scalaVersion).decoder
+    decoder.assertFormat("example.Main$A$1", "Main.m.A")
   }
 
   test("package object") {
@@ -1079,9 +1080,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def foo: String = ???
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.package$", "java.lang.String foo()", "example.foo: String")
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat("example.package$", "java.lang.String foo()", "example.foo: String")
+    decoder.assertFormat(
       "example.package",
       "java.lang.String foo()",
       "example.foo.<static forwarder>: String",
@@ -1095,9 +1096,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |
          |def foo: String = ???
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.example$package$", "java.lang.String foo()", "example.foo: String")
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat("example.example$package$", "java.lang.String foo()", "example.foo: String")
+    decoder.assertFormat(
       "example.example$package",
       "java.lang.String foo()",
       "example.foo.<static forwarder>: String",
@@ -1114,9 +1115,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def m(x: String): String = ""
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.A", "java.lang.String m()", "A.m: String", skip = true)
-    debuggee.assertFormat("example.A", "java.lang.String m(java.lang.String x)", "A.m(x: String): String")
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat("example.A", "java.lang.String m()", "A.m: String", skip = true)
+    decoder.assertFormat("example.A", "java.lang.String m(java.lang.String x)", "A.m(x: String): String")
   }
 
   test("adapted anon fun") {
@@ -1127,8 +1128,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  def m(x: String): String = x.takeWhile(_ != '.')
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat(
       "example.A",
       "boolean m$$anonfun$adapted$1(java.lang.Object _$1)",
       "A.m.<anon fun>.<adapted>(Char): Boolean",
@@ -1167,34 +1168,34 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  }
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.B1$", "scala.Function0 B1$$superArg$1()", "B1.<init>.<super arg>: () => String")
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat("example.B1$", "scala.Function0 B1$$superArg$1()", "B1.<init>.<super arg>: () => String")
+    decoder.assertFormat(
       "example.B1$",
       "scala.Function1 example$B1$$$B2$$superArg$1()",
       "B1.B2.<init>.<super arg>: String => String"
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.C1",
       "scala.Function0 C1$superArg$1()",
       "C1.<init>.<super arg>: () => String"
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.C1",
       "scala.Function1 example$C1$$C2$$superArg$1()",
       "C1.C2.<init>.<super arg>: String => String"
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.C1",
       "scala.Function0 example$C1$$_$C3$superArg$1$1()",
       "C1.m.C3.<init>.<super arg>: () => String"
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.C1",
       "scala.Function0 example$C1$$_$$anon$superArg$1$1()",
       "C1.m.<anon class>.<init>.<super arg>: () => String"
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.C1$C3$1",
       "scala.Function1 example$C1$C3$1$$C4$superArg$1()",
       "C1.m.C3.C4.<init>.<super arg>: String => String"
@@ -1212,24 +1213,24 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  // def mbis: ? ?=> String = ???
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat(
       "example.A",
       "java.lang.String m(int x, java.lang.String evidence$1)",
       "A.m(x: Int): String ?=> String"
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.A",
       "int m(int evidence$2, java.lang.String evidence$3)",
       "A.m(): (Int, String) ?=> Int"
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.A",
       "java.lang.String m(java.lang.String x, int evidence$4, java.lang.String evidence$5)",
       "A.m(x: String): Int ?=> String ?=> String"
     )
     // TODO uncomment in 3.3.2 or 3.3.3
-    // debuggee.assertFormat("example.A", "java.lang.String mbis(java.lang.Object evidence$5)", "A.m: ? ?=> String")
+    // decoder.assertFormat("example.A", "java.lang.String mbis(java.lang.Object evidence$5)", "A.m: ? ?=> String")
   }
 
   test("trait param") {
@@ -1240,13 +1241,13 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |
          |class B(x: Int)(using String) extends A(1, 2, 3)
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
     // todo fix: should be a BinaryTraitParamGetter
-    debuggee.assertFormat("example.B", "int x()", "B.x: Int", skip = true)
-    debuggee.assertFormat("example.B", "int y()", "B.y: Int", skip = true)
-    debuggee.assertFormat("example.B", "void y_$eq(int x$1)", "B.y_=(Int): Unit", skip = true)
-    debuggee.assertFormat("example.B", "int example$A$$z()", "B.z: Int", skip = true)
-    debuggee.assertFormat("example.B", "java.lang.String example$A$$x$4()", "B.x$4: String", skip = true)
+    decoder.assertFormat("example.B", "int x()", "B.x: Int", skip = true)
+    decoder.assertFormat("example.B", "int y()", "B.y: Int", skip = true)
+    decoder.assertFormat("example.B", "void y_$eq(int x$1)", "B.y_=(Int): Unit", skip = true)
+    decoder.assertFormat("example.B", "int example$A$$z()", "B.z: Int", skip = true)
+    decoder.assertFormat("example.B", "java.lang.String example$A$$x$4()", "B.x$4: String", skip = true)
   }
 
   test("lifted try") {
@@ -1268,12 +1269,12 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |
          |   def m4 = "" + m3
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.A", "java.lang.String liftedTree1$1()", "A.<try>: \"\" | \"\"")
-    debuggee.assertFormat("example.A", "java.lang.String liftedTree2$1()", "A.<try>: \"\" | \"\"")
-    debuggee.assertFormat("example.A", "java.lang.String liftedTree3$1()", "A.<try>: \"\" | \"\"")
-    debuggee.assertFormat("example.A", "int liftedTree4$1()", "A.<try>: 2 | 3")
-    debuggee.assertFormat("example.A", "java.lang.String liftedTree5$1()", "A.<try>: \"\" | \"\"")
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat("example.A", "java.lang.String liftedTree1$1()", "A.<try>: \"\" | \"\"")
+    decoder.assertFormat("example.A", "java.lang.String liftedTree2$1()", "A.<try>: \"\" | \"\"")
+    decoder.assertFormat("example.A", "java.lang.String liftedTree3$1()", "A.<try>: \"\" | \"\"")
+    decoder.assertFormat("example.A", "int liftedTree4$1()", "A.<try>: 2 | 3")
+    decoder.assertFormat("example.A", "java.lang.String liftedTree5$1()", "A.<try>: \"\" | \"\"")
   }
 
   test("by-name args") {
@@ -1289,10 +1290,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |    foo(1 + 1)
          |}
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.A", "java.lang.Object foo(scala.Function0 x)", "A.foo[T](x: => T): T")
-    debuggee.assertFormat("example.A", "java.lang.String $init$$$anonfun$1()", "A.<by-name arg>: String")
-    debuggee.assertFormat("example.A", "int m$$anonfun$1()", "A.<by-name arg>: Int")
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat("example.A", "java.lang.Object foo(scala.Function0 x)", "A.foo[T](x: => T): T")
+    decoder.assertFormat("example.A", "java.lang.String $init$$$anonfun$1()", "A.<by-name arg>: String")
+    decoder.assertFormat("example.A", "int m$$anonfun$1()", "A.<by-name arg>: Int")
   }
 
   test("inner object") {
@@ -1309,17 +1310,17 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  object F
          |""".stripMargin
 
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.A", "example.A$B$ B()", "A.B: B")
-    debuggee.assertFormat("example.A", "example.A$B$ B$(example.A $this)", "A.B.<static forwarder>: B", skip = true)
-    debuggee.assertFormat("example.C$", "example.A$B$ B()", "C.B: B", skip = true)
-    debuggee.assertFormat("example.E", "example.E$F$ F()", "E.F: F", skip = true)
-    debuggee.assertFormat("example.E", "example.A$B$ B()", "E.B: B", skip = true)
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat("example.A", "example.A$B$ B()", "A.B: B")
+    decoder.assertFormat("example.A", "example.A$B$ B$(example.A $this)", "A.B.<static forwarder>: B", skip = true)
+    decoder.assertFormat("example.C$", "example.A$B$ B()", "C.B: B", skip = true)
+    decoder.assertFormat("example.E", "example.E$F$ F()", "E.F: F", skip = true)
+    decoder.assertFormat("example.E", "example.A$B$ B()", "E.B: B", skip = true)
 
     if !isScala30 then
-      debuggee.assertFormat("example.C$", "java.lang.Object B$lzyINIT1()", "C.B.<lazy init>: B", skip = true)
-      debuggee.assertFormat("example.E", "java.lang.Object F$lzyINIT1()", "E.F.<lazy init>: F")
-      debuggee.assertFormat("example.E", "java.lang.Object B$lzyINIT2()", "E.B.<lazy init>: B", skip = true)
+      decoder.assertFormat("example.C$", "java.lang.Object B$lzyINIT1()", "C.B.<lazy init>: B", skip = true)
+      decoder.assertFormat("example.E", "java.lang.Object F$lzyINIT1()", "E.F.<lazy init>: F")
+      decoder.assertFormat("example.E", "java.lang.Object B$lzyINIT2()", "E.B.<lazy init>: B", skip = true)
   }
 
   test("static forwarder") {
@@ -1332,8 +1333,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |
          |object B extends A[String]
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat(
       "example.B",
       "java.lang.String foo(java.lang.Object arg0)",
       "B.foo.<static forwarder>(x: String): String",
@@ -1349,8 +1350,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |
          |class B(foo: String) extends A(foo)
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.B", "java.lang.String foo$accessor()", "B.foo: String", skip = true)
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat("example.B", "java.lang.String foo$accessor()", "B.foo: String", skip = true)
   }
 
   test("trait setters") {
@@ -1364,20 +1365,20 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |
          |object C extends A
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat(
       "example.B",
       "void example$A$_setter_$example$A$$foo_$eq(java.lang.String x$0)",
       "B.foo_=(String): Unit",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.C$",
       "void example$A$_setter_$example$A$$foo_$eq(java.lang.String x$0)",
       "C.foo_=(String): Unit",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.C",
       "void example$A$_setter_$example$A$$foo_$eq(java.lang.String arg0)",
       "C.foo_=.<static forwarder>(String): Unit",
@@ -1398,20 +1399,20 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |class C extends B[String]
          |""".stripMargin
 
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat(
       "example.B",
       "java.lang.String example$B$$super$foo(java.lang.Object x)",
       "B.foo.<super>(x: T): String",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.C",
       "java.lang.String example$B$$super$foo(java.lang.String x)",
       "C.foo.<super>(x: String): String",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.C",
       "java.lang.String example$B$$super$foo(java.lang.Object x)",
       "C.foo.<super>.<bridge>(x: String): String",
@@ -1438,26 +1439,26 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  @scala.annotation.varargs
          |  def m(args: String*): Int = args.size
          |""".stripMargin
-    val fromJava = TestingDebuggee.fromJavaSource(javaSource, "example", scalaVersion)
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion, Seq.empty, Seq(fromJava.mainModule))
-    debuggee.assertFormat(
+    val javaModule = TestingDebuggee.fromJavaSource(javaSource, "example", scalaVersion).mainModule
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion, Seq.empty, Seq(javaModule)).decoder
+    decoder.assertFormat(
       "example.B",
       "java.lang.String m(java.lang.Object[] args)",
       "B.m.<bridge>(args: Any*): String",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.B",
       "java.lang.String m(scala.collection.immutable.Seq args)",
       "B.m(args: Any*): String"
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.B",
       "int m(java.lang.String[] args)",
       "B.m.<bridge>(args: String*): Int",
       skip = true
     )
-    debuggee.assertFormat("example.B", "int m(scala.collection.immutable.Seq args)", "B.m(args: String*): Int")
+    decoder.assertFormat("example.B", "int m(scala.collection.immutable.Seq args)", "B.m(args: String*): Int")
   }
 
   test("specialized methods") {
@@ -1469,39 +1470,39 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |
          |object B extends A
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.A", "boolean apply(double x)", "A.apply(x: Double): Boolean")
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat("example.A", "boolean apply(double x)", "A.apply(x: Double): Boolean")
+    decoder.assertFormat(
       "example.A",
       "java.lang.Object apply(java.lang.Object v1)",
       "A.apply.<bridge>(x: Double): Boolean",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.A",
       "boolean apply$mcZD$sp(double x)",
       "A.apply.<specialized>(x: Double): Boolean",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.A",
       "int apply$mcII$sp(int x$0)",
       "A.apply.<specialized>(x: Double): Boolean",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.B",
       "boolean apply(double arg0)",
       "B.apply.<static forwarder>(x: Double): Boolean",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.B",
       "boolean apply$mcZD$sp(double arg0)",
       "B.apply.<specialized>.<static forwarder>(x: Double): Boolean",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.B",
       "int apply$mcII$sp(int arg0)",
       "B.apply.<specialized>.<static forwarder>(x: Double): Boolean",
@@ -1523,9 +1524,9 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |object B extends A:
          |  inline override def m[T](x: => T): T = x
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat("example.B", "java.lang.String x$proxy2$1(java.lang.String s$1)", "B.<by-name arg>: String")
-    debuggee.assertFormat("example.B$", "java.lang.Object x$proxy1$1(scala.Function0 x$1)", "B.<by-name arg>: T")
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat("example.B", "java.lang.String x$proxy2$1(java.lang.String s$1)", "B.<by-name arg>: String")
+    decoder.assertFormat("example.B$", "java.lang.Object x$proxy1$1(scala.Function0 x$1)", "B.<by-name arg>: T")
   }
 
   test("inline accessor") {
@@ -1546,62 +1547,62 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |class C(x: String) extends AnyVal:
          |  inline def m: String = x + x
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat(
       "example.A",
       "java.lang.String inline$x$i2(example.A$AA x$0)",
       "A.<inline A.AA.x>: String",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.A",
       "java.lang.String inline$x$i2$(example.A $this, example.A$AA x$0)",
       "A.<inline A.AA.x>.<static forwarder>: String",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.A",
       "void inline$x_$eq$i2(example.A$AA x$0, java.lang.String x$0)",
       "A.<inline A.AA.x_=>(String): Unit",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.A",
       "void inline$x_$eq$i2$(example.A $this, example.A$AA x$0, java.lang.String x$0)",
       "A.<inline A.AA.x_=>.<static forwarder>(String): Unit",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.B",
       "java.lang.String inline$x$i2(example.A$AA x$0)",
       "B.<inline A.AA.x>.<mixin forwarder>: String",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.B",
       "void inline$x_$eq$i2(example.A$AA x$0, java.lang.String x$0)",
       "B.<inline A.AA.x_=>.<mixin forwarder>(String): Unit",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.B",
       "java.lang.String inline$y()",
       "B.<inline B.y>.<static forwarder>: String",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.B",
       "void inline$y_$eq(java.lang.String arg0)",
       "B.<inline B.y_=>.<static forwarder>(String): Unit",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.C$",
       "java.lang.String inline$x$extension(java.lang.String $this)",
       "C.<inline C.x>: String",
       skip = true
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.C",
       "java.lang.String inline$x$extension(java.lang.String arg0)",
       "C.<inline C.x>.<static forwarder>: String",
@@ -1616,8 +1617,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |object A:
          |  val x: String => String = identity
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat(
       "example.A$",
       "java.lang.Object $deserializeLambda$(java.lang.invoke.SerializedLambda arg0)",
       "A.$deserializeLambda$(arg0: SerializedLambda): Object"
@@ -1632,8 +1633,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  case B extends A("b")
          |  case C extends A("c")
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat(
       "example.A",
       "void <init>(java.lang.String x, java.lang.String _$name, int _$ordinal)",
       "A.<init>(x: String): Unit"
@@ -1650,24 +1651,24 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |    lazy val (x, y) = ("x", "y")
          |    (x, y)
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
     if isScala30 then
-      debuggee.assertFormat("example.A", "scala.Tuple2 $1$()", "A.<anon>: (String, String)", skip = true)
-      debuggee.assertFormat(
+      decoder.assertFormat("example.A", "scala.Tuple2 $1$()", "A.<anon>: (String, String)", skip = true)
+      decoder.assertFormat(
         "example.A",
         "scala.Tuple2 $2$$lzyINIT1$1(scala.runtime.LazyRef $2$$lzy1$1)",
         "A.m.<anon>.<lazy init>: (String, String)"
       )
-      debuggee.assertNotFound("example.A", "scala.Tuple2 $3$$1(scala.runtime.LazyRef $2$$lzy1$2)")
+      decoder.assertNotFound("example.A", "scala.Tuple2 $3$$1(scala.runtime.LazyRef $2$$lzy1$2)")
     else
-      debuggee.assertFormat("example.A", "java.lang.Object $1$$lzyINIT1()", "A.<anon>.<lazy init>: (String, String)")
-      debuggee.assertFormat("example.A", "scala.Tuple2 $1$()", "A.<anon>: (String, String)", skip = true)
-      debuggee.assertFormat(
+      decoder.assertFormat("example.A", "java.lang.Object $1$$lzyINIT1()", "A.<anon>.<lazy init>: (String, String)")
+      decoder.assertFormat("example.A", "scala.Tuple2 $1$()", "A.<anon>: (String, String)", skip = true)
+      decoder.assertFormat(
         "example.A",
         "scala.Tuple2 $2$$lzyINIT1$1(scala.runtime.LazyRef $2$$lzy1$1)",
         "A.m.<anon>.<lazy init>: (String, String)"
       )
-      debuggee.assertFormat(
+      decoder.assertFormat(
         "example.A",
         "scala.Tuple2 $2$$1(scala.runtime.LazyRef $2$$lzy1$2)",
         "A.m.<anon>: (String, String)",
@@ -1687,8 +1688,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |    def m3: String = x + x
          |    () 
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat(
       "example.A",
       "java.lang.String example$A$$_$m3$1$(example.A $this)",
       "A.m1.m3.<static forwarder>: String",
@@ -1709,13 +1710,13 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |      formatted <- Some("")
          |    } yield formatted
          |""".stripMargin
-    val debuggee = TestingDebuggee.mainClass(source, "example", scalaVersion)
-    debuggee.assertFormat(
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    decoder.assertFormat(
       "example.A",
       "scala.Option m$$anonfun$2(scala.Tuple2 x$1)",
       "A.m.<anon fun>((String, String)): Option[String]"
     )
-    debuggee.assertFormat(
+    decoder.assertFormat(
       "example.A",
       if isScala30 then "scala.Option m$$anonfun$5$$anonfun$3(scala.Tuple2 x$1)"
       else "scala.Option m$$anonfun$2$$anonfun$2(scala.Tuple2 x$1)",
@@ -1724,17 +1725,16 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
   }
 
   extension (debuggee: TestingDebuggee)
-    private def loader: JavaReflectLoader =
-      new JavaReflectLoader(debuggee.classLoader, loadExtraInfo = true)
-
-    private def initUnpickler(): Scala3Unpickler =
-      val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
+    private def decoder: BinaryDecoder =
+      val javaRuntime = debuggee.javaRuntime.toSeq.flatMap {
         case Java8(_, classJars, _) => classJars
         case java9OrAbove: Java9OrAbove =>
           java9OrAbove.classSystems.map(_.fileSystem.getPath("/modules", "java.base"))
       }
-      val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
-      new Scala3Unpickler(debuggeeClasspath, loader, println, testMode = true)
+      BinaryDecoder(debuggee.classPath.toList, javaRuntime)
+
+  extension (decoder: BinaryDecoder)
+    private def unpickler = Scala3Unpickler(decoder, formatter)
 
     private def loadBinaryMethod(declaringType: String, javaSig: String)(using
         munit.Location
@@ -1744,7 +1744,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
         val parameters = m.allParameters.map(p => p.`type`.name + " " + p.name).mkString(", ")
         s"$returnType ${m.name}($parameters)"
 
-      val methods = loader.loadClass(declaringType).declaredMethods
+      val methods = decoder.classLoader.loadClass(declaringType).declaredMethods
       def notFoundMessage: String =
         s"Cannot find method '$javaSig':\n" + methods.map(m => s"  " + formatJavaStyle(m)).mkString("\n")
       methods.find(m => formatJavaStyle(m) == javaSig).getOrElse(throw new Exception(notFoundMessage))
@@ -1753,17 +1753,17 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
         munit.Location
     ): Unit =
       val m = loadBinaryMethod(declaringType, javaSig)
-      intercept[NotFoundException](initUnpickler().findMethod(m))
+      intercept[NotFoundException](decoder.decodeMethod(m))
 
     private def assertAmbiguous(declaringType: String, javaSig: String)(using
         munit.Location
     ): Unit =
       val m = loadBinaryMethod(declaringType, javaSig)
-      intercept[AmbiguousException](initUnpickler().findMethod(m))
+      intercept[AmbiguousException](decoder.decodeMethod(m))
 
     private def assertAmbiguous(declaringType: String)(using munit.Location): Unit =
-      val cls = loader.loadClass(declaringType)
-      intercept[AmbiguousException](initUnpickler().findClass(cls))
+      val cls = decoder.classLoader.loadClass(declaringType)
+      intercept[AmbiguousException](decoder.decodeClass(cls))
 
     private def assertFormat(
         declaringType: String,
@@ -1774,13 +1774,11 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
         munit.Location
     ): Unit =
       val m = loadBinaryMethod(declaringType, javaSig)
-      val unpickler = initUnpickler()
-      val binarySymbol = unpickler.findMethod(m)
-      assertEquals(unpickler.formatter.format(binarySymbol), expected)
+      val binarySymbol = decoder.decodeMethod(m)
+      assertEquals(formatter.format(binarySymbol), expected)
       assertEquals(unpickler.skip(binarySymbol), skip)
 
     private def assertFormat(declaringType: String, expected: String)(using munit.Location): Unit =
-      val cls = loader.loadClass(declaringType)
-      val unpickler = initUnpickler()
-      val binarySymbol = unpickler.findClass(cls)
-      assertEquals(unpickler.formatter.format(binarySymbol), expected)
+      val cls = decoder.classLoader.loadClass(declaringType)
+      val binarySymbol = decoder.decodeClass(cls)
+      assertEquals(formatter.format(binarySymbol), expected)
