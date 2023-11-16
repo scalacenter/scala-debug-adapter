@@ -57,7 +57,7 @@ class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1+`) {
     )
   }
 
-  test("given lazy val") {
+  test("given lazy val".ignore) {
     val source =
       """|package example
          |

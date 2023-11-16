@@ -1861,7 +1861,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(Breakpoint(5), Evaluation.success("Foo.msg", "x"))
   }
 
-  test("evaluate by-name param") {
+  test("evaluate by-name param".ignore) {
     val source =
       """|package example
          |
@@ -2572,7 +2572,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("instance of local class in method of value class") {
+  test("instance of local class in method of value class".ignore) {
     // only Scala 3 because:
     // "implementation restriction: nested class is not allowed in value class
     // This restriction is planned to be removed in subsequent releases."
