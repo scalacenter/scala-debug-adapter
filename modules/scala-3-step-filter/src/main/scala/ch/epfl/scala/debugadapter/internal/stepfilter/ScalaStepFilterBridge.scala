@@ -3,13 +3,13 @@ package ch.epfl.scala.debugadapter.internal.stepfilter
 import ch.epfl.scala.debugadapter.internal.jdi
 import tastyquery.Contexts
 import tastyquery.Contexts.Context
-import tastyquery.Flags
 import tastyquery.Names.*
 import tastyquery.Signatures.*
 import tastyquery.Symbols.*
 import tastyquery.Types.*
 import tastyquery.jdk.ClasspathLoaders
 import tastyquery.jdk.ClasspathLoaders.FileKind
+import tastyquery.Modifiers.TermSymbolKind
 
 import java.nio.file.Path
 import java.util.function.Consumer
@@ -83,14 +83,14 @@ class ScalaStepFilterBridge(
       else ctx.defn.EmptyPackage
     val className = javaParts.last
     val clsSymbols = findSymbolsRecursively(packageSym, className)
-    val obj = clsSymbols.filter(_.is(Flags.Module))
-    val cls = clsSymbols.filter(!_.is(Flags.Module))
+    val obj = clsSymbols.filter(_.isModuleClass)
+    val cls = clsSymbols.filter(!_.isModuleClass)
     assert(obj.size <= 1 && cls.size <= 1)
     if isObject && !isExtensionMethod then obj.headOption else cls.headOption
 
-  private def findSymbolsRecursively(owner: DeclaringSymbol, encodedName: String): Seq[DeclaringSymbol] =
+  private def findSymbolsRecursively(owner: DeclaringSymbol, encodedName: String): Seq[ClassSymbol] =
     owner.declarations
-      .collect { case sym: DeclaringSymbol => sym }
+      .collect { case sym: ClassSymbol => sym }
       .flatMap { sym =>
         val encodedSymName = NameTransformer.encode(sym.name.toString)
         val Symbol = s"${Regex.quote(encodedSymName)}\\$$?(.*)".r
@@ -180,6 +180,5 @@ class ScalaStepFilterBridge(
 
   private def skip(symbol: TermSymbol): Boolean =
     val isNonLazyGetterOrSetter =
-      (!symbol.flags.is(Flags.Method) || symbol.is(Flags.Accessor)) &&
-        !symbol.is(Flags.Lazy)
-    isNonLazyGetterOrSetter || symbol.is(Flags.Synthetic)
+      (!symbol.isMethod || symbol.isSetter) && symbol.kind != TermSymbolKind.LazyVal
+    isNonLazyGetterOrSetter || symbol.isSynthetic || symbol.isExport
