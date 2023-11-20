@@ -1724,6 +1724,108 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
     )
   }
 
+  test("inline defs") {
+    val source =
+      """|package example
+         |
+         |class Logger:
+         |  def m1(x: String): String = ???
+         |
+         |  inline def m2(f: String => String): String => String =
+         |    x => m1(f(x))
+         |
+         |  inline def trace1(a: String)(inline f: String => String): Unit =
+         |    println(f(a))
+         |
+         |  inline def rec(b: Boolean)(inline f: String => String): String =
+         |    inline if b then f(rec(false)(f))
+         |    else f("")
+         |
+         |class Test:
+         |  def test(name: String): Unit =
+         |    val logger = new Logger
+         |    val xs = List.empty[String]
+         |    val f = logger.m2(x => xs.map(y => x + y).mkString)
+         |    logger.trace1(name)(x => xs.map(y => x + y).mkString)
+         |    logger.trace1(name + name)(x => xs.map(y => x + y).mkString)
+         |    logger.rec(true)(x => xs.map(y => x + y).mkString)
+         |""".stripMargin
+
+    val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
+    if isScala30 then
+      decoder.assertFormat(
+        "example.Test",
+        "java.lang.String $anonfun$1(scala.collection.immutable.List xs$1, java.lang.String x)",
+        "Test.test.f.<anon fun>(x: String): String"
+      )
+      decoder.assertFormat(
+        "example.Test",
+        "java.lang.String $anonfun$2(scala.Function1 f$proxy1$1, example.Logger Logger_this$1, java.lang.String x)",
+        "Logger.m2.<anon fun>(x: String): String"
+      )
+      decoder.assertFormat(
+        "example.Test",
+        "java.lang.String $anonfun$3(java.lang.String x$proxy1$1, java.lang.String y)",
+        "Test.test.<anon fun>.<anon fun>(y: String): String"
+      )
+      decoder.assertFormat(
+        "example.Test",
+        "java.lang.String test$$anonfun$1(java.lang.String name$1, java.lang.String y)",
+        "Test.test.<anon fun>.<anon fun>(y: String): String"
+      )
+      decoder.assertFormat(
+        "example.Test",
+        "java.lang.String test$$anonfun$2(java.lang.String a$proxy1$1, java.lang.String y)",
+        "Test.test.<anon fun>.<anon fun>(y: String): String"
+      )
+      decoder.assertFormat(
+        "example.Test",
+        "java.lang.String test$$anonfun$3(java.lang.String x$proxy2$1, java.lang.String y)",
+        "Test.test.<anon fun>.<anon fun>(y: String): String"
+      )
+      decoder.assertFormat(
+        "example.Test",
+        "java.lang.String $anonfun$4$$anonfun$1(java.lang.String x$1, java.lang.String y)",
+        "Test.test.f.<anon fun>.<anon fun>(y: String): String"
+      )
+    else
+      decoder.assertFormat(
+        "example.Test",
+        "java.lang.String $anonfun$1(scala.collection.immutable.List xs$1, java.lang.String x)",
+        "Test.test.f.<anon fun>(x: String): String"
+      )
+      decoder.assertFormat(
+        "example.Test",
+        "java.lang.String $anonfun$2(scala.Function1 f$proxy1$1, example.Logger Logger_this$1, java.lang.String x)",
+        "Logger.m2.<anon fun>(x: String): String"
+      )
+      decoder.assertFormat(
+        "example.Test",
+        "java.lang.String test$$anonfun$1(java.lang.String name$1, java.lang.String y)",
+        "Test.test.<anon fun>.<anon fun>(y: String): String"
+      )
+      decoder.assertFormat(
+        "example.Test",
+        "java.lang.String test$$anonfun$2(java.lang.String a$proxy1$1, java.lang.String y)",
+        "Test.test.<anon fun>.<anon fun>(y: String): String"
+      )
+      decoder.assertFormat(
+        "example.Test",
+        "java.lang.String test$$anonfun$3(java.lang.String y)",
+        "Test.test.<anon fun>.<anon fun>(y: String): String"
+      )
+      decoder.assertFormat(
+        "example.Test",
+        "java.lang.String test$$anonfun$4(java.lang.String x$2, java.lang.String y)",
+        "Test.test.<anon fun>.<anon fun>(y: String): String"
+      )
+      decoder.assertFormat(
+        "example.Test",
+        "java.lang.String $anonfun$1$$anonfun$1(java.lang.String x$1, java.lang.String y)",
+        "Test.test.f.<anon fun>.<anon fun>(y: String): String"
+      )
+  }
+
   extension (debuggee: TestingDebuggee)
     private def decoder: BinaryDecoder =
       val javaRuntime = debuggee.javaRuntime.toSeq.flatMap {

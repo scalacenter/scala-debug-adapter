@@ -15,8 +15,7 @@ sealed trait LiftedTree[S]:
 
   def inlinedFrom: List[InlineCall] = Nil
   def inlinedArgs: Map[Symbol, Seq[TermTree]] = Map.empty
-  def positionsIn(sourceName: String)(using Context): Seq[SourcePosition] =
-    LiftedTree.collectInlinePositions(this, sourceName)
+  def positions(using Context): Seq[SourcePosition] = LiftedTree.collectPositions(this)
   def capture(using Context): Seq[String] = LiftedTree.collectCapture(this)
 end LiftedTree
 
@@ -48,14 +47,22 @@ final case class ByNameArg(tree: TermTree, paramTpe: TermType, isInline: Boolean
   def tpe: TermType = if isInline then tree.tpe.widenTermRef else paramTpe
   def symbol: Nothing = unexpected("no symbol for by name arg")
 
-final case class InlinedTree[S](underlying: LiftedTree[S], inlineCall: InlineCall)(using Context) extends LiftedTree[S]:
+final case class InlinedFromDef[S](underlying: LiftedTree[S], inlineCall: InlineCall)(using Context)
+    extends LiftedTree[S]:
   def tree: Tree = underlying.tree
   def symbol: S = underlying.symbol
   def tpe: TermType = inlineCall.substTypeParams(underlying.tpe)
   override def inlinedFrom: List[InlineCall] = inlineCall :: underlying.inlinedFrom
   override def inlinedArgs: Map[Symbol, Seq[TermTree]] = underlying.inlinedArgs
 
-final case class InlinedFromLambda[S](underlying: LiftedTree[S], params: Seq[TermSymbol], inlineArgs: Seq[TermTree])
+/**
+ * An inline call arg can capture a variable passed to another argument of the same call
+ * Example:
+ *   inline def withContext(ctx: Context)(f: Context ?=> T): T = f(ctx)
+ *   withContext(someCtx)(list.map(<anon fun>))
+ * <anon fun> can capture someCtx
+ */
+final case class InlinedFromArg[S](underlying: LiftedTree[S], params: Seq[TermSymbol], inlineArgs: Seq[TermTree])
     extends LiftedTree[S]:
   def tree: Tree = underlying.tree
   def symbol: S = underlying.symbol
@@ -65,14 +72,14 @@ final case class InlinedFromLambda[S](underlying: LiftedTree[S], params: Seq[Ter
 
 object LiftedTree:
   // todo should also map the inlineArgs as a map Map[TermSymbol, TermTree]
-  private def collectInlinePositions(liftedTree: LiftedTree[?], sourceName: String)(using
+  private def collectPositions(liftedTree: LiftedTree[?])(using
       Context
   ): Seq[SourcePosition] =
     val positions = mutable.Set.empty[SourcePosition]
     val alreadySeen = mutable.Set.empty[Symbol]
 
     def registerPosition(pos: SourcePosition): Unit =
-      if pos.isFullyDefined && pos.sourceFile.name == sourceName then positions += pos
+      if pos.isFullyDefined then positions += pos
 
     def loopCollect(symbol: Symbol)(collect: => Unit): Unit =
       if !alreadySeen.contains(symbol) then
@@ -101,7 +108,7 @@ object LiftedTree:
     registerPosition(liftedTree.tree.pos)
     Traverser(liftedTree.inlinedFrom, liftedTree.inlinedArgs).traverse(liftedTree.tree)
     positions.toSeq
-  end collectInlinePositions
+  end collectPositions
 
   def collectCapture(liftedTree: LiftedTree[?])(using Context): Seq[String] =
     val capture = mutable.Set.empty[String]
@@ -146,8 +153,8 @@ object LiftedTree:
         case term: LocalTermDef =>
           loopCollect(term.symbol)(traverser.traverse(term.tree))
         case lambda: LambdaTree => loopCollect(lambda.symbol(0))(lambda.tree)
-        case InlinedTree(underlying, inlineCall) => traverse(underlying)
-        case InlinedFromLambda(underlying, params, inlineArgs) => traverse(underlying)
+        case InlinedFromDef(underlying, inlineCall) => traverse(underlying)
+        case InlinedFromArg(underlying, params, inlineArgs) => traverse(underlying)
         case tree => traverser.traverse(tree.tree)
     traverse(liftedTree)
     capture.toSeq

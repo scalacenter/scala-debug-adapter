@@ -60,12 +60,12 @@ class LiftedTreeCollector[S] private (matcher: PartialFunction[LiftedTree[?], Li
           case tree: DefTree if tree.symbol.isInline => ()
           case InlineCall(inlineCall) =>
             val liftedTrees = inlinedTrees.getOrElseUpdate(inlineCall.symbol, collectInlineDef(inlineCall.symbol))
-            buffer ++= liftedTrees.map(InlinedTree(_, inlineCall))
+            buffer ++= liftedTrees.map(InlinedFromDef(_, inlineCall))
             buffer ++= inlineCall.args.flatMap { arg =>
               extractLambda(arg) match
                 case Some(lambda) =>
                   val params = lambda.meth.symbol.asTerm.paramSymbols
-                  collect(arg).map(InlinedFromLambda(_, params, inlineCall.args))
+                  collect(arg).map(InlinedFromArg(_, params, inlineCall.args))
                 case None => collect(arg)
             }
             super.traverse(inlineCall.termRefTree)

@@ -201,7 +201,7 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
 
   private def wrapIfInline(liftedTree: LiftedTree[?], decodedClass: DecodedClass): DecodedClass =
     liftedTree match
-      case InlinedTree(underlying, inlineCall) =>
+      case InlinedFromDef(underlying, inlineCall) =>
         DecodedClass.InlinedClass(wrapIfInline(underlying, decodedClass), inlineCall.callTree)
       case _ => decodedClass
 
@@ -771,7 +771,7 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
 
   private def wrapIfInline(liftedTree: LiftedTree[?], decodedMethod: DecodedMethod): DecodedMethod =
     liftedTree match
-      case InlinedTree(liftedTree, inlineCall) =>
+      case InlinedFromDef(liftedTree, inlineCall) =>
         DecodedMethod.InlinedMethod(wrapIfInline(liftedTree, decodedMethod), inlineCall.callTree)
       case _ => decodedMethod
 
@@ -799,7 +799,7 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
     LiftedTreeCollector.collect(owner)(matcher).filter(tree => sourceLines.forall(matchLines(tree, _)))
 
   private def matchLines(liftedFun: LiftedTree[?], sourceLines: binary.SourceLines): Boolean =
-    val positions = liftedFun.positionsIn(sourceLines.sourceName)
+    val positions = liftedFun.positions.filter(pos => pos.sourceFile.name == sourceLines.sourceName)
     sourceLines.tastyLines.forall(line => positions.exists(_.containsLine(line)))
 
   private def matchTargetName(method: binary.Method, symbol: TermSymbol): Boolean =
@@ -850,7 +850,7 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
     def isCapture(param: String) =
       patterns.exists(_.unapplySeq(param).nonEmpty)
     def isProxy(param: String) = "(.+)\\$proxy\\d+\\$\\d+".r.unapplySeq(param).nonEmpty
-    def isThisOrOuter(param: String) = "\\$(this|outer)\\$\\d+".r.unapplySeq(param).nonEmpty
+    def isThisOrOuter(param: String) = "(.+_|\\$)(this|outer)\\$\\d+".r.unapplySeq(param).nonEmpty
     def isLazy(param: String) = "(.+)\\$lzy\\d+\\$\\d+".r.unapplySeq(param).nonEmpty
     capturedParams.forall(p => isProxy(p.name) || isCapture(p.name) || isThisOrOuter(p.name) || isLazy(p.name))
 
