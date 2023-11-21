@@ -51,6 +51,8 @@ class JavaReflectLoader(classLoader: ClassLoader, loadExtraInfo: Boolean) extend
             val instructions = mutable.Buffer.empty[Instruction]
             override def visitLineNumber(line: Int, start: asm.Label): Unit =
               lines += line
+            override def visitFieldInsn(opcode: Int, owner: String, name: String, descriptor: String): Unit =
+              instructions += Instruction.Field(opcode, owner.replace('/', '.'), name, descriptor)
             override def visitMethodInsn(
                 opcode: Int,
                 owner: String,

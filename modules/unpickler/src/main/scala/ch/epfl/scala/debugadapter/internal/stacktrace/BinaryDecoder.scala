@@ -81,9 +81,7 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
         .orFind { case Patterns.LazyInit(name) => findLazyInit(decodedClass, name) }
         .orFind { case Patterns.Outer(_) => findOuter(decodedClass).toSeq }
         .orFind { case Patterns.TraitInitializer() => findTraitInitializer(decodedClass, method) }
-        .orFind { case Patterns.InlineAccessor(names) =>
-          names.flatMap(findInlineAccessorOrForwarder(decodedClass, method, _))
-        }
+        .orFind { case Patterns.InlineAccessor(names) => findInlineAccessor(decodedClass, method, names).toSeq }
         .orFind { case Patterns.ValueClassExtension() => findValueClassExtension(decodedClass, method) }
         .orFind { case Patterns.DeserializeLambda() =>
           Seq(DecodedMethod.DeserializeLambda(decodedClass, defn.DeserializeLambdaType))
@@ -258,13 +256,22 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
       method: binary.Method,
       names: Seq[String]
   ): Seq[DecodedMethod.SetterAccessor] =
-    val javaParamType = method.allParameters.last.`type`
-    def matchType0(sym: TermSymbol): Boolean =
-      matchSetterArgType(sym.declaredType, javaParamType)
+    for
+      param <- method.allParameters.lastOption.toSeq
+      sym <- findFieldSymbols(decodedClass, param.`type`, names)
+    yield
+      val tpe = MethodType(List(SimpleName("x$1")), List(sym.declaredType.asInstanceOf[Type]), defn.UnitType)
+      DecodedMethod.SetterAccessor(decodedClass, sym, tpe)
+
+  private def findFieldSymbols(
+      decodedClass: DecodedClass,
+      binaryType: binary.Type,
+      names: Seq[String]
+  ): Seq[TermSymbol] =
+    def matchType0(sym: TermSymbol): Boolean = matchSetterArgType(sym.declaredType, binaryType)
     decodedClass.declarations.collect {
       case sym: TermSymbol if !sym.isMethod && names.exists(sym.targetNameStr == _) && matchType0(sym) =>
-        val tpe = MethodType(List(SimpleName("x$1")), List(sym.declaredType.asInstanceOf[Type]), defn.UnitType)
-        DecodedMethod.SetterAccessor(decodedClass, sym, tpe)
+        sym
     }
 
   private def findSuperAccessor(
@@ -302,83 +309,64 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
         DecodedMethod.SpecializedMethod(decodedClass, sym)
     }
 
-  // TODO use invocation instead
-  private def findInlineAccessorOrForwarder(
-      decodedClass: DecodedClass,
-      method: binary.Method,
-      name: String
-  ): Seq[DecodedMethod] =
-    val mixinForwarders =
-      if !decodedClass.isTrait then
-        for
-          interface <- allInterfaces(method.declaringClass).filter(_.declaredMethods.exists(_.name == method.name))
-          traitSym <- decodeClass(interface).classSymbol.toSeq
-          if traitSym.isTrait
-          inlineAccessor <- findInlineAccessor(DecodedClass.ClassDef(traitSym), method, name)
-        yield DecodedMethod.MixinForwarder(decodedClass, inlineAccessor)
-      else Seq.empty
-    mixinForwarders.orIfEmpty(findInlineAccessor(decodedClass, method, name))
-
-  def allInterfaces(cls: binary.ClassType): Seq[binary.ClassType] =
-    def rec(cls: binary.ClassType, acc: Seq[binary.ClassType]): Seq[binary.ClassType] =
-      val newInterfaces = cls.interfaces.filter(!acc.contains(_))
-      (newInterfaces ++ cls.superclass).foldLeft(acc ++ newInterfaces)((acc, cls) => rec(cls, acc))
-    rec(cls, Seq.empty)
-
   private def findInlineAccessor(
       decodedClass: DecodedClass,
       method: binary.Method,
-      name: String
+      names: Seq[String]
   ): Seq[DecodedMethod] =
-    val hasReceiver = "(.+)\\$i\\d+".r
-    val inlineable = name match
-      case hasReceiver(name) =>
-        for
-          receiverParam <- method.allParameters.filter(_.name != "$this").headOption.toSeq
-          receiverClass <- receiverParam.`type` match
-            case cls: binary.ClassType => decodeClass(cls).classSymbol
-            case _ => Seq.empty
-          inlineable <- findInlineableMethod(receiverClass, method, name)
-        yield inlineable
-      case s"${name}$$extension" =>
-        decodedClass.companionClassSymbol.toSeq.flatMap(findInlineableMethod(_, method, name))
-      case _ => decodedClass.classSymbol.toSeq.flatMap(findInlineableMethod(_, method, name))
-    inlineable.map(DecodedMethod.InlineAccessor(decodedClass, _))
-
-  private def findInlineableMethod(
-      cls: ClassSymbol,
-      method: binary.Method,
-      name: String
-  ): Seq[DecodedMethod] =
-    val standardMethods =
+    val methodAccessors = method.instructions
+      .collect { case binary.Instruction.Method(_, owner, name, descriptor, _) =>
+        classLoader.loadClass(owner).method(name, descriptor)
+      }
+      .singleOpt
+      .flatten
+      .map { binaryTarget =>
+        val target = decodeMethod(binaryTarget)
+        // val tpe = target.declaredType.asSeenFrom(fromType, fromClass)
+        DecodedMethod.InlineAccessor(decodedClass, target)
+      }
+    def fieldAccessors =
       for
-        classSym <- cls.linearization
-        sym <- classSym.declarations.collect { case sym: TermSymbol if sym.targetNameStr == name => sym }
-        if sym.isOverridingSymbol(cls)
-        // should I compute the declaredType type as seen from cls?
-        resultType = sym.declaredType match
-          case byName: ByNameType => byName.resultType
-          case tpe => tpe
-        if matchSignature(method, resultType)
-      yield DecodedMethod.ValOrDefDef(DecodedClass.ClassDef(classSym), sym)
-    def setters =
-      name match
-        case s"${name}_=" =>
-          val javaParamType = method.allParameters.last.`type`
-          for
-            classSym <- cls.linearization
-            sym <- classSym.declarations.collect {
-              case sym: TermSymbol if !sym.isMethod && sym.targetNameStr == name => sym
-            }
-            if sym.isOverridingSymbol(cls)
-            // should I compute the declaredType type as seen from cls?
-            if matchSetterArgType(sym.declaredType, javaParamType)
-          yield
-            val declaredTpe =
-              MethodType(List(SimpleName("x$1")), List(sym.declaredType.asInstanceOf[Type]), defn.UnitType)
-            DecodedMethod.SetterAccessor(DecodedClass.ClassDef(classSym), sym, declaredTpe)
-        case _ => Seq.empty
-    standardMethods.orIfEmpty(setters)
+        fieldIn <- method.instructions
+          .collect { case fieldIn: binary.Instruction.Field => fieldIn }
+          .singleOpt
+          .toSeq
+        binaryField <- classLoader.loadClass(fieldIn.owner).declaredField(fieldIn.name).toSeq
+        fieldOwner = decodeClass(binaryField.declaringClass)
+        sym <- findFieldSymbols(fieldOwner, binaryField.`type`, Seq(binaryField.decodedName))
+      yield
+        // TODO InlineAccessor should contain a decoded method or a decoded field.
+        val decodedTarget = fieldIn.opcode match
+          case 0xb4 | 0xb2 => DecodedMethod.ValOrDefDef(fieldOwner, sym)
+          case 0xb5 | 0xb3 =>
+            val tpe = MethodType(List(SimpleName("x$1")), List(sym.declaredType.asInstanceOf[Type]), defn.UnitType)
+            DecodedMethod.SetterAccessor(fieldOwner, sym, tpe)
+          case opcode => unexpected(s"field opcode $opcode")
+        DecodedMethod.InlineAccessor(decodedClass, decodedTarget)
+    def moduleAccessors =
+      for
+        fieldIn <- method.instructions
+          .collect { case fieldIn: binary.Instruction.Field => fieldIn }
+          .singleOpt
+          .toSeq
+        targetClass = decodeClass(classLoader.loadClass(fieldIn.owner))
+        targetClassSym <- targetClass.classSymbol
+        targetTermSym <- targetClassSym.moduleValue
+      yield DecodedMethod.InlineAccessor(decodedClass, DecodedMethod.ValOrDefDef(targetClass, targetTermSym))
+    def valueClassAccessors =
+      if method.instructions.isEmpty && method.isExtensionMethod then
+        for
+          companionClass <- decodedClass.companionClass.toSeq
+          param <- method.allParameters.lastOption.toSeq
+          field <- findFieldSymbols(companionClass, param.`type`, names.map(_.stripSuffix("$extension")))
+        yield
+          val decodedTarget = DecodedMethod.ValOrDefDef(decodedClass, field)
+          DecodedMethod.InlineAccessor(decodedClass, decodedTarget)
+      else Seq.empty
+    methodAccessors.toSeq
+      .orIfEmpty(fieldAccessors)
+      .orIfEmpty(moduleAccessors.toSeq)
+      .orIfEmpty(valueClassAccessors)
 
   private def findInstanceMethods(
       decodedClass: DecodedClass,
@@ -435,16 +423,6 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
       if sym.isParamAccessor then DecodedMethod.TraitParamAccessor(decodedClass, sym)
       else if sym.isSetter then DecodedMethod.SetterAccessor(decodedClass, sym, tpe)
       else DecodedMethod.GetterAccessor(decodedClass, sym, tpe)
-
-  private def findLocalMethods(
-      decodedClass: DecodedClass,
-      method: binary.Method,
-      names: Seq[String]
-  ): Seq[DecodedMethod] =
-    collectLocalMethods(decodedClass, method) {
-      case fun if names.contains(fun.symbol.name.toString) && matchLiftedFunSignature(method, fun) =>
-        wrapIfInline(fun, DecodedMethod.ValOrDefDef(decodedClass, fun.symbol.asTerm))
-    }
 
   private def findLazyInit(decodedClass: DecodedClass, name: String): Seq[DecodedMethod] =
     val matcher: PartialFunction[Symbol, TermSymbol] =
@@ -647,14 +625,21 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
       decodedClass: DecodedClass,
       method: binary.Method
   ): Seq[DecodedMethod] =
-    val anonFuns = collectLocalMethods(decodedClass, method) {
-      case fun if fun.symbol.isAnonFun && matchLiftedFunSignature(method, fun) =>
-        wrapIfInline(fun, DecodedMethod.ValOrDefDef(decodedClass, fun.symbol.asTerm))
-    }
+    val anonFuns = findLocalMethods(decodedClass, method, Seq(CommonNames.anonFun.toString))
     val byNameArgs =
       if method.allParameters.forall(_.isCapture) then findByNameArgs(decodedClass, method)
       else Seq.empty
     reduceAmbiguityOnMethods(anonFuns ++ byNameArgs)
+
+  private def findLocalMethods(
+      decodedClass: DecodedClass,
+      method: binary.Method,
+      names: Seq[String]
+  ): Seq[DecodedMethod] =
+    collectLocalMethods(decodedClass, method) {
+      case fun if names.contains(fun.symbol.name.toString) && matchLiftedFunSignature(method, fun) =>
+        wrapIfInline(fun, DecodedMethod.ValOrDefDef(decodedClass, fun.symbol.asTerm))
+    }
 
   private def reduceAmbiguityOnMethods(syms: Seq[DecodedMethod]): Seq[DecodedMethod] =
     if syms.size > 1 then
@@ -886,7 +871,6 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
   /* After code generation, a method ends up with more than its declared parameters.
    *
    * It has, in order:
-   *
    * - capture params,
    * - declared params,
    * - "expanded" params (from java.lang.Enum constructors and uncurried context function types).

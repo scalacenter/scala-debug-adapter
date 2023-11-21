@@ -24,7 +24,11 @@ class StackTraceFormatter(warnLogger: String => Unit, testMode: Boolean) extends
   private def formatOwner(method: DecodedMethod): String =
     method match
       case method: DecodedMethod.ValOrDefDef => formatOwner(method.symbol)
-      case method: DecodedMethod.LazyInit => formatOwner(method.symbol)
+      case method: DecodedMethod.LazyInit =>
+        if method.symbol.owner.isTrait then
+          // the lazy init is in subclass
+          format(method.owner)
+        else formatOwner(method.symbol)
       case method: DecodedMethod.TraitParamAccessor => format(method.owner)
       case method: DecodedMethod.MixinForwarder => format(method.owner)
       case method: DecodedMethod.TraitStaticForwarder => formatOwner(method.target)

@@ -222,6 +222,9 @@ extension (self: DecodedClass)
 
   def thisType(using Context): Option[ThisType] = classSymbol.map(_.thisType)
 
+  def companionClass(using Context): Option[DecodedClass] =
+    self.companionClassSymbol.map(DecodedClass.ClassDef(_))
+
   def companionClassSymbol(using Context): Option[ClassSymbol] = self match
     case self: DecodedClass.ClassDef => self.symbol.companionClass
     case self: DecodedClass.SyntheticCompanionClass => Some(self.companionSymbol)

@@ -5,6 +5,7 @@ trait ClassType extends Type:
   def superclass: Option[ClassType]
   def interfaces: Seq[ClassType]
   def method(name: String, descriptor: String): Option[Method]
+  def declaredField(name: String): Option[Field]
   def declaredMethod(name: String, descriptor: String): Option[Method]
   def declaredMethods: Seq[Method]
 

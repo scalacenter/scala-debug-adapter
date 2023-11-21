@@ -126,7 +126,11 @@ object Patterns:
   object InlineAccessor:
     def unapply(method: binary.Method): Option[Seq[String]] =
       if method.isStatic then None
-      else method.extractFromDecodedNames("inline\\$(.+)".r)(_(0))
+      else
+        method.extractFromDecodedNames("inline\\$(.+)".r) { xs =>
+          // strip $i1 suffix if exists
+          "(.+)\\$i\\d+".r.unapplySeq(xs(0)).map(_(0)).getOrElse(xs(0))
+        }
 
   extension (method: binary.Method)
     private def extractFromDecodedNames[T](regex: Regex)(extract: List[String] => T): Option[Seq[T]] =

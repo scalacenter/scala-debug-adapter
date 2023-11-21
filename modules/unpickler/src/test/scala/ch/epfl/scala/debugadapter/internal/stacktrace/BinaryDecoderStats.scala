@@ -43,14 +43,14 @@ class BinaryDecoderStats extends DebuggableFunSuite:
 
     for
       cls <- loadClasses(libraries, "scala3-compiler_3-3.3.0", decoder.classLoader)
-      // if cls.name == "dotty.tools.dotc.printing.RefinedPrinter"
+      // if cls.name == "dotty.tools.dotc.transform.sjs.PrepJSInterop$OwnerKind"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => decoder.tryDecode(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => decoder.tryDecode(cls, anonClassCounter)
         case Patterns.InnerClass(_) => decoder.tryDecode(cls, innerClassCounter)
         case _ => decoder.tryDecode(cls, topLevelClassCounter)
       method <- cls.declaredMethods
-    // if method.name == "toTextFunction$1$$anonfun$1"
+    // if method.name == "inline$baseKinds"
     do
       method match
         case Patterns.AnonFun(_) => decoder.tryDecode(method, anonFunCounter)
@@ -58,9 +58,10 @@ class BinaryDecoderStats extends DebuggableFunSuite:
         case Patterns.LocalLazyInit(_) => decoder.tryDecode(method, localLazyInitCounter)
         case Patterns.LocalMethod(_) => decoder.tryDecode(method, localMethodCounter)
         case _ => decoder.tryDecode(method, methodCounter)
-    // localMethodCounter.printNotFound()
-    // methodCounter.printNotFound()
-    anonFunCounter.printAmbiguous()
+    localMethodCounter.printNotFound()
+    anonFunCounter.printNotFound()
+    methodCounter.printNotFound()
+    // anonFunCounter.printAmbiguous()
     // anonFunCounter.printNotFound()
     localClassCounter.printReport()
     anonClassCounter.printReport()
