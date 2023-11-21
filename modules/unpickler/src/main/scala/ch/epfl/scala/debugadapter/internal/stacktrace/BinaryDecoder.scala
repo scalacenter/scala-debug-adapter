@@ -23,7 +23,7 @@ object BinaryDecoder:
     new BinaryDecoder(classLoader)(using ctx)
 
 final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClassLoader)(using Context):
-  private val defn = Definitions()
+  private given defn: Definitions = Definitions()
 
   def decodeClass(cls: binary.ClassType): DecodedClass =
     val javaParts = cls.name.split('.')
@@ -672,7 +672,7 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
     collectLiftedTrees(decodedClass, method) { case arg: ByNameArg if !arg.isInline => arg }
       .collect {
         case arg if matchReturnType(arg.tpe, method.returnType) && matchCapture(arg.capture, method.allParameters) =>
-          wrapIfInline(arg, DecodedMethod.ByNameArg(decodedClass, arg.tree, arg.tpe.asInstanceOf))
+          wrapIfInline(arg, DecodedMethod.ByNameArg(decodedClass, arg.owner, arg.tree, arg.tpe.asInstanceOf))
       }
 
   private def findByNameArgsProxy(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
@@ -680,17 +680,17 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
       collectLiftedTrees(decodedClass, method) { case arg: ByNameArg if arg.isInline => arg }
         .collect {
           case arg if matchReturnType(arg.tpe, method.returnType) && matchCapture(arg.capture, method.allParameters) =>
-            wrapIfInline(arg, DecodedMethod.ByNameArg(decodedClass, arg.tree, arg.tpe.asInstanceOf))
+            wrapIfInline(arg, DecodedMethod.ByNameArg(decodedClass, arg.owner, arg.tree, arg.tpe.asInstanceOf))
         }
     val inlineOverrides = decodedClass.classSymbol.toSeq
       .flatMap(_.declarations)
       .collect {
-        case term: TermSymbol
-            if term.allOverriddenSymbols.nonEmpty && term.isInline && method.sourceLines.forall(term.pos.matchLines) =>
-          term.paramSymbols.map(sym => (sym, sym.declaredType)).collect {
-            case (sym, byName: ByNameType) if matchReturnType(byName.resultType, method.returnType) =>
-              val argTree = Ident(sym.name)(sym.localRef)(SourcePosition.NoPosition)
-              DecodedMethod.ByNameArg(decodedClass, argTree, byName.resultType)
+        case sym: TermSymbol
+            if sym.allOverriddenSymbols.nonEmpty && sym.isInline && method.sourceLines.forall(sym.pos.matchLines) =>
+          sym.paramSymbols.map(paramSym => (paramSym, paramSym.declaredType)).collect {
+            case (paramSym, byName: ByNameType) if matchReturnType(byName.resultType, method.returnType) =>
+              val argTree = Ident(paramSym.name)(paramSym.localRef)(SourcePosition.NoPosition)
+              DecodedMethod.ByNameArg(decodedClass, sym, argTree, byName.resultType)
           }
       }
       .flatten
@@ -706,52 +706,31 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
       .collect(matcher)
 
   private def findSuperArgs(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod.SuperConstructorArg] =
-    def asSuperCall(parent: Tree): Option[Apply] =
-      parent match
-        case superCall: Apply => Some(superCall)
-        case block: Block => asSuperCall(block.expr)
-        case _ => None
-
-    def asType(tpe: TermType): Option[Type] =
-      tpe match
-        case tpe: Type => Some(tpe)
-        case _ => None
-
-    def asSuperCons(fun: TermTree): Option[TermSymbol] =
-      fun match
-        case Apply(fun, _) => asSuperCons(fun)
-        case s @ Select(_: New, _) if s.symbol.isTerm => Some(s.symbol.asTerm)
-        case _ => None
-
-    val localClasses: Seq[ClassSymbol] = collectLiftedTrees(decodedClass, method) { case cls: LocalClass => cls }
-      .map(_.symbol.asClass)
-    val innerClasses = decodedClass.declarations.collect {
-      case cls: ClassSymbol if method.sourceLines.forall(cls.pos.matchLines) => cls
-    }
-    for
-      cls <- decodedClass.classSymbol.toSeq ++ localClasses ++ innerClasses
-      tree <- cls.tree.toSeq
-      parent <- tree.rhs.parents
-      superCall <- asSuperCall(parent).toSeq
-      superCons <- asSuperCons(superCall.fun).toSeq
-      paramTypes = superCons.declaredType.allParamTypes
-      args = superCall.allArgsFlatten
-      if args.size == paramTypes.size
-      (arg, paramType) <- args.zip(paramTypes)
-      if method.sourceLines.forall(arg.matchLines)
-      argType0 <- asType(arg.tpe).toSeq
-      argType = paramType match
-        case byName: ByNameType => defn.Function0Type.appliedTo(byName.resultType)
-        case _ => argType0
-      if matchReturnType(argType, method.returnType)
-    yield DecodedMethod.SuperConstructorArg(decodedClass, tree.rhs.constr.symbol, arg, argType)
-  end findSuperArgs
+    def matchSuperArg(liftedArg: LiftedTree[Nothing]): Boolean =
+      val primaryConstructor = liftedArg.owner.asClass.getAllOverloadedDecls(nme.Constructor).head
+      // a super arg takes the same parameters as its constructor
+      val scalaParams = prepareScalaParams(method, primaryConstructor.declaredType)
+      val javaParams = prepareJavaParams(method, scalaParams)
+      matchReturnType(liftedArg.tpe, method.returnType) && matchCapture(liftedArg.capture, javaParams.capturedParams)
+    collectLiftedTrees(decodedClass, method) { case arg: ConstructorArg => arg }
+      .collect {
+        case liftedArg if matchSuperArg(liftedArg) =>
+          DecodedMethod.SuperConstructorArg(
+            decodedClass,
+            liftedArg.owner.asClass,
+            liftedArg.tree,
+            liftedArg.tpe.asInstanceOf
+          )
+      }
 
   private def findLiftedTries(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
     collectLiftedTrees(decodedClass, method) { case tree: LiftedTry => tree }
       .collect {
         case liftedTry if matchReturnType(liftedTry.tpe, method.returnType) =>
-          wrapIfInline(liftedTry, DecodedMethod.LiftedTry(decodedClass, liftedTry.tree, liftedTry.tpe.asInstanceOf))
+          wrapIfInline(
+            liftedTry,
+            DecodedMethod.LiftedTry(decodedClass, liftedTry.owner, liftedTry.tree, liftedTry.tpe.asInstanceOf)
+          )
       }
 
   private def wrapIfInline(liftedTree: LiftedTree[?], decodedMethod: DecodedMethod): DecodedMethod =
@@ -807,7 +786,8 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
     def regularParams = declaredParams ++ expandedParams
 
   private def matchLiftedFunSignature(method: binary.Method, tree: LiftedTree[TermSymbol]): Boolean =
-    val (scalaParams, javaParams) = groupParams(method, tree.tpe)
+    val scalaParams = prepareScalaParams(method, tree.tpe)
+    val javaParams = prepareJavaParams(method, scalaParams)
 
     def matchParamNames: Boolean =
       scalaParams.declaredParamNames
@@ -848,7 +828,8 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
       checkParamNames: Boolean = true,
       checkTypeErasure: Boolean = true
   ): Boolean =
-    val (scalaParams, javaParams) = groupParams(method, declaredType)
+    val scalaParams = prepareScalaParams(method, declaredType)
+    val javaParams = prepareJavaParams(method, scalaParams)
     if !captureAllowed && javaParams.capturedParams.nonEmpty then false
     else
       def matchParamNames: Boolean =
@@ -868,6 +849,14 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
       (!checkTypeErasure || matchTypeErasure)
   end matchSignature
 
+  private def prepareScalaParams(method: binary.Method, tpe: TermType): ScalaParams =
+    val (expandedParamTypes, returnType) =
+      if method.isConstructor && method.declaringClass.isJavaLangEnum then
+        (List(defn.StringType, defn.IntType), tpe.returnType)
+      else if !method.isAnonFun then expandContextFunctions(tpe.returnType, acc = Nil)
+      else (List.empty, tpe.returnType)
+    ScalaParams(tpe.allParamNames, tpe.allParamTypes, expandedParamTypes, returnType)
+
   /* After code generation, a method ends up with more than its declared parameters.
    *
    * It has, in order:
@@ -878,23 +867,11 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
    * We can only check the names of declared params.
    * We can check the (erased) type of declared and expand params; together we call them "regular" params.
    */
-  private def groupParams(method: binary.Method, tpe: TermType): (ScalaParams, JavaParams) =
-    val (expandedParamTypes, returnType) =
-      if method.isConstructor && method.declaringClass.isJavaLangEnum then
-        (List(defn.StringType, defn.IntType), tpe.returnType)
-      else if !method.isAnonFun then expandContextFunctions(tpe.returnType, acc = Nil)
-      else (List.empty, tpe.returnType)
-    val scalaParams =
-      ScalaParams(tpe.allParamNames, tpe.allParamTypes, expandedParamTypes, returnType)
-
-    // split the method parameters into captured, declared and expanded
+  private def prepareJavaParams(method: binary.Method, scalaParams: ScalaParams): JavaParams =
     val (capturedParams, regularParams) =
       method.allParameters.splitAt(method.allParameters.size - scalaParams.regularParamTypes.size)
     val (declaredParams, expandedParams) = regularParams.splitAt(scalaParams.declaredParamTypes.size)
-
-    val javaParams = JavaParams(capturedParams, declaredParams, expandedParams, method.returnType)
-    (scalaParams, javaParams)
-  end groupParams
+    JavaParams(capturedParams, declaredParams, expandedParams, method.returnType)
 
   private def expandContextFunctions(tpe: Type, acc: List[Type]): (List[Type], Type) =
     tpe.dealias match

@@ -1169,7 +1169,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |}
          |""".stripMargin
     val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
-    decoder.assertFormat("example.B1$", "scala.Function0 B1$$superArg$1()", "B1.<init>.<super arg>: () => String")
+    decoder.assertFormat("example.B1$", "scala.Function0 B1$$superArg$1()", "B1.<init>.<super arg>: () => \"\"")
     decoder.assertFormat(
       "example.B1$",
       "scala.Function1 example$B1$$$B2$$superArg$1()",
@@ -1178,7 +1178,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
     decoder.assertFormat(
       "example.C1",
       "scala.Function0 C1$superArg$1()",
-      "C1.<init>.<super arg>: () => String"
+      "C1.<init>.<super arg>: () => \"\""
     )
     decoder.assertFormat(
       "example.C1",
@@ -1188,12 +1188,12 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
     decoder.assertFormat(
       "example.C1",
       "scala.Function0 example$C1$$_$C3$superArg$1$1()",
-      "C1.m.C3.<init>.<super arg>: () => String"
+      "C1.m.C3.<init>.<super arg>: () => \"\""
     )
     decoder.assertFormat(
       "example.C1",
       "scala.Function0 example$C1$$_$$anon$superArg$1$1()",
-      "C1.m.<anon class>.<init>.<super arg>: () => String"
+      "C1.m.<anon class>.<init>.<super arg>: () => \"\""
     )
     decoder.assertFormat(
       "example.C1$C3$1",
@@ -1271,10 +1271,10 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |""".stripMargin
     val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
     decoder.assertFormat("example.A", "java.lang.String liftedTree1$1()", "A.<try>: \"\" | \"\"")
-    decoder.assertFormat("example.A", "java.lang.String liftedTree2$1()", "A.<try>: \"\" | \"\"")
-    decoder.assertFormat("example.A", "java.lang.String liftedTree3$1()", "A.<try>: \"\" | \"\"")
-    decoder.assertFormat("example.A", "int liftedTree4$1()", "A.<try>: 2 | 3")
-    decoder.assertFormat("example.A", "java.lang.String liftedTree5$1()", "A.<try>: \"\" | \"\"")
+    decoder.assertFormat("example.A", "java.lang.String liftedTree2$1()", "A.x.<try>: \"\" | \"\"")
+    decoder.assertFormat("example.A", "java.lang.String liftedTree3$1()", "A.m1.x.<try>: \"\" | \"\"")
+    decoder.assertFormat("example.A", "int liftedTree4$1()", "A.m1.m2.<try>: 2 | 3")
+    decoder.assertFormat("example.A", "java.lang.String liftedTree5$1()", "A.m4.<try>: \"\" | \"\"")
   }
 
   test("by-name args") {
@@ -1293,7 +1293,7 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
     val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
     decoder.assertFormat("example.A", "java.lang.Object foo(scala.Function0 x)", "A.foo[T](x: => T): T")
     decoder.assertFormat("example.A", "java.lang.String $init$$$anonfun$1()", "A.<by-name arg>: String")
-    decoder.assertFormat("example.A", "int m$$anonfun$1()", "A.<by-name arg>: Int")
+    decoder.assertFormat("example.A", "int m$$anonfun$1()", "A.m.<by-name arg>: Int")
   }
 
   test("inner object") {
@@ -1525,8 +1525,8 @@ abstract class Scala3UnpicklerTests(val scalaVersion: ScalaVersion) extends Debu
          |  inline override def m[T](x: => T): T = x
          |""".stripMargin
     val decoder = TestingDebuggee.mainClass(source, "example", scalaVersion).decoder
-    decoder.assertFormat("example.B", "java.lang.String x$proxy2$1(java.lang.String s$1)", "B.<by-name arg>: String")
-    decoder.assertFormat("example.B$", "java.lang.Object x$proxy1$1(scala.Function0 x$1)", "B.<by-name arg>: T")
+    decoder.assertFormat("example.B", "java.lang.String x$proxy2$1(java.lang.String s$1)", "B.m.<by-name arg>: String")
+    decoder.assertFormat("example.B$", "java.lang.Object x$proxy1$1(scala.Function0 x$1)", "B.m.<by-name arg>: T")
   }
 
   test("inline accessor") {

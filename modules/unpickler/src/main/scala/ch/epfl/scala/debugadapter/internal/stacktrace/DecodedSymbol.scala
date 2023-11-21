@@ -70,20 +70,25 @@ object DecodedMethod:
 
   final class SuperConstructorArg(
       val owner: DecodedClass,
-      val constructor: Symbol,
+      val treeOwner: ClassSymbol,
       val argTree: Tree,
       val declaredType: Type
   ) extends DecodedMethod:
     override def treeOpt: Option[Tree] = Some(argTree)
-    override def toString: String = s"SuperConstructorArg($owner, ${argTree.pos.showBasic}, ${declaredType.showBasic})"
+    override def toString: String =
+      s"SuperConstructorArg($owner, ${treeOwner.showBasic}, ${argTree.pos.showBasic}, ${declaredType.showBasic})"
 
-  final class LiftedTry(val owner: DecodedClass, val tryTree: Tree, val declaredType: Type) extends DecodedMethod:
+  final class LiftedTry(val owner: DecodedClass, val treeOwner: Symbol, val tryTree: Tree, val declaredType: Type)
+      extends DecodedMethod:
     override def treeOpt: Option[Tree] = Some(tryTree)
-    override def toString: String = s"LiftedTry($owner, ${tryTree.pos.showBasic}, ${declaredType.showBasic})"
+    override def toString: String =
+      s"LiftedTry($owner, ${treeOwner.showBasic}, ${tryTree.pos.showBasic}, ${declaredType.showBasic})"
 
-  final class ByNameArg(val owner: DecodedClass, val argTree: Tree, val declaredType: Type) extends DecodedMethod:
+  final class ByNameArg(val owner: DecodedClass, val treeOwner: Symbol, val argTree: Tree, val declaredType: Type)
+      extends DecodedMethod:
     override def treeOpt: Option[Tree] = Some(argTree)
-    override def toString: String = s"ByNameArg($owner, ${argTree.pos.showBasic}, ${declaredType.showBasic})"
+    override def toString: String =
+      s"ByNameArg($owner, ${treeOwner.showBasic}, ${argTree.pos.showBasic}, ${declaredType.showBasic})"
 
   final class Bridge(val target: DecodedMethod, val declaredType: TypeOrMethodic) extends DecodedMethod:
     override def owner: DecodedClass = target.owner

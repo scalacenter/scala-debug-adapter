@@ -43,14 +43,14 @@ class BinaryDecoderStats extends DebuggableFunSuite:
 
     for
       cls <- loadClasses(libraries, "scala3-compiler_3-3.3.0", decoder.classLoader)
-      // if cls.name == "dotty.tools.dotc.transform.sjs.PrepJSInterop$OwnerKind"
+      // if cls.name == "dotty.tools.dotc.cc.CaptureSet$"
       clsSym <- cls match
         case Patterns.LocalClass(_, _, _) => decoder.tryDecode(cls, localClassCounter)
         case Patterns.AnonClass(_, _) => decoder.tryDecode(cls, anonClassCounter)
         case Patterns.InnerClass(_) => decoder.tryDecode(cls, innerClassCounter)
         case _ => decoder.tryDecode(cls, topLevelClassCounter)
       method <- cls.declaredMethods
-    // if method.name == "inline$baseKinds"
+    // if method.name == "dotty$tools$dotc$cc$CaptureSet$$$Diff$superArg$1"
     do
       method match
         case Patterns.AnonFun(_) => decoder.tryDecode(method, anonFunCounter)
@@ -58,9 +58,11 @@ class BinaryDecoderStats extends DebuggableFunSuite:
         case Patterns.LocalLazyInit(_) => decoder.tryDecode(method, localLazyInitCounter)
         case Patterns.LocalMethod(_) => decoder.tryDecode(method, localMethodCounter)
         case _ => decoder.tryDecode(method, methodCounter)
+    anonClassCounter.printFirstThrowable()
     localMethodCounter.printNotFound()
     anonFunCounter.printNotFound()
     methodCounter.printNotFound()
+    localMethodCounter.printAmbiguous()
     // anonFunCounter.printAmbiguous()
     // anonFunCounter.printNotFound()
     localClassCounter.printReport()
@@ -76,7 +78,7 @@ class BinaryDecoderStats extends DebuggableFunSuite:
     checkCounter(anonClassCounter, 430)
     checkCounter(innerClassCounter, 2409)
     checkCounter(topLevelClassCounter, 1505)
-    checkCounter(localMethodCounter, 2606, expectedAmbiguous = 2)
+    checkCounter(localMethodCounter, 2608)
     checkCounter(anonFunCounter, 6960, expectedAmbiguous = 24, expectedNotFound = 1)
     checkCounter(adaptedAnonFunCounter, 370, expectedAmbiguous = 1)
     checkCounter(localLazyInitCounter, 108)

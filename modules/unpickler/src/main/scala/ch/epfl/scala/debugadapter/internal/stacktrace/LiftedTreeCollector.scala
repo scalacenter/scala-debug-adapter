@@ -9,6 +9,7 @@ import tastyquery.Contexts.*
 import tastyquery.SourcePosition
 import tastyquery.Types.*
 import tastyquery.Traversers
+import tastyquery.Exceptions.NonMethodReferenceException
 
 /**
  * Collect all trees that could be lifted by the compiler: local defs, lambdas, try clauses, by-name applications
@@ -17,18 +18,18 @@ import tastyquery.Traversers
  */
 object LiftedTreeCollector:
   def collect[S](sym: Symbol)(matcher: PartialFunction[LiftedTree[?], LiftedTree[S]])(using
-      Context
+      Context,
+      Definitions
   ): Seq[LiftedTree[S]] =
-    sym.tree.toSeq.flatMap(collect(_)(matcher))
+    val collector = LiftedTreeCollector[S](sym, matcher)
+    sym.tree.toSeq.flatMap(collector.collect)
 
-  def collect[S](tree: Tree)(matcher: PartialFunction[LiftedTree[?], LiftedTree[S]])(using
-      Context
-  ): Seq[LiftedTree[S]] =
-    val collector = LiftedTreeCollector[S](matcher)
-    collector.collect(tree)
-
-class LiftedTreeCollector[S] private (matcher: PartialFunction[LiftedTree[?], LiftedTree[S]])(using Context):
+class LiftedTreeCollector[S] private (root: Symbol, matcher: PartialFunction[LiftedTree[?], LiftedTree[S]])(using
+    ctx: Context,
+    defn: Definitions
+):
   private val inlinedTrees = mutable.Map.empty[TermSymbol, Seq[LiftedTree[S]]]
+  private var owner = root
 
   def collect(tree: Tree): Seq[LiftedTree[S]] =
     val buffer = mutable.Buffer.empty[LiftedTree[S]]
@@ -42,22 +43,31 @@ class LiftedTreeCollector[S] private (matcher: PartialFunction[LiftedTree[?], Li
             registerLiftedFun(LocalLazyVal(tree))
           case tree: ClassDef if tree.symbol.isLocal => registerLiftedFun(LocalClass(tree))
           case tree: Lambda => registerLiftedFun(LambdaTree(tree))
-          case tree: Try => registerLiftedFun(LiftedTry(tree))
+          case tree: Try => registerLiftedFun(LiftedTry(owner, tree))
           case tree: Apply =>
-            val isInline = isInlineMethodApply(tree.fun)
-            tree.fun.tpe.widenTermRef match
-              case tpe: MethodType =>
-                tpe.paramTypes.zip(tree.args).foreach {
-                  case (byNameTpe: ByNameType, arg) =>
-                    registerLiftedFun(ByNameArg(arg, byNameTpe.resultType, isInline))
-                  case _ => ()
-                }
-              case _ => ()
+            val isInline = tree.funSymbol.exists(_.isInline)
+            // TODO remove try catch after next tasty-query version
+            try
+              tree.methodType.paramTypes.zip(tree.args).collect { case (byNameTpe: ByNameType, arg) =>
+                registerLiftedFun(ByNameArg(owner, arg, byNameTpe.resultType, isInline))
+              }
+              for
+                funSym <- tree.funSymbol
+                if owner.isClass && funSym.isConstructor
+                (paramTpe, arg) <- tree.methodType.paramTypes.zip(tree.args)
+              do registerLiftedFun(ConstructorArg(owner.asClass, arg, paramTpe))
+            catch case t => ()
           case _ => ()
 
         // recurse
         tree match
-          case tree: DefTree if tree.symbol.isInline => ()
+          case tree: DefTree =>
+            if tree.symbol.isInline then ()
+            else
+              val previousOwner = owner
+              owner = tree.symbol
+              super.traverse(tree)
+              owner = previousOwner
           case InlineCall(inlineCall) =>
             val liftedTrees = inlinedTrees.getOrElseUpdate(inlineCall.symbol, collectInlineDef(inlineCall.symbol))
             buffer ++= liftedTrees.map(InlinedFromDef(_, inlineCall))
@@ -94,10 +104,3 @@ class LiftedTreeCollector[S] private (matcher: PartialFunction[LiftedTree[?], Li
     tree match
       case tree: DefDef => tree.rhs
       case _ => None
-
-  private def isInlineMethodApply(tree: Tree): Boolean =
-    tree match
-      case tree: TermReferenceTree if tree.symbol.isInline => true
-      case Apply(fun, _) => isInlineMethodApply(fun)
-      case TypeApply(fun, _) => isInlineMethodApply(fun)
-      case _ => false

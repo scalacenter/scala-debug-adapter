@@ -50,6 +50,8 @@ extension (symbol: TermSymbol)
     siteClass.classSymbol.exists(symbol.isOverridingSymbol)
   def isOverridingSymbol(siteClass: ClassSymbol)(using Context): Boolean =
     overridingSymbolInLinearization(siteClass) == symbol
+  def isConstructor =
+    symbol.owner.isClass && symbol.isMethod && symbol.name == nme.Constructor
 
   def paramSymbols: List[TermSymbol] =
     symbol.tree.toList
@@ -170,6 +172,16 @@ extension (tree: Apply)
       case Apply(fun, args) => rec(fun) ++ args
       case _ => Seq.empty
     rec(tree.fun) ++ tree.args
+
+extension (tree: Apply | TypeApply)
+  def funSymbol(using Context): Option[TermSymbol] =
+    val fun = tree match
+      case tree: Apply => tree.fun
+      case tree: TypeApply => tree.fun
+    fun match
+      case fun: (Apply | TypeApply) => fun.funSymbol
+      case fun: TermReferenceTree => Some(fun.symbol).collect { case sym: TermSymbol => sym }
+      case _ => None
 
 extension (pos: SourcePosition)
   def isFullyDefined: Boolean =
