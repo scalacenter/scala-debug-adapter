@@ -682,18 +682,19 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
           case arg if matchReturnType(arg.tpe, method.returnType) && matchCapture(arg.capture, method.allParameters) =>
             wrapIfInline(arg, DecodedMethod.ByNameArg(decodedClass, arg.owner, arg.tree, arg.tpe.asInstanceOf))
         }
-    val inlineOverrides = decodedClass.classSymbol.toSeq
-      .flatMap(_.declarations)
-      .collect {
-        case sym: TermSymbol
-            if sym.allOverriddenSymbols.nonEmpty && sym.isInline && method.sourceLines.forall(sym.pos.matchLines) =>
-          sym.paramSymbols.map(paramSym => (paramSym, paramSym.declaredType)).collect {
-            case (paramSym, byName: ByNameType) if matchReturnType(byName.resultType, method.returnType) =>
-              val argTree = Ident(paramSym.name)(paramSym.localRef)(SourcePosition.NoPosition)
-              DecodedMethod.ByNameArg(decodedClass, sym, argTree, byName.resultType)
-          }
-      }
-      .flatten
+    val inlineOverrides =
+      for
+        classSym <- decodedClass.classSymbol.toSeq
+        sym <- classSym.declarations.collect {
+          case sym: TermSymbol if sym.allOverriddenSymbols.nonEmpty && sym.isInline => sym
+        }
+        if method.sourceLines.forall(sym.pos.matchLines)
+        paramSym <- sym.paramSymbols
+        resultType <- Seq(paramSym.declaredType).collect { case tpe: ByNameType => tpe.resultType }
+        if matchReturnType(resultType, method.returnType)
+      yield
+        val argTree = Ident(paramSym.name)(paramSym.localRef)(SourcePosition.NoPosition)
+        DecodedMethod.ByNameArg(decodedClass, sym, argTree, resultType)
     explicitByNameArgs ++ inlineOverrides
 
   private def collectLocalMethods(
