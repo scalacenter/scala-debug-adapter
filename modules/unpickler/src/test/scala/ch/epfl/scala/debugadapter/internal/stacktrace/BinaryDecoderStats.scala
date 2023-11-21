@@ -16,6 +16,7 @@ import scala.util.Properties
 import scala.util.control.NonFatal
 
 class BinaryDecoderStats extends DebuggableFunSuite:
+  val formatter = StackTraceFormatter(println, testMode = true)
   private val javaRuntime = JavaRuntime(Properties.jdkHome).get match
     case Java8(_, classJars, _) => classJars
     case java9OrAbove: Java9OrAbove =>
@@ -26,63 +27,73 @@ class BinaryDecoderStats extends DebuggableFunSuite:
         )
       }
 
-  test("scala3-compiler:3.3.0"):
-    val classCounter = Counter("classes")
-    val methodCounter = Counter("methods")
+  test("scala3-compiler:3.3.1"):
+    val decoder = initDecoder("org.scala-lang", "scala3-compiler_3", "3.3.1")
+    decoder.assertDecode(
+      "scala.quoted.runtime.impl.QuotesImpl",
+      "boolean scala$quoted$runtime$impl$QuotesImpl$$inline$xCheckMacro()",
+      "QuotesImpl.<inline QuotesImpl.xCheckMacro>: Boolean"
+    )
+    decoder.assertDecode(
+      "dotty.tools.dotc.printing.RefinedPrinter",
+      "void dotty$tools$dotc$printing$RefinedPrinter$$inline$myCtx_$eq(dotty.tools.dotc.core.Contexts$Context x$0)",
+      "RefinedPrinter.<inline RefinedPrinter.myCtx_=>(Contexts.Context): Unit"
+    )
+    decoder.assertDecodeAll(
+      expectedClasses = ExpectedCount(4426),
+      expectedMethods = ExpectedCount(68453, ambiguous = 25, notFound = 1)
+    )
 
-    val libraries = TestingResolver.fetch("org.scala-lang", "scala3-compiler_3", "3.3.0")
+  test("scala3-compiler:3.0.2"):
+    val decoder = initDecoder("org.scala-lang", "scala3-compiler_3", "3.0.2")
+    decoder.assertDecodeAll(
+      expectedClasses = ExpectedCount(3859, notFound = 3),
+      expectedMethods = ExpectedCount(60794, ambiguous = 24, notFound = 131)
+    )
+
+  private def initDecoder(org: String, artifact: String, version: String): TestingDecoder =
+    val libraries = TestingResolver.fetch(org, artifact, version)
+    val library = libraries.find(_.name.startsWith(artifact)).get
     val decoder = BinaryDecoder(libraries.map(_.absolutePath), javaRuntime)
+    TestingDecoder(library, decoder)
 
-    for
-      cls <- loadClasses(libraries, "scala3-compiler_3-3.3.0", decoder.classLoader)
-      // if cls.name == "dotty.tools.dotc.cc.CaptureSet$"
-      clsSym <- decoder.tryDecode(cls, classCounter)
-      method <- cls.declaredMethods
-    // if method.name == "dotty$tools$dotc$cc$CaptureSet$$$Diff$superArg$1"
-    do decoder.tryDecode(method, methodCounter)
-    classCounter.printReport()
-    methodCounter.printReport()
-    checkCounter(classCounter, 4386)
-    checkCounter(methodCounter, 67918, expectedAmbiguous = 25, expectedNotFound = 1)
+  extension (decoder: TestingDecoder)
+    private def assertDecode(className: String, expected: String)(using munit.Location): Unit =
+      val cls = decoder.classLoader.loadClass(className)
+      val decodedClass = decoder.decodeClass(cls)
+      assertEquals(formatter.format(decodedClass), expected)
 
-  def checkCounter(
-      counter: Counter,
-      expectedSuccess: Int,
-      expectedIgnored: Int = 0,
-      expectedAmbiguous: Int = 0,
-      expectedNotFound: Int = 0,
-      expectedThrowables: Int = 0
-  )(using munit.Location): Unit =
-    assertEquals(counter.success.size, expectedSuccess)
-    assertEquals(counter.ignored.size, expectedIgnored)
-    assertEquals(counter.ambiguous.size, expectedAmbiguous)
-    assertEquals(counter.notFound.size, expectedNotFound)
-    assertEquals(counter.throwables.size, expectedThrowables)
+    private def assertDecode(className: String, javaSig: String, expected: String)(using munit.Location): Unit =
+      val cls = decoder.classLoader.loadClass(className)
+      val method = loadBinaryMethod(className, javaSig)
+      val decodedMethod = decoder.decodeMethod(method)
+      assertEquals(formatter.format(decodedMethod), expected)
 
-  def loadClasses(
-      libraries: Seq[Library],
-      libraryName: String,
-      binaryLoader: binary.BinaryClassLoader
-  ): Seq[binary.ClassType] =
-    val libary = libraries.find(_.name == libraryName).get
-    val classNames = IO
-      .withinJarFile(libary.absolutePath) { fs =>
-        val classMatcher = fs.getPathMatcher("glob:**.class")
-        Files
-          .walk(fs.getPath("/"): Path)
-          .filter(classMatcher.matches)
-          .iterator
-          .asScala
-          .map(_.toString.stripPrefix("/").stripSuffix(".class").replace('/', '.'))
-          .toSeq
-      }
-      .get
-    val classes = classNames.map(binaryLoader.loadClass)
-    println(s"Loaded ${classes.size} classes in $libraryName.")
-    classes
+    private def assertDecodeAll(expectedClasses: ExpectedCount, expectedMethods: ExpectedCount)(using
+        munit.Location
+    ): Unit =
+      val classCounter = Counter("classes")
+      val methodCounter = Counter("method")
+      for
+        cls <- decoder.allClasses
+        clsSym <- decoder.tryDecode(cls, classCounter)
+        method <- cls.declaredMethods
+      do decoder.tryDecode(method, methodCounter)
+      methodCounter.printNotFound()
+      classCounter.printReport()
+      methodCounter.printReport()
+      classCounter.check(expectedClasses)
+      methodCounter.check(expectedMethods)
 
-  extension (decoder: BinaryDecoder)
-    def tryDecode(cls: binary.ClassType, counter: Counter): Option[DecodedClass] =
+    private def loadBinaryMethod(declaringType: String, javaSig: String)(using
+        munit.Location
+    ): binary.Method =
+      val methods = decoder.classLoader.loadClass(declaringType).declaredMethods
+      def notFoundMessage: String =
+        s"Cannot find method '$javaSig':\n" + methods.map(m => s"  " + customFormat(m)).mkString("\n")
+      methods.find(m => customFormat(m) == javaSig).getOrElse(throw new Exception(notFoundMessage))
+
+    private def tryDecode(cls: binary.ClassType, counter: Counter): Option[DecodedClass] =
       try
         val sym = decoder.decodeClass(cls)
         counter.success += cls
@@ -98,7 +109,7 @@ class BinaryDecoderStats extends DebuggableFunSuite:
           counter.throwables += (cls -> e)
           None
 
-    def tryDecode(mthd: binary.Method, counter: Counter): Unit =
+    private def tryDecode(mthd: binary.Method, counter: Counter): Unit =
       try
         val sym = decoder.decodeMethod(mthd)
         counter.success += mthd
@@ -108,7 +119,23 @@ class BinaryDecoderStats extends DebuggableFunSuite:
         case ignored: IgnoredException => counter.ignored += ignored
         case e => counter.throwables += (mthd -> e)
 
-  class Counter(name: String):
+  private def customFormat(m: binary.Symbol): String =
+    m match
+      case m: binary.Method =>
+        val returnType = m.returnType.map(_.name).get
+        val parameters = m.allParameters.map(p => p.`type`.name + " " + p.name).mkString(", ")
+        s"$returnType ${m.name}($parameters)"
+      case m => m.toString
+
+  private case class ExpectedCount(
+      success: Int,
+      ignored: Int = 0,
+      ambiguous: Int = 0,
+      notFound: Int = 0,
+      throwable: Int = 0
+  )
+
+  private class Counter(name: String):
     val success = mutable.Buffer.empty[binary.Symbol]
     val notFound = mutable.Buffer.empty[(binary.Symbol, NotFoundException)]
     val ambiguous = mutable.Buffer.empty[AmbiguousException]
@@ -136,18 +163,24 @@ class BinaryDecoderStats extends DebuggableFunSuite:
 
     def printNotFound() =
       notFound.foreach { case (s1, NotFoundException(s2)) =>
-        if s1 != s2 then println(s"$s1 not found because of $s2")
-        else println(s"$s1 not found")
+        if s1 != s2 then println(s"${customFormat(s1)} not found because of ${customFormat(s2)}")
+        else println(s"${customFormat(s1)} not found")
       }
 
     def printAmbiguous() =
-      ambiguous.foreach { case AmbiguousException(symbol, candidates) =>
-        println(s"$symbol is ambiguous:" + candidates.map(s"\n  - " + _).mkString)
+      ambiguous.foreach { case AmbiguousException(s, candidates) =>
+        println(s"${customFormat(s)} is ambiguous:" + candidates.map(s"\n  - " + _).mkString)
       }
 
     def printFirstThrowable() = throwables.headOption.foreach(printThrowable)
-    def printThrowables() = throwables.foreach((sym, e) => println(s"$sym $e"))
 
     private def printThrowable(sym: binary.Symbol, e: Throwable) =
       println(s"$sym $e")
       e.printStackTrace()
+
+    def check(expected: ExpectedCount)(using munit.Location): Unit =
+      assertEquals(success.size, expected.success)
+      assertEquals(ignored.size, expected.ignored)
+      assertEquals(ambiguous.size, expected.ambiguous)
+      assertEquals(notFound.size, expected.notFound)
+      assertEquals(throwables.size, expected.throwable)

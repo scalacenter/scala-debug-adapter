@@ -242,3 +242,27 @@ extension (self: DecodedClass)
     case self: DecodedClass.SyntheticCompanionClass => Some(self.companionSymbol)
     case self: DecodedClass.InlinedClass => self.underlying.companionClassSymbol
     case _ => None
+
+extension (self: binary.Symbol | binary.Instruction.Field | binary.Instruction.Method)
+  def name: String = self match
+    case self: binary.Symbol => self.name
+    case self: binary.Instruction.Field => self.name
+    case self: binary.Instruction.Method => self.name
+
+  def isExpanded: Boolean =
+    name.matches(".+\\$\\$(_\\$)*(.+)")
+
+  def unexpandedDecodedNames: Seq[String] =
+    val expanded = ".+\\$\\$(_\\$)*(.+)".r
+    def unexpand(name: String) =
+      name match
+        case expanded(_, name) => name
+        case _ => name
+    Seq(name, NameTransformer.decode(unexpand(name)), unexpand(decodedName)).distinct
+
+  def decodedName: String =
+    NameTransformer.decode(name)
+
+extension (field: binary.Instruction.Field)
+  def isPut: Boolean =
+    field.opcode == 0xb5 || field.opcode == 0xb3

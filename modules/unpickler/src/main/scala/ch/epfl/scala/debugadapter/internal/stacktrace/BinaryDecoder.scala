@@ -325,31 +325,33 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
         // val tpe = target.declaredType.asSeenFrom(fromType, fromClass)
         DecodedMethod.InlineAccessor(decodedClass, target)
       }
-    def fieldAccessors =
+    def singleFieldInstruction(f: binary.Instruction.Field => Boolean) = method.instructions
+      .collect { case instr: binary.Instruction.Field => instr }
+      .singleOpt
+      .filter(f)
+      .toSeq
+    def fieldSetters =
+      val expectedNames = names.map(_.stripSuffix("_=")).distinct
       for
-        fieldIn <- method.instructions
-          .collect { case fieldIn: binary.Instruction.Field => fieldIn }
-          .singleOpt
-          .toSeq
-        binaryField <- classLoader.loadClass(fieldIn.owner).declaredField(fieldIn.name).toSeq
+        instr <- singleFieldInstruction(f => f.isPut && f.unexpandedDecodedNames.exists(expectedNames.contains))
+        binaryField <- classLoader.loadClass(instr.owner).declaredField(instr.name).toSeq
         fieldOwner = decodeClass(binaryField.declaringClass)
-        sym <- findFieldSymbols(fieldOwner, binaryField.`type`, Seq(binaryField.decodedName))
+        sym <- findFieldSymbols(fieldOwner, binaryField.`type`, instr.unexpandedDecodedNames)
       yield
-        // TODO InlineAccessor should contain a decoded method or a decoded field.
-        val decodedTarget = fieldIn.opcode match
-          case 0xb4 | 0xb2 => DecodedMethod.ValOrDefDef(fieldOwner, sym)
-          case 0xb5 | 0xb3 =>
-            val tpe = MethodType(List(SimpleName("x$1")), List(sym.declaredType.asInstanceOf[Type]), defn.UnitType)
-            DecodedMethod.SetterAccessor(fieldOwner, sym, tpe)
-          case opcode => unexpected(s"field opcode $opcode")
+        val tpe = MethodType(List(SimpleName("x$1")), List(sym.declaredType.asInstanceOf[Type]), defn.UnitType)
+        val decodedTarget = DecodedMethod.SetterAccessor(fieldOwner, sym, tpe)
         DecodedMethod.InlineAccessor(decodedClass, decodedTarget)
+    def fieldGetters =
+      for
+        instr <- singleFieldInstruction(f => !f.isPut && f.unexpandedDecodedNames.exists(names.contains))
+        binaryField <- classLoader.loadClass(instr.owner).declaredField(instr.name).toSeq
+        fieldOwner = decodeClass(binaryField.declaringClass)
+        sym <- findFieldSymbols(fieldOwner, binaryField.`type`, instr.unexpandedDecodedNames)
+      yield DecodedMethod.InlineAccessor(decodedClass, DecodedMethod.ValOrDefDef(fieldOwner, sym))
     def moduleAccessors =
       for
-        fieldIn <- method.instructions
-          .collect { case fieldIn: binary.Instruction.Field => fieldIn }
-          .singleOpt
-          .toSeq
-        targetClass = decodeClass(classLoader.loadClass(fieldIn.owner))
+        instr <- singleFieldInstruction(_.name == "MODULE$")
+        targetClass = decodeClass(classLoader.loadClass(instr.owner))
         targetClassSym <- targetClass.classSymbol
         targetTermSym <- targetClassSym.moduleValue
       yield DecodedMethod.InlineAccessor(decodedClass, DecodedMethod.ValOrDefDef(targetClass, targetTermSym))
@@ -364,7 +366,8 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
           DecodedMethod.InlineAccessor(decodedClass, decodedTarget)
       else Seq.empty
     methodAccessors.toSeq
-      .orIfEmpty(fieldAccessors)
+      .orIfEmpty(fieldSetters)
+      .orIfEmpty(fieldGetters)
       .orIfEmpty(moduleAccessors.toSeq)
       .orIfEmpty(valueClassAccessors)
 
