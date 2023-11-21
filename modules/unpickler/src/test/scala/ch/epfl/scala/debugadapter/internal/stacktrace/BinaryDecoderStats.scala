@@ -27,15 +27,7 @@ class BinaryDecoderStats extends DebuggableFunSuite:
       }
 
   test("scala3-compiler:3.3.0"):
-    val localClassCounter = Counter("local classes")
-    val innerClassCounter = Counter("inner classes")
-    val anonClassCounter = Counter("anon classes")
-    val topLevelClassCounter = Counter("top-level classes")
-
-    val localMethodCounter = Counter("local methods")
-    val anonFunCounter = Counter("anon functions")
-    val adaptedAnonFunCounter = Counter("adapted anon functions")
-    val localLazyInitCounter = Counter("local lazy initializers")
+    val classCounter = Counter("classes")
     val methodCounter = Counter("methods")
 
     val libraries = TestingResolver.fetch("org.scala-lang", "scala3-compiler_3", "3.3.0")
@@ -44,45 +36,14 @@ class BinaryDecoderStats extends DebuggableFunSuite:
     for
       cls <- loadClasses(libraries, "scala3-compiler_3-3.3.0", decoder.classLoader)
       // if cls.name == "dotty.tools.dotc.cc.CaptureSet$"
-      clsSym <- cls match
-        case Patterns.LocalClass(_, _, _) => decoder.tryDecode(cls, localClassCounter)
-        case Patterns.AnonClass(_, _) => decoder.tryDecode(cls, anonClassCounter)
-        case Patterns.InnerClass(_) => decoder.tryDecode(cls, innerClassCounter)
-        case _ => decoder.tryDecode(cls, topLevelClassCounter)
+      clsSym <- decoder.tryDecode(cls, classCounter)
       method <- cls.declaredMethods
     // if method.name == "dotty$tools$dotc$cc$CaptureSet$$$Diff$superArg$1"
-    do
-      method match
-        case Patterns.AnonFun(_) => decoder.tryDecode(method, anonFunCounter)
-        case Patterns.AdaptedAnonFun(_) => decoder.tryDecode(method, adaptedAnonFunCounter)
-        case Patterns.LocalLazyInit(_) => decoder.tryDecode(method, localLazyInitCounter)
-        case Patterns.LocalMethod(_) => decoder.tryDecode(method, localMethodCounter)
-        case _ => decoder.tryDecode(method, methodCounter)
-    anonClassCounter.printFirstThrowable()
-    localMethodCounter.printNotFound()
-    anonFunCounter.printNotFound()
-    methodCounter.printNotFound()
-    localMethodCounter.printAmbiguous()
-    // anonFunCounter.printAmbiguous()
-    // anonFunCounter.printNotFound()
-    localClassCounter.printReport()
-    anonClassCounter.printReport()
-    innerClassCounter.printReport()
-    topLevelClassCounter.printReport()
-    localMethodCounter.printReport()
-    anonFunCounter.printReport()
-    adaptedAnonFunCounter.printReport()
-    localLazyInitCounter.printReport()
+    do decoder.tryDecode(method, methodCounter)
+    classCounter.printReport()
     methodCounter.printReport()
-    checkCounter(localClassCounter, 42)
-    checkCounter(anonClassCounter, 430)
-    checkCounter(innerClassCounter, 2409)
-    checkCounter(topLevelClassCounter, 1505)
-    checkCounter(localMethodCounter, 2608)
-    checkCounter(anonFunCounter, 6960, expectedAmbiguous = 24, expectedNotFound = 1)
-    checkCounter(adaptedAnonFunCounter, 370, expectedAmbiguous = 1)
-    checkCounter(localLazyInitCounter, 108)
-    checkCounter(methodCounter, 57872)
+    checkCounter(classCounter, 4386)
+    checkCounter(methodCounter, 67918, expectedAmbiguous = 25, expectedNotFound = 1)
 
   def checkCounter(
       counter: Counter,
