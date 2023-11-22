@@ -14,18 +14,11 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 import scala.util.Properties
 import scala.util.control.NonFatal
+import scala.io.Source
 
 class BinaryDecoderStats extends DebuggableFunSuite:
-  val formatter = StackTraceFormatter(println, testMode = true)
-  private val javaRuntime = JavaRuntime(Properties.jdkHome).get match
-    case Java8(_, classJars, _) => classJars
-    case java9OrAbove: Java9OrAbove =>
-      java9OrAbove.classSystems.flatMap { s =>
-        Seq(
-          s.fileSystem.getPath("/modules/java.base"),
-          s.fileSystem.getPath("/modules/java.management")
-        )
-      }
+  private val formatter = StackTraceFormatter(println, testMode = true)
+  private val javaRuntime = JavaRuntime(Properties.jdkHome).get
 
   test("scala3-compiler:3.3.1"):
     val decoder = initDecoder("org.scala-lang", "scala3-compiler_3", "3.3.1")
@@ -51,10 +44,60 @@ class BinaryDecoderStats extends DebuggableFunSuite:
       expectedMethods = ExpectedCount(60794, ambiguous = 24, notFound = 131)
     )
 
-  private def initDecoder(org: String, artifact: String, version: String): TestingDecoder =
-    val libraries = TestingResolver.fetch(org, artifact, version)
-    val library = libraries.find(_.name.startsWith(artifact)).get
-    val decoder = BinaryDecoder(libraries.map(_.absolutePath), javaRuntime)
+  test("de.sciss:desktop-core_3:0.11.4"):
+    val decoder = initDecoder("de.sciss", "desktop-core_3", "0.11.4")
+    // decoder.assertDecode(
+    //   "de.sciss.desktop.impl.LogPaneImpl",
+    //   "int de$sciss$desktop$impl$LogPaneImpl$$textPane$$superArg$1()",
+    //   ""
+    // )
+    // decoder.assertDecode(
+    //   "de.sciss.desktop.impl.LogPaneImpl$textPane$",
+    //   "boolean apply$mcZD$sp(double x$0)",
+    //   "LogPaneImpl.textPane.<init>(): Unit"
+    // )
+    decoder.assertDecodeAll(
+      expectedClasses = ExpectedCount(229, throwables = 7),
+      expectedMethods = ExpectedCount(2705, notFound = 6, throwables = 27)
+    )
+
+  test("all Scala 3 ecosystem"):
+    println(Properties.javaVersion)
+    assume(Properties.javaVersion == "17")
+    assume(!isCI)
+    val csv = Source.fromResource("scala3-artifacts-231121.csv")
+    val classCounters = mutable.Buffer.empty[Counter]
+    val methodCounters = mutable.Buffer.empty[Counter]
+    for line <- csv.getLines.drop(1) do
+      val parts = line.split(',').map(_.drop(1).dropRight(1))
+      val (org, artifact, version) = (parts(0), parts(1), parts(2))
+      try
+        val decoder = initDecoder(org, artifact, version)
+        val (classCounter, methodCounter) = decoder.decodeAll()
+        classCounters += classCounter
+        methodCounters += methodCounter
+      catch case e => println(s"cannot decode $line")
+
+    val totalClassCounter = classCounters.foldLeft(Counter("total classes"))(_.merge(_))
+    val totalMethodCounter = methodCounters.foldLeft(Counter("total methods"))(_.merge(_))
+    totalClassCounter.printReport()
+    totalMethodCounter.printReport()
+
+    (classCounters ++ methodCounters).toSeq
+      .sortBy(_.successPercent)
+      .take(10)
+      .foreach(c => println(s"${c.name} ${c.successPercent}%"))
+
+  private def initDecoder(groupId: String, artifactId: String, version: String): TestingDecoder =
+    val libraries = TestingResolver.fetch(groupId, artifactId, version)
+    val library = libraries.find(l => l.name.startsWith(artifactId.stripSuffix("_3")) && l.version == version).get
+    val javaRuntimeJars = javaRuntime match
+      case Java8(_, classJars, _) => classJars
+      case java9OrAbove: Java9OrAbove =>
+        java9OrAbove.classSystems.flatMap { s =>
+          Files.list(s.fileSystem.getPath("/modules")).iterator.asScala.toSeq
+        }
+    val decoder = BinaryDecoder(libraries.map(_.absolutePath), javaRuntimeJars)
     TestingDecoder(library, decoder)
 
   extension (decoder: TestingDecoder)
@@ -64,7 +107,6 @@ class BinaryDecoderStats extends DebuggableFunSuite:
       assertEquals(formatter.format(decodedClass), expected)
 
     private def assertDecode(className: String, javaSig: String, expected: String)(using munit.Location): Unit =
-      val cls = decoder.classLoader.loadClass(className)
       val method = loadBinaryMethod(className, javaSig)
       val decodedMethod = decoder.decodeMethod(method)
       assertEquals(formatter.format(decodedMethod), expected)
@@ -72,18 +114,24 @@ class BinaryDecoderStats extends DebuggableFunSuite:
     private def assertDecodeAll(expectedClasses: ExpectedCount, expectedMethods: ExpectedCount)(using
         munit.Location
     ): Unit =
-      val classCounter = Counter("classes")
-      val methodCounter = Counter("method")
-      for
-        cls <- decoder.allClasses
-        clsSym <- decoder.tryDecode(cls, classCounter)
-        method <- cls.declaredMethods
-      do decoder.tryDecode(method, methodCounter)
-      methodCounter.printNotFound()
-      classCounter.printReport()
-      methodCounter.printReport()
+      val (classCounter, methodCounter) = decodeAll()
       classCounter.check(expectedClasses)
       methodCounter.check(expectedMethods)
+
+    private def decodeAll(): (Counter, Counter) =
+      val classCounter = Counter(decoder.name + " classes")
+      val methodCounter = Counter(decoder.name + " methods")
+      for
+        cls <- decoder.allClasses
+        // _ = println(s"\"$cls\"")
+        clsSym <- decoder.tryDecode(cls, classCounter)
+        method <- cls.declaredMethods
+      do
+        // println(s"\"$cls\", \"${customFormat(method)}\"")
+        decoder.tryDecode(method, methodCounter)
+      classCounter.printReport()
+      methodCounter.printReport()
+      (classCounter, methodCounter)
 
     private def loadBinaryMethod(declaringType: String, javaSig: String)(using
         munit.Location
@@ -132,10 +180,10 @@ class BinaryDecoderStats extends DebuggableFunSuite:
       ignored: Int = 0,
       ambiguous: Int = 0,
       notFound: Int = 0,
-      throwable: Int = 0
+      throwables: Int = 0
   )
 
-  private class Counter(name: String):
+  private class Counter(val name: String):
     val success = mutable.Buffer.empty[binary.Symbol]
     val notFound = mutable.Buffer.empty[(binary.Symbol, NotFoundException)]
     val ambiguous = mutable.Buffer.empty[AmbiguousException]
@@ -144,10 +192,11 @@ class BinaryDecoderStats extends DebuggableFunSuite:
 
     def size: Int = success.size + notFound.size + ambiguous.size + ignored.size + throwables.size
 
+    def successPercent: Float = percent(success.size)
+
     def printReport() =
       def format(kind: String, count: Int): Option[String] =
-        val percent = count * 100 / size
-        Option.when(count > 0)(s"$kind: $count ($percent%)")
+        Option.when(count > 0)(s"$kind: $count (${percent(count)}%)")
       if size > 0 then
         val stats = Seq(
           "success" -> success.size,
@@ -159,7 +208,7 @@ class BinaryDecoderStats extends DebuggableFunSuite:
           .flatMap(format)
           .map("\n  - " + _)
           .mkString
-        println(s"$size $name: $stats")
+        println(s"$name ($size): $stats")
 
     def printNotFound() =
       notFound.foreach { case (s1, NotFoundException(s2)) =>
@@ -174,13 +223,23 @@ class BinaryDecoderStats extends DebuggableFunSuite:
 
     def printFirstThrowable() = throwables.headOption.foreach(printThrowable)
 
-    private def printThrowable(sym: binary.Symbol, e: Throwable) =
-      println(s"$sym $e")
-      e.printStackTrace()
-
     def check(expected: ExpectedCount)(using munit.Location): Unit =
       assertEquals(success.size, expected.success)
       assertEquals(ignored.size, expected.ignored)
       assertEquals(ambiguous.size, expected.ambiguous)
       assertEquals(notFound.size, expected.notFound)
-      assertEquals(throwables.size, expected.throwable)
+      assertEquals(throwables.size, expected.throwables)
+
+    def merge(counter: Counter): Counter =
+      counter.success ++= success
+      counter.ignored ++= ignored
+      counter.ambiguous ++= ambiguous
+      counter.notFound ++= notFound
+      counter.throwables ++= throwables
+      counter
+
+    private def printThrowable(sym: binary.Symbol, e: Throwable) =
+      println(s"$sym $e")
+      e.printStackTrace()
+
+    private def percent(count: Int): Float = count.toFloat * 100 / size

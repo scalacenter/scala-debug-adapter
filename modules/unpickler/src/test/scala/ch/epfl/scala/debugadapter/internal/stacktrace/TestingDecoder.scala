@@ -9,7 +9,8 @@ import scala.jdk.CollectionConverters.*
 
 class TestingDecoder(library: Library, decoder: BinaryDecoder):
   export decoder.*
-  def allClasses: Seq[binary.ClassType] = 
+  def name: String = library.name
+  def allClasses: Seq[binary.ClassType] =
     val classNames = IO
       .withinJarFile(library.absolutePath) { fs =>
         val classMatcher = fs.getPathMatcher("glob:**.class")
