@@ -12,6 +12,7 @@ import java.nio.file.*
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 import scala.util.Properties
+import ch.epfl.scala.debugadapter.testfmk.FetchOptions
 
 trait BinaryDecoderStatsBase extends DebuggableFunSuite:
   private val formatter = StackTraceFormatter(println, testMode = true)
@@ -19,8 +20,16 @@ trait BinaryDecoderStatsBase extends DebuggableFunSuite:
 
   def println(x: Any): Unit = Predef.println(x)
 
-  def initDecoder(groupId: String, artifactId: String, version: String): TestingDecoder =
-    val libraries = TestingResolver.fetch(groupId, artifactId, version)
+  def initDecoder(
+      groupId: String,
+      artifactId: String,
+      version: String,
+      fetchOptions: FetchOptions = FetchOptions.default
+  ): TestingDecoder =
+    val libraries = TestingResolver.fetch(groupId, artifactId, version, fetchOptions)
+    initDecoder(libraries, artifactId, version)
+
+  def initDecoder(libraries: Seq[Library], artifactId: String, version: String): TestingDecoder =
     val library = libraries.find(l => l.name.startsWith(artifactId.stripSuffix("_3")) && l.version == version).get
     val javaRuntimeJars = javaRuntime match
       case Java8(_, classJars, _) => classJars
@@ -42,9 +51,11 @@ trait BinaryDecoderStatsBase extends DebuggableFunSuite:
       val decodedMethod = decoder.decodeMethod(method)
       assertEquals(formatter.format(decodedMethod), expected)
 
-    def assertDecodeAll(expectedClasses: ExpectedCount, expectedMethods: ExpectedCount, printProgress: Boolean = false)(
-        using munit.Location
-    ): Unit =
+    def assertDecodeAll(
+        expectedClasses: ExpectedCount = ExpectedCount(0),
+        expectedMethods: ExpectedCount = ExpectedCount(0),
+        printProgress: Boolean = false
+    )(using munit.Location): Unit =
       val (classCounter, methodCounter) = decodeAll(printProgress)
       classCounter.check(expectedClasses)
       methodCounter.check(expectedMethods)

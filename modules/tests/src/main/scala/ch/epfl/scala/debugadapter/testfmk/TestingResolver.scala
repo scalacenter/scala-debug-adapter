@@ -10,6 +10,17 @@ import ch.epfl.scala.debugadapter.Library
 import ch.epfl.scala.debugadapter.SourceJar
 import java.io.File
 
+case class FetchOptions(
+    keepOptionalDeps: Boolean = false,
+    fetchProvided: Boolean = false,
+    repositories: Seq[Repository] = Seq.empty,
+    exclusions: Seq[(String, String)] = Seq.empty
+)
+
+object FetchOptions {
+  def default = FetchOptions()
+}
+
 object TestingResolver extends DebugToolsResolver {
   private val cache = mutable.Map.empty[ScalaVersion, ScalaInstance]
 
@@ -19,18 +30,27 @@ object TestingResolver extends DebugToolsResolver {
       .get
   }
 
-  def fetch(org: String, name: String, version: String): Seq[Library] = {
-    val dependency = Dependency(coursier.Module(Organization(org), ModuleName(name)), version)
-    fetch(dependency)
+  def fetch(org: String, name: String, version: String, options: FetchOptions = FetchOptions.default): Seq[Library] = {
+    val dep = Dependency(coursier.Module(Organization(org), ModuleName(name)), version)
+    fetch(Seq(dep), options)
   }
 
-  def fetch(dependencies: Dependency*): Seq[Library] = {
+  def fetch(dependencies: Dependency*): Seq[Library] = fetch(dependencies, FetchOptions.default)
+
+  def fetch(dependencies: Seq[Dependency], options: FetchOptions): Seq[Library] = {
     coursier
       .Fetch()
-      .addRepositories(MavenRepository("https://repo1.maven.org/maven2/dev"))
+      .addRepositories(options.repositories :+ MavenRepository("https://repo1.maven.org/maven2/dev"): _*)
       .addDependencies(dependencies: _*)
       .addClassifiers(Classifier.sources)
       .withMainArtifacts()
+      .mapResolutionParams { params =>
+        val exclusions = options.exclusions.map { case (org, mod) => (Organization(org), ModuleName(mod)) }.toSet
+        params
+          .withKeepOptionalDependencies(options.keepOptionalDeps)
+          // .withTransitiveProvidedDependencies(options.fetchProvided)
+          .withExclusions(exclusions)
+      }
       .run()
       .groupBy(getArtifactId)
       .toSeq

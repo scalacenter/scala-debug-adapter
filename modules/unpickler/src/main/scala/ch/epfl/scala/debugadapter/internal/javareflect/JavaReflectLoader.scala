@@ -71,5 +71,5 @@ class JavaReflectLoader(classLoader: ClassLoader, loadExtraInfo: Boolean) extend
 
 object JavaReflectLoader:
   def apply(classPath: Seq[Path], loadExtraInfo: Boolean = true): JavaReflectLoader =
-    val classLoader = URLClassLoader(classPath.map(_.toUri.toURL).toArray, null: ClassLoader)
+    val classLoader = URLClassLoader(classPath.map(_.toUri.toURL).toArray)
     new JavaReflectLoader(classLoader, loadExtraInfo)

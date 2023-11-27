@@ -20,6 +20,7 @@ class TestingDecoder(library: Library, decoder: BinaryDecoder):
           .iterator
           .asScala
           .map(_.toString.stripPrefix("/").stripSuffix(".class").replace('/', '.'))
+          .filterNot(_.endsWith("module-info"))
           .toSeq
       }
       .get
