@@ -2,6 +2,7 @@ package ch.epfl.scala.debugadapter.internal.stacktrace
 
 import ch.epfl.scala.debugadapter.internal.binary
 import ch.epfl.scala.debugadapter.internal.jdi.JdiMethod
+import ch.epfl.scala.debugadapter.internal.jdi.JdiClassLoader
 import ch.epfl.scala.debugadapter.internal.stacktrace.*
 import tastyquery.Contexts.Context
 import tastyquery.Names.*
@@ -18,12 +19,24 @@ import java.util.function.Consumer
 import scala.jdk.OptionConverters.*
 import scala.util.matching.Regex
 
-class Scala3Unpickler(decoder: BinaryDecoder, formatter: StackTraceFormatter):
-  def skipMethod(obj: Any): Boolean =
-    val decodedMethod = decoder.decodeMethod(JdiMethod(obj))
-    skipMethod(decodedMethod)
+class Scala3UnpicklerBridge(
+    classEntries: Array[Path],
+    warnLogger: Consumer[String],
+    testMode: Boolean
+):
+  val decoder: BinaryDecoder = BinaryDecoder(classEntries)
+  val formatter: StackTraceFormatter = StackTraceFormatter(s => warnLogger.accept(s), testMode)
+  val unpickler: Scala3Unpickler = Scala3Unpickler(decoder, formatter)
 
-  private[stacktrace] def skip(method: DecodedMethod): Boolean =
+  def skipMethod(obj: Any): Boolean =
+    val decodedMethod = decoder.decode(JdiMethod(obj))
+    unpickler.skip(decodedMethod)
+
+  def formatMethod(obj: Any): Optional[String] =
+    unpickler.format(JdiMethod(obj)).toJava
+
+class Scala3Unpickler(decoder: BinaryDecoder, formatter: StackTraceFormatter):
+  def skip(method: DecodedMethod): Boolean =
     method match
       case method: DecodedMethod.ValOrDefDef =>
         val sym = method.symbol
@@ -49,10 +62,7 @@ class Scala3Unpickler(decoder: BinaryDecoder, formatter: StackTraceFormatter):
       case method: DecodedMethod.InlinedMethod => skip(method.underlying)
       case _ => false
 
-  def formatMethod(obj: Any): Optional[String] =
-    formatMethod(JdiMethod(obj)).toJava
-
-  def formatMethod(method: binary.Method): Option[String] =
+  def format(method: binary.Method): Option[String] =
     def rec(method: DecodedMethod): Option[String] =
       method match
         case method: DecodedMethod.LazyInit if method.symbol.owner.isTrait => None
@@ -67,4 +77,4 @@ class Scala3Unpickler(decoder: BinaryDecoder, formatter: StackTraceFormatter):
         case _: DecodedMethod.AdaptedFun => None
         case method: DecodedMethod.InlinedMethod => rec(method.underlying)
         case m => Some(formatter.format(m))
-    rec(decoder.decodeMethod(method))
+    rec(decoder.decode(method))

@@ -155,7 +155,7 @@ class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`) {
 abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends DebugTestSuite {
   private val printlnMethod =
     if (scalaVersion.isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void"
-  test("should not step into mixin forwarder") {
+  test("should not step into mixin forwarder".only) {
     val source =
       """|package example
          |

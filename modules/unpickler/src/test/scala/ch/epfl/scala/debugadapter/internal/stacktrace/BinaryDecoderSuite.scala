@@ -29,43 +29,31 @@ trait BinaryDecoderSuite extends CommonFunSuite:
 
   def initDecoder(libraries: Seq[Library], artifactId: String, version: String): TestingDecoder =
     val library = libraries.find(l => l.name.startsWith(artifactId.stripSuffix("_3")) && l.version == version).get
-    val javaRuntimeJars = javaRuntime match
-      case Java8(_, classJars, _) => classJars
-      case java9OrAbove: Java9OrAbove =>
-        java9OrAbove.classSystems.flatMap { s =>
-          Files.list(s.fileSystem.getPath("/modules")).iterator.asScala.toSeq
-        }
-    val decoder = BinaryDecoder(libraries.map(_.absolutePath), javaRuntimeJars)
-    TestingDecoder(library, decoder)
+    TestingDecoder(library, libraries)
 
   extension (debuggee: TestingDebuggee)
     def decoder: TestingDecoder =
-      val javaRuntime = debuggee.javaRuntime.toSeq.flatMap {
-        case Java8(_, classJars, _) => classJars
-        case java9OrAbove: Java9OrAbove =>
-          java9OrAbove.classSystems.map(_.fileSystem.getPath("/modules", "java.base"))
-      }
-      TestingDecoder(debuggee.mainModule, BinaryDecoder(debuggee.classPath.toList, javaRuntime))
+      TestingDecoder(debuggee.mainModule, debuggee.managedEntries)
 
   extension (decoder: TestingDecoder)
     private def unpickler = Scala3Unpickler(decoder.decoder, formatter)
 
     def assertDecode(className: String, expected: String)(using munit.Location): Unit =
       val cls = decoder.classLoader.loadClass(className)
-      val decodedClass = decoder.decodeClass(cls)
+      val decodedClass = decoder.decode(cls)
       assertEquals(formatter.format(decodedClass), expected)
 
     def assertDecode(className: String, method: String, expected: String, skip: Boolean = false)(using
         munit.Location
     ): Unit =
       val binaryMethod = loadBinaryMethod(className, method)
-      val decodedMethod = decoder.decodeMethod(binaryMethod)
+      val decodedMethod = decoder.decode(binaryMethod)
       assertEquals(formatter.format(decodedMethod), expected)
       assertEquals(unpickler.skip(decodedMethod), skip)
 
     def assertNotFound(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val method = loadBinaryMethod(declaringType, javaSig)
-      intercept[NotFoundException](decoder.decodeMethod(method))
+      intercept[NotFoundException](decoder.decode(method))
 
     def assertDecodeAll(
         expectedClasses: ExpectedCount = ExpectedCount(0),
@@ -94,17 +82,17 @@ trait BinaryDecoderSuite extends CommonFunSuite:
       methodCounter.printReport()
       (classCounter, methodCounter)
 
-    private def loadBinaryMethod(declaringType: String, javaSig: String)(using
+    private def loadBinaryMethod(declaringType: String, method: String)(using
         munit.Location
     ): binary.Method =
-      val methods = decoder.classLoader.loadClass(declaringType).declaredMethods
+      val binaryMethods = decoder.classLoader.loadClass(declaringType).declaredMethods
       def notFoundMessage: String =
-        s"Cannot find method '$javaSig':\n" + methods.map(m => s"  " + formatMethod(m)).mkString("\n")
-      methods.find(m => formatMethod(m) == javaSig).getOrElse(throw new Exception(notFoundMessage))
+        s"Cannot find method '$method':\n" + binaryMethods.map(m => s"  " + formatMethod(m)).mkString("\n")
+      binaryMethods.find(m => formatMethod(m) == method).getOrElse(throw new Exception(notFoundMessage))
 
     private def tryDecode(cls: binary.ClassType, counter: Counter): Option[DecodedClass] =
       try
-        val sym = decoder.decodeClass(cls)
+        val sym = decoder.decode(cls)
         counter.success += cls
         Some(sym)
       catch
@@ -120,7 +108,7 @@ trait BinaryDecoderSuite extends CommonFunSuite:
 
     private def tryDecode(cls: DecodedClass, mthd: binary.Method, counter: Counter): Unit =
       try
-        val sym = decoder.decodeMethod(cls, mthd)
+        val sym = decoder.decode(cls, mthd)
         counter.success += mthd
       catch
         case notFound: NotFoundException => counter.notFound += (mthd -> notFound)

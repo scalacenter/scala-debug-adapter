@@ -6,8 +6,29 @@ import ch.epfl.scala.debugadapter.internal.binary
 import ch.epfl.scala.debugadapter.internal.IO
 import java.nio.file.Files
 import scala.jdk.CollectionConverters.*
+import ch.epfl.scala.debugadapter.internal.binary.BinaryClassLoader
+import ch.epfl.scala.debugadapter.JavaRuntime
+import scala.util.Properties
+import ch.epfl.scala.debugadapter.Java8
+import ch.epfl.scala.debugadapter.Java9OrAbove
+import ch.epfl.scala.debugadapter.internal.javareflect.JavaReflectLoader
 
-class TestingDecoder(mainEntry: ManagedEntry, val decoder: BinaryDecoder):
+object TestingDecoder:
+  def javaRuntime = JavaRuntime(Properties.jdkHome).get
+
+  def apply(mainModule: ManagedEntry, classEntries: Seq[ManagedEntry]): TestingDecoder =
+    val classPath = classEntries.map(_.absolutePath)
+    val javaRuntimeJars = javaRuntime match
+      case Java8(_, classJars, _) => classJars
+      case java9OrAbove: Java9OrAbove =>
+        java9OrAbove.classSystems.flatMap { s =>
+          Files.list(s.fileSystem.getPath("/modules")).iterator.asScala.toSeq
+        }
+    val decoder = BinaryDecoder(classPath ++ javaRuntimeJars)
+    val classLoader = JavaReflectLoader(classPath)
+    new TestingDecoder(mainModule, classLoader, decoder)
+
+class TestingDecoder(mainEntry: ManagedEntry, val classLoader: BinaryClassLoader, val decoder: BinaryDecoder):
   export decoder.*
   def name: String = mainEntry.name
   def allClasses: Seq[binary.ClassType] =
@@ -24,5 +45,5 @@ class TestingDecoder(mainEntry: ManagedEntry, val decoder: BinaryDecoder):
           .toSeq
       }
       .get
-    val classes = classNames.map(decoder.classLoader.loadClass)
+    val classes = classNames.map(classLoader.loadClass)
     classes

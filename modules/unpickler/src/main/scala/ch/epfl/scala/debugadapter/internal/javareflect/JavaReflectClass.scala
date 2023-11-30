@@ -4,10 +4,11 @@ import ch.epfl.scala.debugadapter.internal.binary
 import scala.util.matching.Regex
 import scala.jdk.CollectionConverters.*
 
-class JavaReflectClass(cls: Class[?], extraInfo: ExtraClassInfo, loader: JavaReflectLoader) extends binary.ClassType:
+class JavaReflectClass(cls: Class[?], extraInfo: ExtraClassInfo, override val classLoader: JavaReflectLoader)
+    extends binary.ClassType:
   override def name: String = cls.getTypeName
-  override def superclass = Option(cls.getSuperclass).map(loader.loadClass)
-  override def interfaces = cls.getInterfaces.toList.map(loader.loadClass)
+  override def superclass = Option(cls.getSuperclass).map(classLoader.loadClass)
+  override def interfaces = cls.getInterfaces.toList.map(classLoader.loadClass)
   override def isInterface: Boolean = cls.isInterface
   override def sourceLines: Option[binary.SourceLines] = extraInfo.sourceLines
 
@@ -18,13 +19,13 @@ class JavaReflectClass(cls: Class[?], extraInfo: ExtraClassInfo, loader: JavaRef
     declaredMethod(name, sig).orElse {
       for
         method <- cls.getMethods.find(m => JavaReflectUtils.signature(m) == binary.MethodSig(name, sig))
-        declaringClass = loader.loadClass(method.getDeclaringClass)
+        declaringClass = classLoader.loadClass(method.getDeclaringClass)
         declaredMethod <- declaringClass.declaredMethod(name, sig)
       yield declaredMethod
     }
 
   override def declaredField(name: String): Option[binary.Field] =
-    try Some(JavaReflectField(cls.getDeclaredField(name), loader))
+    try Some(JavaReflectField(cls.getDeclaredField(name), classLoader))
     catch case _: NoSuchFieldException => None
 
   override def toString: String =
@@ -34,9 +35,9 @@ class JavaReflectClass(cls: Class[?], extraInfo: ExtraClassInfo, loader: JavaRef
     cls.getDeclaredMethods.map { m =>
       val sig = JavaReflectUtils.signature(m)
       val methodInfo = extraInfo.getMethodInfo(sig)
-      JavaReflectMethod(m, sig, methodInfo, loader)
+      JavaReflectMethod(m, sig, methodInfo, classLoader)
     } ++ cls.getDeclaredConstructors.map { c =>
       val sig = JavaReflectUtils.signature(c)
       val methodInfo = extraInfo.getMethodInfo(sig)
-      JavaReflectConstructor(c, sig, methodInfo, loader)
+      JavaReflectConstructor(c, sig, methodInfo, classLoader)
     }

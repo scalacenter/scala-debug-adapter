@@ -7,6 +7,7 @@ import java.util as ju
 class JdiReferenceType(obj: Any, className: String = "com.sun.jdi.ReferenceType")
     extends JdiType(obj, className)
     with ClassType:
+  override def classLoader: BinaryClassLoader = JdiClassLoader(invokeMethod("classLoader"))
   override def superclass: Option[ClassType] = if isClass then asClass.superclass else asInterface.superclass
   override def interfaces: Seq[ClassType] = if isClass then asClass.interfaces else asInterface.interfaces
   def isClass = isInstanceOf("com.sun.jdi.ClassType")

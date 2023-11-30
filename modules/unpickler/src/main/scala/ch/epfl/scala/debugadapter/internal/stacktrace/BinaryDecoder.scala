@@ -16,16 +16,15 @@ import java.nio.file.Path
 import scala.util.matching.Regex
 
 object BinaryDecoder:
-  def apply(classEntries: Seq[Path], javaRuntime: Seq[Path]): BinaryDecoder =
-    val classLoader = JavaReflectLoader(classEntries)
-    val classpath = ClasspathLoaders.read(classEntries.toList ++ javaRuntime)
+  def apply(classEntries: Seq[Path]): BinaryDecoder =
+    val classpath = ClasspathLoaders.read(classEntries.toList)
     val ctx = Context.initialize(classpath)
-    new BinaryDecoder(classLoader)(using ctx)
+    new BinaryDecoder(using ctx)
 
-final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClassLoader)(using Context):
+final class BinaryDecoder(using Context):
   private given defn: Definitions = Definitions()
 
-  def decodeClass(cls: binary.ClassType): DecodedClass =
+  def decode(cls: binary.ClassType): DecodedClass =
     val javaParts = cls.name.split('.')
     val packageNames = javaParts.dropRight(1).toList.map(SimpleName.apply)
     val packageSym =
@@ -50,13 +49,13 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
         allSymbols.collect { case cls: DecodedClass.ClassDef => DecodedClass.SyntheticCompanionClass(cls.symbol) }
       else allSymbols.filter(!_.isModuleClass)
     candidates.singleOrThrow(cls)
-  end decodeClass
+  end decode
 
-  def decodeMethod(method: binary.Method): DecodedMethod =
-    val decodedClass = decodeClass(method.declaringClass)
-    decodeMethod(decodedClass, method)
+  def decode(method: binary.Method): DecodedMethod =
+    val decodedClass = decode(method.declaringClass)
+    decode(decodedClass, method)
 
-  def decodeMethod(decodedClass: DecodedClass, method: binary.Method): DecodedMethod =
+  def decode(decodedClass: DecodedClass, method: binary.Method): DecodedMethod =
     def find(f: PartialFunction[binary.Method, Seq[DecodedMethod]]): Seq[DecodedMethod] =
       f.applyOrElse(method, _ => Seq.empty[DecodedMethod])
 
@@ -100,7 +99,7 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
         }
 
     candidates.singleOrThrow(method)
-  end decodeMethod
+  end decode
 
   private def reduceAmbiguityOnClasses(syms: Seq[DecodedClass]): Seq[DecodedClass] =
     if syms.size > 1 then
@@ -133,7 +132,7 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
     remaining match
       case None =>
         val parents = (javaClass.superclass.toSet ++ javaClass.interfaces)
-          .map(decodeClass(_))
+          .map(decode)
           .collect { case cls: DecodedClass.ClassDef => cls.symbol }
         classOwners
           .flatMap(cls => collectLocalClasses(cls, localClassName, javaClass.sourceLines))
@@ -314,6 +313,7 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
       method: binary.Method,
       names: Seq[String]
   ): Seq[DecodedMethod] =
+    val classLoader = method.declaringClass.classLoader
     val methodAccessors = method.instructions
       .collect { case binary.Instruction.Method(_, owner, name, descriptor, _) =>
         classLoader.loadClass(owner).method(name, descriptor)
@@ -321,7 +321,7 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
       .singleOpt
       .flatten
       .map { binaryTarget =>
-        val target = decodeMethod(binaryTarget)
+        val target = decode(binaryTarget)
         // val tpe = target.declaredType.asSeenFrom(fromType, fromClass)
         DecodedMethod.InlineAccessor(decodedClass, target)
       }
@@ -335,7 +335,7 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
       for
         instr <- singleFieldInstruction(f => f.isPut && f.unexpandedDecodedNames.exists(expectedNames.contains))
         binaryField <- classLoader.loadClass(instr.owner).declaredField(instr.name).toSeq
-        fieldOwner = decodeClass(binaryField.declaringClass)
+        fieldOwner = decode(binaryField.declaringClass)
         sym <- findFieldSymbols(fieldOwner, binaryField.`type`, instr.unexpandedDecodedNames)
       yield
         val tpe = MethodType(List(SimpleName("x$1")), List(sym.declaredType.asInstanceOf[Type]), defn.UnitType)
@@ -345,13 +345,13 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
       for
         instr <- singleFieldInstruction(f => !f.isPut && f.unexpandedDecodedNames.exists(names.contains))
         binaryField <- classLoader.loadClass(instr.owner).declaredField(instr.name).toSeq
-        fieldOwner = decodeClass(binaryField.declaringClass)
+        fieldOwner = decode(binaryField.declaringClass)
         sym <- findFieldSymbols(fieldOwner, binaryField.`type`, instr.unexpandedDecodedNames)
       yield DecodedMethod.InlineAccessor(decodedClass, DecodedMethod.ValOrDefDef(fieldOwner, sym))
     def moduleAccessors =
       for
         instr <- singleFieldInstruction(_.name == "MODULE$")
-        targetClass = decodeClass(classLoader.loadClass(instr.owner))
+        targetClass = decode(classLoader.loadClass(instr.owner))
         targetClassSym <- targetClass.classSymbol
         targetTermSym <- targetClassSym.moduleValue
       yield DecodedMethod.InlineAccessor(decodedClass, DecodedMethod.ValOrDefDef(targetClass, targetTermSym))
@@ -450,7 +450,7 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
       }
       .singleOpt
       .flatten
-      .map(target => DecodedMethod.TraitStaticForwarder(decodeMethod(decodedClass, target)))
+      .map(target => DecodedMethod.TraitStaticForwarder(decode(decodedClass, target)))
 
   private def findOuter(decodedClass: DecodedClass): Option[DecodedMethod.OuterAccessor] =
     def outerClass(sym: Symbol): ClassSymbol = if sym.owner.isClass then sym.owner.asClass else outerClass(sym.owner)
@@ -486,12 +486,12 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
   ): Seq[DecodedMethod.StaticForwarder] =
     method.instructions
       .collect { case binary.Instruction.Method(_, owner, name, descriptor, _) =>
-        classLoader.loadClass(owner).method(name, descriptor)
+        method.declaringClass.classLoader.loadClass(owner).method(name, descriptor)
       }
       .flatten
       .singleOpt
       .toSeq
-      .map(decodeMethod)
+      .map(decode)
       .collect {
         case mixin: DecodedMethod.MixinForwarder => mixin.target
         case target => target
@@ -556,12 +556,12 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
     method.instructions
       .collect {
         case binary.Instruction.Method(_, owner, name, descriptor, _) if name == method.name =>
-          classLoader.loadClass(owner).method(name, descriptor)
+          method.declaringClass.classLoader.loadClass(owner).method(name, descriptor)
       }
       .singleOpt
       .flatten
       .map { binaryTarget =>
-        val target = decodeMethod(binaryTarget)
+        val target = decode(binaryTarget)
         val tpe = target.declaredType.asSeenFrom(fromType, fromClass)
         DecodedMethod.Bridge(target, tpe)
       }
@@ -572,12 +572,12 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
   ): Option[DecodedMethod.MixinForwarder] =
     method.instructions
       .collect { case binary.Instruction.Method(_, owner, name, descriptor, _) =>
-        classLoader.loadClass(owner).method(name, descriptor)
+        method.declaringClass.classLoader.loadClass(owner).method(name, descriptor)
       }
       .singleOpt
       .flatten
       .filter(target => target.isStatic && target.declaringClass.isInterface)
-      .map(decodeMethod)
+      .map(decode)
       .collect { case staticForwarder: DecodedMethod.TraitStaticForwarder =>
         DecodedMethod.MixinForwarder(decodedClass, staticForwarder.target)
       }
