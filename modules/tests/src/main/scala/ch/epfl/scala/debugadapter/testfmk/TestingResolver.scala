@@ -11,8 +11,8 @@ import ch.epfl.scala.debugadapter.SourceJar
 import java.io.File
 
 case class FetchOptions(
-    keepOptionalDeps: Boolean = false,
-    fetchProvided: Boolean = false,
+    keepOptional: Boolean = false,
+    keepProvided: Boolean = false,
     repositories: Seq[Repository] = Seq.empty,
     exclusions: Seq[(String, String)] = Seq.empty
 )
@@ -47,8 +47,8 @@ object TestingResolver extends DebugToolsResolver {
       .mapResolutionParams { params =>
         val exclusions = options.exclusions.map { case (org, mod) => (Organization(org), ModuleName(mod)) }.toSet
         params
-          .withKeepOptionalDependencies(options.keepOptionalDeps)
-          // .withTransitiveProvidedDependencies(options.fetchProvided)
+          .withKeepOptionalDependencies(options.keepOptional)
+          // .withKeepProvidedDependencies(options.keepProvided)
           .withExclusions(exclusions)
       }
       .run()

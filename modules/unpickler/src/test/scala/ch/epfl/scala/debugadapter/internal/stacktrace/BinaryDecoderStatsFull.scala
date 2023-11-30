@@ -12,7 +12,7 @@ import ch.epfl.scala.debugadapter.testfmk.TestingResolver
 import coursier.error.ResolutionError
 import ch.epfl.scala.debugadapter.Library
 
-class BinaryDecoderStatsFull extends BinaryDecoderStatsBase:
+class BinaryDecoderStatsFull extends BinaryDecoderSuite:
   lazy val file = Paths.get(s"test-result-${Random.nextInt(Int.MaxValue)}.txt")
   lazy val pw = new PrintWriter(file.toFile)
 
@@ -54,9 +54,9 @@ class BinaryDecoderStatsFull extends BinaryDecoderStatsBase:
       else if org == "com.evolution" then Seq(MavenRepository("https://evolution.jfrog.io/artifactory/public"))
       else if org == "com.github.j5ik2o" then Seq(MavenRepository("https://maven.seasar.org/maven2/"))
       else Seq.empty
-    def tryWith(keepOptionalDeps: Boolean, fetchProvided: Boolean): Option[(Counter, Counter)] =
+    def tryWith(keepOptional: Boolean, keepProvided: Boolean): Option[(Counter, Counter)] =
       try
-        val fetchOptions = FetchOptions(keepOptionalDeps, fetchProvided, repositories)
+        val fetchOptions = FetchOptions(keepOptional, keepProvided, repositories)
         val decoder = initDecoder(org, artifact, version, fetchOptions)
         Some(decoder.decodeAll())
       catch case _ => None

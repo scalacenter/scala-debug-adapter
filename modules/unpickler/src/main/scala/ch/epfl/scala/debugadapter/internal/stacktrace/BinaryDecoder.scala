@@ -834,23 +834,23 @@ final class BinaryDecoder(private[stacktrace] val classLoader: binary.BinaryClas
   ): Boolean =
     val scalaParams = prepareScalaParams(method, declaredType)
     val javaParams = prepareJavaParams(method, scalaParams)
-    if !captureAllowed && javaParams.capturedParams.nonEmpty then false
-    else
-      def matchParamNames: Boolean =
-        scalaParams.declaredParamNames
-          .corresponds(javaParams.declaredParams)((name, javaParam) => name.toString == javaParam.name)
 
-      def matchTypeErasure: Boolean =
-        scalaParams.regularParamTypes
-          .corresponds(javaParams.regularParams)((tpe, javaParam) =>
-            matchArgType(tpe, javaParam.`type`, asJavaVarargs)
-          ) && matchReturnType(scalaParams.returnType, javaParams.returnType)
+    def matchParamNames: Boolean =
+      scalaParams.declaredParamNames
+        .corresponds(javaParams.declaredParams)((name, javaParam) => name.toString == javaParam.name)
 
-      javaParams.capturedParams.forall(_.isGenerated) && // captures are generated
-      javaParams.expandedParams.forall(_.isGenerated) && // expanded params are generated
-      scalaParams.regularParamTypes.size == javaParams.regularParams.size &&
-      (!checkParamNames || matchParamNames) &&
-      (!checkTypeErasure || matchTypeErasure)
+    def matchTypeErasure: Boolean =
+      scalaParams.regularParamTypes
+        .corresponds(javaParams.regularParams)((tpe, javaParam) =>
+          matchArgType(tpe, javaParam.`type`, asJavaVarargs)
+        ) && matchReturnType(scalaParams.returnType, javaParams.returnType)
+
+    (captureAllowed || javaParams.capturedParams.isEmpty) &&
+    javaParams.capturedParams.forall(_.isGenerated) && // captures are generated
+    javaParams.expandedParams.forall(_.isGenerated) && // expanded params are generated
+    scalaParams.regularParamTypes.size == javaParams.regularParams.size &&
+    (!checkParamNames || matchParamNames) &&
+    (!checkTypeErasure || matchTypeErasure)
   end matchSignature
 
   private def prepareScalaParams(method: binary.Method, tpe: TermType): ScalaParams =

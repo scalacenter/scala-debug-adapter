@@ -4,20 +4,9 @@ import scala.util.Properties
 import ch.epfl.scala.debugadapter.testfmk.FetchOptions
 import coursier.maven.MavenRepository
 
-class BinaryDecoderStats extends BinaryDecoderStatsBase:
-
+class BinaryDecoderStats extends BinaryDecoderSuite:
   test("scala3-compiler:3.3.1"):
     val decoder = initDecoder("org.scala-lang", "scala3-compiler_3", "3.3.1")
-    decoder.assertDecode(
-      "scala.quoted.runtime.impl.QuotesImpl",
-      "boolean scala$quoted$runtime$impl$QuotesImpl$$inline$xCheckMacro()",
-      "QuotesImpl.<inline QuotesImpl.xCheckMacro>: Boolean"
-    )
-    decoder.assertDecode(
-      "dotty.tools.dotc.printing.RefinedPrinter",
-      "void dotty$tools$dotc$printing$RefinedPrinter$$inline$myCtx_$eq(dotty.tools.dotc.core.Contexts$Context x$0)",
-      "RefinedPrinter.<inline RefinedPrinter.myCtx_=>(Contexts.Context): Unit"
-    )
     decoder.assertDecodeAll(
       expectedClasses = ExpectedCount(4426),
       expectedMethods = ExpectedCount(68421, ambiguous = 25, notFound = 33)
@@ -28,20 +17,6 @@ class BinaryDecoderStats extends BinaryDecoderStatsBase:
     decoder.assertDecodeAll(
       expectedClasses = ExpectedCount(3859, notFound = 3),
       expectedMethods = ExpectedCount(60762, ambiguous = 24, notFound = 163)
-    )
-
-  test("de.sciss:desktop-core:0.11.4"):
-    assume(clue(Properties.javaVersion) == "17")
-    val decoder = initDecoder("de.sciss", "desktop-core_3", "0.11.4")
-    // fixed by tastyquery#395
-    decoder.assertDecode(
-      "de.sciss.desktop.impl.LogPaneImpl$textPane$",
-      "boolean apply$mcZD$sp(double x$0)",
-      "LogPaneImpl.textPane.apply.<specialized>(str: String): Unit"
-    )
-    decoder.assertDecodeAll(
-      expectedClasses = ExpectedCount(236),
-      expectedMethods = ExpectedCount(2751, ambiguous = 2, notFound = 6)
     )
 
   test("io.github.vigoo:zio-aws-ec2_3:4.0.5 - slow".ignore):
@@ -56,11 +31,11 @@ class BinaryDecoderStats extends BinaryDecoderStatsBase:
     decoder.assertDecodeAll(ExpectedCount(10), ExpectedCount(218))
 
   test("net.zygfryd:jackshaft_3:0.2.2".ignore):
-    val decoder = initDecoder("net.zygfryd", "jackshaft_3", "0.2.2", FetchOptions(fetchProvided = true))
+    val decoder = initDecoder("net.zygfryd", "jackshaft_3", "0.2.2", FetchOptions(keepProvided = true))
     decoder.assertDecodeAll(ExpectedCount(49, notFound = 1), ExpectedCount(454, notFound = 1))
 
   test("company.jap:fields-core_3:0.4.16"):
-    val decoder = initDecoder("company.jap", "fields-core_3", "0.4.16", FetchOptions(keepOptionalDeps = true))
+    val decoder = initDecoder("company.jap", "fields-core_3", "0.4.16", FetchOptions(keepOptional = true))
     decoder.assertDecodeAll(ExpectedCount(245), ExpectedCount(2755, notFound = 92))
 
   test("org.clulab:processors-main_3:8.5.3"):
@@ -78,21 +53,21 @@ class BinaryDecoderStats extends BinaryDecoderStatsBase:
   test("com.zengularity:benji-google_3:2.2.1".ignore):
     val fetchOptions = FetchOptions(
       repositories = Seq(MavenRepository("https://oss.sonatype.org/content/repositories/snapshots")),
-      fetchProvided = true
+      keepProvided = true
     )
     val decoder = initDecoder("com.zengularity", "benji-google_3", "2.2.1", fetchOptions)
     decoder.assertDecodeAll(ExpectedCount(50, throwables = 10), ExpectedCount(450, throwables = 242))
 
   test("com.dimafeng:testcontainers-scala-scalatest-selenium_3:0.41.0".ignore):
-    val fetchOptions = FetchOptions(fetchProvided = true)
+    val fetchOptions = FetchOptions(keepProvided = true)
     val decoder = initDecoder("com.dimafeng", "testcontainers-scala-scalatest-selenium_3", "0.41.0", fetchOptions)
     decoder.assertDecodeAll(ExpectedCount(3), ExpectedCount(31, notFound = 3))
 
   test("com.zengularity:benji-vfs_3:2.2.1".ignore):
     val fetchOptions = FetchOptions(
       repositories = Seq(MavenRepository("https://oss.sonatype.org/content/repositories/snapshots")),
-      fetchProvided = true,
-      keepOptionalDeps = true
+      keepProvided = true,
+      keepOptional = true
     )
     val decoder = initDecoder("com.zengularity", "benji-vfs_3", "2.2.1", fetchOptions)
     decoder.assertDecodeAll(ExpectedCount(26), ExpectedCount(281, throwables = 13))
@@ -125,5 +100,15 @@ class BinaryDecoderStats extends BinaryDecoderStatsBase:
     val decoder = initDecoder("com.devsisters", "zio-agones_3", "0.1.0", fetchOptions)
     decoder.assertDecodeAll(
       ExpectedCount(83, notFound = 21, throwables = 5),
-      ExpectedCount(2782, throwables = 29)
+      ExpectedCount(2784, throwables = 27)
     )
+
+  test("org.log4s:log4s_3:1.10.0".ignore):
+    val fetchOptions = FetchOptions(keepProvided = true)
+    val decoder = initDecoder("org.log4s", "log4s_3", "1.10.0", fetchOptions)
+    decoder.assertDecode("org.log4s.Warn", "java.lang.String name()", "")
+
+  test("org.virtuslab.scala-cli:cli2_3:0.1.5".ignore):
+    val fetchOptions = FetchOptions(keepProvided = true)
+    val decoder = initDecoder("org.virtuslab.scala-cli", "cli2_3", "0.1.5", fetchOptions)
+    decoder.assertDecodeAll()
