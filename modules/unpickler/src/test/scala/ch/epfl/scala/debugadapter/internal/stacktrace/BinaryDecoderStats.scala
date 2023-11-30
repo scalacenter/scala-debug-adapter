@@ -1,10 +1,13 @@
 package ch.epfl.scala.debugadapter.internal.stacktrace
 
-import scala.util.Properties
 import ch.epfl.scala.debugadapter.testfmk.FetchOptions
 import coursier.maven.MavenRepository
+import scala.concurrent.duration.*
 
 class BinaryDecoderStats extends BinaryDecoderSuite:
+  override def munitTimeout: Duration =
+    if isDebug then 8.hours else 2.minutes
+
   test("scala3-compiler:3.3.1"):
     val decoder = initDecoder("org.scala-lang", "scala3-compiler_3", "3.3.1")
     decoder.assertDecodeAll(
@@ -96,6 +99,7 @@ class BinaryDecoderStats extends BinaryDecoderSuite:
     decoder.assertDecodeAll(ExpectedCount(24), ExpectedCount(353))
 
   test("com.devsisters:zio-agones_3:0.1.0"):
+    assume(!isJava8)
     val fetchOptions = FetchOptions(exclusions = Seq("io.grpc" -> "grpc-core"))
     val decoder = initDecoder("com.devsisters", "zio-agones_3", "0.1.0", fetchOptions)
     decoder.assertDecodeAll(

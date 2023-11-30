@@ -4,20 +4,17 @@ import ch.epfl.scala.debugadapter.*
 import ch.epfl.scala.debugadapter.internal.IO
 import ch.epfl.scala.debugadapter.internal.binary
 import ch.epfl.scala.debugadapter.internal.javareflect.*
-import ch.epfl.scala.debugadapter.testfmk.DebuggableFunSuite
+import ch.epfl.scala.debugadapter.testfmk.CommonFunSuite
+import ch.epfl.scala.debugadapter.testfmk.FetchOptions
+import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 import ch.epfl.scala.debugadapter.testfmk.TestingResolver
-import tastyquery.Symbols.*
 
 import java.nio.file.*
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
-import scala.util.Properties
-import ch.epfl.scala.debugadapter.testfmk.FetchOptions
-import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 
-trait BinaryDecoderSuite extends DebuggableFunSuite:
+trait BinaryDecoderSuite extends CommonFunSuite:
   private val formatter = StackTraceFormatter(println, testMode = true)
-  private val javaRuntime = JavaRuntime(Properties.jdkHome).get
 
   def println(x: Any): Unit = Predef.println(x)
 
@@ -58,11 +55,11 @@ trait BinaryDecoderSuite extends DebuggableFunSuite:
       val decodedClass = decoder.decodeClass(cls)
       assertEquals(formatter.format(decodedClass), expected)
 
-    def assertDecode(className: String, javaSig: String, expected: String, skip: Boolean = false)(using
+    def assertDecode(className: String, method: String, expected: String, skip: Boolean = false)(using
         munit.Location
     ): Unit =
-      val method = loadBinaryMethod(className, javaSig)
-      val decodedMethod = decoder.decodeMethod(method)
+      val binaryMethod = loadBinaryMethod(className, method)
+      val decodedMethod = decoder.decodeMethod(binaryMethod)
       assertEquals(formatter.format(decodedMethod), expected)
       assertEquals(unpickler.skip(decodedMethod), skip)
 

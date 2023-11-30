@@ -4,7 +4,7 @@ import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 import scala.util.Properties
 
-class BniaryDecoderTests extends BinaryDecoderSuite:
+class BinaryDecoderTests extends BinaryDecoderSuite:
   test("mixin and static forwarders") {
     val source =
       """|package example
@@ -1695,7 +1695,7 @@ class BniaryDecoderTests extends BinaryDecoderSuite:
   }
 
   test("tastyquery#395"):
-    assume(clue(Properties.javaVersion) == "17")
+    assume(!isJava8)
     val decoder = initDecoder("de.sciss", "desktop-core_3", "0.11.4")
     decoder.assertDecode(
       "de.sciss.desktop.impl.LogPaneImpl$textPane$",
