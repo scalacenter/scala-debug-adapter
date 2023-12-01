@@ -15,22 +15,28 @@ class JdiReferenceType(obj: Any, className: String = "com.sun.jdi.ReferenceType"
   override def sourceLines: Option[SourceLines] =
     Some(SourceLines(sourceName, allLineLocations.map(_.lineNumber)))
 
-  override def method(name: String, sig: String): Option[Method] = None
+  override def method(name: String, sig: String): Option[Method] =
+    visibleMethods.find(_.signedName == SignedName(name, sig))
 
-  override def declaredMethod(name: String, sig: String): Option[Method] = None
+  override def declaredMethod(name: String, sig: String): Option[Method] =
+    declaredMethods.find(_.signedName == SignedName(name, sig))
 
-  override def declaredMethods: Seq[Method] = Seq.empty
+  override def declaredMethods: Seq[Method] =
+    invokeMethod[ju.List[Any]]("methods").asScala.map(JdiMethod(_)).toSeq
 
   override def declaredField(name: String): Option[Field] = None
 
   def asClass: JdiClassType = JdiClassType(obj)
   def asInterface: JdiInterfaceType = JdiInterfaceType(obj)
+  def constantPool: ConstantPool = ConstantPool(invokeMethod("constantPool"))
 
   private def allLineLocations: Seq[JdiLocation] =
-    invokeMethod[ju.List[Any]]("allLineLocations").asScala.map(JdiLocation.apply(_)).toSeq
+    invokeMethod[ju.List[Any]]("allLineLocations").asScala.map(JdiLocation(_)).toSeq
 
-  private[jdi] def sourceName: String =
-    invokeMethod("sourceName")
+  private[jdi] def sourceName: String = invokeMethod("sourceName")
+
+  private def visibleMethods: Seq[JdiMethod] =
+    invokeMethod[ju.List[Any]]("visibleMethods").asScala.map(JdiMethod(_)).toSeq
 
 class JdiClassType(obj: Any) extends JdiReferenceType(obj, "com.sun.jdi.ClassType"):
   override def superclass: Option[ClassType] = Some(JdiReferenceType(invokeMethod[Any]("superclass")))

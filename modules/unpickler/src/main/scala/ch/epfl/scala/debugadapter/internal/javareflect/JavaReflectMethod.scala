@@ -4,11 +4,11 @@ import ch.epfl.scala.debugadapter.internal.binary
 
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
-import ch.epfl.scala.debugadapter.internal.binary.MethodSig
+import ch.epfl.scala.debugadapter.internal.binary.SignedName
 
 class JavaReflectMethod(
     method: Method,
-    val signature: MethodSig,
+    val signedName: SignedName,
     extraInfos: ExtraMethodInfo,
     loader: JavaReflectLoader
 ) extends binary.Method:

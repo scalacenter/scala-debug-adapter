@@ -5,7 +5,7 @@ import ch.epfl.scala.debugadapter.internal.binary.*
 import scala.collection.mutable
 import org.objectweb.asm
 import java.io.IOException
-import ch.epfl.scala.debugadapter.internal.binary.MethodSig
+import ch.epfl.scala.debugadapter.internal.binary.SignedName
 import java.net.URLClassLoader
 import java.nio.file.Path
 
@@ -35,7 +35,7 @@ class JavaReflectLoader(classLoader: ClassLoader, loadExtraInfo: Boolean) extend
     assert(loadExtraInfo)
     var sourceName: String = ""
     var allLines = mutable.Set.empty[Int]
-    val extraInfos = mutable.Map.empty[MethodSig, ExtraMethodInfo]
+    val extraInfos = mutable.Map.empty[SignedName, ExtraMethodInfo]
     val visitor =
       new asm.ClassVisitor(asm.Opcodes.ASM9):
         override def visitSource(source: String, debug: String): Unit = sourceName = source
@@ -64,7 +64,7 @@ class JavaReflectLoader(classLoader: ClassLoader, loadExtraInfo: Boolean) extend
             override def visitEnd(): Unit =
               allLines ++= lines
               val sourceLines = Option.when(sourceName.nonEmpty)(SourceLines(sourceName, lines.toSeq))
-              extraInfos += MethodSig(name, descriptor) -> ExtraMethodInfo(sourceLines, instructions.toSeq)
+              extraInfos += SignedName(name, descriptor) -> ExtraMethodInfo(sourceLines, instructions.toSeq)
     reader.accept(visitor, asm.Opcodes.ASM9)
     val sourceLines = Option.when(sourceName.nonEmpty)(SourceLines(sourceName, allLines.toSeq))
     ExtraClassInfo(sourceLines, extraInfos.toMap)

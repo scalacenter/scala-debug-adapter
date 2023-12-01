@@ -607,7 +607,7 @@ final class BinaryDecoder(using Context):
     val candidates = findAnonFunsAndByNameArgs(decodedClass, method)
     if candidates.size > 1 then
       val clashingMethods = method.declaringClass.declaredMethods
-        .filter(m => m.returnType.zip(method.returnType).forall(_ == _) && m.signature.name != method.signature.name)
+        .filter(m => m.returnType.zip(method.returnType).forall(_ == _) && m.signedName.name != method.signedName.name)
         .collect { case m @ Patterns.AnonFun(_) if m.name != method.name => m }
         .map(m => m -> findAnonFunsAndByNameArgs(decodedClass, m).toSet)
         .toMap

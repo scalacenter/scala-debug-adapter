@@ -13,12 +13,12 @@ class JavaReflectClass(cls: Class[?], extraInfo: ExtraClassInfo, override val cl
   override def sourceLines: Option[binary.SourceLines] = extraInfo.sourceLines
 
   override def declaredMethod(name: String, sig: String): Option[binary.Method] =
-    declaredMethods.find(m => m.signature == binary.MethodSig(name, sig))
+    declaredMethods.find(m => m.signedName == binary.SignedName(name, sig))
 
   override def method(name: String, sig: String): Option[binary.Method] =
     declaredMethod(name, sig).orElse {
       for
-        method <- cls.getMethods.find(m => JavaReflectUtils.signature(m) == binary.MethodSig(name, sig))
+        method <- cls.getMethods.find(m => JavaReflectUtils.signature(m) == binary.SignedName(name, sig))
         declaringClass = classLoader.loadClass(method.getDeclaringClass)
         declaredMethod <- declaringClass.declaredMethod(name, sig)
       yield declaredMethod

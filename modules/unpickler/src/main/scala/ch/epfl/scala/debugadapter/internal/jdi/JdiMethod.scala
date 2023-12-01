@@ -32,9 +32,14 @@ class JdiMethod(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method") 
   override def sourceLines: Option[SourceLines] =
     Some(SourceLines(declaringClass.sourceName, allLineLocations.map(_.lineNumber)))
 
-  override def signature: MethodSig = ???
+  override def signedName: SignedName = SignedName(name, signature)
 
-  override def instructions: Seq[Instruction] = Seq.empty
+  override def instructions: Seq[Instruction] =
+    ByteCodes.parse(bytecodes, declaringClass.constantPool)
 
   private def allLineLocations: Seq[JdiLocation] =
     invokeMethod[ju.List[Any]]("allLineLocations").asScala.map(JdiLocation.apply(_)).toSeq
+
+  private def signature: String = invokeMethod("signature")
+
+  private def bytecodes: Array[Byte] = invokeMethod("bytecodes")
