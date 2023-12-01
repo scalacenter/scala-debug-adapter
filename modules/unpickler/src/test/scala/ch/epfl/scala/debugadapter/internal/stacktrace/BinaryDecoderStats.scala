@@ -45,8 +45,8 @@ class BinaryDecoderStats extends BinaryDecoderSuite:
     val repository = MavenRepository("http://artifactory.cs.arizona.edu:8081/artifactory/sbt-release")
     val decoder = initDecoder("org.clulab", "processors-main_3", "8.5.3", FetchOptions(repositories = Seq(repository)))
     decoder.assertDecodeAll(
-      ExpectedCount(798, throwables = 2),
-      ExpectedCount(14708, ambiguous = 237, notFound = 148, throwables = 30)
+      ExpectedCount(800),
+      ExpectedCount(14746, ambiguous = 237, notFound = 148)
     )
 
   test("com.github.simy4.xpath:xpath-to-xml-scala_3:2.3.7"):
@@ -77,7 +77,7 @@ class BinaryDecoderStats extends BinaryDecoderSuite:
 
   test("dev.zio:zio-interop-cats_3:23.1.0.0"):
     val decoder = initDecoder("dev.zio", "zio-interop-cats_3", "23.1.0.0")
-    decoder.assertDecodeAll(ExpectedCount(137, throwables = 21), ExpectedCount(2784, notFound = 2, throwables = 635))
+    decoder.assertDecodeAll(ExpectedCount(137, throwables = 21), ExpectedCount(2789, notFound = 2, throwables = 630))
 
   test("com.evolution:scache_3:5.1.2"):
     val fetchOptions = FetchOptions(

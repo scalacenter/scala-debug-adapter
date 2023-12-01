@@ -1704,20 +1704,29 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
       skip = true
     )
 
-  test("tasty-query#397".ignore):
+  test("tasty-query#397".only):
     val decoder = initDecoder("com.github.xuwei-k", "httpz_3", "0.8.0")
-    decoder.assertDecode("httpz.package$$anon$1", "")
-    decoder.assertDecode("httpz.InterpretersTemplate$$anon$5", "")
+    decoder.assertDecode("httpz.package$$anon$1", "httpz.ActionZipAp.<anon class>")
+    decoder.assertDecode("httpz.InterpretersTemplate$$anon$5", "InterpretersTemplate.times.future.apply.<anon class>")
     decoder.assertDecode(
       "httpz.package$",
       "java.lang.Object httpz$package$$anon$1$$_$ap$$anonfun$1(scala.Function1 _$2, java.lang.Object _$3)",
-      ""
+      "httpz.ActionZipAp.<anon class>.ap.<anon fun>(A => B, A): B"
     )
-    decoder.assertDecode("httpz.Response", "scalaz.Equal responseEqual(scalaz.Equal arg0)", "")
+    decoder.assertDecode(
+      "httpz.Response",
+      "scalaz.Equal responseEqual(scalaz.Equal arg0)",
+      "Response.responseEqual.<static forwarder>[A](implicit Equal[A]): Equal[Response[A]]",
+      skip = true
+    )
 
-  test("tasty-query#398".ignore):
+  test("tasty-query#398"):
     val decoder = initDecoder("io.github.ashwinbhaskar", "sight-client_3", "0.1.2")
-    decoder.assertDecode("sight.client.SightClientImpl", "java.lang.String b$1(scala.Tuple2 x$1$2)", "")
+    decoder.assertDecode(
+      "sight.client.SightClientImpl",
+      "java.lang.String b$1(scala.Tuple2 x$1$2)",
+      "SightClientImpl.constructPayload.<anon fun>.<anon fun>.<anon fun>.fileContents.<anon fun>.b: String"
+    )
 
   test("tasty-query#401".ignore) {
     val source =
@@ -1750,15 +1759,15 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     )
   }
 
-  test("tasty-query#402".ignore):
+  test("tasty-query#402"):
     val decoder = initDecoder("com.softwaremill.sttp.client3", "opentelemetry_3", "3.6.1")
     decoder.assertDecode(
       "sttp.client3.opentelemetry.OpenTelemetryTracingBackend",
       "java.lang.Object send$$anonfun$2$$anonfun$1$$anonfun$1(sttp.client3.RequestT request$5, scala.collection.mutable.Map carrier$5)",
-      ""
+      "OpenTelemetryTracingBackend.send.<anon fun>.<by-name arg>: F[Response[T]]"
     )
 
-  test("tasty-query#403".ignore) {
+  test("tasty-query#403") {
     val source =
       """|package example
          |
@@ -1775,11 +1784,11 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  
          |""".stripMargin
     val decoder = TestingDebuggee.mainClass(source, "example", ScalaVersion.`3.1+`).decoder
-    decoder.assertDecode("example.B", "void m(java.lang.String x)", "")
-    decoder.assertDecode("example.C", "void m(java.lang.Integer x)", "")
+    decoder.assertDecode("example.B", "void m(java.lang.String x)", "B.m(x: Type): Unit")
+    decoder.assertDecode("example.C", "void m(java.lang.Integer x)", "C.m(x: Value[T]): Unit")
   }
 
-  test("tasty-query#407".ignore) {
+  test("tasty-query#407") {
     val source =
       """|package example
          |
@@ -1793,7 +1802,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def test: Consumer[String] = m(println)
          |""".stripMargin
     val decoder = TestingDebuggee.mainClass(source, "example", ScalaVersion.`3.1+`).decoder
-    decoder.assertDecode("example.A", "void test$$anonfun$1(java.lang.String x)", "")
+    decoder.assertDecode("example.A", "void test$$anonfun$1(java.lang.String x)", "A.test.<anon fun>(x: String): Unit")
   }
 
   test("scala3-compiler:3.3.1"):
