@@ -19,14 +19,16 @@ import tastyquery.Exceptions.NonMethodReferenceException
 object LiftedTreeCollector:
   def collect[S](sym: Symbol)(matcher: PartialFunction[LiftedTree[?], LiftedTree[S]])(using
       Context,
-      Definitions
+      Definitions,
+      ThrowOrWarn
   ): Seq[LiftedTree[S]] =
     val collector = LiftedTreeCollector[S](sym, matcher)
     sym.tree.toSeq.flatMap(collector.collect)
 
 class LiftedTreeCollector[S] private (root: Symbol, matcher: PartialFunction[LiftedTree[?], LiftedTree[S]])(using
-    ctx: Context,
-    defn: Definitions
+    Context,
+    Definitions,
+    ThrowOrWarn
 ):
   private val inlinedTrees = mutable.Map.empty[TermSymbol, Seq[LiftedTree[S]]]
   private var owner = root
@@ -45,18 +47,16 @@ class LiftedTreeCollector[S] private (root: Symbol, matcher: PartialFunction[Lif
           case tree: Lambda => registerLiftedFun(LambdaTree(tree))
           case tree: Try => registerLiftedFun(LiftedTry(owner, tree))
           case tree: Apply =>
-            val isInline = tree.funSymbol.exists(_.isInline)
-            // TODO remove try catch after next tasty-query version
-            try
-              tree.methodType.paramTypes.zip(tree.args).collect { case (byNameTpe: ByNameType, arg) =>
-                registerLiftedFun(ByNameArg(owner, arg, byNameTpe.resultType, isInline))
-              }
-              for
-                funSym <- tree.funSymbol
-                if owner.isClass && funSym.isConstructor
-                (paramTpe, arg) <- tree.methodType.paramTypes.zip(tree.args)
-              do registerLiftedFun(ConstructorArg(owner.asClass, arg, paramTpe))
-            catch case t => ()
+            for
+              symbol <- tree.safeFunSymbol
+              methodType <- tree.safeMethodType
+            do
+              val paramTypesAndArgs = methodType.paramTypes.zip(tree.args)
+              for case (byNameTpe: ByNameType, arg) <- paramTypesAndArgs do
+                registerLiftedFun(ByNameArg(owner, arg, byNameTpe.resultType, symbol.isInline))
+              if owner.isClass && symbol.isConstructor then
+                for (paramTpe, arg) <- paramTypesAndArgs do
+                  registerLiftedFun(ConstructorArg(owner.asClass, arg, paramTpe))
           case _ => ()
 
         // recurse

@@ -14,7 +14,8 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 
 trait BinaryDecoderSuite extends CommonFunSuite:
-  private val formatter = StackTraceFormatter(println, testMode = true)
+  given ThrowOrWarn = ThrowOrWarn.printAndThrow
+  private def formatter(using ThrowOrWarn) = StackTraceFormatter()
 
   def println(x: Any): Unit = Predef.println(x)
 
@@ -23,11 +24,11 @@ trait BinaryDecoderSuite extends CommonFunSuite:
       artifactId: String,
       version: String,
       fetchOptions: FetchOptions = FetchOptions.default
-  ): TestingDecoder =
+  )(using ThrowOrWarn): TestingDecoder =
     val libraries = TestingResolver.fetch(groupId, artifactId, version, fetchOptions)
     initDecoder(libraries, artifactId, version)
 
-  def initDecoder(libraries: Seq[Library], artifactId: String, version: String): TestingDecoder =
+  def initDecoder(libraries: Seq[Library], artifactId: String, version: String)(using ThrowOrWarn): TestingDecoder =
     val library = libraries.find(l => l.name.startsWith(artifactId.stripSuffix("_3")) && l.version == version).get
     TestingDecoder(library, libraries)
 
@@ -62,7 +63,8 @@ trait BinaryDecoderSuite extends CommonFunSuite:
     )(using munit.Location): Unit =
       val (classCounter, methodCounter) = decodeAll(printProgress)
       // classCounter.printThrowables()
-      // methodCounter.printThrowables()
+      // classCounter.printThrowable(1)
+      methodCounter.printThrowable(0)
       // methodCounter.printFirstThrowable()
       classCounter.check(expectedClasses)
       methodCounter.check(expectedMethods)
@@ -184,10 +186,11 @@ trait BinaryDecoderSuite extends CommonFunSuite:
         println(s"${formatDebug(s)} is ambiguous:" + candidates.map(s"\n  - " + _).mkString)
       }
 
-    def printFirstThrowable() = throwables.headOption.foreach { (sym, t) =>
-      println(s"${formatDebug(sym)} $t")
-      t.printStackTrace()
-    }
+    def printThrowable(i: Int) =
+      if throwables.size > i then
+        val (sym, t) = throwables(i)
+        println(s"${formatDebug(sym)} $t")
+        t.printStackTrace()
 
     def printThrowables() = throwables.foreach { (sym, t) =>
       println(s"${formatDebug(sym)} $t")

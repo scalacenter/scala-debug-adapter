@@ -16,7 +16,7 @@ import ch.epfl.scala.debugadapter.internal.javareflect.JavaReflectLoader
 object TestingDecoder:
   def javaRuntime = JavaRuntime(Properties.jdkHome).get
 
-  def apply(mainModule: ManagedEntry, classEntries: Seq[ManagedEntry]): TestingDecoder =
+  def apply(mainModule: ManagedEntry, classEntries: Seq[ManagedEntry])(using ThrowOrWarn): TestingDecoder =
     val classPath = classEntries.map(_.absolutePath)
     val javaRuntimeJars = javaRuntime match
       case Java8(_, classJars, _) => classJars
@@ -30,6 +30,9 @@ object TestingDecoder:
 
 class TestingDecoder(mainEntry: ManagedEntry, val classLoader: BinaryClassLoader, val decoder: BinaryDecoder):
   export decoder.*
+  def decode(cls: String): DecodedClass =
+    val binaryClass = classLoader.loadClass(cls)
+    decode(binaryClass)
   def name: String = mainEntry.name
   def allClasses: Seq[binary.ClassType] =
     val classNames = IO

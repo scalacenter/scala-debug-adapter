@@ -16,8 +16,8 @@ sealed trait LiftedTree[S]:
 
   def inlinedFrom: List[InlineCall] = Nil
   def inlinedArgs: Map[Symbol, Seq[TermTree]] = Map.empty
-  def positions(using Context): Seq[SourcePosition] = LiftedTree.collectPositions(this)
-  def capture(using Context): Seq[String] = LiftedTree.collectCapture(this)
+  def positions(using Context, ThrowOrWarn): Seq[SourcePosition] = LiftedTree.collectPositions(this)
+  def capture(using Context, ThrowOrWarn): Seq[String] = LiftedTree.collectCapture(this)
 end LiftedTree
 
 sealed trait LocalTermDef extends LiftedTree[TermSymbol]:
@@ -91,7 +91,8 @@ final case class InlinedFromArg[S](underlying: LiftedTree[S], params: Seq[TermSy
 object LiftedTree:
   // todo should also map the inlineArgs as a map Map[TermSymbol, TermTree]
   private def collectPositions(liftedTree: LiftedTree[?])(using
-      Context
+      Context,
+      ThrowOrWarn
   ): Seq[SourcePosition] =
     val positions = mutable.Set.empty[SourcePosition]
     val alreadySeen = mutable.Set.empty[Symbol]
@@ -109,17 +110,17 @@ object LiftedTree:
       override def traverse(tree: Tree): Unit =
         tree match
           case _: TypeTree => ()
-          case tree: TermReferenceTree if inlineMapping.contains(tree.symbol) =>
-            val arg = inlineMapping(tree.symbol)
-            registerPosition(arg.pos)
-            loopCollect(tree.symbol)(Traverser(inlinedFrom.tail, inlinedArgs).traverse(arg))
-          case tree: TermReferenceTree if inlinedArgs.contains(tree.symbol) =>
-            val args = inlinedArgs(tree.symbol)
-            loopCollect(tree.symbol)(args.foreach(traverse))
-          case tree: TermReferenceTree if tree.symbol.isInline =>
-            val pos = tree.symbol.tree.map(_.pos).getOrElse(SourcePosition.NoPosition)
-            registerPosition(pos)
-            loopCollect(tree.symbol)(tree.symbol.tree.foreach(traverse))
+          case tree: TermReferenceTree =>
+            for sym <- tree.safeSymbol do
+              for arg <- inlineMapping.get(sym) do
+                registerPosition(arg.pos)
+                loopCollect(sym)(Traverser(inlinedFrom.tail, inlinedArgs).traverse(arg))
+              for args <- inlinedArgs.get(sym) do
+                val args = inlinedArgs(sym)
+                loopCollect(sym)(args.foreach(traverse))
+              for tree <- sym.tree if sym.isInline do
+                registerPosition(tree.pos)
+                loopCollect(sym)(traverse(tree))
           case _ => ()
         super.traverse(tree)
 
@@ -128,7 +129,7 @@ object LiftedTree:
     positions.toSeq
   end collectPositions
 
-  def collectCapture(liftedTree: LiftedTree[?])(using Context): Seq[String] =
+  def collectCapture(liftedTree: LiftedTree[?])(using Context, ThrowOrWarn): Seq[String] =
     val capture = mutable.Set.empty[String]
     val alreadySeen = mutable.Set.empty[Symbol]
 
@@ -143,23 +144,20 @@ object LiftedTree:
       override def traverse(tree: Tree): Unit =
         tree match
           case tree: TermReferenceTree =>
-            val symbol = tree.symbol
-            if inlineMapping.contains(symbol) then
-              val arg = inlineMapping(symbol)
-              loopCollect(symbol)(Traverser(inlinedFrom.tail, inlinedArgs).traverse(arg))
-            else if inlinedArgs.contains(symbol) then
-              val args = inlinedArgs(symbol)
-              loopCollect(symbol)(args.foreach(traverse))
+            for symbol <- tree.safeSymbol do
+              for arg <- inlineMapping.get(symbol) do
+                loopCollect(symbol)(Traverser(inlinedFrom.tail, inlinedArgs).traverse(arg))
+              for args <- inlinedArgs.get(symbol) do loopCollect(symbol)(args.foreach(traverse))
           case _ => ()
 
         tree match
           case _: TypeTree => ()
-          case ident: Ident if ident.symbol.isTerm =>
-            val sym = ident.symbol.asTerm
-            capture += sym.nameStr
-            if sym.isLocal then
-              if sym.isMethod || sym.isLazyVal then loopCollect(sym)(sym.tree.foreach(traverse))
-              else if sym.isModuleVal then loopCollect(sym)(sym.moduleClass.flatMap(_.tree).foreach(traverse))
+          case ident: Ident =>
+            for sym <- ident.safeSymbol.collect { case sym: TermSymbol => sym } do
+              capture += sym.nameStr
+              if sym.isLocal then
+                if sym.isMethod || sym.isLazyVal then loopCollect(sym)(sym.tree.foreach(traverse))
+                else if sym.isModuleVal then loopCollect(sym)(sym.moduleClass.flatMap(_.tree).foreach(traverse))
           case _ => super.traverse(tree)
     end Traverser
 

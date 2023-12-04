@@ -24,8 +24,11 @@ class Scala3UnpicklerBridge(
     warnLogger: Consumer[String],
     testMode: Boolean
 ):
-  val decoder: BinaryDecoder = BinaryDecoder(classEntries)
-  val formatter: StackTraceFormatter = StackTraceFormatter(s => warnLogger.accept(s), testMode)
+  val decoder: BinaryDecoder = BinaryDecoder(classEntries)(
+    // make it quiet, or it would be too verbose when things go wrong
+    using ThrowOrWarn(_ => (), testMode)
+  )
+  val formatter: StackTraceFormatter = StackTraceFormatter(using ThrowOrWarn(s => warnLogger.accept(s), testMode))
   val unpickler: Scala3Unpickler = Scala3Unpickler(decoder, formatter)
 
   def skipMethod(obj: Any): Boolean =

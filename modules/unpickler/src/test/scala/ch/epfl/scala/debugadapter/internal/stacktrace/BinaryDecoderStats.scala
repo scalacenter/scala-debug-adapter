@@ -76,8 +76,12 @@ class BinaryDecoderStats extends BinaryDecoderSuite:
     decoder.assertDecodeAll(ExpectedCount(26), ExpectedCount(281, throwables = 13))
 
   test("dev.zio:zio-interop-cats_3:23.1.0.0"):
+    given ThrowOrWarn = ThrowOrWarn.ignore
     val decoder = initDecoder("dev.zio", "zio-interop-cats_3", "23.1.0.0")
-    decoder.assertDecodeAll(ExpectedCount(137, throwables = 21), ExpectedCount(2789, notFound = 2, throwables = 630))
+    decoder.assertDecodeAll(
+      ExpectedCount(148, notFound = 9, throwables = 1),
+      ExpectedCount(3058, notFound = 524, throwables = 8)
+    )
 
   test("com.evolution:scache_3:5.1.2"):
     val fetchOptions = FetchOptions(

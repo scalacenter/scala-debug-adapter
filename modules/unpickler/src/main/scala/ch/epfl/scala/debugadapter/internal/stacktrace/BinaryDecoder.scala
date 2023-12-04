@@ -16,12 +16,12 @@ import java.nio.file.Path
 import scala.util.matching.Regex
 
 object BinaryDecoder:
-  def apply(classEntries: Seq[Path]): BinaryDecoder =
+  def apply(classEntries: Seq[Path])(using ThrowOrWarn): BinaryDecoder =
     val classpath = ClasspathLoaders.read(classEntries.toList)
     val ctx = Context.initialize(classpath)
     new BinaryDecoder(using ctx)
 
-final class BinaryDecoder(using Context):
+final class BinaryDecoder(using Context, ThrowOrWarn):
   private given defn: Definitions = Definitions()
 
   def decode(cls: binary.ClassType): DecodedClass =
@@ -664,13 +664,6 @@ final class BinaryDecoder(using Context):
       case (enclosing, enclosed) =>
         enclosing.pos.enclose(enclosed.pos)
 
-  private def isInlineMethodApply(tree: Tree): Boolean =
-    tree match
-      case tree: TermReferenceTree if tree.symbol.isInline => true
-      case Apply(fun, _) => isInlineMethodApply(fun)
-      case TypeApply(fun, _) => isInlineMethodApply(fun)
-      case _ => false
-
   private def findByNameArgs(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
     collectLiftedTrees(decodedClass, method) { case arg: ByNameArg if !arg.isInline => arg }
       .collect {
@@ -878,8 +871,8 @@ final class BinaryDecoder(using Context):
     JavaParams(capturedParams, declaredParams, expandedParams, method.returnType)
 
   private def expandContextFunctions(tpe: Type, acc: List[Type]): (List[Type], Type) =
-    tpe.dealias match
-      case tpe: AppliedType if tpe.tycon.isContextFunction =>
+    tpe.safeDealias match
+      case Some(tpe: AppliedType) if tpe.tycon.isContextFunction =>
         val argsAsTypes = tpe.args.map(_.highIfWildcard)
         expandContextFunctions(argsAsTypes.last, acc ::: argsAsTypes.init)
       case _ => (acc, tpe)
@@ -899,15 +892,16 @@ final class BinaryDecoder(using Context):
 
   private def matchSetterArgType(scalaVarType: TypeOrMethodic, javaSetterParamType: binary.Type): Boolean =
     scalaVarType match
-      case scalaVarType: Type => matchType(scalaVarType.erasedAsArgType(asJavaVarargs = false), javaSetterParamType)
+      case scalaVarType: Type =>
+        scalaVarType.erasedAsArgType(asJavaVarargs = false).exists(matchType(_, javaSetterParamType))
       case _: MethodicType => false
 
   private def matchArgType(scalaType: Type, javaType: binary.Type, asJavaVarargs: Boolean): Boolean =
-    matchType(scalaType.erasedAsArgType(asJavaVarargs), javaType)
+    scalaType.erasedAsArgType(asJavaVarargs).exists(matchType(_, javaType))
 
   private def matchReturnType(scalaType: TermType, javaType: Option[binary.Type]): Boolean =
     scalaType match
-      case scalaType: Type => javaType.forall(matchType(scalaType.erasedAsReturnType, _))
+      case scalaType: Type => javaType.forall(jt => scalaType.erasedAsReturnType.exists(matchType(_, jt)))
       case _: MethodicType | _: PackageRef => false
 
   private lazy val dollarDigitsMaybeDollarAtEndRegex = "\\$\\d+\\$?$".r

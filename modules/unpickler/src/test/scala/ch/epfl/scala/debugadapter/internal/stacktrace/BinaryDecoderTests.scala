@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter.internal.stacktrace
 import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 import scala.util.Properties
+import tastyquery.Exceptions.*
 
 class BinaryDecoderTests extends BinaryDecoderSuite:
   test("mixin and static forwarders") {
@@ -1819,3 +1820,23 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
       "RefinedPrinter.<inline RefinedPrinter.myCtx_=>(Contexts.Context): Unit",
       skip = true
     )
+
+  test("bar".only):
+    val source =
+      """|package example
+         |
+         |package object foo:
+         |  def m(x: String): String = ""
+         |
+         |class A:
+         |  def test(xs: Seq[String]) =
+         |    xs.map(foo.m)
+         |""".stripMargin
+    val decoder = TestingDebuggee.mainClass(source, "example", ScalaVersion.`3.1+`).decoder
+    decoder.assertDecode("example.A", "java.lang.String test$$anonfun$1(java.lang.String x)", "")
+
+  test("tasty-query#412"):
+    given ThrowOrWarn = ThrowOrWarn.justPrint
+    val decoder = initDecoder("dev.zio", "zio-interop-cats_3", "23.1.0.0")
+    intercept[TastyFormatException](decoder.decode("zio.BuildInfoInteropCats"))
+    decoder.assertDecode("zio.interop.ZioMonadErrorE$$anon$4", "ZioMonadErrorE.adaptError.<anon PartialFunction>")

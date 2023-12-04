@@ -18,6 +18,7 @@ extension (symbol: Symbol)
   def isLocal = symbol.owner.isTerm
   def pos: SourcePosition = symbol.tree.map(_.pos).getOrElse(SourcePosition.NoPosition)
   def isInline = symbol.isTerm && symbol.asTerm.isInline
+  def nameStr: String = symbol.name.toString
 
   def showBasic =
     val span = symbol.tree.map(_.pos) match
@@ -29,7 +30,6 @@ extension (symbol: Symbol)
 
 extension (symbol: ClassSymbol)
   def isAnonClass = symbol.name == CommonNames.anonClass
-  def nameStr: String = symbol.name.toString()
 
   /** The name of this class in the source, i.e., without the trailing `$` for module classes. */
   def sourceName: String = symbol.name match
@@ -41,7 +41,6 @@ extension (symbol: TermSymbol)
   def isModuleOrLazyVal: Boolean = symbol.isLazyVal || symbol.isModuleVal
   def isLazyVal: Boolean = symbol.kind == TermSymbolKind.LazyVal
   def isVal: Boolean = symbol.kind == TermSymbolKind.Val
-  def nameStr: String = symbol.name.toString()
   def isAnonFun = symbol.name == CommonNames.anonFun
   def targetNameStr(using Context): String = symbol.targetName.toString
   def overridingSymbolInLinearization(siteClass: ClassSymbol)(using Context): TermSymbol =
@@ -116,6 +115,9 @@ extension (tpe: TermType)
     case t: PackageRef => unexpected("return type on package ref")
 
 extension (tpe: Type)
+  def safeDealias(using Context, ThrowOrWarn): Option[Type] =
+    tryOrNone(tpe.dealias)
+
   def isOperatorLike: Boolean =
     tpe match
       case ref: TypeRef =>
@@ -124,15 +126,15 @@ extension (tpe: Type)
         !regex.findFirstIn(ref.name.toString()).isDefined
       case _ => false
 
-  def erasedAsReturnType(using Context): ErasedTypeRef = erased(isReturnType = true)
-  def erasedAsArgType(asJavaVarargs: Boolean = false)(using Context): ErasedTypeRef =
+  def erasedAsReturnType(using Context, ThrowOrWarn): Option[ErasedTypeRef] = erased(isReturnType = true)
+  def erasedAsArgType(asJavaVarargs: Boolean = false)(using Context, ThrowOrWarn): Option[ErasedTypeRef] =
     tpe match
       case tpe: RepeatedType if asJavaVarargs =>
         ctx.defn.ArrayTypeOf(tpe.elemType).erased(isReturnType = false)
       case _ => tpe.erased(isReturnType = false)
 
-  private def erased(isReturnType: Boolean)(using Context): ErasedTypeRef =
-    ErasedTypeRef.erase(tpe, SourceLanguage.Scala3, keepUnit = isReturnType)
+  private def erased(isReturnType: Boolean)(using Context, ThrowOrWarn): Option[ErasedTypeRef] =
+    tryOrNone(ErasedTypeRef.erase(tpe, SourceLanguage.Scala3, keepUnit = isReturnType))
 
 extension (tpe: TermType)
   def isNumberedTypeRefInScalaPackage(namePrefix: String): Boolean =
@@ -173,15 +175,22 @@ extension (tree: Apply)
       case _ => Seq.empty
     rec(tree.fun) ++ tree.args
 
-extension (tree: Apply | TypeApply)
-  def funSymbol(using Context): Option[TermSymbol] =
-    val fun = tree match
-      case tree: Apply => tree.fun
-      case tree: TypeApply => tree.fun
-    fun match
-      case fun: (Apply | TypeApply) => fun.funSymbol
-      case fun: TermReferenceTree => Some(fun.symbol).collect { case sym: TermSymbol => sym }
-      case _ => None
+extension (tree: Apply)
+  def safeMethodType(using Context, ThrowOrWarn): Option[MethodType] =
+    tryOrNone(tree.methodType)
+
+  def safeFunSymbol(using Context, ThrowOrWarn): Option[TermSymbol] =
+    def rec(tree: Tree): Option[TermSymbol] =
+      tree match
+        case tree: Apply => rec(tree.fun)
+        case tree: TypeApply => rec(tree.fun)
+        case tree: TermReferenceTree => tree.safeSymbol.collect { case sym: TermSymbol => sym }
+        case _ => None
+    rec(tree)
+
+extension (tree: TermReferenceTree)
+  def safeSymbol(using Context, ThrowOrWarn): Option[PackageSymbol | TermSymbol] =
+    tryOrNone(tree.symbol)
 
 extension (pos: SourcePosition)
   def isFullyDefined: Boolean =

@@ -6,7 +6,7 @@ import tastyquery.Names.*
 import ch.epfl.scala.debugadapter.internal.stacktrace.*
 import tastyquery.Contexts.Context
 
-class StackTraceFormatter(warnLogger: String => Unit, testMode: Boolean) extends ThrowOrWarn(warnLogger, testMode):
+class StackTraceFormatter(using ThrowOrWarn):
   def format(cls: DecodedClass): String =
     cls match
       case cls: DecodedClass.ClassDef => formatQualifiedName(cls.symbol)
