@@ -16,6 +16,7 @@ class BinaryDecoderStatsFull extends BinaryDecoderSuite:
   lazy val file = Paths.get(s"test-result-${Random.nextInt(Int.MaxValue)}.txt")
   lazy val pw = new PrintWriter(file.toFile)
 
+  override protected def throwOrWarn: ThrowOrWarn = ThrowOrWarn.ignore
   override def println(x: Any): Unit =
     Predef.println(x)
     pw.println(x)
@@ -24,7 +25,7 @@ class BinaryDecoderStatsFull extends BinaryDecoderSuite:
   test("all Scala 3 ecosystem".ignore)(decodeAllFromCsvFile("scala3-artifacts-231121.csv"))
   test("all failed".ignore)(decodeAllFromCsvFile("scala3-artifacts-231121-failed.csv"))
 
-  def decodeAllFromCsvFile(fileName: String): Unit =
+  def decodeAllFromCsvFile(fileName: String)(using ThrowOrWarn): Unit =
     val csv = Source.fromResource(fileName)
     val classCounts = mutable.Buffer.empty[Count]
     val methodCounts = mutable.Buffer.empty[Count]
@@ -46,7 +47,7 @@ class BinaryDecoderStatsFull extends BinaryDecoderSuite:
       .sortBy(count => -count.successPercent)
       .foreach(c => println(s"${c.name} ${c.successPercent}%"))
 
-  def tryDecodeAll(org: String, artifact: String, version: String): (Counter, Counter) =
+  def tryDecodeAll(org: String, artifact: String, version: String)(using ThrowOrWarn): (Counter, Counter) =
     val repositories =
       if org == "org.clulab" then Seq(MavenRepository("http://artifactory.cs.arizona.edu:8081/artifactory/sbt-release"))
       else if org == "com.zengularity" then

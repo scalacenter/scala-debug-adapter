@@ -1705,7 +1705,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
       skip = true
     )
 
-  test("tasty-query#397".only):
+  test("tasty-query#397 and tasty-query#413"):
     val decoder = initDecoder("com.github.xuwei-k", "httpz_3", "0.8.0")
     decoder.assertDecode("httpz.package$$anon$1", "httpz.ActionZipAp.<anon class>")
     decoder.assertDecode("httpz.InterpretersTemplate$$anon$5", "InterpretersTemplate.times.future.apply.<anon class>")
@@ -1719,6 +1719,11 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
       "scalaz.Equal responseEqual(scalaz.Equal arg0)",
       "Response.responseEqual.<static forwarder>[A](implicit Equal[A]): Equal[Response[A]]",
       skip = true
+    )
+    decoder.assertDecode(
+      "httpz.Core",
+      "scalaz.$bslash$div jsonResponse$$anonfun$3$$anonfun$1(argonaut.DecodeJson A$2, httpz.Request request$1, httpz.Response json)",
+      "Core.jsonResponse.<anon fun>.<anon fun>(json: Response[Json]): \\/[Error, Response[A]]"
     )
 
   test("tasty-query#398"):
@@ -1821,22 +1826,19 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
       skip = true
     )
 
-  test("bar".only):
-    val source =
-      """|package example
-         |
-         |package object foo:
-         |  def m(x: String): String = ""
-         |
-         |class A:
-         |  def test(xs: Seq[String]) =
-         |    xs.map(foo.m)
-         |""".stripMargin
-    val decoder = TestingDebuggee.mainClass(source, "example", ScalaVersion.`3.1+`).decoder
-    decoder.assertDecode("example.A", "java.lang.String test$$anonfun$1(java.lang.String x)", "")
-
   test("tasty-query#412"):
     given ThrowOrWarn = ThrowOrWarn.justPrint
     val decoder = initDecoder("dev.zio", "zio-interop-cats_3", "23.1.0.0")
     intercept[TastyFormatException](decoder.decode("zio.BuildInfoInteropCats"))
     decoder.assertDecode("zio.interop.ZioMonadErrorE$$anon$4", "ZioMonadErrorE.adaptError.<anon PartialFunction>")
+
+  test("tasty-query#414"):
+    val decoder = initDecoder("io.github.dieproht", "matr-dflt-data_3", "0.0.3")
+    decoder.assertDecode(
+      "matr.dflt.DefaultMatrixFactory$$anon$1",
+      "DefaultMatrixFactory.defaultMatrixFactory.builder.<anon class>"
+    )
+
+  test("tasty-query#415"):
+    val decoder = initDecoder("com.github.mkroli", "dns4s-fs2_3", "0.21.0")
+    decoder.assertDecode("com.github.mkroli.dns4s.fs2.DnsClientOps", "DnsClientOps")

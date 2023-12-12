@@ -14,8 +14,10 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 
 trait BinaryDecoderSuite extends CommonFunSuite:
-  given ThrowOrWarn = ThrowOrWarn.printAndThrow
+  protected def throwOrWarn: ThrowOrWarn = ThrowOrWarn.printAndThrow
   private def formatter(using ThrowOrWarn) = StackTraceFormatter()
+
+  given ThrowOrWarn = throwOrWarn
 
   def println(x: Any): Unit = Predef.println(x)
 
@@ -63,9 +65,9 @@ trait BinaryDecoderSuite extends CommonFunSuite:
     )(using munit.Location): Unit =
       val (classCounter, methodCounter) = decodeAll(printProgress)
       // classCounter.printThrowables()
-      // classCounter.printThrowable(1)
-      methodCounter.printThrowable(0)
-      // methodCounter.printFirstThrowable()
+      // methodCounter.printThrowables()
+      // classCounter.printThrowable(0)
+      // methodCounter.printThrowable(0)
       classCounter.check(expectedClasses)
       methodCounter.check(expectedMethods)
 
