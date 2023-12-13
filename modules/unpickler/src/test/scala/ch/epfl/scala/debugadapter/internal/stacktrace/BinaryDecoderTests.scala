@@ -1842,3 +1842,25 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
   test("tasty-query#415"):
     val decoder = initDecoder("com.github.mkroli", "dns4s-fs2_3", "0.21.0")
     decoder.assertDecode("com.github.mkroli.dns4s.fs2.DnsClientOps", "DnsClientOps")
+
+  test("bug: Type.of creates capture".ignore):
+    val source =
+      """|package example
+         |
+         |import scala.quoted.*
+         |
+         |trait A[T]
+         |
+         |class B(using q: Quotes):
+         |  import q.reflect.*
+         |
+         |  private def m[T](using tpe: Type[T]): String => TypeRepr =
+         |    (x: String) => TypeRepr.of[A[T]]
+         |
+         |""".stripMargin
+    val decoder = TestingDebuggee.mainClass(source, "example", ScalaVersion.`3.1+`).decoder
+    decoder.assertDecode(
+      "example.B",
+      "java.lang.Object m$$anonfun$1(scala.quoted.Type tpe$1, java.lang.String x)",
+      "B.m.<anon fun>(x: String): q.reflect.TypeRepr"
+    )

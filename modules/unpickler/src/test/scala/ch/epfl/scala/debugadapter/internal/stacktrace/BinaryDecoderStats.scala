@@ -120,3 +120,14 @@ class BinaryDecoderStats extends BinaryDecoderSuite:
     val fetchOptions = FetchOptions(keepProvided = true)
     val decoder = initDecoder("org.virtuslab.scala-cli", "cli2_3", "0.1.5", fetchOptions)
     decoder.assertDecodeAll()
+
+  // slow because of repeated TastyFormatException
+  test("io.github.kory33:s2mc-protocol-impl_3:0.2.3".ignore):
+    given ThrowOrWarn = ThrowOrWarn.ignore
+    val decoder = initDecoder("io.github.kory33", "s2mc-protocol-impl_3", "0.2.3")
+    decoder.assertDecodeAll()
+
+  test("in.nvilla:regsafe_3:0.0.1: unstable TASTy version"):
+    given ThrowOrWarn = ThrowOrWarn.ignore
+    val decoder = initDecoder("in.nvilla", "regsafe_3", "0.0.1")
+    decoder.assertDecodeAll(ExpectedCount(19), ExpectedCount(158))

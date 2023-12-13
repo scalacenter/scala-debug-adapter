@@ -17,7 +17,7 @@ import scala.util.matching.Regex
 
 object BinaryDecoder:
   def apply(classEntries: Seq[Path])(using ThrowOrWarn): BinaryDecoder =
-    val classpath = ClasspathLoaders.read(classEntries.toList)
+    val classpath = CustomClasspath(ClasspathLoaders.read(classEntries.toList))
     val ctx = Context.initialize(classpath)
     new BinaryDecoder(using ctx)
 
