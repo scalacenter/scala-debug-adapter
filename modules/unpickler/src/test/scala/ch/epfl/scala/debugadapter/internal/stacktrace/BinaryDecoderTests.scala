@@ -65,7 +65,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     decoder.assertDecode("example.Main$$anon$2", javaSig, "Main.main.a2.<anon class>.m(): String")
   }
 
-  test("find local class, trait and object by parents") {
+  test("local class, trait and object by parents") {
     val source =
       """|package example
          |object Main :
@@ -1829,7 +1829,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
   test("tasty-query#412"):
     given ThrowOrWarn = ThrowOrWarn.justPrint
     val decoder = initDecoder("dev.zio", "zio-interop-cats_3", "23.1.0.0")
-    intercept[TastyFormatException](decoder.decode("zio.BuildInfoInteropCats"))
+    decoder.assertDecode("zio.BuildInfoInteropCats", "BuildInfoInteropCats")
     decoder.assertDecode("zio.interop.ZioMonadErrorE$$anon$4", "ZioMonadErrorE.adaptError.<anon PartialFunction>")
 
   test("tasty-query#414"):
@@ -1863,4 +1863,13 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
       "example.B",
       "java.lang.Object m$$anonfun$1(scala.quoted.Type tpe$1, java.lang.String x)",
       "B.m.<anon fun>(x: String): q.reflect.TypeRepr"
+    )
+
+  test("bug: not an outer".ignore):
+    given ThrowOrWarn = ThrowOrWarn.ignore
+    val decoder = initDecoder("com.disneystreaming", "weaver-monix-core_3", "0.6.15")
+    decoder.assertDecode(
+      "weaver.monixcompat.PureTaskSuite",
+      "weaver.SourceLocation$ weaver$SourceLocationMacro$Here$$$outer()",
+      ""
     )

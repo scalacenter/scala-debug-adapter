@@ -34,3 +34,4 @@ object CustomClasspath:
 
     override def hasTastyFile: Boolean = data.hasTastyFile
     override def readClassFileBytes(): IArray[Byte] = data.readClassFileBytes()
+    override def toString: String = data.toString

@@ -76,11 +76,10 @@ class BinaryDecoderStats extends BinaryDecoderSuite:
     decoder.assertDecodeAll(ExpectedCount(26), ExpectedCount(281, throwables = 13))
 
   test("dev.zio:zio-interop-cats_3:23.1.0.0"):
-    given ThrowOrWarn = ThrowOrWarn.ignore
-    val decoder = initDecoder("dev.zio", "zio-interop-cats_3", "23.1.0.0")
+    val decoder = initDecoder("dev.zio", "zio-interop-cats_3", "23.1.0.0")(using ThrowOrWarn.ignore)
     decoder.assertDecodeAll(
-      ExpectedCount(147, notFound = 9, throwables = 2),
-      ExpectedCount(3513, notFound = 59)
+      ExpectedCount(149, notFound = 9),
+      ExpectedCount(3546, notFound = 59)
     )
 
   test("com.evolution:scache_3:5.1.2"):
@@ -105,7 +104,7 @@ class BinaryDecoderStats extends BinaryDecoderSuite:
   test("com.devsisters:zio-agones_3:0.1.0"):
     assume(!isJava8)
     val fetchOptions = FetchOptions(exclusions = Seq("io.grpc" -> "grpc-core"))
-    val decoder = initDecoder("com.devsisters", "zio-agones_3", "0.1.0", fetchOptions)
+    val decoder = initDecoder("com.devsisters", "zio-agones_3", "0.1.0", fetchOptions)(using ThrowOrWarn.ignore)
     decoder.assertDecodeAll(
       ExpectedCount(83, notFound = 21, throwables = 5),
       ExpectedCount(2784, throwables = 27)
@@ -123,11 +122,9 @@ class BinaryDecoderStats extends BinaryDecoderSuite:
 
   // slow because of repeated TastyFormatException
   test("io.github.kory33:s2mc-protocol-impl_3:0.2.3".ignore):
-    given ThrowOrWarn = ThrowOrWarn.ignore
-    val decoder = initDecoder("io.github.kory33", "s2mc-protocol-impl_3", "0.2.3")
+    val decoder = initDecoder("io.github.kory33", "s2mc-protocol-impl_3", "0.2.3")(using ThrowOrWarn.ignore)
     decoder.assertDecodeAll()
 
   test("in.nvilla:regsafe_3:0.0.1: unstable TASTy version"):
-    given ThrowOrWarn = ThrowOrWarn.ignore
-    val decoder = initDecoder("in.nvilla", "regsafe_3", "0.0.1")
+    val decoder = initDecoder("in.nvilla", "regsafe_3", "0.0.1")(using ThrowOrWarn.ignore)
     decoder.assertDecodeAll(ExpectedCount(19), ExpectedCount(158))

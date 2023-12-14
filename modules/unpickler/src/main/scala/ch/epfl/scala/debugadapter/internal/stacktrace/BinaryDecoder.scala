@@ -41,7 +41,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         reduceAmbiguityOnClasses(findLocalClasses(cls, packageSym, decl, "$anon", remaining))
       case Patterns.LocalClass(declaringClassName, localClassName, remaining) =>
         findLocalClasses(cls, packageSym, declaringClassName, localClassName, remaining)
-      case _ => findClassRecursively(packageSym, decodedClassName)
+      case _ => findClassFromPackage(packageSym, decodedClassName)
 
     val candidates =
       if cls.isObject then allSymbols.filter(_.isModuleClass)
@@ -128,7 +128,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       localClassName: String,
       remaining: Option[String]
   ): Seq[DecodedClass] =
-    val classOwners = findClassRecursively(packageSym, declaringClassName).map(_.symbol)
+    val classOwners = findClassFromPackage(packageSym, declaringClassName).map(_.symbol)
     remaining match
       case None =>
         val parents = (javaClass.superclass.toSet ++ javaClass.interfaces)
@@ -143,7 +143,21 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
           .flatMap(_.classSymbol)
         localClasses.flatMap(s => findClassRecursively(s, remaining))
 
-  private def findClassRecursively(owner: DeclaringSymbol, decodedName: String): Seq[DecodedClass.ClassDef] =
+  private def findClassFromPackage(owner: PackageSymbol, decodedName: String): Seq[DecodedClass.ClassDef] =
+    val topLevelName =
+      if decodedName.contains("$package") then decodedName.split("\\$package")(0) + "$package"
+      else decodedName.split('$')(0)
+    val remaining = decodedName.stripPrefix(topLevelName).stripPrefix("$")
+    val typeNames = Seq(typeName(topLevelName), moduleClassName(topLevelName))
+    typeNames
+      .flatMap(owner.getDecl)
+      .collect { case sym: ClassSymbol => sym }
+      .flatMap { sym =>
+        if remaining.isEmpty then Seq(DecodedClass.ClassDef(sym))
+        else findClassRecursively(sym, remaining)
+      }
+
+  private def findClassRecursively(owner: ClassSymbol, decodedName: String): Seq[DecodedClass.ClassDef] =
     owner.declarations
       .collect { case sym: ClassSymbol => sym }
       .flatMap { sym =>
@@ -453,9 +467,13 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       .map(target => DecodedMethod.TraitStaticForwarder(decode(decodedClass, target)))
 
   private def findOuter(decodedClass: DecodedClass): Option[DecodedMethod.OuterAccessor] =
-    def outerClass(sym: Symbol): ClassSymbol = if sym.owner.isClass then sym.owner.asClass else outerClass(sym.owner)
+    def outerClass(sym: Symbol): Option[ClassSymbol] =
+      sym.owner match
+        case null => None
+        case owner if owner.isClass => Some(owner.asClass)
+        case owner => outerClass(owner)
     decodedClass.symbolOpt
-      .map(outerClass)
+      .flatMap(outerClass)
       .map(outerClass => DecodedMethod.OuterAccessor(decodedClass, outerClass.thisType))
 
   private def findTraitInitializer(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod.ValOrDefDef] =
