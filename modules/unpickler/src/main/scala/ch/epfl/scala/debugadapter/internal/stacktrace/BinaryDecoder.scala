@@ -146,7 +146,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
   private def findClassFromPackage(owner: PackageSymbol, decodedName: String): Seq[DecodedClass.ClassDef] =
     val topLevelName =
       if decodedName.contains("$package") then decodedName.split("\\$package")(0) + "$package"
-      else decodedName.split('$')(0)
+      else decodedName.split('$').headOption.getOrElse(decodedName)
     val remaining = decodedName.stripPrefix(topLevelName).stripPrefix("$")
     val typeNames = Seq(typeName(topLevelName), moduleClassName(topLevelName))
     typeNames
@@ -231,7 +231,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         case anonFun: DecodedClass.SAMOrPartialFunction =>
           if method.isConstructor then Seq(DecodedMethod.SAMOrPartialFunctionConstructor(decodedClass, anonFun.tpe))
           else if anonFun.parentClass == defn.PartialFunctionClass then
-            Seq(findPartialFunctionImpl(decodedClass, anonFun.tpe, method))
+            findPartialFunctionImpl(decodedClass, anonFun.tpe, method).toSeq
           else findSAMFunctionImpl(decodedClass, anonFun.symbol, anonFun.parentClass, method).toSeq
         case underlying: DecodedClass.ClassDef => findInstanceMethods(decodedClass, underlying.symbol, method)
         case _: DecodedClass.SyntheticCompanionClass => Seq.empty
@@ -535,10 +535,14 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       yield DecodedMethod.SAMOrPartialFunctionImpl(decodedClass, overridden, symbol.declaredType)
     types.nextOption
 
-  private def findPartialFunctionImpl(decodedClass: DecodedClass, tpe: Type, method: binary.Method): DecodedMethod =
-    val implementedSym = defn.PartialFunctionClass.findNonOverloadedDecl(SimpleName(method.name))
-    val implTpe = implementedSym.typeAsSeenFrom(SkolemType(tpe))
-    DecodedMethod.SAMOrPartialFunctionImpl(decodedClass, implementedSym, implTpe)
+  private def findPartialFunctionImpl(
+      decodedClass: DecodedClass,
+      tpe: Type,
+      method: binary.Method
+  ): Option[DecodedMethod] =
+    for sym <- defn.PartialFunctionClass.getNonOverloadedDecl(SimpleName(method.name)) yield
+      val implTpe = sym.typeAsSeenFrom(SkolemType(tpe))
+      DecodedMethod.SAMOrPartialFunctionImpl(decodedClass, sym, implTpe)
 
   private def findBridgesAndMixinForwarders(
       decodedClass: DecodedClass,
@@ -782,7 +786,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
     sourceLines.tastyLines.forall(line => positions.exists(_.containsLine(line)))
 
   private def matchTargetName(method: binary.Method, symbol: TermSymbol): Boolean =
-    method.unexpandedDecodedNames.map(_.stripSuffix("$")).contains(symbol.targetNameStr)
+    method.unexpandedDecodedNames.contains(symbol.targetNameStr)
 
   private case class ScalaParams(
       declaredParamNames: Seq[UnsignedTermName],

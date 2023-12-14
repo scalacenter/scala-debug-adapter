@@ -128,3 +128,7 @@ class BinaryDecoderStats extends BinaryDecoderSuite:
   test("in.nvilla:regsafe_3:0.0.1: unstable TASTy version"):
     val decoder = initDecoder("in.nvilla", "regsafe_3", "0.0.1")(using ThrowOrWarn.ignore)
     decoder.assertDecodeAll(ExpectedCount(19), ExpectedCount(158))
+
+  test("io.github.valdemargr:gql-core_3:0.3.3"):
+    val decoder = initDecoder("io.github.valdemargr", "gql-core_3", "0.3.3")
+    decoder.assertDecodeAll(ExpectedCount(531), ExpectedCount(7267, ambiguous = 4, notFound = 1))

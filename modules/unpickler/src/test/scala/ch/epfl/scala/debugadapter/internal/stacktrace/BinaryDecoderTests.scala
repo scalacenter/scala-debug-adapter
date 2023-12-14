@@ -322,13 +322,13 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     decoder.assertDecode("example.Main$A$B$1", "void <init>()", "Main.A.m.B.<init>(): Unit")
   }
 
-  test("local class with encoded name") {
+  test("operator-like names") {
     val source =
       """|package example 
          |class ++ :
          |  def m = 
          |    def ++ = 1
-         |    class ++ 
+         |    class ++
          |""".stripMargin
     val decoder = TestingDebuggee.mainClass(source, "example.Main", ScalaVersion.`3.1+`).decoder
     decoder.assertDecode("example.$plus$plus", "int $plus$plus$1()", "++.m.++: Int")
@@ -1827,8 +1827,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     )
 
   test("tasty-query#412"):
-    given ThrowOrWarn = ThrowOrWarn.justPrint
-    val decoder = initDecoder("dev.zio", "zio-interop-cats_3", "23.1.0.0")
+    val decoder = initDecoder("dev.zio", "zio-interop-cats_3", "23.1.0.0")(using ThrowOrWarn.ignore)
     decoder.assertDecode("zio.BuildInfoInteropCats", "BuildInfoInteropCats")
     decoder.assertDecode("zio.interop.ZioMonadErrorE$$anon$4", "ZioMonadErrorE.adaptError.<anon PartialFunction>")
 
@@ -1866,10 +1865,31 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     )
 
   test("bug: not an outer".ignore):
-    given ThrowOrWarn = ThrowOrWarn.ignore
-    val decoder = initDecoder("com.disneystreaming", "weaver-monix-core_3", "0.6.15")
+    val decoder = initDecoder("com.disneystreaming", "weaver-monix-core_3", "0.6.15")(using ThrowOrWarn.ignore)
     decoder.assertDecode(
       "weaver.monixcompat.PureTaskSuite",
       "weaver.SourceLocation$ weaver$SourceLocationMacro$Here$$$outer()",
       ""
     )
+
+  test("bug: $ as a name".ignore) {
+    val source =
+      """|package example
+         |
+         |class $:
+         |  def $: String = ???
+         |
+         |object $
+         |""".stripMargin
+    val decoder = TestingDebuggee.mainClass(source, "example", ScalaVersion.`3.1+`).decoder
+    decoder.assertDecode("example.$", "java.lang.String $()", "$.$: String")
+    decoder.assertDecode("example.$$", "$")
+  }
+
+  test("tasty-query#423".ignore):
+    val decoder = initDecoder("com.typesafe.akka", "akka-stream_3", "2.8.5")
+    decoder.assertDecode("akka.stream.scaladsl.FlowOps$passedEnd$2$", "")
+
+  test("tasty-query#424".ignore):
+    val decoder = initDecoder("edu.gemini", "lucuma-itc-core_3", "0.10.0")(using ThrowOrWarn.ignore)
+    decoder.assertDecode("lucuma.itc.ItcImpl", "")
