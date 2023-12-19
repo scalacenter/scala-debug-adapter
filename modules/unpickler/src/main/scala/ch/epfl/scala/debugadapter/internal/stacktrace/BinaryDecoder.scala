@@ -786,7 +786,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
     sourceLines.tastyLines.forall(line => positions.exists(_.containsLine(line)))
 
   private def matchTargetName(method: binary.Method, symbol: TermSymbol): Boolean =
-    method.unexpandedDecodedNames.contains(symbol.targetNameStr)
+    method.unexpandedDecodedNames.map(_.stripSuffix("$")).contains(symbol.targetNameStr)
 
   private case class ScalaParams(
       declaredParamNames: Seq[UnsignedTermName],

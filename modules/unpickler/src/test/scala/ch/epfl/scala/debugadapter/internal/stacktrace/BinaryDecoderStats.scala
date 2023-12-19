@@ -106,8 +106,8 @@ class BinaryDecoderStats extends BinaryDecoderSuite:
     val fetchOptions = FetchOptions(exclusions = Seq("io.grpc" -> "grpc-core"))
     val decoder = initDecoder("com.devsisters", "zio-agones_3", "0.1.0", fetchOptions)(using ThrowOrWarn.ignore)
     decoder.assertDecodeAll(
-      ExpectedCount(83, notFound = 21, throwables = 5),
-      ExpectedCount(2784, throwables = 27)
+      ExpectedCount(83, notFound = 26),
+      ExpectedCount(2804, ambiguous = 2, notFound = 5)
     )
 
   test("org.log4s:log4s_3:1.10.0".ignore):
@@ -120,10 +120,14 @@ class BinaryDecoderStats extends BinaryDecoderSuite:
     val decoder = initDecoder("org.virtuslab.scala-cli", "cli2_3", "0.1.5", fetchOptions)
     decoder.assertDecodeAll()
 
-  // slow because of repeated TastyFormatException
+  // slow because of repeated InvalidProgramStructureException
   test("io.github.kory33:s2mc-protocol-impl_3:0.2.3".ignore):
     val decoder = initDecoder("io.github.kory33", "s2mc-protocol-impl_3", "0.2.3")(using ThrowOrWarn.ignore)
-    decoder.assertDecodeAll()
+    // decoder.assertDecode("io.github.kory33.s2mctest.impl.connection.protocol.PacketIntentCodecCache$$anon$99", "")
+    decoder.assertDecodeAllInClass("io.github.kory33.s2mctest.impl.connection.protocol.PacketIntentCodecCache")(
+      printProgress = true
+    )
+    // decoder.assertDecodeAll()
 
   test("in.nvilla:regsafe_3:0.0.1: unstable TASTy version"):
     val decoder = initDecoder("in.nvilla", "regsafe_3", "0.0.1")(using ThrowOrWarn.ignore)

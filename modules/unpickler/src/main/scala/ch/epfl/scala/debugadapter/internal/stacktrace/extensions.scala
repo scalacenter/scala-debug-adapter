@@ -192,6 +192,10 @@ extension (tree: TermReferenceTree)
   def safeSymbol(using Context, ThrowOrWarn): Option[PackageSymbol | TermSymbol] =
     tryOrNone(tree.symbol)
 
+extension (tree: TermTree)
+  def safeTpe(using Context, ThrowOrWarn): Option[TermType] =
+    tryOrNone(tree.tpe)
+
 extension (pos: SourcePosition)
   def isFullyDefined: Boolean =
     !pos.isUnknown && pos.hasLineColumnInformation

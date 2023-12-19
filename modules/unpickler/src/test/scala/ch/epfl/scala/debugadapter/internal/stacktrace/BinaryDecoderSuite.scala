@@ -58,6 +58,22 @@ trait BinaryDecoderSuite extends CommonFunSuite:
       val method = loadBinaryMethod(declaringType, javaSig)
       intercept[NotFoundException](decoder.decode(method))
 
+    def assertDecodeAllInClass(
+        className: String
+    )(expectedMethods: ExpectedCount = ExpectedCount(0), printProgress: Boolean = false)(using munit.Location): Unit =
+      val binaryClass = decoder.classLoader.loadClass(className)
+      val decodedClass = decoder.decode(binaryClass)
+      val methodCounter = Counter(className + " methods")
+      val binaryMethods = binaryClass.declaredMethods
+      var reported = 0
+      for (binaryMethod, i) <- binaryMethods.zipWithIndex do
+        val percent = i * 100 / binaryMethods.size
+        if percent > reported && printProgress then
+          println(percent + "%")
+          reported = percent
+        decoder.tryDecode(decodedClass, binaryMethod, methodCounter)
+      methodCounter.check(expectedMethods)
+
     def assertDecodeAll(
         expectedClasses: ExpectedCount = ExpectedCount(0),
         expectedMethods: ExpectedCount = ExpectedCount(0),

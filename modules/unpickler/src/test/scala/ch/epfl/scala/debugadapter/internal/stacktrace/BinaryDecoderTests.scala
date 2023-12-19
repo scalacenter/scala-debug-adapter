@@ -1886,10 +1886,10 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     decoder.assertDecode("example.$$", "$")
   }
 
-  test("tasty-query#423".ignore):
+  test("tasty-query#423"):
     val decoder = initDecoder("com.typesafe.akka", "akka-stream_3", "2.8.5")
-    decoder.assertDecode("akka.stream.scaladsl.FlowOps$passedEnd$2$", "")
+    decoder.assertDecode("akka.stream.scaladsl.FlowOps$passedEnd$2$", "FlowOps.zipAllFlow.passedEnd")
 
-  test("tasty-query#424".ignore):
-    val decoder = initDecoder("edu.gemini", "lucuma-itc-core_3", "0.10.0")(using ThrowOrWarn.ignore)
-    decoder.assertDecode("lucuma.itc.ItcImpl", "")
+  test("tasty-query#424"):
+    val decoder = initDecoder("edu.gemini", "lucuma-itc-core_3", "0.10.0")
+    decoder.assertDecode("lucuma.itc.ItcImpl", "ItcImpl")
