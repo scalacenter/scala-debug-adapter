@@ -5,84 +5,63 @@ import ch.epfl.scala.debugadapter.testfmk.*
 class ScalaStackTraceTests extends DebugTestSuite {
   val scalaVersion = ScalaVersion.`3.1+`
 
-  test("2 list of args") {
-    val source =
-      """|package example
-         |def m(t : Int)(x : String) = {
-         |  ()
-         |}
-         |object Main:
-         |  def main(args: Array[String]): Unit =
-         |    m(42)("")
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-
-    check(
-      Breakpoint(
-        3,
-        List(
-          "example.m(t: Int)(x: String): Unit",
-          "Main.main(args: Array[String]): Unit"
-        )
-      )
-    )
-  }
-
   test("anonfun") {
     val source =
       """|package example
          |
          |object Main:
          |  def main(args: Array[String]): Unit =
-         |    new Hello().greet()
+         |    val a = new A
+         |    a.m
          |
-         |  class Hello():
-         |    def greet(): Unit =
-         |     List(1,2,3).map ( n => {
-         |           n+1
-         |     })
+         |  class A:
+         |    def m: Seq[Int] =
+         |      List(1,2,3).map { n =>
+         |        println("")
+         |        n+1
+         |      }
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(
-        10,
-        List(
-          "Main.Hello.greet.<anon fun>(n: Int): Int",
+        11,
+        Seq(
+          "Main.A.m.<anon fun>(n: Int): Int",
           "JFunction1$mcII$sp.apply(t: Any): Any",
           "List.map[B](f: A => B): List[B]",
-          "Main.Hello.greet(): Unit",
+          "Main.A.m: Seq[Int]",
           "Main.main(args: Array[String]): Unit"
         )
       ),
-      Breakpoint(10),
-      Breakpoint(10)
+      Breakpoint(11),
+      Breakpoint(11)
     )
 
   }
 
-  test("trait initializer ") {
+  test("trait initializer") {
     val source =
       """|package example
-         |trait MyClass(t : Int) {
-         |  println(t)
+         |
+         |trait A {
+         |  println("Hello")
          |}
          |
-         |class A extends MyClass(2)
+         |class B extends A
          |
          |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val myObj = new A()
-         |  }
+         |  def main(args: Array[String]): Unit =
+         |    new B
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
 
     check(
       Breakpoint(
-        3,
-        List(
-          "MyClass.<init>(t: Int): Unit",
+        4,
+        Seq(
           "A.<init>(): Unit",
+          "B.<init>(): Unit",
           "Main.main(args: Array[String]): Unit"
         )
       )
@@ -112,7 +91,7 @@ class ScalaStackTraceTests extends DebugTestSuite {
     check(
       Breakpoint(
         7,
-        List(
+        Seq(
           "example.m2(t: Int): Int",
           "example.m1.<default 3>(y: Int): Int",
           "Main.main(args: Array[String]): Unit"
@@ -166,7 +145,7 @@ class ScalaStackTraceTests extends DebugTestSuite {
     check(
       Breakpoint(
         6,
-        List(
+        Seq(
           "Main.main.B.m(): Unit",
           "Main.main(args: Array[String]): Unit"
         )

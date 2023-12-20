@@ -34,10 +34,6 @@ trait BinaryDecoderSuite extends CommonFunSuite:
     val library = libraries.find(l => l.name.startsWith(artifactId.stripSuffix("_3")) && l.version == version).get
     TestingDecoder(library, libraries)
 
-  extension (debuggee: TestingDebuggee)
-    def decoder: TestingDecoder =
-      TestingDecoder(debuggee.mainModule, debuggee.managedEntries)
-
   extension (decoder: TestingDecoder)
     private def unpickler = Scala3Unpickler(decoder.decoder, formatter)
 

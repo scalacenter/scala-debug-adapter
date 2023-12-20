@@ -144,9 +144,13 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         localClasses.flatMap(s => findClassRecursively(s, remaining))
 
   private def findClassFromPackage(owner: PackageSymbol, decodedName: String): Seq[DecodedClass.ClassDef] =
-    val topLevelName =
-      if decodedName.contains("$package") then decodedName.split("\\$package")(0) + "$package"
-      else decodedName.split('$').headOption.getOrElse(decodedName)
+    val packageObject = "([^\\$]+\\$package)(\\$.*)?".r
+    val specializedClass = "([^\\$]+\\$mc.+\\$sp)(\\$.*)?".r
+    val standardClass = "([^\\$]+)(\\$.*)?".r
+    val topLevelName = decodedName match
+      case packageObject(name, _) => name
+      case specializedClass(name, _) => name
+      case standardClass(name, _) => name
     val remaining = decodedName.stripPrefix(topLevelName).stripPrefix("$")
     val typeNames = Seq(typeName(topLevelName), moduleClassName(topLevelName))
     typeNames
