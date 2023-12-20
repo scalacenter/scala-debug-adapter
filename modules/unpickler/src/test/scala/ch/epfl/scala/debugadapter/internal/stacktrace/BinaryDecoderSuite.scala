@@ -82,6 +82,7 @@ trait BinaryDecoderSuite extends CommonFunSuite:
       else if methodCounter.throwables.nonEmpty then
         methodCounter.printThrowables()
         methodCounter.printThrowable(0)
+      // methodCounter.printNotFound()
       classCounter.check(expectedClasses)
       methodCounter.check(expectedMethods)
 
@@ -111,7 +112,7 @@ trait BinaryDecoderSuite extends CommonFunSuite:
     private def tryDecode(cls: binary.ClassType, counter: Counter): Option[DecodedClass] =
       try
         val sym = decoder.decode(cls)
-        counter.success += cls
+        counter.success += (cls -> sym)
         Some(sym)
       catch
         case ambiguious: AmbiguousException =>
@@ -126,8 +127,8 @@ trait BinaryDecoderSuite extends CommonFunSuite:
 
     private def tryDecode(cls: DecodedClass, mthd: binary.Method, counter: Counter): Unit =
       try
-        val sym = decoder.decode(cls, mthd)
-        counter.success += mthd
+        val decoded = decoder.decode(cls, mthd)
+        counter.success += (mthd -> decoded)
       catch
         case notFound: NotFoundException => counter.notFound += (mthd -> notFound)
         case ambiguous: AmbiguousException => counter.ambiguous += ambiguous
@@ -181,7 +182,7 @@ trait BinaryDecoderSuite extends CommonFunSuite:
   end Count
 
   class Counter(val name: String):
-    val success = mutable.Buffer.empty[binary.Symbol]
+    val success = mutable.Buffer.empty[(binary.Symbol, DecodedSymbol)]
     val notFound = mutable.Buffer.empty[(binary.Symbol, NotFoundException)]
     val ambiguous = mutable.Buffer.empty[AmbiguousException]
     val ignored = mutable.Buffer.empty[IgnoredException]

@@ -1015,9 +1015,9 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |def foo: String = ???
          |""".stripMargin
     val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
-    decoder.assertDecode("example.example$package$", "java.lang.String foo()", "example.foo: String")
+    decoder.assertDecode("example.decoder$package$", "java.lang.String foo()", "example.foo: String")
     decoder.assertDecode(
-      "example.example$package",
+      "example.decoder$package",
       "java.lang.String foo()",
       "example.foo.<static forwarder>: String",
       skip = true
@@ -1823,6 +1823,35 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
       "dotty.tools.dotc.printing.RefinedPrinter",
       "void dotty$tools$dotc$printing$RefinedPrinter$$inline$myCtx_$eq(dotty.tools.dotc.core.Contexts$Context x$0)",
       "RefinedPrinter.<inline RefinedPrinter.myCtx_=>(Contexts.Context): Unit",
+      skip = true
+    )
+    decoder.assertDecode(
+      "dotty.tools.dotc.transform.sjs.PrepJSInterop$OwnerKind",
+      "int inline$baseKinds$extension(int arg0)",
+      "PrepJSInterop.OwnerKind.<inline PrepJSInterop.OwnerKind.baseKinds>.<static forwarder>: Int",
+      skip = true
+    )
+    decoder.assertDecode(
+      "org.scalajs.ir.Trees$OptimizerHints",
+      "boolean inline$extension(int arg0)",
+      "Trees.OptimizerHints.inline.<static forwarder>: Boolean",
+      skip = true
+    )
+    decoder.assertDecode(
+      "dotty.tools.package",
+      "java.lang.Object unreachable$default$1()",
+      "tools.unreachable.<default 1>.<static forwarder>: Any",
+      skip = true
+    )
+    // decoder.assertDecode(
+    //   "dotty.tools.dotc.printing.Formatting$StringFormatter",
+    //   "java.lang.String assemble$$anonfun$1(java.lang.String str)",
+    //   ""
+    // )
+    decoder.assertDecode(
+      "dotty.tools.dotc.core.tasty.TreeUnpickler",
+      "dotty.tools.dotc.ast.Trees$Tree dotty$tools$dotc$core$tasty$TreeUnpickler$TreeReader$$_$_$$anonfun$18(dotty.tools.dotc.core.Contexts$Context x$1$19, dotty.tools.dotc.core.tasty.TreeUnpickler$TreeReader $this$tailLocal1$1)",
+      "TreeUnpickler.readTpt.<static forwarder>()(using Contexts.Context): tpd.Tree",
       skip = true
     )
 

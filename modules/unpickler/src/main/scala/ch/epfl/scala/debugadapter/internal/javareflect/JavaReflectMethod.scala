@@ -28,6 +28,8 @@ class JavaReflectMethod(
 
   override def isStatic: Boolean = Modifier.isStatic(method.getModifiers)
 
+  override def isFinal: Boolean = Modifier.isFinal(method.getModifiers)
+
   override def toString: String =
     if showSpan.isEmpty then method.toString else s"$method $showSpan"
 

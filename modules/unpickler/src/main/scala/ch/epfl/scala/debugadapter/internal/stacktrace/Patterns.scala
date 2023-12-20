@@ -34,7 +34,8 @@ object Patterns:
 
   object LazyInit:
     def unapply(method: binary.Method): Option[String] =
-      """(.*)\$lzyINIT\d+""".r.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0).stripSuffix("$"))
+      if method.isBridge || method.isStatic then None
+      else """(.*)\$lzyINIT\d+""".r.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0).stripSuffix("$"))
 
   object TraitLocalStaticForwarder:
     def unapply(method: binary.Method): Option[Seq[String]] =
@@ -42,29 +43,28 @@ object Patterns:
       else None
 
   object TraitStaticForwarder:
-    def unapply(method: binary.Method): Option[Seq[String]] =
-      if method.isTraitStaticForwarder then Some(method.unexpandedDecodedNames.map(_.stripSuffix("$")))
-      else None
+    def unapply(method: binary.Method): Boolean = method.isTraitStaticForwarder
 
   object Outer:
-    def unapply(method: binary.Method): Option[String] =
-      "(.*)\\$\\$\\$outer".r.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0))
+    def unapply(method: binary.Method): Boolean =
+      (!method.isBridge && !method.isStatic) &&
+        "(.*)\\$\\$\\$outer".r.unapplySeq(NameTransformer.decode(method.name)).isDefined
 
   object AnonFun:
-    def unapply(method: binary.Method): Option[String] =
-      "(.*)\\$anonfun\\$\\d+".r.unapplySeq(NameTransformer.decode(method.name)).map(xs => xs(0).stripSuffix("$"))
+    def unapply(method: binary.Method): Boolean =
+      !method.isBridge && "(.*)\\$anonfun\\$\\d+".r.unapplySeq(NameTransformer.decode(method.name)).isDefined
 
   object AdaptedAnonFun:
-    def unapply(method: binary.Method): Option[String] =
-      """(.*)\$anonfun\$adapted\$\d+""".r
-        .unapplySeq(NameTransformer.decode(method.name))
-        .map(xs => xs(0).stripSuffix("$"))
+    def unapply(method: binary.Method): Boolean =
+      // adapted anon funs can be bridges or static or both
+      (method.isBridge || method.isStatic) &&
+        """(.*)\$anonfun\$adapted\$\d+""".r.unapplySeq(NameTransformer.decode(method.name)).isDefined
 
   object LocalMethod:
     def unapply(method: binary.Method): Option[Seq[String]] =
       method match
-        case ByNameArgProxy() => None
         case DefaultArg(_) => None
+        case m if m.isBridge => None
         case _ => method.extractFromDecodedNames("(.+)\\$\\d+".r)(_(0).stripSuffix("$"))
 
   object DefaultArg:
@@ -73,17 +73,17 @@ object Patterns:
 
   object LocalLazyInit:
     def unapply(method: binary.Method): Option[Seq[String]] =
-      if !method.allParameters.forall(_.isGenerated) then None
+      if method.isBridge || !method.allParameters.forall(_.isGenerated) then None
       else method.extractFromDecodedNames("""(.+)\$lzyINIT\d+\$(\d+)""".r)(_(0).stripSuffix("$"))
 
   object SuperArg:
     def unapply(method: binary.Method): Boolean =
-      """(.*)\$superArg\$\d+(\$\d+)?""".r.unapplySeq(method.name).isDefined
+      !method.isBridge && """(.*)\$superArg\$\d+(\$\d+)?""".r.unapplySeq(method.name).isDefined
 
   object LiftedTree:
     def unapply(method: binary.Method): Boolean =
       val liftedTree = "liftedTree\\d+\\$\\d+".r
-      liftedTree.unapplySeq(method.name).isDefined
+      !method.isBridge && liftedTree.unapplySeq(method.name).isDefined
 
   object TraitInitializer:
     def unapply(method: binary.Method): Boolean =
@@ -99,20 +99,23 @@ object Patterns:
 
   object ParamForwarder:
     def unapply(method: binary.Method): Option[Seq[String]] =
-      method.extractFromDecodedNames("(.+)\\$accessor".r)(xs => xs(0))
+      if method.isStatic || method.isBridge then None
+      else method.extractFromDecodedNames("(.+)\\$accessor".r)(xs => xs(0))
 
   object TraitSetter:
     def unapply(method: binary.Method): Option[String] =
-      if method.isStatic then None
+      if method.isStatic || method.isBridge then None
       else """.+\$_setter_\$(.+\$\$)?(.+)_=""".r.unapplySeq(method.decodedName).map(xs => xs(1))
 
   object Setter:
     def unapply(method: binary.Method): Option[Seq[String]] =
-      method.extractFromDecodedNames("(.+)_=".r)(_(0))
+      if method.isStatic || method.isBridge then None
+      else method.extractFromDecodedNames("(.+)_=".r)(_(0))
 
   object SuperAccessor:
     def unapply(method: binary.Method): Option[Seq[String]] =
-      method.extractFromDecodedNames("super\\$(.+)".r)(_(0))
+      if method.isStatic || method.isBridge then None
+      else method.extractFromDecodedNames("super\\$(.+)".r)(_(0))
 
   object SpecializedMethod:
     def unapply(method: binary.Method): Option[Seq[String]] =
@@ -121,11 +124,11 @@ object Patterns:
 
   object ByNameArgProxy:
     def unapply(method: binary.Method): Boolean =
-      ".+\\$proxy\\d+\\$\\d+".r.unapplySeq(method.name).isDefined
+      !method.isBridge && ".+\\$proxy\\d+\\$\\d+".r.unapplySeq(method.name).isDefined
 
   object InlineAccessor:
     def unapply(method: binary.Method): Option[Seq[String]] =
-      if method.isStatic then None
+      if method.isStatic || method.isBridge then None
       else
         method.extractFromDecodedNames("inline\\$(.+)".r) { xs =>
           // strip $i1 suffix if exists

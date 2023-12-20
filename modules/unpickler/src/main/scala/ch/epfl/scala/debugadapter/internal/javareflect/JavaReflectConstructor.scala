@@ -28,6 +28,8 @@ class JavaReflectConstructor(
 
   override def isStatic: Boolean = false
 
+  override def isFinal: Boolean = true
+
   override def isConstructor: Boolean = true
 
   override def toString: String = constructor.toString

@@ -8,13 +8,14 @@ trait Method extends Symbol:
   def returnTypeName: String
   def isBridge: Boolean
   def isStatic: Boolean
+  def isFinal: Boolean
   def instructions: Seq[Instruction]
   def isConstructor: Boolean
   def signedName: SignedName
 
-  def isExtensionMethod: Boolean = name.endsWith("$extension") && !isStatic
+  def isExtensionMethod: Boolean = name.endsWith("$extension") && !isStatic && !isBridge
   def isTraitStaticForwarder: Boolean =
-    name.endsWith("$") && !isDeserializeLambda && !isTraitInitializer && declaringClass.isInterface && isStatic
+    declaringClass.isInterface && isStatic && name.endsWith("$") && !isDeserializeLambda && !isTraitInitializer
   def isTraitInitializer: Boolean = name == "$init$" && isStatic
   def isClassInitializer: Boolean = name == "<init>"
   def isPartialFunctionApplyOrElse: Boolean = declaringClass.isPartialFunction && name == "applyOrElse"

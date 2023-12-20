@@ -27,6 +27,8 @@ class JdiMethod(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method") 
 
   override def isStatic: Boolean = invokeMethod("isStatic")
 
+  override def isFinal: Boolean = invokeMethod("isFinal")
+
   override def isConstructor: Boolean = invokeMethod("isConstructor")
 
   override def sourceLines: Option[SourceLines] =

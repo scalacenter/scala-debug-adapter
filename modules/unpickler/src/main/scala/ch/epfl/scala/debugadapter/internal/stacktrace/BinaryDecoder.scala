@@ -38,10 +38,10 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         val decl = declaringClassName match
           case WithLocalPart(decl, _) => decl.stripSuffix("$")
           case decl => decl
-        reduceAmbiguityOnClasses(findLocalClasses(cls, packageSym, decl, "$anon", remaining))
+        reduceAmbiguityOnClasses(decodeLocalClasses(cls, packageSym, decl, "$anon", remaining))
       case Patterns.LocalClass(declaringClassName, localClassName, remaining) =>
-        findLocalClasses(cls, packageSym, declaringClassName, localClassName, remaining)
-      case _ => findClassFromPackage(packageSym, decodedClassName)
+        decodeLocalClasses(cls, packageSym, declaringClassName, localClassName, remaining)
+      case _ => decodeClassFromPackage(packageSym, decodedClassName)
 
     val candidates =
       if cls.isObject then allSymbols.filter(_.isModuleClass)
@@ -56,46 +56,47 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
     decode(decodedClass, method)
 
   def decode(decodedClass: DecodedClass, method: binary.Method): DecodedMethod =
-    def find(f: PartialFunction[binary.Method, Seq[DecodedMethod]]): Seq[DecodedMethod] =
+    def tryDecode(f: PartialFunction[binary.Method, Seq[DecodedMethod]]): Seq[DecodedMethod] =
       f.applyOrElse(method, _ => Seq.empty[DecodedMethod])
 
     extension (xs: Seq[DecodedMethod])
-      def orFind(f: PartialFunction[binary.Method, Seq[DecodedMethod]]): Seq[DecodedMethod] =
+      def orTryDecode(f: PartialFunction[binary.Method, Seq[DecodedMethod]]): Seq[DecodedMethod] =
         if xs.nonEmpty then xs else f.applyOrElse(method, _ => Seq.empty[DecodedMethod])
     val candidates =
-      find { case Patterns.SpecializedMethod(names) => findSpecializedMethod(decodedClass, method, names) }
-        .orFind { case _ if method.isBridge => findBridgesAndMixinForwarders(decodedClass, method).toSeq }
-        .orFind { case Patterns.LocalLazyInit(names) =>
-          collectLocalMethods(decodedClass, method) {
-            case term if term.symbol.isModuleOrLazyVal && names.contains(term.symbol.nameStr) =>
-              wrapIfInline(term, DecodedMethod.LazyInit(decodedClass, term.symbol))
-          }
-        }
-        .orFind { case Patterns.AnonFun(_) => findAnonFunsAndReduceAmbiguity(decodedClass, method) }
-        .orFind { case Patterns.AdaptedAnonFun(_) => findAdaptedAnonFun(decodedClass, method) }
-        .orFind { case Patterns.ByNameArgProxy() => findByNameArgsProxy(decodedClass, method) }
-        .orFind { case Patterns.SuperArg() => findSuperArgs(decodedClass, method) }
-        .orFind { case Patterns.LiftedTree() => findLiftedTries(decodedClass, method) }
-        .orFind { case Patterns.LocalMethod(names) => findLocalMethods(decodedClass, method, names) }
-        .orFind { case Patterns.LazyInit(name) => findLazyInit(decodedClass, name) }
-        .orFind { case Patterns.Outer(_) => findOuter(decodedClass).toSeq }
-        .orFind { case Patterns.TraitInitializer() => findTraitInitializer(decodedClass, method) }
-        .orFind { case Patterns.InlineAccessor(names) => findInlineAccessor(decodedClass, method, names).toSeq }
-        .orFind { case Patterns.ValueClassExtension() => findValueClassExtension(decodedClass, method) }
-        .orFind { case Patterns.DeserializeLambda() =>
+      tryDecode {
+        // static and/or bridge
+        case Patterns.AdaptedAnonFun() => decodeAdaptedAnonFun(decodedClass, method)
+        // bridge or standard
+        case Patterns.SpecializedMethod(names) => decodeSpecializedMethod(decodedClass, method, names)
+        // bridge only
+        case m if m.isBridge => decodeBridgesAndMixinForwarders(decodedClass, method).toSeq
+        // static or standard
+        case Patterns.AnonFun() => decodeAnonFunsAndReduceAmbiguity(decodedClass, method)
+        case Patterns.ByNameArgProxy() => decodeByNameArgsProxy(decodedClass, method)
+        case Patterns.SuperArg() => decodeSuperArgs(decodedClass, method)
+        case Patterns.LiftedTree() => decodeLiftedTries(decodedClass, method)
+        case Patterns.LocalLazyInit(names) => decodeLocalLazyInit(decodedClass, method, names)
+        // static only
+        case Patterns.TraitInitializer() => decodeTraitInitializer(decodedClass, method)
+        case Patterns.DeserializeLambda() =>
           Seq(DecodedMethod.DeserializeLambda(decodedClass, defn.DeserializeLambdaType))
-        }
-        .orFind { case Patterns.ParamForwarder(names) => findParamForwarder(decodedClass, method, names) }
-        .orFind { case Patterns.TraitSetter(name) => findTraitSetter(decodedClass, method, name) }
-        .orFind { case Patterns.Setter(names) =>
-          findStandardMethods(decodedClass, method).orIfEmpty(findSetter(decodedClass, method, names))
-        }
-        .orFind { case Patterns.SuperAccessor(names) => findSuperAccessor(decodedClass, method, names) }
-        .orFind { case Patterns.TraitStaticForwarder(names) => findTraitStaticForwarder(decodedClass, method).toSeq }
-        .orFind {
-          case _ if method.isStatic && decodedClass.isJava => findStaticJavaMethods(decodedClass, method)
-          case _ if method.isStatic => findStaticForwarder(decodedClass, method)
-          case _ => findStandardMethods(decodedClass, method)
+        case Patterns.TraitStaticForwarder() => decodeTraitStaticForwarder(decodedClass, method).toSeq
+        case m if m.isStatic && decodedClass.isJava => decodeStaticJavaMethods(decodedClass, method)
+        // cannot be static anymore
+        case Patterns.LazyInit(name) => decodeLazyInit(decodedClass, name)
+        case Patterns.Outer() => decodeOuter(decodedClass).toSeq
+        case Patterns.ParamForwarder(names) => decodeParamForwarder(decodedClass, method, names)
+        case Patterns.TraitSetter(name) => decodeTraitSetter(decodedClass, method, name)
+        case Patterns.Setter(names) =>
+          decodeStandardMethods(decodedClass, method).orIfEmpty(decodeSetter(decodedClass, method, names))
+        case Patterns.SuperAccessor(names) => decodeSuperAccessor(decodedClass, method, names)
+      }
+        .orTryDecode { case Patterns.ValueClassExtension() => decodeValueClassExtension(decodedClass, method) }
+        .orTryDecode { case Patterns.InlineAccessor(names) => decodeInlineAccessor(decodedClass, method, names).toSeq }
+        .orTryDecode { case Patterns.LocalMethod(names) => decodeLocalMethods(decodedClass, method, names) }
+        .orTryDecode {
+          case m if m.isStatic => decodeStaticForwarder(decodedClass, method)
+          case _ => decodeStandardMethods(decodedClass, method)
         }
 
     candidates.singleOrThrow(method)
@@ -121,14 +122,14 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       case (enclosing, enclosed) =>
         enclosing.pos.enclose(enclosed.pos)
 
-  private def findLocalClasses(
+  private def decodeLocalClasses(
       javaClass: binary.ClassType,
       packageSym: PackageSymbol,
       declaringClassName: String,
       localClassName: String,
       remaining: Option[String]
   ): Seq[DecodedClass] =
-    val classOwners = findClassFromPackage(packageSym, declaringClassName).map(_.symbol)
+    val classOwners = decodeClassFromPackage(packageSym, declaringClassName).map(_.symbol)
     remaining match
       case None =>
         val parents = (javaClass.superclass.toSet ++ javaClass.interfaces)
@@ -141,9 +142,9 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         val localClasses = classOwners
           .flatMap(cls => collectLocalClasses(cls, localClassName, None))
           .flatMap(_.classSymbol)
-        localClasses.flatMap(s => findClassRecursively(s, remaining))
+        localClasses.flatMap(s => decodeClassRecursively(s, remaining))
 
-  private def findClassFromPackage(owner: PackageSymbol, decodedName: String): Seq[DecodedClass.ClassDef] =
+  private def decodeClassFromPackage(owner: PackageSymbol, decodedName: String): Seq[DecodedClass.ClassDef] =
     val packageObject = "([^\\$]+\\$package)(\\$.*)?".r
     val specializedClass = "([^\\$]+\\$mc.+\\$sp)(\\$.*)?".r
     val standardClass = "([^\\$]+)(\\$.*)?".r
@@ -158,10 +159,10 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       .collect { case sym: ClassSymbol => sym }
       .flatMap { sym =>
         if remaining.isEmpty then Seq(DecodedClass.ClassDef(sym))
-        else findClassRecursively(sym, remaining)
+        else decodeClassRecursively(sym, remaining)
       }
 
-  private def findClassRecursively(owner: ClassSymbol, decodedName: String): Seq[DecodedClass.ClassDef] =
+  private def decodeClassRecursively(owner: ClassSymbol, decodedName: String): Seq[DecodedClass.ClassDef] =
     owner.declarations
       .collect { case sym: ClassSymbol => sym }
       .flatMap { sym =>
@@ -169,7 +170,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         decodedName match
           case Symbol(remaining) =>
             if remaining.isEmpty then Some(DecodedClass.ClassDef(sym))
-            else findClassRecursively(sym, remaining)
+            else decodeClassRecursively(sym, remaining)
           case _ => None
       }
 
@@ -220,7 +221,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         DecodedClass.InlinedClass(wrapIfInline(underlying, decodedClass), inlineCall.callTree)
       case _ => decodedClass
 
-  private def findStaticJavaMethods(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
+  private def decodeStaticJavaMethods(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
     decodedClass.companionClassSymbol.toSeq
       .flatMap(_.declarations)
       .collect {
@@ -229,20 +230,20 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
           DecodedMethod.ValOrDefDef(decodedClass, sym)
       }
 
-  private def findStandardMethods(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
+  private def decodeStandardMethods(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
     def rec(underlying: DecodedClass): Seq[DecodedMethod] =
       underlying match
         case anonFun: DecodedClass.SAMOrPartialFunction =>
           if method.isConstructor then Seq(DecodedMethod.SAMOrPartialFunctionConstructor(decodedClass, anonFun.tpe))
           else if anonFun.parentClass == defn.PartialFunctionClass then
-            findPartialFunctionImpl(decodedClass, anonFun.tpe, method).toSeq
-          else findSAMFunctionImpl(decodedClass, anonFun.symbol, anonFun.parentClass, method).toSeq
-        case underlying: DecodedClass.ClassDef => findInstanceMethods(decodedClass, underlying.symbol, method)
+            decodePartialFunctionImpl(decodedClass, anonFun.tpe, method).toSeq
+          else decodeSAMFunctionImpl(decodedClass, anonFun.symbol, anonFun.parentClass, method).toSeq
+        case underlying: DecodedClass.ClassDef => decodeInstanceMethods(decodedClass, underlying.symbol, method)
         case _: DecodedClass.SyntheticCompanionClass => Seq.empty
         case inlined: DecodedClass.InlinedClass => rec(inlined.underlying)
     rec(decodedClass)
 
-  private def findParamForwarder(
+  private def decodeParamForwarder(
       decodedClass: DecodedClass,
       method: binary.Method,
       names: Seq[String]
@@ -252,7 +253,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         DecodedMethod.ValOrDefDef(decodedClass, sym)
     }
 
-  private def findTraitSetter(
+  private def decodeTraitSetter(
       decodedClass: DecodedClass,
       method: binary.Method,
       name: String
@@ -268,19 +269,19 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       val tpe = MethodType(List(SimpleName("x$1")), List(paramType), defn.UnitType)
       DecodedMethod.SetterAccessor(decodedClass, sym, tpe)
 
-  private def findSetter(
+  private def decodeSetter(
       decodedClass: DecodedClass,
       method: binary.Method,
       names: Seq[String]
   ): Seq[DecodedMethod.SetterAccessor] =
     for
       param <- method.allParameters.lastOption.toSeq
-      sym <- findFieldSymbols(decodedClass, param.`type`, names)
+      sym <- decodeFields(decodedClass, param.`type`, names)
     yield
       val tpe = MethodType(List(SimpleName("x$1")), List(sym.declaredType.asInstanceOf[Type]), defn.UnitType)
       DecodedMethod.SetterAccessor(decodedClass, sym, tpe)
 
-  private def findFieldSymbols(
+  private def decodeFields(
       decodedClass: DecodedClass,
       binaryType: binary.Type,
       names: Seq[String]
@@ -291,7 +292,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         sym
     }
 
-  private def findSuperAccessor(
+  private def decodeSuperAccessor(
       decodedClass: DecodedClass,
       method: binary.Method,
       names: Seq[String]
@@ -306,7 +307,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       if matchSignature(method, expectedTpe)
     yield DecodedMethod.SuperAccessor(decodedClass, sym, expectedTpe)
 
-  private def findSpecializedMethod(
+  private def decodeSpecializedMethod(
       decodedClass: DecodedClass,
       method: binary.Method,
       names: Seq[String]
@@ -326,7 +327,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         DecodedMethod.SpecializedMethod(decodedClass, sym)
     }
 
-  private def findInlineAccessor(
+  private def decodeInlineAccessor(
       decodedClass: DecodedClass,
       method: binary.Method,
       names: Seq[String]
@@ -354,7 +355,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         instr <- singleFieldInstruction(f => f.isPut && f.unexpandedDecodedNames.exists(expectedNames.contains))
         binaryField <- classLoader.loadClass(instr.owner).declaredField(instr.name).toSeq
         fieldOwner = decode(binaryField.declaringClass)
-        sym <- findFieldSymbols(fieldOwner, binaryField.`type`, instr.unexpandedDecodedNames)
+        sym <- decodeFields(fieldOwner, binaryField.`type`, instr.unexpandedDecodedNames)
       yield
         val tpe = MethodType(List(SimpleName("x$1")), List(sym.declaredType.asInstanceOf[Type]), defn.UnitType)
         val decodedTarget = DecodedMethod.SetterAccessor(fieldOwner, sym, tpe)
@@ -364,7 +365,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         instr <- singleFieldInstruction(f => !f.isPut && f.unexpandedDecodedNames.exists(names.contains))
         binaryField <- classLoader.loadClass(instr.owner).declaredField(instr.name).toSeq
         fieldOwner = decode(binaryField.declaringClass)
-        sym <- findFieldSymbols(fieldOwner, binaryField.`type`, instr.unexpandedDecodedNames)
+        sym <- decodeFields(fieldOwner, binaryField.`type`, instr.unexpandedDecodedNames)
       yield DecodedMethod.InlineAccessor(decodedClass, DecodedMethod.ValOrDefDef(fieldOwner, sym))
     def moduleAccessors =
       for
@@ -378,9 +379,9 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         for
           companionClass <- decodedClass.companionClass.toSeq
           param <- method.allParameters.lastOption.toSeq
-          field <- findFieldSymbols(companionClass, param.`type`, names.map(_.stripSuffix("$extension")))
+          sym <- decodeFields(companionClass, param.`type`, names.map(_.stripSuffix("$extension")))
         yield
-          val decodedTarget = DecodedMethod.ValOrDefDef(decodedClass, field)
+          val decodedTarget = DecodedMethod.ValOrDefDef(decodedClass, sym)
           DecodedMethod.InlineAccessor(decodedClass, decodedTarget)
       else Seq.empty
     methodAccessors.toSeq
@@ -389,7 +390,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       .orIfEmpty(moduleAccessors.toSeq)
       .orIfEmpty(valueClassAccessors)
 
-  private def findInstanceMethods(
+  private def decodeInstanceMethods(
       decodedClass: DecodedClass,
       classSymbol: ClassSymbol,
       method: binary.Method
@@ -413,17 +414,17 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
           case sym if !isJava && matchSignature(method, sym.declaredType, asJavaVarargs = true) =>
             DecodedMethod.Bridge(DecodedMethod.ValOrDefDef(decodedClass, sym), sym.declaredType)
         }
-      fromClass.orIfEmpty(findAccessorsFromTraits(decodedClass, classSymbol, method))
+      fromClass.orIfEmpty(decodeAccessorsFromTraits(decodedClass, classSymbol, method))
 
-  private def findAccessorsFromTraits(
+  private def decodeAccessorsFromTraits(
       decodedClass: DecodedClass,
       classSymbol: ClassSymbol,
       method: binary.Method
   ): Seq[DecodedMethod] =
     if classSymbol.isTrait then Seq.empty
-    else findAccessorsFromTraits(decodedClass, classSymbol, classSymbol.thisType, method)
+    else decodeAccessorsFromTraits(decodedClass, classSymbol, classSymbol.thisType, method)
 
-  private def findAccessorsFromTraits(
+  private def decodeAccessorsFromTraits(
       decodedClass: DecodedClass,
       fromClass: ClassSymbol,
       fromType: Type,
@@ -445,7 +446,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       else if sym.isSetter then DecodedMethod.SetterAccessor(decodedClass, sym, tpe)
       else DecodedMethod.GetterAccessor(decodedClass, sym, tpe)
 
-  private def findLazyInit(decodedClass: DecodedClass, name: String): Seq[DecodedMethod] =
+  private def decodeLazyInit(decodedClass: DecodedClass, name: String): Seq[DecodedMethod] =
     val matcher: PartialFunction[Symbol, TermSymbol] =
       case sym: TermSymbol if sym.isModuleOrLazyVal && sym.nameStr == name => sym
     val fromClass = decodedClass.declarations.collect(matcher).map(DecodedMethod.LazyInit(decodedClass, _))
@@ -457,7 +458,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       yield DecodedMethod.LazyInit(decodedClass, term)
     fromClass.orIfEmpty(fromTraits)
 
-  private def findTraitStaticForwarder(
+  private def decodeTraitStaticForwarder(
       decodedClass: DecodedClass,
       method: binary.Method
   ): Option[DecodedMethod.TraitStaticForwarder] =
@@ -470,7 +471,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       .flatten
       .map(target => DecodedMethod.TraitStaticForwarder(decode(decodedClass, target)))
 
-  private def findOuter(decodedClass: DecodedClass): Option[DecodedMethod.OuterAccessor] =
+  private def decodeOuter(decodedClass: DecodedClass): Option[DecodedMethod.OuterAccessor] =
     def outerClass(sym: Symbol): Option[ClassSymbol] =
       sym.owner match
         case null => None
@@ -480,12 +481,15 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       .flatMap(outerClass)
       .map(outerClass => DecodedMethod.OuterAccessor(decodedClass, outerClass.thisType))
 
-  private def findTraitInitializer(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod.ValOrDefDef] =
+  private def decodeTraitInitializer(
+      decodedClass: DecodedClass,
+      method: binary.Method
+  ): Seq[DecodedMethod.ValOrDefDef] =
     decodedClass.declarations.collect {
       case sym: TermSymbol if sym.name == nme.Constructor => DecodedMethod.ValOrDefDef(decodedClass, sym)
     }
 
-  private def findValueClassExtension(
+  private def decodeValueClassExtension(
       decodedClass: DecodedClass,
       method: binary.Method
   ): Seq[DecodedMethod.ValOrDefDef] =
@@ -495,13 +499,13 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         DecodedMethod.ValOrDefDef(decodedClass, sym)
     }
 
-  private def findStaticForwarder(
+  private def decodeStaticForwarder(
       decodedClass: DecodedClass,
       method: binary.Method
   ): Seq[DecodedMethod.StaticForwarder] =
-    decodedClass.companionClassSymbol.toSeq.flatMap(findStaticForwarder(decodedClass, _, method))
+    decodedClass.companionClassSymbol.toSeq.flatMap(decodeStaticForwarder(decodedClass, _, method))
 
-  private def findStaticForwarder(
+  private def decodeStaticForwarder(
       decodedClass: DecodedClass,
       companionObject: ClassSymbol,
       method: binary.Method
@@ -525,7 +529,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         DecodedMethod.StaticForwarder(decodedClass, target, declaredType)
       }
 
-  private def findSAMFunctionImpl(
+  private def decodeSAMFunctionImpl(
       decodedClass: DecodedClass,
       symbol: TermSymbol,
       parentClass: ClassSymbol,
@@ -539,7 +543,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       yield DecodedMethod.SAMOrPartialFunctionImpl(decodedClass, overridden, symbol.declaredType)
     types.nextOption
 
-  private def findPartialFunctionImpl(
+  private def decodePartialFunctionImpl(
       decodedClass: DecodedClass,
       tpe: Type,
       method: binary.Method
@@ -548,7 +552,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       val implTpe = sym.typeAsSeenFrom(SkolemType(tpe))
       DecodedMethod.SAMOrPartialFunctionImpl(decodedClass, sym, implTpe)
 
-  private def findBridgesAndMixinForwarders(
+  private def decodeBridgesAndMixinForwarders(
       decodedClass: DecodedClass,
       method: binary.Method
   ): Option[DecodedMethod] =
@@ -556,24 +560,24 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       underlying match
         case underlying: DecodedClass.ClassDef =>
           if !underlying.symbol.isTrait then
-            findBridgesAndMixinForwarders(decodedClass, underlying.symbol, underlying.symbol.thisType, method)
+            decodeBridgesAndMixinForwarders(decodedClass, underlying.symbol, underlying.symbol.thisType, method)
           else None
         case underlying: DecodedClass.SAMOrPartialFunction =>
-          findBridgesAndMixinForwarders(decodedClass, underlying.parentClass, SkolemType(underlying.tpe), method)
+          decodeBridgesAndMixinForwarders(decodedClass, underlying.parentClass, SkolemType(underlying.tpe), method)
         case underlying: DecodedClass.InlinedClass => rec(underlying.underlying)
         case _: DecodedClass.SyntheticCompanionClass => None
     rec(decodedClass)
 
-  private def findBridgesAndMixinForwarders(
+  private def decodeBridgesAndMixinForwarders(
       decodedClass: DecodedClass,
       fromClass: ClassSymbol,
       fromType: Type,
       method: binary.Method
   ): Option[DecodedMethod] =
-    findBridges(decodedClass, fromClass, fromType, method)
-      .orIfEmpty(findMixinForwarder(decodedClass, method))
+    decodeBridges(decodedClass, fromClass, fromType, method)
+      .orIfEmpty(decodeMixinForwarder(decodedClass, method))
 
-  private def findBridges(
+  private def decodeBridges(
       decodedClass: DecodedClass,
       fromClass: ClassSymbol,
       fromType: Type,
@@ -592,7 +596,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         DecodedMethod.Bridge(target, tpe)
       }
 
-  private def findMixinForwarder(
+  private def decodeMixinForwarder(
       decodedClass: DecodedClass,
       method: binary.Method
   ): Option[DecodedMethod.MixinForwarder] =
@@ -614,7 +618,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         Seq(cls, companionClass)
       case _ => Seq(cls)
 
-  private def findAdaptedAnonFun(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
+  private def decodeAdaptedAnonFun(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
     if method.instructions.nonEmpty then
       val underlying = method.instructions
         .collect {
@@ -623,19 +627,19 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
         }
         .flatten
         .singleOrElse(unexpected(s"$method is not an adapted method: cannot find underlying invocation"))
-      findAnonFunsAndByNameArgs(decodedClass, underlying).map(DecodedMethod.AdaptedFun(_))
+      decodeAnonFunsAndByNameArgs(decodedClass, underlying).map(DecodedMethod.AdaptedFun(_))
     else Seq.empty
 
-  private def findAnonFunsAndReduceAmbiguity(
+  private def decodeAnonFunsAndReduceAmbiguity(
       decodedClass: DecodedClass,
       method: binary.Method
   ): Seq[DecodedMethod] =
-    val candidates = findAnonFunsAndByNameArgs(decodedClass, method)
+    val candidates = decodeAnonFunsAndByNameArgs(decodedClass, method)
     if candidates.size > 1 then
       val clashingMethods = method.declaringClass.declaredMethods
         .filter(m => m.returnType.zip(method.returnType).forall(_ == _) && m.signedName.name != method.signedName.name)
-        .collect { case m @ Patterns.AnonFun(_) if m.name != method.name => m }
-        .map(m => m -> findAnonFunsAndByNameArgs(decodedClass, m).toSet)
+        .collect { case m @ Patterns.AnonFun() if m.name != method.name => m }
+        .map(m => m -> decodeAnonFunsAndByNameArgs(decodedClass, m).toSet)
         .toMap
       def reduceAmbiguity(
           methods: Map[binary.Method, Set[DecodedMethod]]
@@ -650,17 +654,17 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       reduceAmbiguity(clashingMethods + (method -> candidates.toSet))(method).toSeq
     else candidates
 
-  private def findAnonFunsAndByNameArgs(
+  private def decodeAnonFunsAndByNameArgs(
       decodedClass: DecodedClass,
       method: binary.Method
   ): Seq[DecodedMethod] =
-    val anonFuns = findLocalMethods(decodedClass, method, Seq(CommonNames.anonFun.toString))
+    val anonFuns = decodeLocalMethods(decodedClass, method, Seq(CommonNames.anonFun.toString))
     val byNameArgs =
-      if method.allParameters.forall(_.isCapture) then findByNameArgs(decodedClass, method)
+      if method.allParameters.forall(_.isCapture) then decodeByNameArgs(decodedClass, method)
       else Seq.empty
     reduceAmbiguityOnMethods(anonFuns ++ byNameArgs)
 
-  private def findLocalMethods(
+  private def decodeLocalMethods(
       decodedClass: DecodedClass,
       method: binary.Method,
       names: Seq[String]
@@ -690,14 +694,14 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       case (enclosing, enclosed) =>
         enclosing.pos.enclose(enclosed.pos)
 
-  private def findByNameArgs(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
+  private def decodeByNameArgs(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
     collectLiftedTrees(decodedClass, method) { case arg: ByNameArg if !arg.isInline => arg }
       .collect {
         case arg if matchReturnType(arg.tpe, method.returnType) && matchCapture(arg.capture, method.allParameters) =>
           wrapIfInline(arg, DecodedMethod.ByNameArg(decodedClass, arg.owner, arg.tree, arg.tpe.asInstanceOf))
       }
 
-  private def findByNameArgsProxy(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
+  private def decodeByNameArgsProxy(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
     val explicitByNameArgs =
       collectLiftedTrees(decodedClass, method) { case arg: ByNameArg if arg.isInline => arg }
         .collect {
@@ -728,7 +732,10 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
     collectLiftedTrees(decodedClass, method) { case term: LocalTermDef => term }
       .collect(matcher)
 
-  private def findSuperArgs(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod.SuperConstructorArg] =
+  private def decodeSuperArgs(
+      decodedClass: DecodedClass,
+      method: binary.Method
+  ): Seq[DecodedMethod.SuperConstructorArg] =
     def matchSuperArg(liftedArg: LiftedTree[Nothing]): Boolean =
       val primaryConstructor = liftedArg.owner.asClass.getAllOverloadedDecls(nme.Constructor).head
       // a super arg takes the same parameters as its constructor
@@ -746,7 +753,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
           )
       }
 
-  private def findLiftedTries(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
+  private def decodeLiftedTries(decodedClass: DecodedClass, method: binary.Method): Seq[DecodedMethod] =
     collectLiftedTrees(decodedClass, method) { case tree: LiftedTry => tree }
       .collect {
         case liftedTry if matchReturnType(liftedTry.tpe, method.returnType) =>
@@ -755,6 +762,16 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
             DecodedMethod.LiftedTry(decodedClass, liftedTry.owner, liftedTry.tree, liftedTry.tpe.asInstanceOf)
           )
       }
+
+  private def decodeLocalLazyInit(
+      decodedClass: DecodedClass,
+      method: binary.Method,
+      names: Seq[String]
+  ): Seq[DecodedMethod] =
+    collectLocalMethods(decodedClass, method) {
+      case term if term.symbol.isModuleOrLazyVal && names.contains(term.symbol.nameStr) =>
+        wrapIfInline(term, DecodedMethod.LazyInit(decodedClass, term.symbol))
+    }
 
   private def wrapIfInline(liftedTree: LiftedTree[?], decodedMethod: DecodedMethod): DecodedMethod =
     liftedTree match
