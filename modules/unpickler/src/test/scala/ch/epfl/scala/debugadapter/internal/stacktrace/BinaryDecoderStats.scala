@@ -42,6 +42,7 @@ class BinaryDecoderStats extends BinaryDecoderSuite:
     decoder.assertDecodeAll(ExpectedCount(245), ExpectedCount(2755, notFound = 92))
 
   test("org.clulab:processors-main_3:8.5.3"):
+    assume(!isCI)
     val repository = MavenRepository("http://artifactory.cs.arizona.edu:8081/artifactory/sbt-release")
     val decoder = initDecoder("org.clulab", "processors-main_3", "8.5.3", FetchOptions(repositories = Seq(repository)))
     decoder.assertDecodeAll(

@@ -5,6 +5,7 @@ import tastyquery.Types.*
 import tastyquery.Names.*
 import ch.epfl.scala.debugadapter.internal.stacktrace.*
 import tastyquery.Contexts.Context
+import tastyquery.Modifiers.TermSymbolKind
 
 class StackTraceFormatter(using ThrowOrWarn):
   def format(cls: DecodedClass): String =
@@ -80,9 +81,13 @@ class StackTraceFormatter(using ThrowOrWarn):
 
   private def formatOwner(sym: Symbol): String =
     sym.owner match
-      case owner: ClassSymbol if owner.name.isPackageObjectClass => format(owner.owner.name)
-      case owner: TermOrTypeSymbol => formatOwner(owner).dot(formatName(owner))
-      case owner: PackageSymbol => ""
+      case owner: ClassSymbol =>
+        if owner.name.isPackageObjectClass then format(owner.owner.name)
+        else formatOwner(owner).dot(formatName(owner))
+      case owner: TermSymbol =>
+        if owner.kind == TermSymbolKind.Def then formatOwner(owner).dot(formatName(owner))
+        else formatOwner(owner)
+      case _ => ""
 
   private def formatName(sym: Symbol): String =
     sym match

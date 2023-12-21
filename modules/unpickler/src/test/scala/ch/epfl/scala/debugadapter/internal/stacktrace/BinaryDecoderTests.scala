@@ -59,10 +59,10 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     decoder.assertDecode(
       "example.Main$$anon$1",
       javaSig,
-      "Main.main.a1.<anon class>.m.<mixin forwarder>(): String",
+      "Main.main.<anon class>.m.<mixin forwarder>(): String",
       skip = true
     )
-    decoder.assertDecode("example.Main$$anon$2", javaSig, "Main.main.a2.<anon class>.m(): String")
+    decoder.assertDecode("example.Main$$anon$2", javaSig, "Main.main.<anon class>.m(): String")
   }
 
   test("local class, trait and object by parents") {
@@ -483,7 +483,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
       "java.lang.String m$$anonfun$1(boolean x)",
       "A.B.m.<anon fun>(x: Boolean): String"
     )
-    decoder.assertDecode("example.A", "java.lang.String $anonfun$1(int x)", "A.B.m.f.<anon fun>(x: Int): String")
+    decoder.assertDecode("example.A", "java.lang.String $anonfun$1(int x)", "A.B.m.<anon fun>(x: Int): String")
     decoder.assertDecode(
       "example.A",
       "java.lang.String m$$anonfun$2(java.lang.String x)",
@@ -505,7 +505,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |
          |""".stripMargin
     val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
-    decoder.assertDecode("example.A$$anon$1", "A.m.b.<anon class>")
+    decoder.assertDecode("example.A$$anon$1", "A.m.<anon class>")
   }
 
   test("this.type") {
@@ -539,8 +539,8 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |""".stripMargin
 
     val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
-    decoder.assertDecode("example.B", "int $anonfun$1(int x)", "example.m.f.<anon fun>(x: Int): Int")
-    decoder.assertDecode("example.B$$anon$1", "example.m.a.<anon class>")
+    decoder.assertDecode("example.B", "int $anonfun$1(int x)", "example.m.<anon fun>(x: Int): Int")
+    decoder.assertDecode("example.B$$anon$1", "example.m.<anon class>")
   }
 
   test("SAM and partial functions") {
@@ -1661,7 +1661,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     decoder.assertDecode(
       "example.Test",
       "java.lang.String $anonfun$1(scala.collection.immutable.List xs$1, java.lang.String x)",
-      "Test.test.f.<anon fun>(x: String): String"
+      "Test.test.<anon fun>(x: String): String"
     )
     decoder.assertDecode(
       "example.Test",
@@ -1691,7 +1691,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     decoder.assertDecode(
       "example.Test",
       "java.lang.String $anonfun$1$$anonfun$1(java.lang.String x$1, java.lang.String y)",
-      "Test.test.f.<anon fun>.<anon fun>(y: String): String"
+      "Test.test.<anon fun>.<anon fun>(y: String): String"
     )
   }
 
@@ -1731,7 +1731,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     decoder.assertDecode(
       "sight.client.SightClientImpl",
       "java.lang.String b$1(scala.Tuple2 x$1$2)",
-      "SightClientImpl.constructPayload.<anon fun>.<anon fun>.<anon fun>.fileContents.<anon fun>.b: String"
+      "SightClientImpl.constructPayload.<anon fun>.<anon fun>.<anon fun>.<anon fun>.b: String"
     )
 
   test("tasty-query#401".ignore) {
