@@ -107,7 +107,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |}
          |""".stripMargin
     val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
-    decoder.assertDecode("example.Main$", "void example$Main$Bar$1$$_$A$3()", "Main.m.Bar.m.A(): Unit")
+    decoder.assertDecode("example.Main$", "void example$Main$Bar$1$$_$A$3()", "Main.m.….m.A(): Unit")
   }
 
   test("local methods with same name") {
@@ -318,7 +318,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |              t
          |""".stripMargin
     val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
-    decoder.assertDecode("example.Main$", "example.Main$D$1 m$1(example.Main$D$1 t)", "Main.A.m.B.C.m.m(t: D): D")
+    decoder.assertDecode("example.Main$", "example.Main$D$1 m$1(example.Main$D$1 t)", "Main.A.….m.m(t: D): D")
     decoder.assertDecode("example.Main$A$B$1", "void <init>()", "Main.A.m.B.<init>(): Unit")
   }
 
@@ -558,42 +558,42 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |""".stripMargin
 
     val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
-    decoder.assertDecode("example.Main$$anon$1", "Main.foo.<anon Ordering>")
+    decoder.assertDecode("example.Main$$anon$1", "Main.<anon Ordering>")
     decoder.assertDecode(
       "example.Main$$anon$1",
       "int compare(java.lang.String x, java.lang.String y)",
-      "Main.foo.<anon Ordering>.compare(x: String, y: String): Int"
+      "Main.<anon Ordering>.compare(x: String, y: String): Int"
     )
     decoder.assertDecode(
       "example.Main$$anon$1",
       "int compare(java.lang.Object x, java.lang.Object y)",
-      "Main.foo.<anon Ordering>.compare.<bridge>(x: String, y: String): Int",
+      "Main.<anon Ordering>.compare.<bridge>(x: String, y: String): Int",
       skip = true
     )
     decoder.assertDecode(
       "example.Main$$anon$2",
-      "Main.f.<anon PartialFunction>"
+      "Main.<anon PartialFunction>"
     )
     decoder.assertDecode(
       "example.Main$$anon$2",
       "boolean isDefinedAt(java.lang.String x)",
-      "Main.f.<anon PartialFunction>.isDefinedAt(x: String): Boolean"
+      "Main.<anon PartialFunction>.isDefinedAt(x: String): Boolean"
     )
     decoder.assertDecode(
       "example.Main$$anon$2",
       "boolean isDefinedAt(java.lang.Object x)",
-      "Main.f.<anon PartialFunction>.isDefinedAt.<bridge>(x: String): Boolean",
+      "Main.<anon PartialFunction>.isDefinedAt.<bridge>(x: String): Boolean",
       skip = true
     )
     decoder.assertDecode(
       "example.Main$$anon$2",
       "java.lang.Object applyOrElse(java.lang.String x, scala.Function1 default)",
-      "Main.f.<anon PartialFunction>.applyOrElse[A1, B1](x: A1, default: A1 => B1): B1"
+      "Main.<anon PartialFunction>.applyOrElse[A1, B1](x: A1, default: A1 => B1): B1"
     )
     decoder.assertDecode(
       "example.Main$$anon$2",
       "java.lang.Object applyOrElse(java.lang.Object x, scala.Function1 default)",
-      "Main.f.<anon PartialFunction>.applyOrElse.<bridge>[A1, B1](x: A1, default: A1 => B1): B1",
+      "Main.<anon PartialFunction>.applyOrElse.<bridge>[A1, B1](x: A1, default: A1 => B1): B1",
       skip = true
     )
   }
@@ -1116,7 +1116,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     decoder.assertDecode(
       "example.C1$C3$1",
       "scala.Function1 example$C1$C3$1$$C4$superArg$1()",
-      "C1.m.C3.C4.<init>.<super arg>: String => String"
+      "C1.m.….C4.<init>.<super arg>: String => String"
     )
   }
 
@@ -1189,8 +1189,8 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |""".stripMargin
     val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
     decoder.assertDecode("example.A", "java.lang.String liftedTree1$1()", "A.<try>: \"\" | \"\"")
-    decoder.assertDecode("example.A", "java.lang.String liftedTree2$1()", "A.x.<try>: \"\" | \"\"")
-    decoder.assertDecode("example.A", "java.lang.String liftedTree3$1()", "A.m1.x.<try>: \"\" | \"\"")
+    decoder.assertDecode("example.A", "java.lang.String liftedTree2$1()", "A.<try>: \"\" | \"\"")
+    decoder.assertDecode("example.A", "java.lang.String liftedTree3$1()", "A.m1.<try>: \"\" | \"\"")
     decoder.assertDecode("example.A", "int liftedTree4$1()", "A.m1.m2.<try>: 2 | 3")
     decoder.assertDecode("example.A", "java.lang.String liftedTree5$1()", "A.m4.<try>: \"\" | \"\"")
   }
@@ -1708,11 +1708,11 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
   test("tasty-query#397 and tasty-query#413"):
     val decoder = initDecoder("com.github.xuwei-k", "httpz_3", "0.8.0")
     decoder.assertDecode("httpz.package$$anon$1", "httpz.ActionZipAp.<anon class>")
-    decoder.assertDecode("httpz.InterpretersTemplate$$anon$5", "InterpretersTemplate.times.future.apply.<anon class>")
+    decoder.assertDecode("httpz.InterpretersTemplate$$anon$5", "InterpretersTemplate.times.….apply.<anon class>")
     decoder.assertDecode(
       "httpz.package$",
       "java.lang.Object httpz$package$$anon$1$$_$ap$$anonfun$1(scala.Function1 _$2, java.lang.Object _$3)",
-      "httpz.ActionZipAp.<anon class>.ap.<anon fun>(A => B, A): B"
+      "httpz.ActionZipAp.….ap.<anon fun>(A => B, A): B"
     )
     decoder.assertDecode(
       "httpz.Response",
@@ -1731,7 +1731,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     decoder.assertDecode(
       "sight.client.SightClientImpl",
       "java.lang.String b$1(scala.Tuple2 x$1$2)",
-      "SightClientImpl.constructPayload.<anon fun>.<anon fun>.<anon fun>.<anon fun>.b: String"
+      "SightClientImpl.constructPayload.….<anon fun>.b: String"
     )
 
   test("tasty-query#401".ignore) {

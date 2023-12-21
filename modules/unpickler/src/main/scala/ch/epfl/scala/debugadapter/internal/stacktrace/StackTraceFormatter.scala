@@ -6,15 +6,24 @@ import tastyquery.Names.*
 import ch.epfl.scala.debugadapter.internal.stacktrace.*
 import tastyquery.Contexts.Context
 import tastyquery.Modifiers.TermSymbolKind
+import scala.annotation.tailrec
 
 class StackTraceFormatter(using ThrowOrWarn):
   def format(cls: DecodedClass): String =
     cls match
       case cls: DecodedClass.ClassDef => formatQualifiedName(cls.symbol)
       case cls: DecodedClass.SAMOrPartialFunction =>
-        formatQualifiedName(cls.symbol.owner).dot(s"<anon ${formatQualifiedName(cls.parentClass)}>")
+        formatOwner(cls.symbol).dot(s"<anon ${formatQualifiedName(cls.parentClass)}>")
       case cls: DecodedClass.SyntheticCompanionClass => formatQualifiedName(cls.companionSymbol)
       case cls: DecodedClass.InlinedClass => format(cls.underlying)
+
+  private def formatAsOwner(cls: DecodedClass): String =
+    cls match
+      case cls: DecodedClass.ClassDef => formatAsOwner(cls.symbol)
+      case cls: DecodedClass.SAMOrPartialFunction =>
+        (formatAllSymbols(cls.symbol.owner) :+ s"<anon ${formatQualifiedName(cls.parentClass)}>").shorten
+      case cls: DecodedClass.SyntheticCompanionClass => formatAsOwner(cls.companionSymbol)
+      case cls: DecodedClass.InlinedClass => formatAsOwner(cls.underlying)
 
   def format(method: DecodedMethod): String =
     val typeAscription = method.declaredType match
@@ -34,9 +43,9 @@ class StackTraceFormatter(using ThrowOrWarn):
       case method: DecodedMethod.MixinForwarder => format(method.owner)
       case method: DecodedMethod.TraitStaticForwarder => formatOwner(method.target)
       case method: DecodedMethod.OuterAccessor => format(method.owner)
-      case method: DecodedMethod.SuperConstructorArg => formatQualifiedName(method.treeOwner)
-      case method: DecodedMethod.LiftedTry => formatQualifiedName(method.treeOwner)
-      case method: DecodedMethod.ByNameArg => formatQualifiedName(method.treeOwner)
+      case method: DecodedMethod.SuperConstructorArg => formatAsOwner(method.treeOwner)
+      case method: DecodedMethod.LiftedTry => formatAsOwner(method.treeOwner)
+      case method: DecodedMethod.ByNameArg => formatAsOwner(method.treeOwner)
       case method: DecodedMethod.Bridge => formatOwner(method.target)
       case method: DecodedMethod.SAMOrPartialFunctionImpl => format(method.owner)
       case method: DecodedMethod.StaticForwarder => format(method.owner)
@@ -76,18 +85,26 @@ class StackTraceFormatter(using ThrowOrWarn):
       case _: DecodedMethod.SAMOrPartialFunctionConstructor => "<init>"
       case method: DecodedMethod.InlinedMethod => formatName(method.underlying)
 
-  private def formatQualifiedName(sym: Symbol): String =
-    formatOwner(sym).dot(formatName(sym))
+  private def formatOwner(sym: Symbol): String = formatAsOwner(sym.owner)
 
-  private def formatOwner(sym: Symbol): String =
-    sym.owner match
-      case owner: ClassSymbol =>
-        if owner.name.isPackageObjectClass then format(owner.owner.name)
-        else formatOwner(owner).dot(formatName(owner))
-      case owner: TermSymbol =>
-        if owner.kind == TermSymbolKind.Def then formatOwner(owner).dot(formatName(owner))
-        else formatOwner(owner)
-      case _ => ""
+  private def formatQualifiedName(sym: Symbol): String =
+    formatAsOwner(sym.owner).dot(formatName(sym))
+
+  private def formatAsOwner(owner: Symbol): String =
+    formatAllSymbols(owner).shorten
+
+  private def formatAllSymbols(sym: Symbol): List[String] =
+    @tailrec
+    def rec(sym: Symbol, acc: List[String]): List[String] =
+      sym match
+        case sym: ClassSymbol =>
+          if sym.name.isPackageObjectClass then format(sym.owner.name) :: acc
+          else rec(sym.owner, formatName(sym) :: acc)
+        case sym: TermSymbol =>
+          if sym.kind == TermSymbolKind.Def then rec(sym.owner, formatName(sym) :: acc)
+          else rec(sym.owner, acc)
+        case _ => acc
+    rec(sym, Nil)
 
   private def formatName(sym: Symbol): String =
     sym match
@@ -97,6 +114,14 @@ class StackTraceFormatter(using ThrowOrWarn):
   extension (prefix: String)
     def dot(suffix: String): String =
       if prefix.nonEmpty && suffix.nonEmpty then s"$prefix.$suffix" else prefix + suffix
+
+    def dotDotDot(suffix: String): String =
+      if prefix.nonEmpty && suffix.nonEmpty then s"$prefix.….$suffix" else prefix + suffix
+
+  extension (xs: List[String])
+    private def shorten: String =
+      if xs.size <= 3 then xs.mkString(".")
+      else xs.head.dot(xs.tail.head).dotDotDot(xs.tail.last)
 
   private def format(name: Name): String =
     def rec(name: Name): String = name match
