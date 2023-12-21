@@ -121,10 +121,12 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
 
   def stackTrace(
       threadId: Long,
+      levels: Int = 10,
       timeout: Duration = defaultTimeout(8.seconds)
   ): StackTraceResponseBody = {
     val args = new StackTraceArguments()
     args.threadId = threadId
+    args.levels = levels
     val request = createRequest(Command.STACKTRACE, args)
     val response = sendRequest(request).map(res => getBody[StackTraceResponseBody](res))
     Await.result(response, timeout)
