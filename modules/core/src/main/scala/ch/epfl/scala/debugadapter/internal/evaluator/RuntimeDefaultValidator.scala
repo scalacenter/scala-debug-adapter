@@ -26,8 +26,6 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
     expression.parse[Stat] match {
       case err: Parsed.Error => Fatal(err.details)
       case Parsed.Success(tree) => Valid(tree)
-      case _: Parsed.Success[?] =>
-        Fatal(new Exception("Parsed expression is not a statement"))
     }
 
   def validate(expression: String): Validation[RuntimeEvaluableTree] =

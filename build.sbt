@@ -19,7 +19,8 @@ inThisBuild(
       if (isRelease) dynVer
       else "3.2.0-SNAPSHOT" // only for local publishing
     },
-    resolvers += Resolver.mavenLocal
+    resolvers += Resolver.mavenLocal,
+    compile / javacOptions ++= Seq("-source", "1.8", "-target", "1.8")
   )
 )
 
@@ -47,7 +48,6 @@ lazy val javaDebug = project
     name := "com-microsoft-java-debug-core",
     crossPaths := false,
     autoScalaLibrary := false,
-    compile / javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
     libraryDependencies ++= Seq(
       "org.apache.commons" % "commons-lang3" % "3.14.0",
       "com.google.code.gson" % "gson" % "2.10.1",
