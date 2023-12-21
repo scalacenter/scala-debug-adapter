@@ -99,6 +99,7 @@ trait BinaryDecoderSuite extends CommonFunSuite:
         decoder.tryDecode(decodedClass, binaryMethod, methodCounter)
       classCounter.printReport()
       methodCounter.printReport()
+
       (classCounter, methodCounter)
 
     private def loadBinaryMethod(declaringType: String, method: String)(using
@@ -191,6 +192,19 @@ trait BinaryDecoderSuite extends CommonFunSuite:
     def count: Count = Count(name, success.size, ambiguous.size, notFound.size, throwables.size)
 
     def printReport() = count.printReport()
+
+    def printComparisionWithJavaFormatting(): Unit =
+      def formatJavaStyle(m: binary.Method): String =
+        s"${m.declaringClass.name}.${m.name}(${m.allParameters.map(_.`type`.name).mkString(",")})"
+
+      val formatted = success
+        .collect { case (m: binary.Method, d: DecodedMethod) => (formatJavaStyle(m), formatter.format(d)) }
+        .sortBy((j, s) => s.size - j.size)
+
+      println(formatted.take(10).mkString("min:\n  ", "\n  ", ""))
+      println(formatted.takeRight(10).mkString("max:\n  ", "\n  ", ""))
+      println(s"mean: ${formatted.map((j, s) => s.size - j.size).sum / formatted.size}")
+    end printComparisionWithJavaFormatting
 
     def printNotFound() =
       notFound.foreach { case (s1, NotFoundException(s2)) =>

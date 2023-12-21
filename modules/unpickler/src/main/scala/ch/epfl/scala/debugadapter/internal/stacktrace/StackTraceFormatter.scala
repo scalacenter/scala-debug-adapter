@@ -204,6 +204,7 @@ class StackTraceFormatter(using ThrowOrWarn):
       case t: TermRef => formatPrefix(t) + "type"
       case t: ConstantType =>
         t.value.value match
+          case null => "Null"
           case str: String => s"\"$str\""
           case t: Type =>
             // to reproduce this we should try `val x = classOf[A]`
