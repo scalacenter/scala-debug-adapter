@@ -319,7 +319,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |""".stripMargin
     val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
     decoder.assertDecode("example.Main$", "example.Main$D$1 m$1(example.Main$D$1 t)", "Main.A.….m.m(t: D): D")
-    decoder.assertDecode("example.Main$A$B$1", "void <init>()", "Main.A.m.B.<init>(): Unit")
+    decoder.assertDecode("example.Main$A$B$1", "void <init>()", "Main.A.….B.<init>(): Unit")
   }
 
   test("operator-like names") {
@@ -1285,19 +1285,19 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     decoder.assertDecode(
       "example.B",
       "void example$A$_setter_$example$A$$foo_$eq(java.lang.String x$0)",
-      "B.foo_=(String): Unit",
+      "B.foo.<setter>(String): Unit",
       skip = true
     )
     decoder.assertDecode(
       "example.C$",
       "void example$A$_setter_$example$A$$foo_$eq(java.lang.String x$0)",
-      "C.foo_=(String): Unit",
+      "C.foo.<setter>(String): Unit",
       skip = true
     )
     decoder.assertDecode(
       "example.C",
       "void example$A$_setter_$example$A$$foo_$eq(java.lang.String arg0)",
-      "C.foo_=.<static forwarder>(String): Unit",
+      "C.foo.<setter>.<static forwarder>(String): Unit",
       skip = true
     )
   }

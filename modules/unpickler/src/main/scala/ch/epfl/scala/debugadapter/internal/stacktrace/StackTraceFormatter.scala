@@ -75,7 +75,9 @@ class StackTraceFormatter(using ThrowOrWarn):
       case method: DecodedMethod.StaticForwarder => formatName(method.target).dot("<static forwarder>")
       case _: DecodedMethod.DeserializeLambda => "$deserializeLambda$"
       case method: DecodedMethod.SetterAccessor =>
-        if method.symbol.isMethod then formatName(method.symbol) else formatName(method.symbol) + "_="
+        if method.symbol.isMethod then formatName(method.symbol)
+        else if method.symbol.isVar then formatName(method.symbol) + "_="
+        else formatName(method.symbol).dot("<setter>")
       case method: DecodedMethod.GetterAccessor => formatName(method.symbol)
       case method: DecodedMethod.SuperAccessor => formatName(method.symbol).dot("<super>")
       case method: DecodedMethod.SpecializedMethod => formatName(method.symbol).dot("<specialized>")
@@ -101,7 +103,7 @@ class StackTraceFormatter(using ThrowOrWarn):
           if sym.name.isPackageObjectClass then format(sym.owner.name) :: acc
           else rec(sym.owner, formatName(sym) :: acc)
         case sym: TermSymbol =>
-          if sym.kind == TermSymbolKind.Def then rec(sym.owner, formatName(sym) :: acc)
+          if sym.isDef then rec(sym.owner, formatName(sym) :: acc)
           else rec(sym.owner, acc)
         case _ => acc
     rec(sym, Nil)

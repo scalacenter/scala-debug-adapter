@@ -41,6 +41,8 @@ extension (symbol: TermSymbol)
   def isModuleOrLazyVal: Boolean = symbol.isLazyVal || symbol.isModuleVal
   def isLazyVal: Boolean = symbol.kind == TermSymbolKind.LazyVal
   def isVal: Boolean = symbol.kind == TermSymbolKind.Val
+  def isDef: Boolean = symbol.kind == TermSymbolKind.Def
+  def isVar: Boolean = symbol.kind == TermSymbolKind.Var
   def isAnonFun = symbol.name == CommonNames.anonFun
   def targetNameStr(using Context): String = symbol.targetName.toString
   def overridingSymbolInLinearization(siteClass: ClassSymbol)(using Context): TermSymbol =
