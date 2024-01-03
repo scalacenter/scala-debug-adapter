@@ -202,9 +202,6 @@ extension (pos: SourcePosition)
   def isFullyDefined: Boolean =
     !pos.isUnknown && pos.hasLineColumnInformation
 
-  def inSourceFile(name: String) =
-    pos.isFullyDefined && pos.sourceFile.name == name
-
   def enclose(other: SourcePosition) =
     pos.isFullyDefined &&
       other.isFullyDefined &&
@@ -220,8 +217,9 @@ extension (pos: SourcePosition)
 
   def matchLines(sourceLines: binary.SourceLines): Boolean =
     !pos.isFullyDefined
-      || pos.sourceFile.name != sourceLines.sourceName
-      || sourceLines.tastySpan.forall(line => pos.startLine <= line && pos.endLine >= line)
+      || // we use endsWith instead of == because of tasty-query#434
+        !pos.sourceFile.name.endsWith(sourceLines.sourceName)
+        || sourceLines.tastySpan.forall(line => pos.startLine <= line && pos.endLine >= line)
 
   def showBasic =
     pos match

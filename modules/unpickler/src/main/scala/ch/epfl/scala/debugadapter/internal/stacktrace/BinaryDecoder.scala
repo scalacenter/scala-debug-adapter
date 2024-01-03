@@ -35,10 +35,10 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
     val allSymbols = decodedClassName match
       case Patterns.AnonClass(declaringClassName, remaining) =>
         val WithLocalPart = "(.+)\\$(.+)\\$\\d+".r
-        val decl = declaringClassName match
-          case WithLocalPart(decl, _) => decl.stripSuffix("$")
-          case decl => decl
-        reduceAmbiguityOnClasses(decodeLocalClasses(cls, packageSym, decl, "$anon", remaining))
+        val topLevelClassName = declaringClassName match
+          case WithLocalPart(topLevelClassName, _) => topLevelClassName.stripSuffix("$")
+          case topLevelClassName => topLevelClassName
+        reduceAmbiguityOnClasses(decodeLocalClasses(cls, packageSym, topLevelClassName, "$anon", remaining))
       case Patterns.LocalClass(declaringClassName, localClassName, remaining) =>
         decodeLocalClasses(cls, packageSym, declaringClassName, localClassName, remaining)
       case _ => decodeClassFromPackage(packageSym, decodedClassName)
@@ -197,11 +197,10 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
   ): Boolean =
     decodedClass match
       case cls: DecodedClass.ClassDef =>
-        val symbol = cls.symbol
-        if symbol.isEnum then expectedParents == symbol.parentClasses.toSet + defn.ProductClass
-        else if isInterface then expectedParents == symbol.parentClasses.filter(_.isTrait).toSet
-        else if symbol.isAnonClass then symbol.parentClasses.forall(expectedParents.contains)
-        else expectedParents == symbol.parentClasses.toSet
+        if cls.symbol.isEnum then expectedParents == cls.symbol.parentClasses.toSet + defn.ProductClass
+        else if isInterface then expectedParents == cls.symbol.parentClasses.filter(_.isTrait).toSet
+        else if cls.symbol.isAnonClass then cls.symbol.parentClasses.forall(expectedParents.contains)
+        else expectedParents == cls.symbol.parentClasses.toSet
       case _: DecodedClass.SyntheticCompanionClass => false
       case anonFun: DecodedClass.SAMOrPartialFunction =>
         if anonFun.parentClass == defn.PartialFunctionClass then
@@ -803,7 +802,8 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
     LiftedTreeCollector.collect(owner)(matcher).filter(tree => sourceLines.forall(matchLines(tree, _)))
 
   private def matchLines(liftedFun: LiftedTree[?], sourceLines: binary.SourceLines): Boolean =
-    val positions = liftedFun.positions.filter(pos => pos.sourceFile.name == sourceLines.sourceName)
+    // we use endsWith instead of == because of tasty-query#434
+    val positions = liftedFun.positions.filter(pos => pos.sourceFile.name.endsWith(sourceLines.sourceName))
     sourceLines.tastyLines.forall(line => positions.exists(_.containsLine(line)))
 
   private def matchTargetName(method: binary.Method, symbol: TermSymbol): Boolean =
