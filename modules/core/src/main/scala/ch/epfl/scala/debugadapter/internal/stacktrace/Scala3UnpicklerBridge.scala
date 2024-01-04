@@ -1,17 +1,20 @@
 package ch.epfl.scala.debugadapter.internal.stacktrace
 
-import java.lang.reflect.Method
-import ch.epfl.scala.debugadapter.Logger
-import com.sun.jdi
 import ch.epfl.scala.debugadapter.Debuggee
-import java.util.function.Consumer
-import java.lang.reflect.InvocationTargetException
 import ch.epfl.scala.debugadapter.Java8
 import ch.epfl.scala.debugadapter.Java9OrAbove
-import scala.util.Try
+import ch.epfl.scala.debugadapter.Logger
+import com.sun.jdi
+
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Method
+import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Optional
+import java.util.function.Consumer
+import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
+import scala.util.Try
 
 class Scala3UnpicklerBridge(
     debuggee: Debuggee,
@@ -45,13 +48,13 @@ class Scala3UnpicklerBridge(
 
 object Scala3UnpicklerBridge {
   def load(debuggee: Debuggee, unpicklerClass: Class[?], logger: Logger, testMode: Boolean) = {
-    // TASTy Query needs the javaRuntimeJars
     val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
       case Java8(_, classJars, _) => classJars
       case java9OrAbove: Java9OrAbove =>
-        java9OrAbove.classSystems.map(_.fileSystem.getPath("/modules", "java.base"))
+        java9OrAbove.classSystems.flatMap { javaFs =>
+          Files.list(javaFs.fileSystem.getPath("/modules")).iterator.asScala.toSeq
+        }
     }
-
     val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
     val warnLogger: Consumer[String] = msg => logger.warn(msg)
     val ctr = unpicklerClass.getConstructor(classOf[Array[Path]], classOf[Consumer[String]], classOf[Boolean])
@@ -66,7 +69,7 @@ object Scala3UnpicklerBridge {
       testMode: Boolean
   ): Try[Scala3UnpicklerBridge] = {
     Try {
-      val className = "ch.epfl.scala.debugadapter.internal.stacktrace.Scala3Unpickler"
+      val className = "ch.epfl.scala.debugadapter.internal.stacktrace.Scala3UnpicklerBridge"
       val cls = classLoader.loadClass(className)
 
       val bridge = load(debuggee, cls, logger, testMode)

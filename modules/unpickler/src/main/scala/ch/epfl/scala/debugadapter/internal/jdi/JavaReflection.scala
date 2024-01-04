@@ -2,7 +2,7 @@ package ch.epfl.scala.debugadapter.internal.jdi
 
 import scala.reflect.ClassTag
 
-private[jdi] class JavaReflection(obj: Any, className: String):
+private[jdi] trait JavaReflection(obj: Any, className: String):
   private val classLoader = obj.getClass.getClassLoader
 
   // Impl classes are private

@@ -32,12 +32,14 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
       logger
     ) {
 
+  import TestingDebugClient.defaultTimeout
+
   override def close(): Unit = {
     super.close()
     socket.close()
   }
 
-  def initialize(timeout: Duration = 8.seconds): Messages.Response = {
+  def initialize(timeout: Duration = defaultTimeout(8.seconds)): Messages.Response = {
     val args = new InitializeArguments()
     args.linesStartAt1 = true
     args.columnsStartAt1 = true
@@ -45,7 +47,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     Await.result(sendRequest(request), timeout)
   }
 
-  def launch(timeout: Duration = 16.seconds): Messages.Response = {
+  def launch(timeout: Duration = defaultTimeout(16.seconds)): Messages.Response = {
     val request = createRequest(Command.LAUNCH, new LaunchArguments())
     Await.result(sendRequest(request), timeout)
   }
@@ -62,7 +64,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     Await.result(sendRequest(request), timeout)
   }
 
-  def configurationDone(timeout: Duration = 1.second): Messages.Response = {
+  def configurationDone(timeout: Duration = defaultTimeout(1.second)): Messages.Response = {
     val request =
       createRequest(Command.CONFIGURATIONDONE, new ConfigurationDoneArguments())
     Await.result(sendRequest(request), timeout)
@@ -70,7 +72,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
 
   def continue(
       threadId: Long,
-      timeout: Duration = 8.seconds
+      timeout: Duration = defaultTimeout(8.seconds)
   ): Messages.Response = {
     val args = new ContinueArguments()
     args.threadId = threadId
@@ -81,7 +83,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
   def setBreakpoints(
       source: Path,
       lines: Seq[Int],
-      timeout: Duration = 1.second
+      timeout: Duration = defaultTimeout(1.second)
   ): Array[Types.Breakpoint] = {
     val breakpoints = lines.map(l => new SourceBreakpoint(l, null, null))
     setSourceBreakpoints(source, breakpoints, timeout)
@@ -90,7 +92,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
   def setSourceBreakpoints(
       source: Path,
       breakpoints: Seq[SourceBreakpoint],
-      timeout: Duration = 1.second
+      timeout: Duration = defaultTimeout(1.second)
   ): Array[Types.Breakpoint] = {
     val args = new SetBreakpointArguments()
     args.source = new Types.Source(source.toString, 0)
@@ -103,7 +105,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
   def setBreakpointsInClass(
       className: String,
       lines: Array[Int],
-      timeout: Duration = 1.second
+      timeout: Duration = defaultTimeout(1.second)
   ): Array[Types.Breakpoint] = {
     val args = new SetBreakpointArguments()
     val source = new Types.Source()
@@ -119,16 +121,18 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
 
   def stackTrace(
       threadId: Long,
-      timeout: Duration = 8.seconds
+      levels: Int = 10,
+      timeout: Duration = defaultTimeout(8.seconds)
   ): StackTraceResponseBody = {
     val args = new StackTraceArguments()
     args.threadId = threadId
+    args.levels = levels
     val request = createRequest(Command.STACKTRACE, args)
     val response = sendRequest(request).map(res => getBody[StackTraceResponseBody](res))
     Await.result(response, timeout)
   }
 
-  def scopes(frameId: Int, timeout: Duration = 1.second): Array[Scope] = {
+  def scopes(frameId: Int, timeout: Duration = defaultTimeout(1.second)): Array[Scope] = {
     val args = new ScopesArguments()
     args.frameId = frameId
     val request = createRequest(Command.SCOPES, args)
@@ -138,7 +142,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
 
   def variables(
       variablesReference: Int,
-      timeout: Duration = 1.second
+      timeout: Duration = defaultTimeout(1.second)
   ): Array[Variable] = {
     val args = new VariablesArguments()
     args.variablesReference = variablesReference
@@ -147,7 +151,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     Await.result(response, timeout)
   }
 
-  def stepIn(threadId: Long, timeout: Duration = 1.second): Unit = {
+  def stepIn(threadId: Long, timeout: Duration = defaultTimeout(1.second)): Unit = {
     val args = new StepInArguments()
     args.threadId = threadId
     val request = createRequest(Command.STEPIN, args)
@@ -155,7 +159,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     Await.result(response, timeout)
   }
 
-  def stepOut(threadId: Long, timeout: Duration = 1.second): Unit = {
+  def stepOut(threadId: Long, timeout: Duration = defaultTimeout(1.second)): Unit = {
     val args = new StepOutArguments()
     args.threadId = threadId
     val request = createRequest(Command.STEPOUT, args)
@@ -163,7 +167,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     Await.result(response, timeout)
   }
 
-  def stepOver(threadId: Long, timeout: Duration = 1.second): Unit = {
+  def stepOver(threadId: Long, timeout: Duration = defaultTimeout(1.second)): Unit = {
     val args = new NextArguments()
     args.threadId = threadId
     val request = createRequest(Command.NEXT, args)
@@ -201,7 +205,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
 
   def disconnect(
       restart: Boolean,
-      timeout: Duration = 1.second
+      timeout: Duration = defaultTimeout(1.second)
   ): Messages.Response = {
     val args = new DisconnectArguments()
     args.restart = restart
@@ -210,24 +214,24 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     Await.result(result, timeout)
   }
 
-  def initialized(timeout: Duration = 1.second): InitializedEvent = {
+  def initialized(timeout: Duration = defaultTimeout(1.second)): InitializedEvent = {
     val event = receiveEvent(timeout)(e => e.event == "initialized")
     getBody[InitializedEvent](event)
   }
 
-  def terminated(timeout: Duration = 1.second): TerminatedEvent = {
+  def terminated(timeout: Duration = defaultTimeout(1.second)): TerminatedEvent = {
     val event = receiveEvent(timeout)(e => e.event == "terminated")
     getBody[TerminatedEvent](event)
   }
 
-  def exited(timeout: Duration = 4.seconds): ExitedEvent = {
+  def exited(timeout: Duration = defaultTimeout(4.seconds)): ExitedEvent = {
     val event = receiveEvent(timeout)(e => e.event == "exited")
     getBody[ExitedEvent](event)
   }
 
   def outputed(
       f: OutputEvent => Boolean,
-      timeout: Duration = 2.second
+      timeout: Duration = defaultTimeout(2.seconds)
   ): OutputEvent = {
     val event = receiveEvent(timeout) { e =>
       if (e.event == "output") {
@@ -238,7 +242,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     getBody[OutputEvent](event)
   }
 
-  def stopped(timeout: Duration = 16.second): StoppedEvent = {
+  def stopped(timeout: Duration = defaultTimeout(16.seconds)): StoppedEvent = {
     val event = receiveEvent(timeout)(e => e != null && e.event == "stopped")
     getBody[StoppedEvent](event)
   }
@@ -265,7 +269,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
 object TestingDebugClient {
   def connect(
       uri: URI,
-      timeout: Duration = 4.seconds,
+      timeout: Duration = defaultTimeout(4.seconds),
       logger: Logger = NoopLogger
   )(implicit ec: ExecutionContext): TestingDebugClient = {
     val socket = new Socket()
@@ -278,6 +282,9 @@ object TestingDebugClient {
     listening.start()
     client
   }
+
+  def defaultTimeout(duration: Duration): Duration =
+    if (DebugUtils.isDebug) 8.hours else duration
 }
 
 class AbstractDebugClient(
@@ -293,17 +300,14 @@ class AbstractDebugClient(
 
   protected var terminateSession = false
 
-  private val reader: Reader = new BufferedReader(
-    new InputStreamReader(input, ProtocolEncoding)
-  )
+  private val reader: Reader = new BufferedReader(new InputStreamReader(input, ProtocolEncoding))
   private val writer: Writer = new PrintWriter(
     new BufferedWriter(new OutputStreamWriter(output, ProtocolEncoding))
   )
 
   private val sequenceNumber = new AtomicInteger(1)
 
-  private var responsePromises: TrieMap[Int, Promise[Messages.Response]] =
-    TrieMap()
+  private var responsePromises: TrieMap[Int, Promise[Messages.Response]] = TrieMap()
   private val events = new LinkedBlockingQueue[Messages.Event]()
 
   def close(): Unit = {
@@ -362,10 +366,10 @@ class AbstractDebugClient(
     val rawMessages =
       Iterator
         .continually {
-          findFirstMessage(remaining).map { case (begin, end) =>
-            val rawMessage = remaining.substring(begin, end)
-            remaining = remaining.substring(end)
-            rawMessage
+          val bytes = remaining.getBytes(ProtocolEncoding)
+          findFirstMessage(remaining, bytes).map { case (begin, end) =>
+            remaining = new String(bytes.slice(end, bytes.size), ProtocolEncoding)
+            new String(bytes.slice(begin, end), ProtocolEncoding)
           }
         }
         .takeWhile(_.nonEmpty)
@@ -390,7 +394,7 @@ class AbstractDebugClient(
     remaining
   }
 
-  private def findFirstMessage(received: String): Option[(Int, Int)] = {
+  private def findFirstMessage(received: String, bytes: Array[Byte]): Option[(Int, Int)] = {
     for {
       beginIdx <-
         received.indexOf(TwoCRLF) match {
@@ -400,8 +404,7 @@ class AbstractDebugClient(
       firstMatch <- ContentLengthMatcher.findFirstMatchIn(received)
       contentLength = firstMatch.group(1).toInt
       endIdx <-
-        if (received.length >= beginIdx + contentLength)
-          Some(beginIdx + contentLength)
+        if (bytes.length >= beginIdx + contentLength) Some(beginIdx + contentLength)
         else None
     } yield (beginIdx, endIdx)
   }

@@ -163,12 +163,12 @@ trait DebugTest {
       assertion(values.getOrElse(throw new NoSuchElementException(variable.name)))
     }
 
-    def assertStop(assertion: List[StackFrame] => Unit): DebugCheckState = {
+    def assertStop(assertion: Array[StackFrame] => Unit): DebugCheckState = {
       val stopped = state.client.stopped()
       val threadId = stopped.threadId
       val stackTrace = state.client.stackTrace(threadId)
 
-      assertion(stackTrace.stackFrames.toList)
+      assertion(stackTrace.stackFrames)
       state.copy(threadId = threadId, topFrame = stackTrace.stackFrames.head, paused = true)
     }
 

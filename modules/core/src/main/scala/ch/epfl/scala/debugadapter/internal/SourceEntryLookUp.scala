@@ -13,7 +13,6 @@ import java.net.URI
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
 import scala.util.control.NonFatal
-import scala.util.Properties
 
 private case class SourceFile(
     entry: SourceEntry,

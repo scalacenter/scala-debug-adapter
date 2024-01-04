@@ -2574,7 +2574,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     )
   }
 
-  test("instance of local class in method of value class") {
+  test("local class in value class") {
     // only Scala 3 because:
     // "implementation restriction: nested class is not allowed in value class
     // This restriction is planned to be removed in subsequent releases."
@@ -2596,6 +2596,10 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
+      defaultConfig.copy(
+        testMode = false // tasty-query#428
+      )
+    )(
       Breakpoint(9),
       DebugStepAssert.inParallel(
         Evaluation.success("self", "foo"),
