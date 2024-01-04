@@ -300,17 +300,14 @@ class AbstractDebugClient(
 
   protected var terminateSession = false
 
-  private val reader: Reader = new BufferedReader(
-    new InputStreamReader(input, ProtocolEncoding)
-  )
+  private val reader: Reader = new BufferedReader(new InputStreamReader(input, ProtocolEncoding))
   private val writer: Writer = new PrintWriter(
     new BufferedWriter(new OutputStreamWriter(output, ProtocolEncoding))
   )
 
   private val sequenceNumber = new AtomicInteger(1)
 
-  private var responsePromises: TrieMap[Int, Promise[Messages.Response]] =
-    TrieMap()
+  private var responsePromises: TrieMap[Int, Promise[Messages.Response]] = TrieMap()
   private val events = new LinkedBlockingQueue[Messages.Event]()
 
   def close(): Unit = {
@@ -369,10 +366,10 @@ class AbstractDebugClient(
     val rawMessages =
       Iterator
         .continually {
-          findFirstMessage(remaining).map { case (begin, end) =>
-            val bytes = remaining.getBytes
-            remaining = new String(bytes.slice(end, bytes.size))
-            new String(bytes.slice(begin, end))
+          val bytes = remaining.getBytes(ProtocolEncoding)
+          findFirstMessage(remaining, bytes).map { case (begin, end) =>
+            remaining = new String(bytes.slice(end, bytes.size), ProtocolEncoding)
+            new String(bytes.slice(begin, end), ProtocolEncoding)
           }
         }
         .takeWhile(_.nonEmpty)
@@ -397,7 +394,7 @@ class AbstractDebugClient(
     remaining
   }
 
-  private def findFirstMessage(received: String): Option[(Int, Int)] = {
+  private def findFirstMessage(received: String, bytes: Array[Byte]): Option[(Int, Int)] = {
     for {
       beginIdx <-
         received.indexOf(TwoCRLF) match {
@@ -407,8 +404,7 @@ class AbstractDebugClient(
       firstMatch <- ContentLengthMatcher.findFirstMatchIn(received)
       contentLength = firstMatch.group(1).toInt
       endIdx <-
-        if (received.getBytes.length >= beginIdx + contentLength)
-          Some(beginIdx + contentLength)
+        if (bytes.length >= beginIdx + contentLength) Some(beginIdx + contentLength)
         else None
     } yield (beginIdx, endIdx)
   }
