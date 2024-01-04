@@ -370,9 +370,9 @@ class AbstractDebugClient(
       Iterator
         .continually {
           findFirstMessage(remaining).map { case (begin, end) =>
-            val rawMessage = remaining.substring(begin, end)
-            remaining = remaining.substring(end)
-            rawMessage
+            val bytes = remaining.getBytes
+            remaining = new String(bytes.slice(end, bytes.size))
+            new String(bytes.slice(begin, end))
           }
         }
         .takeWhile(_.nonEmpty)
@@ -407,7 +407,7 @@ class AbstractDebugClient(
       firstMatch <- ContentLengthMatcher.findFirstMatchIn(received)
       contentLength = firstMatch.group(1).toInt
       endIdx <-
-        if (received.length >= beginIdx + contentLength)
+        if (received.getBytes.length >= beginIdx + contentLength)
           Some(beginIdx + contentLength)
         else None
     } yield (beginIdx, endIdx)
