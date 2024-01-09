@@ -1880,8 +1880,9 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |      x
          |    m
          |    class A {
-         |      def m: Boolean =
+         |      def m: Boolean = {
          |        x
+         |      }
          |    }
          |    val a = new A
          |    a.m
@@ -1902,7 +1903,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Evaluation.successOrIgnore("x", true, isScala2),
       Breakpoint(17),
       Evaluation.successOrIgnore("x", true, isScala2),
-      Breakpoint(26),
+      Breakpoint(27),
       Evaluation.successOrIgnore("x", "foo", isScala2)
     )
   }
@@ -2584,8 +2585,9 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |class A(self: String) extends AnyVal:
          |  def m(size: Int): String =
          |    class B:
-         |      def m(): String =
+         |      def m(): String = {
          |        self.take(size)
+         |      }
          |    val b = new B
          |    b.m()
          |
@@ -2600,7 +2602,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
         testMode = false // tasty-query#428
       )
     )(
-      Breakpoint(9),
+      Breakpoint(10),
       DebugStepAssert.inParallel(
         Evaluation.success("self", "foo"),
         Evaluation.success("m(2)", "fo"),
