@@ -17,8 +17,10 @@ import RuntimeEvaluatorExtractors.*
 case class Call(fun: Term, argClause: Term.ArgClause)
 case class PreparedCall(qual: Validation[RuntimeTree], name: String)
 
-class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookUpProvider, implicit val logger: Logger)
-    extends RuntimeValidator {
+class RuntimeValidator(val frame: JdiFrame, val sourceLookUp: SourceLookUpProvider, preEvaluation: Boolean)(implicit
+    logger: Logger
+) {
+  val evaluation = new RuntimeEvaluation(frame, logger)
   val helper = new RuntimeEvaluationHelpers(frame, sourceLookUp)
   import helper.*
 
@@ -46,6 +48,14 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
       case _ => Recoverable("Expression not supported at runtime")
     }
 
+  private def preEvaluate(tree: RuntimeEvaluableTree): Validation[RuntimeEvaluableTree] = {
+    if (preEvaluation) {
+      val value = evaluation.evaluate(tree)
+      var tpe = value.extract(_.value.`type`)
+      Validation.fromTry(tpe).map(PreEvaluatedTree(value, _))
+    } else Valid(tree)
+  }
+
   protected def validateWithClass(expression: Stat): Validation[RuntimeTree] =
     expression match {
       case value: Term.Name => validateName(value.value, false).orElse(validateClass(value.value, currentLocation))
@@ -72,11 +82,13 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
   /* -------------------------------------------------------------------------- */
   /*                             Literal validation                             */
   /* -------------------------------------------------------------------------- */
-  def validateLiteral(lit: Lit): Validation[RuntimeEvaluableTree] =
-    frame.classLoader().map(loader => LiteralTree(fromLitToValue(lit, loader))).extract match {
+  def validateLiteral(lit: Lit): Validation[RuntimeEvaluableTree] = {
+    val validation = frame.classLoader().map(loader => LiteralTree(fromLitToValue(lit, loader))).extract match {
       case Success(value) => value
       case Failure(e) => CompilerRecoverable(e)
     }
+    validation.flatMap(preEvaluate)
+  }
 
   /* -------------------------------------------------------------------------- */
   /*                               This validation                              */
@@ -96,11 +108,17 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
   /* -------------------------------------------------------------------------- */
   /*                               Name validation                              */
   /* -------------------------------------------------------------------------- */
-  def localVarTreeByName(name: String, preevaluate: Boolean = true): Validation[RuntimeEvaluableTree] =
-    Validation
+  def localVarTreeByName(name: String, preevaluate: Boolean = preEvaluation): Validation[RuntimeEvaluableTree] = {
+    val validation = Validation
       .fromOption(frame.variableByName(name))
       .filter(_.`type`.name() != "scala.Function0", runtimeFatal = true)
       .map(v => LocalVarTree(name, v.`type`))
+
+    validation.transform {
+      case Valid(tree) if preevaluate => preEvaluate(tree)
+      case tree => tree
+    }
+  }
 
   // We might sometimes need to access a 'private' attribute of a class
   private def fieldLookup(name: String, ref: ReferenceType) =
@@ -110,9 +128,9 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
   def fieldTreeByName(
       of: RuntimeTree,
       name: String,
-      preevaluate: Boolean = true
-  ): Validation[RuntimeEvaluableTree] =
-    of match {
+      preevaluate: Boolean = preEvaluation
+  ): Validation[RuntimeEvaluableTree] = {
+    val validation = of match {
       case ReferenceTree(ref) =>
         for {
           field <- Validation.fromOption(fieldLookup(name, ref))
@@ -121,6 +139,15 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
         } yield fieldTree
       case _ => Recoverable(s"Cannot access field $name from non reference type ${of.`type`.name()}")
     }
+    validation.transform {
+      case tree if !preevaluate => tree
+      case Valid(tree @ (_: StaticFieldTree | InstanceFieldTree(_, _: PreEvaluatedTree))) =>
+        preEvaluate(tree)
+      case Valid(tree @ (_: TopLevelModuleTree | NestedModuleTree(_, InstanceMethodTree(_, _, _: PreEvaluatedTree)))) =>
+        preEvaluate(tree)
+      case tree => tree
+    }
+  }
 
   private def inCompanion(name: Option[String], moduleName: String) = name
     .filter(_.endsWith("$"))
@@ -134,7 +161,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
   def validateModule(name: String, of: Option[RuntimeTree]): Validation[RuntimeEvaluableTree] = {
     val moduleName = if (name.endsWith("$")) name else name + "$"
     val ofName = of.map(_.`type`.name)
-    searchClasses(moduleName, ofName).flatMap { moduleCls =>
+    val validation = searchClasses(moduleName, ofName).flatMap { moduleCls =>
       val isInModule = inCompanion(ofName, moduleName)
 
       (isInModule, moduleCls, of) match {
@@ -146,6 +173,11 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
           else Recoverable(s"Cannot access module $moduleCls from ${instance.`type`.name()}")
         case _ => Recoverable(s"Cannot access module $moduleCls")
       }
+    }
+    validation.transform {
+      case Valid(tree @ (_: TopLevelModuleTree | NestedModuleTree(_, InstanceMethodTree(_, _, _: PreEvaluatedTree)))) =>
+        preEvaluate(tree)
+      case tree => tree
     }
   }
 
@@ -278,14 +310,17 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
   /*                              Outer validation                              */
   /* -------------------------------------------------------------------------- */
   def validateOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree] =
-    outerLookup(tree)
+    outerLookup(tree).transform {
+      case Valid(tree @ (_: FieldTree | _: TopLevelModuleTree)) => preEvaluate(tree)
+      case tree => tree
+    }
 
   /* -------------------------------------------------------------------------- */
   /*                           Flow control validation                          */
   /* -------------------------------------------------------------------------- */
   def validateIf(tree: Term.If): Validation[RuntimeEvaluableTree] = {
     lazy val objType = loadClass("java.lang.Object").get
-    for {
+    val validation = for {
       cond <- validate(tree.cond)
       thenp <- validate(tree.thenp)
       elsep <- validate(tree.elsep)
@@ -297,6 +332,20 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
         extractCommonSuperClass(thenp.`type`, elsep.`type`).getOrElse(objType)
       )
     } yield ifTree
+    validation.transform {
+      case tree @ Valid(IfTree(p: PreEvaluatedTree, thenp, elsep, _)) =>
+        val predicate = for {
+          pValue <- p.value
+          unboxed <- pValue.unboxIfPrimitive
+          bool <- unboxed.toBoolean
+        } yield bool
+        predicate.extract match {
+          case Success(true) => Valid(thenp)
+          case Success(false) => Valid(elsep)
+          case _ => tree
+        }
+      case tree => tree
+    }
   }
 
   /* -------------------------------------------------------------------------- */
@@ -329,7 +378,7 @@ class RuntimeDefaultValidator(val frame: JdiFrame, val sourceLookUp: SourceLookU
   }
 }
 
-object RuntimeDefaultValidator {
-  def apply(frame: JdiFrame, sourceLookUp: SourceLookUpProvider, logger: Logger) =
-    new RuntimeDefaultValidator(frame, sourceLookUp, logger)
+object RuntimeValidator {
+  def apply(frame: JdiFrame, sourceLookUp: SourceLookUpProvider, preEvaluation: Boolean, logger: Logger) =
+    new RuntimeValidator(frame, sourceLookUp, preEvaluation)(logger)
 }
