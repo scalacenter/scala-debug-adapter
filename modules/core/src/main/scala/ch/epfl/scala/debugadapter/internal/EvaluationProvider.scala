@@ -23,7 +23,7 @@ import ch.epfl.scala.debugadapter.internal.evaluator.{Invalid, Fatal, Valid}
 import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeEvaluatorExtractors.MethodCall
 import ch.epfl.scala.debugadapter.internal.evaluator.RuntimePreEvaluationValidator
 import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeDefaultValidator
-import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeDefaultEvaluator
+import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeEvaluation
 import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeEvaluableTree
 import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeValidator
 import com.microsoft.java.debug.core.IEvaluatableBreakpoint
@@ -59,7 +59,7 @@ private[internal] class EvaluationProvider(
 
   override def evaluate(expression: String, thread: ThreadReference, depth: Int): CompletableFuture[Value] = {
     val frame = JdiFrame(thread, depth)
-    val evaluator = RuntimeDefaultEvaluator(frame, logger)
+    val evaluator = RuntimeEvaluation(frame, logger)
     val validator = RuntimePreEvaluationValidator(frame, evaluator, sourceLookUp, logger)
     val evaluation = for {
       preparedExpression <- prepare(expression, frame, validator)
@@ -181,7 +181,7 @@ private[internal] class EvaluationProvider(
     expression match {
       case logMessage: PlainLogMessage => messageLogger.log(logMessage, frame)
       case RuntimeExpression(tree) =>
-        RuntimeDefaultEvaluator(frame, logger).evaluate(tree).getResult.map(_.value)
+        RuntimeEvaluation(frame, logger).evaluate(tree).getResult.map(_.value)
       case expression: CompiledExpression =>
         val fqcn = frame.current().location.declaringType.name
         for {

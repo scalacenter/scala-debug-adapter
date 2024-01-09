@@ -9,7 +9,7 @@ import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
 
 class RuntimePreEvaluationValidator(
     override val frame: JdiFrame,
-    evaluator: RuntimeEvaluator,
+    evaluator: RuntimeEvaluation,
     sourceLookUp: SourceLookUpProvider,
     override implicit val logger: Logger
 ) extends RuntimeDefaultValidator(frame, sourceLookUp, logger) {
@@ -76,7 +76,7 @@ class RuntimePreEvaluationValidator(
 object RuntimePreEvaluationValidator {
   def apply(
       frame: JdiFrame,
-      evaluator: RuntimeEvaluator,
+      evaluator: RuntimeEvaluation,
       sourceLookup: SourceLookUpProvider,
       logger: Logger
   ): RuntimePreEvaluationValidator =
