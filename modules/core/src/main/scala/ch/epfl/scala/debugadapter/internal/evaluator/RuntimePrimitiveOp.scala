@@ -304,7 +304,7 @@ case object Neq extends ObjectOp
 case object Not extends RuntimeUnaryOp {
   override def evaluate(rhs: JdiValue, loader: JdiClassLoader) =
     rhs.toBoolean.map(v => loader.mirrorOf(!v))
-  override def typeCheck(rhs: Type) = rhs.virtualMachine().mirrorOf(true).`type`().asInstanceOf[BooleanType]
+  override def typeCheck(rhs: Type): Type = rhs.virtualMachine().mirrorOf(true).`type`().asInstanceOf[BooleanType]
 }
 
 object RuntimeUnaryOp {
