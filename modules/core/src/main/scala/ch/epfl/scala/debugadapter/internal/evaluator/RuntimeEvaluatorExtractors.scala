@@ -36,22 +36,6 @@ protected[internal] object RuntimeEvaluatorExtractors {
     }
   }
 
-  object MethodCall {
-    def unapply(tree: RuntimeTree): Boolean =
-      tree match {
-        case mt: NestedModuleTree => unapply(mt.init.qual)
-        case ft: InstanceFieldTree => unapply(ft.qual)
-        case IfTree(p, t, f, _) => unapply(p) || unapply(t) || unapply(f)
-        case AssignTree(lhs, rhs, _) => unapply(lhs) || unapply(rhs)
-        case _: MethodTree | _: NewInstanceTree => true
-        case _: LiteralTree | _: LocalVarTree | _: PreEvaluatedTree | _: ThisTree | UnitTree => false
-        case _: StaticFieldTree | _: ClassTree | _: StaticTree | _: TopLevelModuleTree => false
-        case _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree | _: ArrayElemTree => false
-      }
-    def unapply(tree: Validation[RuntimeTree]): Validation[RuntimeTree] =
-      tree.filter(unapply)
-  }
-
   object ReferenceTree {
     def unapply(tree: RuntimeTree): Validation[ReferenceType] = {
       tree.`type` match {

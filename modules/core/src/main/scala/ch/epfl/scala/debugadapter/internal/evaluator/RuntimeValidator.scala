@@ -17,7 +17,7 @@ import RuntimeEvaluatorExtractors.*
 case class Call(fun: Term, argClause: Term.ArgClause)
 case class PreparedCall(qual: Validation[RuntimeTree], name: String)
 
-class RuntimeValidator(val frame: JdiFrame, val sourceLookUp: SourceLookUpProvider, preEvaluation: Boolean)(implicit
+class RuntimeValidation(frame: JdiFrame, sourceLookUp: SourceLookUpProvider, preEvaluation: Boolean)(implicit
     logger: Logger
 ) {
   val evaluation = new RuntimeEvaluation(frame, logger)
@@ -83,7 +83,7 @@ class RuntimeValidator(val frame: JdiFrame, val sourceLookUp: SourceLookUpProvid
   /*                             Literal validation                             */
   /* -------------------------------------------------------------------------- */
   def validateLiteral(lit: Lit): Validation[RuntimeEvaluableTree] = {
-    val validation = frame.classLoader().map(loader => LiteralTree(fromLitToValue(lit, loader))).extract match {
+    val validation = frame.classLoader().map(loader => LiteralTree(fromLitToValue(lit, loader))).getResult match {
       case Success(value) => value
       case Failure(e) => CompilerRecoverable(e)
     }
@@ -376,9 +376,4 @@ class RuntimeValidator(val frame: JdiFrame, val sourceLookUp: SourceLookUpProvid
       assign <- AssignTree(lhsValue, rhs, unit)
     } yield assign
   }
-}
-
-object RuntimeValidator {
-  def apply(frame: JdiFrame, sourceLookUp: SourceLookUpProvider, preEvaluation: Boolean, logger: Logger) =
-    new RuntimeValidator(frame, sourceLookUp, preEvaluation)(logger)
 }

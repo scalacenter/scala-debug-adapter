@@ -9,21 +9,7 @@ import ch.epfl.scala.debugadapter.JavaRuntime
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.ManagedEntry
 import ch.epfl.scala.debugadapter.UnmanagedEntry
-import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeExpression
-import ch.epfl.scala.debugadapter.internal.evaluator.CompiledExpression
-import ch.epfl.scala.debugadapter.internal.evaluator.JdiFrame
-import ch.epfl.scala.debugadapter.internal.evaluator.JdiObject
-import ch.epfl.scala.debugadapter.internal.evaluator.JdiValue
-import ch.epfl.scala.debugadapter.internal.evaluator.MessageLogger
-import ch.epfl.scala.debugadapter.internal.evaluator.MethodInvocationFailed
-import ch.epfl.scala.debugadapter.internal.evaluator.PlainLogMessage
-import ch.epfl.scala.debugadapter.internal.evaluator.PreparedExpression
-import ch.epfl.scala.debugadapter.internal.evaluator.ScalaEvaluator
-import ch.epfl.scala.debugadapter.internal.evaluator.{Invalid, Fatal, Valid}
-import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeEvaluatorExtractors.MethodCall
-import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeEvaluation
-import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeEvaluableTree
-import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeValidator
+import ch.epfl.scala.debugadapter.internal.evaluator.*
 import com.microsoft.java.debug.core.IEvaluatableBreakpoint
 import com.microsoft.java.debug.core.adapter.IDebugAdapterContext
 import com.microsoft.java.debug.core.adapter.IEvaluationProvider
@@ -49,6 +35,7 @@ private[internal] class EvaluationProvider(
 
   private var debugContext: IDebugAdapterContext = _
   private val isEvaluating = new AtomicBoolean(false)
+  private val runtimeEvaluator = new RuntimeEvaluator(sourceLookUp, logger)
 
   override def initialize(debugContext: IDebugAdapterContext, options: java.util.Map[String, AnyRef]): Unit =
     this.debugContext = debugContext
@@ -57,9 +44,8 @@ private[internal] class EvaluationProvider(
 
   override def evaluate(expression: String, thread: ThreadReference, depth: Int): CompletableFuture[Value] = {
     val frame = JdiFrame(thread, depth)
-    val preEvaluator = RuntimeValidator(frame, sourceLookUp, preEvaluation = true, logger)
     val evaluation = for {
-      preparedExpression <- prepare(expression, frame, preEvaluator)
+      preparedExpression <- prepare(expression, frame, preEvaluation = true)
       evaluation <- evaluate(preparedExpression, frame)
     } yield evaluation
     completeFuture(evaluation, thread)
@@ -82,7 +68,7 @@ private[internal] class EvaluationProvider(
       if (breakpoint.getCompiledExpression(locationCode) != null) {
         breakpoint.getCompiledExpression(locationCode).asInstanceOf[Try[PreparedExpression]]
       } else if (breakpoint.containsConditionalExpression) {
-        prepare(breakpoint.getCondition, frame, RuntimeValidator(frame, sourceLookUp, false, logger))
+        prepare(breakpoint.getCondition, frame, preEvaluation = false)
       } else if (breakpoint.containsLogpointExpression) {
         prepareLogMessage(breakpoint.getLogMessage, frame)
       } else {
@@ -144,46 +130,53 @@ private[internal] class EvaluationProvider(
     } else {
       val tripleQuote = "\"\"\""
       val expression = s"""println(s$tripleQuote$message$tripleQuote)"""
-      prepare(expression, frame, RuntimeValidator(frame, sourceLookUp, false, logger))
+      prepare(expression, frame, preEvaluation = false)
     }
   }
 
-  private def compilePrepare(expression: String, frame: JdiFrame) =
-    if (mode.allowScalaEvaluation) {
-      val fqcn = frame.current().location.declaringType.name
-      for {
-        evaluator <- getScalaEvaluator(fqcn)
-        sourceContent <- sourceLookUp
-          .getSourceContentFromClassName(fqcn)
-          .toTry(s"Cannot find source file of class $fqcn")
-        preparedExpression <- evaluator.compile(sourceContent, expression, frame)
-      } yield preparedExpression
-    } else {
-      Failure(new EvaluationFailed(s"Cannot evaluate '$expression' with $mode mode"))
-    }
-
-  private def prepare(expression: String, frame: JdiFrame, validator: RuntimeValidator): Try[PreparedExpression] =
+  private def prepare(expression: String, frame: JdiFrame, preEvaluation: Boolean): Try[PreparedExpression] =
     if (mode.allowRuntimeEvaluation)
-      validator.validate(expression) match {
-        case MethodCall(tree: RuntimeEvaluableTree) if mode.allowScalaEvaluation =>
-          compilePrepare(expression, frame).orElse(Success(RuntimeExpression(tree)))
-        case Valid(tree) => Success(RuntimeExpression(tree))
-        case Fatal(e) => Failure(e)
-        case inv: Invalid =>
-          compilePrepare(expression, frame)
+      runtimeEvaluator.validate(expression, frame, preEvaluation) match {
+        case Success(expr) if mode.allowScalaEvaluation && containsMethodCall(expr.tree) =>
+          compile(expression, frame).orElse(Success(expr))
+        case validation => validation
       }
-    else compilePrepare(expression, frame)
+    else if (mode.allowScalaEvaluation) compile(expression, frame)
+    else Failure(new EvaluationFailed(s"Cannot evaluate '$expression' with $mode mode"))
+
+  private def compile(expression: String, frame: JdiFrame): Try[CompiledExpression] = {
+    val fqcn = frame.current().location.declaringType.name
+    for {
+      evaluator <- getScalaEvaluator(fqcn)
+      sourceContent <- sourceLookUp
+        .getSourceContentFromClassName(fqcn)
+        .toTry(s"Cannot find source file of class $fqcn")
+      preparedExpression <- evaluator.compile(sourceContent, expression, frame)
+    } yield preparedExpression
+  }
+
+  private def containsMethodCall(tree: RuntimeTree): Boolean = {
+    tree match {
+      case mt: NestedModuleTree => containsMethodCall(mt.init.qual)
+      case ft: InstanceFieldTree => containsMethodCall(ft.qual)
+      case IfTree(p, t, f, _) => containsMethodCall(p) || containsMethodCall(t) || containsMethodCall(f)
+      case AssignTree(lhs, rhs, _) => containsMethodCall(lhs) || containsMethodCall(rhs)
+      case _: MethodTree | _: NewInstanceTree => true
+      case _: LiteralTree | _: LocalVarTree | _: PreEvaluatedTree | _: ThisTree | UnitTree => false
+      case _: StaticFieldTree | _: ClassTree | _: StaticTree | _: TopLevelModuleTree => false
+      case _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree | _: ArrayElemTree => false
+    }
+  }
 
   private def evaluate(expression: PreparedExpression, frame: JdiFrame): Try[Value] = evaluationBlock {
     expression match {
       case logMessage: PlainLogMessage => messageLogger.log(logMessage, frame)
-      case RuntimeExpression(tree) =>
-        RuntimeEvaluation(frame, logger).evaluate(tree).getResult.map(_.value)
-      case expression: CompiledExpression =>
+      case expr: RuntimeExpression => runtimeEvaluator.evaluate(expr, frame)
+      case expr: CompiledExpression =>
         val fqcn = frame.current().location.declaringType.name
         for {
-          evaluator <- getScalaEvaluator(fqcn)
-          compiledExpression <- evaluator.evaluate(expression, frame)
+          scalaEvaluator <- getScalaEvaluator(fqcn)
+          compiledExpression <- scalaEvaluator.evaluate(expr, frame)
         } yield compiledExpression
     }
   }

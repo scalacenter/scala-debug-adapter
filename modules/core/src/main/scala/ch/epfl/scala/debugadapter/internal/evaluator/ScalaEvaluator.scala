@@ -15,10 +15,8 @@ private[internal] class ScalaEvaluator(
     logger: Logger,
     testMode: Boolean
 ) {
-  def evaluate(expression: CompiledExpression, frame: JdiFrame): Try[Value] = {
-    val CompiledExpression(classDir, className) = expression
-    evaluate(classDir, className, frame)
-  }
+  def evaluate(expression: CompiledExpression, frame: JdiFrame): Try[Value] =
+    evaluate(expression.classDir, expression.className, frame)
 
   def compile(sourceContent: String, expression: String, frame: JdiFrame): Try[CompiledExpression] = {
     logger.debug(s"Compiling expression '$expression'")
