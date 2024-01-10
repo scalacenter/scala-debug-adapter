@@ -97,7 +97,7 @@ case class StaticFieldTree(
 /* -------------------------------------------------------------------------- */
 /*                                Method trees                                */
 /* -------------------------------------------------------------------------- */
-case class BinaryOpTree (
+case class BinaryOpTree(
     lhs: RuntimeEvaluableTree,
     rhs: RuntimeEvaluableTree,
     op: BinaryOp

@@ -1,22 +1,22 @@
 package ch.epfl.scala.debugadapter.testfmk
 
-import ch.epfl.scala.debugadapter.DebugServer
-import java.util.concurrent.Executors
-import scala.concurrent.ExecutionContext
-import com.microsoft.java.debug.core.protocol.Types.StackFrame
-import ch.epfl.scala.debugadapter.GithubUtils
-import ch.epfl.scala.debugadapter.Debuggee
-import scala.concurrent.duration.*
-import ch.epfl.scala.debugadapter.Logger
-import java.net.URI
-import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
-import munit.FunSuite
-import munit.Assertions.*
-import com.microsoft.java.debug.core.protocol.Types.SourceBreakpoint
 import ch.epfl.scala.debugadapter.DebugConfig
-import scala.concurrent.Future
-import scala.concurrent.Await
+import ch.epfl.scala.debugadapter.DebugServer
+import ch.epfl.scala.debugadapter.Debuggee
+import ch.epfl.scala.debugadapter.GithubUtils
+import ch.epfl.scala.debugadapter.Logger
+import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
+import com.microsoft.java.debug.core.protocol.Types.SourceBreakpoint
+import com.microsoft.java.debug.core.protocol.Types.StackFrame
 import com.microsoft.java.debug.core.protocol.Types.Variable
+import munit.Assertions.*
+
+import java.net.URI
+import java.util.concurrent.Executors
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration.*
 import scala.util.Properties
 
 case class DebugCheckState(
@@ -26,9 +26,7 @@ case class DebugCheckState(
     paused: Boolean
 )
 
-abstract class DebugTestSuite extends FunSuite with DebugTest {
-  override def munitTimeout: Duration = 120.seconds
-}
+abstract class DebugTestSuite extends CommonFunSuite with DebugTest
 
 trait DebugTest {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
@@ -39,7 +37,6 @@ trait DebugTest {
 
   def javaVersion: String = Properties.javaVersion
 
-  def isJava8 = javaVersion.contains("1.8")
   def isScala3(implicit ctx: TestingContext) = ctx.scalaVersion.isScala3
   def isScala2(implicit ctx: TestingContext) = ctx.scalaVersion.isScala2
   def isScala213(implicit ctx: TestingContext) = ctx.scalaVersion.isScala213

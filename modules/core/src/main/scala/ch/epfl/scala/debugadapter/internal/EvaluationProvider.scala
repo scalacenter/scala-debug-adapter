@@ -139,10 +139,12 @@ private[internal] class EvaluationProvider(
       runtimeEvaluator.validate(expression, frame, preEvaluation) match {
         case Success(expr) if mode.allowScalaEvaluation && containsMethodCall(expr.tree) =>
           compile(expression, frame).orElse(Success(expr))
-        case validation => validation
+        case success: Success[RuntimeExpression] => success
+        case failure: Failure[RuntimeExpression] =>
+          if (mode.allowScalaEvaluation) compile(expression, frame) else failure
       }
     else if (mode.allowScalaEvaluation) compile(expression, frame)
-    else Failure(new EvaluationFailed(s"Cannot evaluate '$expression' with $mode mode"))
+    else Failure(new EvaluationFailed(s"Evaluation is disabled"))
 
   private def compile(expression: String, frame: JdiFrame): Try[CompiledExpression] = {
     val fqcn = frame.current().location.declaringType.name

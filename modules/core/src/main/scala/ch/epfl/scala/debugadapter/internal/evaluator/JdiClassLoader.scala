@@ -71,7 +71,7 @@ private[internal] class JdiClassLoader(
 
   def mirrorOfLiteral(value: Any): Safe[JdiValue] = value match {
     case _: Byte | _: Short | _: Char | _: Int | _: Long | _: Float | _: Double | _: Boolean =>
-      Safe(mirrorOfAnyVal(value.asInstanceOf))
+      Safe(mirrorOfAnyVal(value.asInstanceOf[AnyVal]))
     case value: String => mirrorOf(value)
     case () => Safe(mirrorOfVoid())
     case _ => Safe.failed(new IllegalArgumentException(s"Unsupported literal $value"))
