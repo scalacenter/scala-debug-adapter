@@ -10,60 +10,6 @@ import ch.epfl.scala.debugadapter.DebugConfig
 import ch.epfl.scala.debugadapter.testfmk.ObjectRef
 
 object JavaRuntimeEvaluatorEnvironments {
-  val localVarTestSource =
-    """|package example;
-       |
-       |public class Main {
-       |  public static void main(String[] args) {
-       |    int i = 0;
-       |    int j = 1;
-       |    int k = 2;
-       |    int l = 3;
-       |    Main main = new Main();
-       |    int x = 1+1;
-       |  }
-       |}
-       |""".stripMargin
-
-  val fieldMethodSource =
-    """|package example;
-       |
-       |public class Main {
-       |  private static String coucou = "coucou";
-       |  private String lapin = "lapin";
-       |  public String love = "love";
-       |
-       |  public static void main(String[] args) {
-       |    Foo foo = new Foo(); SuperFoo hiddenFoo = new Foo();
-       |    SuperFoo superfoo = new SuperFoo();
-       |    Main main = new Main();
-       |    System.out.println("the end");
-       |    main.foo();
-       |  }
-       |
-       |  public void foo() {
-       |    System.out.println("foo");
-       |  }
-       |
-       |  public static String staticMethod() { return "i am static"; }
-       |}
-       |
-       |class SuperFoo { 
-       |  private String superfoo = "hello super";
-       |  public boolean superbar = true;
-       |  public static String foofoo = "superfoofoo";
-       |
-       |  public static String staticMethod() { return "i am static superfoo"; }
-       |}
-       |
-       |class Foo extends SuperFoo {
-       |  public static String foofoo = "foofoo";
-       |  private String lapinou = "lapinou";
-       |
-       |  public static String staticMethod() { return "i am static foo"; }
-       |}
-       |""".stripMargin
-
   val nested =
     """|package example;
        |
@@ -196,10 +142,6 @@ object JavaRuntimeEvaluatorEnvironments {
 
 class JavaRuntimeEvaluatorTests extends DebugTestSuite {
   val scalaVersion = ScalaVersion.`3.1+`
-  lazy val localVar =
-    TestingDebuggee.fromJavaSource(JavaRuntimeEvaluatorEnvironments.localVarTestSource, "example.Main", scalaVersion)
-  lazy val fieldMethod =
-    TestingDebuggee.fromJavaSource(JavaRuntimeEvaluatorEnvironments.fieldMethodSource, "example.Main", scalaVersion)
   lazy val nested =
     TestingDebuggee.fromJavaSource(JavaRuntimeEvaluatorEnvironments.nested, "example.Main", scalaVersion)
   lazy val preEvaluation =
@@ -208,42 +150,76 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
   protected override def defaultConfig: DebugConfig =
     super.defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly)
 
-  test("should retrieve the value of a local variable from jdi") {
-    implicit val debuggee = localVar
+  test("local variables") {
+    val source =
+      """|package example;
+         |
+         |public class Main {
+         |  public static void main(String[] args) {
+         |    int i = 0;
+         |    Main main = new Main();
+         |    int x = 1+1;
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
     check(
-      Breakpoint(10),
+      Breakpoint(7),
       DebugStepAssert.inParallel(
         Evaluation.success("i", 0),
-        Evaluation.success("j", 1),
-        Evaluation.success("k", 2),
-        Evaluation.success("main", ObjectRef("Main"))
+        Evaluation.success("main", ObjectRef("Main")),
+        Evaluation.failed("x")
       )
     )
   }
 
-  test("Should retrieve the value of a field, should it be private or not") {
-    implicit val debuggee = fieldMethod
+  test("public, private and static fields") {
+    val source =
+      """|package example;
+         |
+         |public class Main {
+         |  private static String coucou = "coucou";
+         |  private String lapin = "lapin";
+         |  public String love = "love";
+         |
+         |  public static void main(String[] args) {
+         |    Foo foo = new Foo();
+         |    Main main = new Main();
+         |    main.foo();
+         |  }
+         |
+         |  public void foo() {
+         |    System.out.println("foo");
+         |  }
+         |}
+         |
+         |class SuperFoo { 
+         |  private String superfoo = "hello super";
+         |  public static String foofoo = "superfoofoo";
+         |}
+         |
+         |class Foo extends SuperFoo {
+         |  public static String foofoo = "foofoo";
+         |  private String lapinou = "lapinou";
+         |}
+         |""".stripMargin
+    implicit val debuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
     check(
-      Breakpoint(13),
+      Breakpoint(11),
       DebugStepAssert.inParallel(
         Evaluation.success("main.lapin", "lapin"),
         Evaluation.success("main.love", "love"),
         Evaluation.success("foo.lapinou", "lapinou"),
-        Evaluation.success("foo.superbar", true),
         Evaluation.success("foo.superfoo", "hello super"),
         Evaluation.success("Foo.foofoo", "foofoo"),
         Evaluation.success("SuperFoo.foofoo", "superfoofoo"),
-        Evaluation.success("coucou", "coucou"),
+        Evaluation.success("coucou", "coucou"), // static field
         Evaluation.failed("lapin"),
-        Evaluation.failed("love")
-      )
-    )
-  }
-
-  test("Should retrieve the value of a field without selector") {
-    implicit val debuggee = fieldMethod
-    check(
-      Breakpoint(17),
+        Evaluation.failed("love"),
+        Evaluation.failed("main.coucou"),
+        Evaluation.failed("foo.foofoo")
+      ),
+      Breakpoint(15),
       DebugStepAssert.inParallel(
         Evaluation.failed("coucou"),
         Evaluation.success("lapin", "lapin"),
@@ -252,10 +228,40 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should call static method") {
-    implicit val debuggee = fieldMethod
+  test("static methods") {
+    val source =
+      """|package example;
+         |
+         |public class Main {
+         |  public static void main(String[] args) {
+         |    Foo foo = new Foo();
+         |    SuperFoo superfoo = new SuperFoo();
+         |    Main main = new Main();
+         |    main.foo();
+         |  }
+         |
+         |  public void foo() {
+         |    System.out.println("foo");
+         |  }
+         |
+         |  public static String staticMethod() { return "i am static"; }
+         |}
+         |
+         |class SuperFoo { 
+         |  public static String staticMethod() { return "i am static superfoo"; }
+         |}
+         |
+         |class Foo extends SuperFoo {
+         |  public static String staticMethod() { return "i am static foo"; }
+         |}
+         |""".stripMargin
+    implicit val debuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
     check(
-      Breakpoint(17),
+      Breakpoint(8),
+      Evaluation.success("staticMethod()", "i am static"),
+      Evaluation.failed("main.staticMethod()"),
+      Evaluation.failed("foo()"),
+      Breakpoint(12),
       DebugStepAssert.inParallel(
         Evaluation.success("Main.staticMethod()", "i am static"),
         Evaluation.success("SuperFoo.staticMethod()", "i am static superfoo"),
@@ -264,7 +270,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should get the value of a field in a nested type") {
+  test("field in a nested type") {
     implicit val debuggee = nested
     check(
       Breakpoint(11),
@@ -282,24 +288,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should not call static members from instance or instance member from static") {
-    implicit val debuggee = fieldMethod
-    check(
-      Breakpoint(13),
-      DebugStepAssert.inParallel(
-        Evaluation.failed("main.coucou"),
-        Evaluation.failed("hiddenFoo.foofoo"),
-        Evaluation.failed("foo.foofoo"),
-        Evaluation.failed("superfoo.foofoo"),
-        Evaluation.failed("main.staticMethod()"),
-        Evaluation.failed("foo()"),
-        Evaluation.failed("lapin")
-      )
-    )
-
-  }
-
-  test("Should call a method on an instance of a nested type") {
+  test("method on an instance of a nested type") {
     implicit val debuggee = nested
     check(
       Breakpoint(11),
@@ -310,7 +299,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should call a static method on nested & inner types") {
+  test("static method on nested & inner types") {
     implicit val debuggee = nested
     check(
       Breakpoint(11),
@@ -323,7 +312,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should pre evaluate method and resolve most precise method") {
+  test("pre evaluate method and resolve most precise method") {
     implicit val debuggee = preEvaluation
     check(
       Breakpoint(8),
@@ -339,7 +328,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should instantiate inner classes") {
+  test("instantiate inner classes") {
     implicit val debuggee = nested
     check(
       Breakpoint(15),
@@ -352,34 +341,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     )
   }
 
-  test("Should evaluate static members from a static context") {
-    val source =
-      """|package example;
-         |
-         |public class Main {
-         |  public static int i = 5;
-         |  public static void main(String[] args) {
-         |    System.out.println(i);
-         |  }
-         |  public static String foo() { return "foo"; }
-         |  static class Bar {
-         |    public int x = 42;
-         |    public static String bar() { return "bar"; }
-         |    public Bar(int x) { this.x = x; }
-         |  } 
-         |}""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
-    check(
-      Breakpoint(6),
-      Evaluation.success("i", 5),
-      Evaluation.success("foo()", "foo"),
-      Evaluation.success("new Bar(42)", ObjectRef("Main$Bar")),
-      Evaluation.success("new Bar(42).x", 42),
-      Evaluation.success("Bar.bar()", "bar")
-    )
-  }
-
-  test("should call nested type in static context") {
+  test("static field in a nested type") {
     val source =
       """|package example;
          |

@@ -12,9 +12,7 @@ sealed trait RuntimeTree {
   override def toString(): String = prettyPrint(0)
   def prettyPrint(depth: Int): String
 }
-sealed trait RuntimeValidationTree extends RuntimeTree {
-  override def `type`: ClassType
-}
+
 sealed trait RuntimeEvaluableTree extends RuntimeTree
 
 sealed trait ModuleTree extends RuntimeEvaluableTree
@@ -34,23 +32,6 @@ sealed trait AssignableTree extends RuntimeEvaluableTree
 /* -------------------------------------------------------------------------- */
 /*                                Simple trees                                */
 /* -------------------------------------------------------------------------- */
-case object UnitTree extends RuntimeEvaluableTree {
-  override def `type`: Type = ???
-  override def prettyPrint(depth: Int): String = "UnitTree()"
-}
-case class LiteralTree(
-    value: Safe[Any],
-    `type`: Type
-) extends RuntimeEvaluableTree {
-  override def prettyPrint(depth: Int): String = {
-    val indent = "\t" * (depth + 1)
-    s"""|LiteralTree(
-        |${indent}value= $value,
-        |${indent}type= ${`type`}
-        |${indent.dropRight(1)})""".stripMargin
-  }
-}
-
 case class LocalVarTree(
     name: String,
     `type`: Type
@@ -256,7 +237,7 @@ case class NestedModuleTree(
 
 case class ClassTree(
     `type`: ClassType
-) extends RuntimeValidationTree {
+) extends RuntimeTree {
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
     s"""|ClassTree(
@@ -265,35 +246,20 @@ case class ClassTree(
   }
 }
 
-case class StaticTree(
-    `type`: ClassType
-) extends RuntimeValidationTree {
-  override def prettyPrint(depth: Int): String = {
-    val indent = "\t" * (depth + 1)
-    s"""|StaticTree(
-        |${indent}t= ${`type`},
-        |${indent.dropRight(1)})""".stripMargin
-  }
-}
-
 /* -------------------------------------------------------------------------- */
 /*                             Pre-evaluated trees                            */
 /* -------------------------------------------------------------------------- */
-case class PreEvaluatedTree(
+case class RuntimeValueTree(
     value: Safe[JdiValue],
     `type`: Type
 ) extends RuntimeEvaluableTree {
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
-    s"""|PreEvaluatedTree(
+    s"""|RuntimeValueTree(
         |${indent}v= $value,
         |${indent}t= ${`type`}
         |${indent.dropRight(1)})""".stripMargin
   }
-}
-
-object PreEvaluatedTree {
-  def apply(value: (Safe[JdiValue], Type)) = new PreEvaluatedTree(value._1, value._2)
 }
 
 /* -------------------------------------------------------------------------- */

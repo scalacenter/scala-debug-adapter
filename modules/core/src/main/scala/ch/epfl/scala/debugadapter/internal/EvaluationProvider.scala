@@ -157,15 +157,15 @@ private[internal] class EvaluationProvider(
     } yield preparedExpression
   }
 
-  private def containsMethodCall(tree: RuntimeTree): Boolean = {
+  private def containsMethodCall(tree: RuntimeEvaluableTree): Boolean = {
     tree match {
       case mt: NestedModuleTree => containsMethodCall(mt.init.qual)
       case ft: InstanceFieldTree => containsMethodCall(ft.qual)
       case IfTree(p, t, f, _) => containsMethodCall(p) || containsMethodCall(t) || containsMethodCall(f)
       case AssignTree(lhs, rhs, _) => containsMethodCall(lhs) || containsMethodCall(rhs)
       case _: MethodTree | _: NewInstanceTree => true
-      case _: LiteralTree | _: LocalVarTree | _: PreEvaluatedTree | _: ThisTree | UnitTree => false
-      case _: StaticFieldTree | _: ClassTree | _: StaticTree | _: TopLevelModuleTree => false
+      case _: LocalVarTree | _: RuntimeValueTree | _: ThisTree => false
+      case _: StaticFieldTree | _: TopLevelModuleTree => false
       case _: BinaryOpTree | _: UnaryOpTree | _: ArrayElemTree => false
     }
   }

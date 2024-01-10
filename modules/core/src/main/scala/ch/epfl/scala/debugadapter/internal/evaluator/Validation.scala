@@ -12,8 +12,7 @@ import ch.epfl.scala.debugadapter.Logger
 
 sealed abstract class Validation[+A] {
   def isValid: Boolean
-  def isInvalid: Boolean = !isValid
-  def isEmpty: Boolean = isInvalid
+  def isEmpty: Boolean = !isValid
 
   def filter(p: A => Boolean, runtimeFatal: Boolean = false): Validation[A]
   def filterNot(p: A => Boolean, runtimeFatal: Boolean = false): Validation[A] = filter(!p(_), runtimeFatal)

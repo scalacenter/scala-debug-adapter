@@ -6,14 +6,13 @@ class RuntimeEvaluation(frame: JdiFrame, logger: Logger) {
   def evaluate(stat: RuntimeEvaluableTree): Safe[JdiValue] =
     eval(stat).map(_.derefIfRef)
 
-  protected def eval(stat: RuntimeEvaluableTree): Safe[JdiValue] =
+  private def eval(stat: RuntimeEvaluableTree): Safe[JdiValue] =
     stat match {
-      case preEvaluated: PreEvaluatedTree => preEvaluated.value
+      case RuntimeValueTree(value, _) => value
       case LocalVarTree(varName, _) => Safe.successful(frame.variableByName(varName).map(frame.variableValue).get)
       case primitive: BinaryOpTree => invokePrimitive(primitive)
       case primitive: UnaryOpTree => invokePrimitive(primitive)
       case module: ModuleTree => evaluateModule(module)
-      case literal: LiteralTree => evaluateLiteral(literal)
       case ThisTree(obj) => Safe(JdiValue(obj.instances(1).get(0), frame.thread))
       case field: InstanceFieldTree => evaluateField(field)
       case staticField: StaticFieldTree => evaluateStaticField(staticField)
@@ -23,34 +22,17 @@ class RuntimeEvaluation(frame: JdiFrame, logger: Logger) {
       case branching: IfTree => evaluateIf(branching)
       case staticMethod: StaticMethodTree => invokeStatic(staticMethod)
       case assign: AssignTree => evaluateAssign(assign)
-      case UnitTree => Safe(JdiValue(frame.thread.virtualMachine.mirrorOfVoid, frame.thread))
     }
 
-  /* -------------------------------------------------------------------------- */
-  /*                             Literal evaluation                             */
-  /* -------------------------------------------------------------------------- */
-  def evaluateLiteral(tree: LiteralTree): Safe[JdiValue] =
-    for {
-      loader <- frame.classLoader()
-      value <- tree.value
-      result <- loader.mirrorOfLiteral(value)
-    } yield result
-
-  /* -------------------------------------------------------------------------- */
-  /*                              Field evaluation                              */
-  /* -------------------------------------------------------------------------- */
-  def evaluateField(tree: InstanceFieldTree): Safe[JdiValue] =
+  private def evaluateField(tree: InstanceFieldTree): Safe[JdiValue] =
     eval(tree.qual).map { value =>
       JdiValue(value.asObject.reference.getValue(tree.field), frame.thread)
     }
 
-  def evaluateStaticField(tree: StaticFieldTree): Safe[JdiValue] =
+  private def evaluateStaticField(tree: StaticFieldTree): Safe[JdiValue] =
     Safe(JdiValue(tree.on.getValue(tree.field), frame.thread))
 
-  /* -------------------------------------------------------------------------- */
-  /*                              Method evaluation                             */
-  /* -------------------------------------------------------------------------- */
-  def invokeStatic(tree: StaticMethodTree): Safe[JdiValue] =
+  private def invokeStatic(tree: StaticMethodTree): Safe[JdiValue] =
     for {
       args <- tree.args.map(eval).traverse
       loader <- frame.classLoader()
@@ -58,7 +40,7 @@ class RuntimeEvaluation(frame: JdiFrame, logger: Logger) {
       result <- JdiClass(tree.on, frame.thread).invokeStatic(tree.method, argsBoxedIfNeeded)
     } yield result
 
-  def invokePrimitive(tree: BinaryOpTree): Safe[JdiValue] =
+  private def invokePrimitive(tree: BinaryOpTree): Safe[JdiValue] =
     for {
       lhs <- eval(tree.lhs).flatMap(_.unboxIfPrimitive)
       rhs <- eval(tree.rhs).flatMap(_.unboxIfPrimitive)
@@ -66,14 +48,14 @@ class RuntimeEvaluation(frame: JdiFrame, logger: Logger) {
       result <- tree.op.evaluate(lhs, rhs, loader)
     } yield result
 
-  def invokePrimitive(tree: UnaryOpTree): Safe[JdiValue] =
+  private def invokePrimitive(tree: UnaryOpTree): Safe[JdiValue] =
     for {
       rhs <- eval(tree.rhs).flatMap(_.unboxIfPrimitive)
       loader <- frame.classLoader()
       result <- tree.op.evaluate(rhs, loader)
     } yield result
 
-  def invoke(tree: InstanceMethodTree): Safe[JdiValue] =
+  private def invoke(tree: InstanceMethodTree): Safe[JdiValue] =
     for {
       qualValue <- eval(tree.qual)
       argsValues <- tree.args.map(eval).traverse
@@ -82,19 +64,13 @@ class RuntimeEvaluation(frame: JdiFrame, logger: Logger) {
       result <- qualValue.asObject.invoke(tree.method, argsBoxedIfNeeded)
     } yield result
 
-  /* -------------------------------------------------------------------------- */
-  /*                              Module evaluation                             */
-  /* -------------------------------------------------------------------------- */
-  def evaluateModule(tree: ModuleTree): Safe[JdiValue] =
+  private def evaluateModule(tree: ModuleTree): Safe[JdiValue] =
     tree match {
       case TopLevelModuleTree(mod) => Safe(JdiObject(mod.instances(1).get(0), frame.thread))
       case NestedModuleTree(_, init) => invoke(init)
     }
 
-  /* -------------------------------------------------------------------------- */
-  /*                                Instantiation                               */
-  /* -------------------------------------------------------------------------- */
-  def instantiate(tree: NewInstanceTree): Safe[JdiObject] =
+  private def instantiate(tree: NewInstanceTree): Safe[JdiObject] =
     for {
       args <- tree.init.args.map(eval).traverse
       loader <- frame.classLoader()
@@ -102,28 +78,19 @@ class RuntimeEvaluation(frame: JdiFrame, logger: Logger) {
       instance <- JdiClass(tree.`type`, frame.thread).newInstance(tree.init.method, boxedUnboxedArgs)
     } yield instance
 
-  /* -------------------------------------------------------------------------- */
-  /*                          Array accessor evaluation                         */
-  /* -------------------------------------------------------------------------- */
-  def evaluateArrayElement(tree: ArrayElemTree): Safe[JdiValue] =
+  private def evaluateArrayElement(tree: ArrayElemTree): Safe[JdiValue] =
     for {
       array <- eval(tree.array)
       index <- eval(tree.index).flatMap(_.unboxIfPrimitive).flatMap(_.toInt)
     } yield array.asArray.getValue(index)
 
-  /* -------------------------------------------------------------------------- */
-  /*                             If tree evaluation                             */
-  /* -------------------------------------------------------------------------- */
-  def evaluateIf(tree: IfTree): Safe[JdiValue] =
+  private def evaluateIf(tree: IfTree): Safe[JdiValue] =
     for {
       predicate <- eval(tree.p).flatMap(_.unboxIfPrimitive).flatMap(_.toBoolean)
       value <- if (predicate) eval(tree.thenp) else eval(tree.elsep)
     } yield value
 
-  /* -------------------------------------------------------------------------- */
-  /*                              Assign evaluation                             */
-  /* -------------------------------------------------------------------------- */
-  def evaluateAssign(tree: AssignTree): Safe[JdiValue] = {
+  private def evaluateAssign(tree: AssignTree): Safe[JdiValue] = {
     eval(tree.rhs)
       .flatMap { rhsValue =>
         tree.lhs match {
