@@ -127,11 +127,11 @@ private[internal] class EvaluationProvider(
   private def prepareLogMessage(message: String, frame: JdiFrame): Try[PreparedExpression] = {
     if (!message.contains("$")) {
       Success(PlainLogMessage(message))
-    } else {
+    } else if (mode.allowScalaEvaluation) {
       val tripleQuote = "\"\"\""
       val expression = s"""println(s$tripleQuote$message$tripleQuote)"""
-      prepare(expression, frame, preEvaluation = false)
-    }
+      compile(expression, frame)
+    } else Failure(new EvaluationFailed(s"Cannot evaluate logpoint '$message' with $mode mode"))
   }
 
   private def prepare(expression: String, frame: JdiFrame, preEvaluation: Boolean): Try[PreparedExpression] =
