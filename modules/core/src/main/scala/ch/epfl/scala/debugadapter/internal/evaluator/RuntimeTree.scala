@@ -39,7 +39,7 @@ case object UnitTree extends RuntimeEvaluableTree {
   override def `type`: Type = ???
   override def prettyPrint(depth: Int): String = "UnitTree()"
 }
-case class LiteralTree private (
+case class LiteralTree(
     value: Safe[Any],
     `type`: Type
 ) extends RuntimeEvaluableTree {
@@ -105,7 +105,7 @@ case class StaticFieldTree(
 /* -------------------------------------------------------------------------- */
 /*                                Method trees                                */
 /* -------------------------------------------------------------------------- */
-case class PrimitiveBinaryOpTree private (
+case class PrimitiveBinaryOpTree(
     lhs: RuntimeEvaluableTree,
     rhs: RuntimeEvaluableTree,
     op: RuntimeBinaryOp
@@ -132,7 +132,7 @@ object PrimitiveBinaryOpTree {
     }
 }
 
-case class ArrayElemTree private (array: RuntimeEvaluableTree, index: RuntimeEvaluableTree, `type`: Type)
+case class ArrayElemTree(array: RuntimeEvaluableTree, index: RuntimeEvaluableTree, `type`: Type)
     extends RuntimeEvaluableTree {
   override def prettyPrint(depth: Int): String = {
     val indent = "\t" * (depth + 1)
@@ -162,7 +162,7 @@ object ArrayElemTree {
   }
 }
 
-case class PrimitiveUnaryOpTree private (
+case class PrimitiveUnaryOpTree(
     rhs: RuntimeEvaluableTree,
     op: RuntimeUnaryOp
 ) extends RuntimeEvaluableTree {
@@ -307,7 +307,7 @@ object PreEvaluatedTree {
 /* -------------------------------------------------------------------------- */
 /*                             Flow control trees                             */
 /* -------------------------------------------------------------------------- */
-case class IfTree private (
+case class IfTree(
     p: RuntimeEvaluableTree,
     thenp: RuntimeEvaluableTree,
     elsep: RuntimeEvaluableTree,

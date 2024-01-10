@@ -135,8 +135,9 @@ class ScalaStackTraceTests extends DebugTestSuite {
          |object Main :
          |  def main(args: Array[String]): Unit = 
          |    class B :
-         |      def m() = 
+         |      def m() = {
          |        println("hello")
+         |      }
          |
          |    class C  extends B 
          |    C().m()

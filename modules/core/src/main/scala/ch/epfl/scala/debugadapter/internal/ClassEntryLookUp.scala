@@ -361,7 +361,7 @@ private object ClassEntryLookUp {
 /**
  * On a case-insensitive system we need to sanitize all URIs to use them as Map keys.
  */
-private case class SourceFileKey private (sanitizeUri: URI)
+private case class SourceFileKey(sanitizeUri: URI)
 
 private object SourceFileKey {
   private val isCaseSensitiveFileSystem = Properties.isWin || Properties.isMac
