@@ -10,8 +10,8 @@ class RuntimeEvaluation(frame: JdiFrame, logger: Logger) {
     stat match {
       case preEvaluated: PreEvaluatedTree => preEvaluated.value
       case LocalVarTree(varName, _) => Safe.successful(frame.variableByName(varName).map(frame.variableValue).get)
-      case primitive: PrimitiveBinaryOpTree => invokePrimitive(primitive)
-      case primitive: PrimitiveUnaryOpTree => invokePrimitive(primitive)
+      case primitive: BinaryOpTree => invokePrimitive(primitive)
+      case primitive: UnaryOpTree => invokePrimitive(primitive)
       case module: ModuleTree => evaluateModule(module)
       case literal: LiteralTree => evaluateLiteral(literal)
       case ThisTree(obj) => Safe(JdiValue(obj.instances(1).get(0), frame.thread))
@@ -58,7 +58,7 @@ class RuntimeEvaluation(frame: JdiFrame, logger: Logger) {
       result <- JdiClass(tree.on, frame.thread).invokeStatic(tree.method, argsBoxedIfNeeded)
     } yield result
 
-  def invokePrimitive(tree: PrimitiveBinaryOpTree): Safe[JdiValue] =
+  def invokePrimitive(tree: BinaryOpTree): Safe[JdiValue] =
     for {
       lhs <- eval(tree.lhs).flatMap(_.unboxIfPrimitive)
       rhs <- eval(tree.rhs).flatMap(_.unboxIfPrimitive)
@@ -66,7 +66,7 @@ class RuntimeEvaluation(frame: JdiFrame, logger: Logger) {
       result <- tree.op.evaluate(lhs, rhs, loader)
     } yield result
 
-  def invokePrimitive(tree: PrimitiveUnaryOpTree): Safe[JdiValue] =
+  def invokePrimitive(tree: UnaryOpTree): Safe[JdiValue] =
     for {
       rhs <- eval(tree.rhs).flatMap(_.unboxIfPrimitive)
       loader <- frame.classLoader()

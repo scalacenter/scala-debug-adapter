@@ -164,7 +164,7 @@ private[internal] class EvaluationProvider(
       case _: MethodTree | _: NewInstanceTree => true
       case _: LiteralTree | _: LocalVarTree | _: PreEvaluatedTree | _: ThisTree | UnitTree => false
       case _: StaticFieldTree | _: ClassTree | _: StaticTree | _: TopLevelModuleTree => false
-      case _: PrimitiveBinaryOpTree | _: PrimitiveUnaryOpTree | _: ArrayElemTree => false
+      case _: BinaryOpTree | _: UnaryOpTree | _: ArrayElemTree => false
     }
   }
 

@@ -1,9 +1,8 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import com.sun.jdi._
-import RuntimeEvaluatorExtractors.{BooleanTree, IsAnyVal}
-import scala.util.Success
+import com.sun.jdi.*
 import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.internal.evaluator.RuntimePrimitiveOps.*
 
 /* -------------------------------------------------------------------------- */
 /*                              Global hierarchy                              */
@@ -49,13 +48,6 @@ case class LiteralTree(
         |${indent}value= $value,
         |${indent}type= ${`type`}
         |${indent.dropRight(1)})""".stripMargin
-  }
-}
-
-object LiteralTree {
-  def apply(value: (Safe[Any], Type)): Validation[LiteralTree] = value._1 match {
-    case Safe(Success(_: String)) | Safe(Success(IsAnyVal(_))) => Valid(new LiteralTree(value._1, value._2))
-    case _ => CompilerRecoverable(s"Unsupported literal type: ${value.getClass}")
   }
 }
 
@@ -105,10 +97,10 @@ case class StaticFieldTree(
 /* -------------------------------------------------------------------------- */
 /*                                Method trees                                */
 /* -------------------------------------------------------------------------- */
-case class PrimitiveBinaryOpTree(
+case class BinaryOpTree (
     lhs: RuntimeEvaluableTree,
     rhs: RuntimeEvaluableTree,
-    op: RuntimeBinaryOp
+    op: BinaryOp
 ) extends RuntimeEvaluableTree {
   override lazy val `type` = op.typeCheck(lhs.`type`, rhs.`type`)
   override def prettyPrint(depth: Int): String = {
@@ -121,13 +113,13 @@ case class PrimitiveBinaryOpTree(
   }
 }
 
-object PrimitiveBinaryOpTree {
+object BinaryOpTree {
   def apply(lhs: RuntimeTree, args: Seq[RuntimeEvaluableTree], name: String)(implicit
       logger: Logger
-  ): Validation[PrimitiveBinaryOpTree] =
+  ): Validation[BinaryOpTree] =
     (lhs, args) match {
       case (ret: RuntimeEvaluableTree, Seq(right)) =>
-        RuntimeBinaryOp(ret, right, name).map(PrimitiveBinaryOpTree(ret, right, _))
+        BinaryOp(ret, right, name).map(BinaryOpTree(ret, right, _))
       case _ => Recoverable(s"Primitive operation operand must be evaluable")
     }
 }
@@ -162,9 +154,9 @@ object ArrayElemTree {
   }
 }
 
-case class PrimitiveUnaryOpTree(
+case class UnaryOpTree(
     rhs: RuntimeEvaluableTree,
-    op: RuntimeUnaryOp
+    op: UnaryOp
 ) extends RuntimeEvaluableTree {
   override lazy val `type` = op.typeCheck(rhs.`type`)
   override def prettyPrint(depth: Int): String = {
@@ -175,9 +167,9 @@ case class PrimitiveUnaryOpTree(
         |${indent.dropRight(1)})""".stripMargin
   }
 }
-object PrimitiveUnaryOpTree {
-  def apply(rhs: RuntimeTree, name: String)(implicit logger: Logger): Validation[PrimitiveUnaryOpTree] = rhs match {
-    case ret: RuntimeEvaluableTree => RuntimeUnaryOp(ret, name).map(PrimitiveUnaryOpTree(ret, _))
+object UnaryOpTree {
+  def apply(rhs: RuntimeTree, name: String)(implicit logger: Logger): Validation[UnaryOpTree] = rhs match {
+    case ret: RuntimeEvaluableTree => UnaryOp(ret, name).map(UnaryOpTree(ret, _))
     case _ => Recoverable(s"Primitive operation operand must be evaluable")
   }
 }
@@ -337,24 +329,23 @@ object IfTree {
       p: RuntimeEvaluableTree,
       ifTrue: RuntimeEvaluableTree,
       ifFalse: RuntimeEvaluableTree,
-      assignableFrom: (
-          Type,
-          Type
-      ) => Boolean, // ! This is a hack, passing a wrong method would lead to inconsistent trees
+      // ! This is a hack, passing a wrong method would lead to inconsistent trees
+      assignableFrom: (Type, Type) => Boolean,
       objType: => Type
   ): Validation[IfTree] = {
     val pType = p.`type`
     val tType = ifTrue.`type`
     val fType = ifFalse.`type`
 
-    p match {
-      case BooleanTree(_) =>
-        if (assignableFrom(tType, fType)) Valid(IfTree(p, ifTrue, ifFalse, tType))
-        else if (assignableFrom(fType, tType)) Valid(IfTree(p, ifTrue, ifFalse, fType))
-        else Valid(IfTree(p, ifTrue, ifFalse, objType))
-      case _ => CompilerRecoverable("A predicate must be a boolean")
-    }
+    if (isBoolean(p.`type`))
+      if (assignableFrom(tType, fType)) Valid(IfTree(p, ifTrue, ifFalse, tType))
+      else if (assignableFrom(fType, tType)) Valid(IfTree(p, ifTrue, ifFalse, fType))
+      else Valid(IfTree(p, ifTrue, ifFalse, objType))
+    else CompilerRecoverable("A predicate must be a boolean")
   }
+
+  private def isBoolean(tpe: Type): Boolean =
+    tpe.isInstanceOf[BooleanType] || tpe.name == "java.lang.Boolean"
 }
 
 /* -------------------------------------------------------------------------- */
