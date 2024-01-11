@@ -60,8 +60,8 @@ object RuntimePrimitiveOps {
   /* -------------------------------------------------------------------------- */
   object BinaryOp {
     def apply(
-        lhs: RuntimeEvaluableTree,
-        rhs: RuntimeEvaluableTree,
+        lhs: RuntimeEvaluationTree,
+        rhs: RuntimeEvaluationTree,
         op: String
     ): Validation[BinaryOp] = {
       op match {
@@ -88,13 +88,13 @@ object RuntimePrimitiveOps {
     }
 
     def apply(
-        lhs: RuntimeTree,
-        rhs: Seq[RuntimeEvaluableTree],
+        lhs: RuntimeEvaluationTree,
+        args: Seq[RuntimeEvaluationTree],
         op: String
     ): Validation[BinaryOp] =
-      (lhs, rhs) match {
-        case (left: RuntimeEvaluableTree, Seq(right)) => apply(left, right, op)
-        case _ => Recoverable("Not a primitive binary operation")
+      args match {
+        case Seq(rhs) => apply(lhs, rhs, op)
+        case _ => Recoverable("Too many arguments")
       }
   }
 
@@ -304,7 +304,7 @@ object RuntimePrimitiveOps {
   }
 
   object UnaryOp {
-    def apply(rhs: RuntimeEvaluableTree, op: String): Validation[UnaryOp] = {
+    def apply(rhs: RuntimeEvaluationTree, op: String): Validation[UnaryOp] = {
       op match {
         case "unary_+" if isNumeric(rhs.`type`) => Valid(UnaryPlus)
         case "unary_-" if isNumeric(rhs.`type`) => Valid(UnaryMinus)
@@ -313,12 +313,6 @@ object RuntimePrimitiveOps {
         case _ => Recoverable("Not a primitive unary operation")
       }
     }
-
-    def apply(rhs: RuntimeTree, op: String): Validation[UnaryOp] =
-      rhs match {
-        case ret: RuntimeEvaluableTree => apply(ret, op)
-        case _ => Recoverable("Not a primitive unary operation")
-      }
   }
 
   /* -------------------------------------------------------------------------- */

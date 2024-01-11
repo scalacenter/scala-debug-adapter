@@ -13,7 +13,7 @@ private[debugadapter] final class SourceLookUpProvider(
     private var fqcnToClassPathEntry: Map[String, ClassEntryLookUp],
     logger: Logger
 ) extends ISourceLookUpProvider {
-  var classesByNames: Map[String, Seq[String]] = loadClassesByNames
+  var classesByScalaNameMap: Map[String, Seq[String]] = loadClassesByScalaName
 
   override def supportsRealtimeBreakpointVerification(): Boolean = true
 
@@ -66,8 +66,8 @@ private[debugadapter] final class SourceLookUpProvider(
     classPathEntries.flatMap(_.fullyQualifiedNames)
   private[internal] def allOrphanClasses: Iterable[ClassFile] =
     classPathEntries.flatMap(_.orphanClassFiles)
-  private[internal] def classesByName(name: String): Seq[String] =
-    classesByNames.get(name).getOrElse(Seq.empty)
+  private[internal] def classesByScalaName(name: String): Seq[String] =
+    classesByScalaNameMap.get(name).getOrElse(Seq.empty)
 
   private[internal] def getScalaSig(fqcn: String): Option[ScalaSig] = {
     for {
@@ -93,11 +93,11 @@ private[debugadapter] final class SourceLookUpProvider(
     sourceUriToClassPathEntry = classPathEntries.flatMap(lookup => lookup.sources.map(uri => (uri, lookup))).toMap
     fqcnToClassPathEntry =
       classPathEntries.flatMap(lookup => lookup.fullyQualifiedNames.map(fqcn => (fqcn, lookup))).toMap
-    classesByNames = loadClassesByNames
+    classesByScalaNameMap = loadClassesByScalaName
   }
 
-  private def loadClassesByNames: Map[String, Seq[String]] =
-    classPathEntries.map(_.classesByNames).foldLeft(Map.empty[String, Seq[String]]) { (x, y) =>
+  private def loadClassesByScalaName: Map[String, Seq[String]] =
+    classPathEntries.map(_.classesByScalaName).foldLeft(Map.empty[String, Seq[String]]) { (x, y) =>
       (x.keys ++ y.keys).map { k =>
         k -> (x.getOrElse(k, Seq.empty) ++ y.getOrElse(k, Seq.empty))
       }.toMap

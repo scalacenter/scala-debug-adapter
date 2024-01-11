@@ -162,7 +162,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
     check(
       Breakpoint(7),
       DebugStepAssert.inParallel(
@@ -203,7 +203,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
          |  private String lapinou = "lapinou";
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
     check(
       Breakpoint(11),
       DebugStepAssert.inParallel(
@@ -213,7 +213,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
         Evaluation.success("foo.superfoo", "hello super"),
         Evaluation.success("Foo.foofoo", "foofoo"),
         Evaluation.success("SuperFoo.foofoo", "superfoofoo"),
-        Evaluation.success("coucou", "coucou"), // static field
+        Evaluation.success("coucou", "coucou"),
         Evaluation.failed("lapin"),
         Evaluation.failed("love"),
         Evaluation.failed("main.coucou"),
@@ -255,7 +255,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
          |  public static String staticMethod() { return "i am static foo"; }
          |}
          |""".stripMargin
-    implicit val debuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
     check(
       Breakpoint(8),
       Evaluation.success("staticMethod()", "i am static"),

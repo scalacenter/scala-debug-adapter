@@ -9,5 +9,7 @@ trait CommonFunSuite extends munit.FunSuite {
   def isDebug: Boolean = DebugUtils.isDebug
 
   override def munitTimeout: Duration =
-    if (isDebug) 8.hours else super.munitTimeout
+    defaultTimeout(super.munitTimeout)
+
+  def defaultTimeout(timeout: Duration) = if (isDebug) 8.hours else timeout
 }

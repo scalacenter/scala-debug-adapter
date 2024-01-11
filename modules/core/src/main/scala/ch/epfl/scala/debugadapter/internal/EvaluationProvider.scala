@@ -157,16 +157,17 @@ private[internal] class EvaluationProvider(
     } yield preparedExpression
   }
 
-  private def containsMethodCall(tree: RuntimeEvaluableTree): Boolean = {
+  private def containsMethodCall(tree: RuntimeEvaluationTree): Boolean = {
+    import RuntimeEvaluationTree.*
     tree match {
-      case mt: NestedModuleTree => containsMethodCall(mt.init.qual)
-      case ft: InstanceFieldTree => containsMethodCall(ft.qual)
-      case IfTree(p, t, f, _) => containsMethodCall(p) || containsMethodCall(t) || containsMethodCall(f)
-      case AssignTree(lhs, rhs, _) => containsMethodCall(lhs) || containsMethodCall(rhs)
-      case _: MethodTree | _: NewInstanceTree => true
-      case _: LocalVarTree | _: RuntimeValueTree | _: ThisTree => false
-      case _: StaticFieldTree | _: TopLevelModuleTree => false
-      case _: BinaryOpTree | _: UnaryOpTree | _: ArrayElemTree => false
+      case NestedModule(_, init) => containsMethodCall(init.qualifier)
+      case InstanceField(_, qualifier) => containsMethodCall(qualifier)
+      case If(p, t, f, _) => containsMethodCall(p) || containsMethodCall(t) || containsMethodCall(f)
+      case Assign(lhs, rhs, _) => containsMethodCall(lhs) || containsMethodCall(rhs)
+      case _: CallMethod | _: NewInstance => true
+      case _: LocalVar | _: RuntimeEvaluationTree.Value | _: This => false
+      case _: StaticField | _: StaticModule => false
+      case _: CallBinaryOp | _: CallUnaryOp | _: ArrayElem => false
     }
   }
 
