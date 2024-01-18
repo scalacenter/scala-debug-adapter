@@ -12,8 +12,6 @@ import scala.meta.trees.*
 import scala.meta.{Type => _, *}
 import scala.util.Failure
 import scala.util.Success
-
-import scala.collection.mutable.Buffer
 import scala.util.Try
 
 private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: SourceLookUpProvider, preEvaluation: Boolean)(
@@ -56,7 +54,10 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
     }
 
   private lazy val thisTree: Validation[RuntimeEvaluationTree] =
-    Validation.fromOption(frame.thisObject.map(ths => This(ths.reference.referenceType())))
+    Validation.fromOption(
+      frame.thisObject.map(ths => This(ths.reference.referenceType())),
+      "`this` is unavailable in a static context"
+    )
 
   private lazy val declaringType: Validation[jdi.ReferenceType] =
     Validation(frame.current().location().declaringType())
@@ -120,28 +121,9 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
   private def validateLiteral(lit: Lit): Validation[RuntimeEvaluationTree] =
     classLoader.map { loader =>
       val value = loader.mirrorOfLiteral(lit.value)
-      val tpe = loader
-        .mirrorOfLiteral(lit.value)
-        .map(_.value.`type`)
-        .extract
-        .get
+      val tpe = loader.mirrorOfLiteral(lit.value).map(_.value.`type`).extract.get
       Value(value, tpe)
     }
-
-  private def findVariable(name: String, preevaluate: Boolean = preEvaluation): Validation[RuntimeEvaluationTree] = {
-    val encodedName = NameTransformer.encode(name)
-    Validation
-      .fromOption(frame.variableByName(encodedName))
-      .filter(_.`type`.name != "scala.Function0")
-      .map(v => LocalVar(encodedName, v.`type`))
-      .flatMap(v => if (preevaluate) preEvaluate(v) else Valid(v))
-  }
-
-  private def findField(name: String, ref: jdi.ReferenceType): Option[jdi.Field] = {
-    val encodedName = NameTransformer.encode(name)
-    Option(ref.fieldByName(encodedName))
-      .orElse(ref.visibleFields.asScala.find(_.name.endsWith("$" + encodedName)))
-  }
 
   private def findField(
       qualifier: RuntimeEvaluationTree,
@@ -150,7 +132,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
   ): Validation[RuntimeEvaluationTree] = {
     for {
       qualifierTpe <- asReference(qualifier.`type`)
-      field <- Validation.fromOption(findField(name, qualifierTpe))
+      field <- findField(name, qualifierTpe)
       _ = loadClassOnNeed(field)
       fieldTree <- asInstanceField(field, qualifier, preevaluate)
     } yield fieldTree
@@ -162,10 +144,26 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       preevaluate: Boolean = preEvaluation
   ): Validation[RuntimeEvaluationTree] = {
     for {
-      field <- Validation.fromOption(findField(name, qualifier))
+      field <- findField(name, qualifier)
       _ = loadClassOnNeed(field)
       fieldTree <- asStaticField(field, preevaluate = preevaluate)
     } yield fieldTree
+  }
+
+  private def findVariable(name: String, preevaluate: Boolean = preEvaluation): Validation[RuntimeEvaluationTree] = {
+    val encodedName = NameTransformer.encode(name)
+    Validation
+      .fromOption(frame.variableByName(encodedName), s"$name is not a local variable")
+      .filter(_.`type`.name != "scala.Function0")
+      .map(v => LocalVar(encodedName, v.`type`))
+      .flatMap(v => if (preevaluate) preEvaluate(v) else Valid(v))
+  }
+
+  private def findField(name: String, ref: jdi.ReferenceType): Validation[jdi.Field] = {
+    val encodedName = NameTransformer.encode(name)
+    def fieldOpt = Option(ref.fieldByName(encodedName))
+      .orElse(ref.visibleFields.asScala.find(_.name.endsWith("$" + encodedName)))
+    Validation.fromOption(fieldOpt, s"$name is not a field in ${ref.name}")
   }
 
   private def findClass(name: String): Validation[jdi.ReferenceType] =
@@ -219,7 +217,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
     val qualifierTypeName = qualifier.`type`.name
     findClassMember(moduleClassName, qualifier).flatMap { tpe =>
       if (inCompanion(Some(qualifierTypeName), moduleClassName))
-        CompilerRecoverable(s"Cannot access module $name from $qualifierTypeName")
+        Recoverable(s"Cannot access module $name from $qualifierTypeName")
       else asModule(tpe, qualifier)
     }
   }
@@ -300,16 +298,18 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
   }
 
   // ! May not be correct when dealing with an object inside a class
-  private def findOuter(qualifier: RuntimeEvaluationTree): Validation[RuntimeEvaluationTree] =
+  private def findOuter(qualifier: RuntimeEvaluationTree): Validation[RuntimeEvaluationTree] = {
+    val qualifierTypeName = qualifier.`type`.name
     asReference(qualifier.`type`)
       .flatMap(tpe => Validation(tpe.fieldByName("$outer")))
       .flatMap(asInstanceField(_, qualifier, preevaluate = true))
       .orElse {
         Validation
-          .fromOption(removeLastInnerTypeFromFQCN(qualifier.`type`.name))
+          .fromOption(removeLastInnerTypeFromFQCN(qualifierTypeName), s"$qualifierTypeName is not an inner class")
           .flatMap(name => loadClass(name + "$"))
           .flatMap(asStaticModule)
       }
+  }
 
   private def validateIf(tree: Term.If): Validation[RuntimeEvaluationTree] =
     for {
@@ -331,9 +331,9 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       val tpe =
         if (isAssignableFrom(tType, fType)) Valid(tType)
         else if (isAssignableFrom(fType, tType)) Valid(fType)
-        else Validation.fromOption(getCommonSuperClass(tType, fType)).orElse(loadClass("java.lang.Object"))
+        else getCommonSuperClass(tType, fType).orElse(loadClass("java.lang.Object"))
       tpe.flatMap(tpe => preEvaluate(If(cond, ifTrue, ifFalse, tpe)))
-    } else CompilerRecoverable("A predicate must be a boolean")
+    } else Recoverable("A predicate must be a boolean")
   }
 
   private def isBoolean(tpe: jdi.Type): Boolean =
@@ -357,7 +357,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
           findVariable(name, false)
             .orElse(thisTree.flatMap(findField(_, name, false)))
             .orElse(declaringType.flatMap(findStaticField(_, name, false)))
-        case _ => CompilerRecoverable("Unsupported assignment")
+        case _ => Recoverable("Unsupported assignment")
       }
 
     for {
@@ -377,12 +377,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
     }
 
   private def fromLitToValue(literal: Lit, classLoader: JdiClassLoader): (Safe[Any], jdi.Type) = {
-    val tpe = classLoader
-      .mirrorOfLiteral(literal.value)
-      .map(_.value.`type`)
-      .getResult
-      .get
-
+    val tpe = classLoader.mirrorOfLiteral(literal.value).map(_.value.`type`).getResult.get
     (Safe(literal.value), tpe)
   }
 
@@ -537,8 +532,8 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
 
   private def isAssignableFrom(got: jdi.Type, expected: jdi.Type): Boolean = {
     def referenceTypesMatch(got: jdi.ReferenceType, expected: jdi.ReferenceType) = {
-      val assignableFrom = expected.classObject().referenceType().methodsByName("isAssignableFrom").get(0)
-      val params = Seq(got.classObject()).asJava
+      val assignableFrom = expected.classObject.referenceType.methodsByName("isAssignableFrom").get(0)
+      val params = Seq(got.classObject).asJava
       expected.classObject
         .invokeMethod(frame.thread, assignableFrom, params, jdi.ObjectReference.INVOKE_SINGLE_THREADED)
         .asInstanceOf[jdi.BooleanValue]
@@ -624,7 +619,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
     loop(qualifier)
   }
 
-  private def getCommonSuperClass(tpe1: jdi.Type, tpe2: jdi.Type): Option[jdi.Type] = {
+  private def getCommonSuperClass(tpe1: jdi.Type, tpe2: jdi.Type): Validation[jdi.Type] = {
     def getSuperClasses(of: jdi.Type): Array[jdi.ClassType] =
       of match {
         case cls: jdi.ClassType =>
@@ -634,7 +629,10 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
 
     val superClasses1 = getSuperClasses(tpe1)
     val superClasses2 = getSuperClasses(tpe2)
-    superClasses1.find(superClasses2.contains)
+    Validation.fromOption(
+      superClasses1.find(superClasses2.contains),
+      s"${tpe1.name} and ${tpe2.name} do not have any common super class"
+    )
   }
 
   private def validateType(
@@ -738,7 +736,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       iter.size match {
         case 1 => Valid(iter.head)
         case 0 => Recoverable(message)
-        case _ => CompilerRecoverable(s"$message: multiple values found")
+        case _ => Recoverable(s"$message: multiple values found")
       }
   }
 }

@@ -17,7 +17,7 @@ inThisBuild(
     developers := Developers.list,
     version ~= { dynVer =>
       if (isRelease) dynVer
-      else "3.2.0-SNAPSHOT" // only for local publishing
+      else "4.0.0-SNAPSHOT" // only for local publishing
     },
     resolvers += Resolver.mavenLocal,
     compile / javacOptions ++= Seq("-source", "1.8", "-target", "1.8")

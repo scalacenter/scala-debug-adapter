@@ -2,12 +2,7 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 
 import java.util.NoSuchElementException
 
-import com.sun.jdi.VMDisconnectedException
-import com.sun.jdi.ObjectCollectedException
-import com.sun.jdi.InvalidStackFrameException
-import com.sun.jdi.AbsentInformationException
-import com.sun.jdi.InvocationException
-import com.sun.jdi.VMOutOfMemoryException
+import com.sun.jdi.*
 import ch.epfl.scala.debugadapter.Logger
 
 sealed abstract class Validation[+A] {
@@ -45,7 +40,8 @@ final case class Valid[+A](value: A) extends Validation[A]() {
   override def toOption: Option[A] = Some(value)
 }
 
-sealed abstract class Invalid(val exception: Exception) extends Validation[Nothing]() {
+sealed trait Invalid extends Validation[Nothing] {
+  def exception: Throwable
   override val isValid: Boolean = false
   override def map[B](f: Nothing => B)(implicit logger: Logger): Validation[B] = this
   override def flatMap[B](f: Nothing => Validation[B])(implicit logger: Logger): Validation[B] = this
@@ -57,17 +53,18 @@ sealed abstract class Invalid(val exception: Exception) extends Validation[Nothi
   override def toOption: Option[Nothing] = None
 }
 
-final case class Recoverable(override val exception: Exception) extends Invalid(exception) {
-  override def orElse[B >: Nothing](f: => Validation[B]): Validation[B] = f
+final case class Recoverable(exception: Exception) extends Invalid {
+  override def orElse[B >: Nothing](f: => Validation[B]): Validation[B] = f match {
+    case valid: Valid[B] => valid
+    case _: Recoverable => this
+    case fatal: Fatal => fatal
+  }
 }
 
-sealed abstract class Unrecoverable(override val exception: Exception) extends Invalid(exception) {
+final case class Fatal(exception: Throwable) extends Invalid {
   override def orElse[B >: Nothing](f: => Validation[B]): Validation[B] = this
   override def transform[B](f: Validation[Nothing] => Validation[B]): Validation[B] = this
 }
-
-final case class Fatal(override val exception: Exception) extends Unrecoverable(exception)
-final case class CompilerRecoverable(override val exception: Exception) extends Unrecoverable(exception)
 
 object Validation {
   private def handler(t: Throwable)(implicit logger: Logger): Invalid = t match {
@@ -76,7 +73,7 @@ object Validation {
     case e @ (_: InvocationException | _: VMOutOfMemoryException) => Fatal(e)
     case e: Exception =>
       logger.warn(s"Unexpected error while validating: $e")
-      CompilerRecoverable(e)
+      Recoverable(e)
   }
 
   def apply[A](input: => A)(implicit logger: Logger): Validation[A] = {
@@ -89,10 +86,10 @@ object Validation {
     }
   }
 
-  def fromOption[A](value: => Option[A]): Validation[A] = {
+  def fromOption[A](value: => Option[A], message: String): Validation[A] = {
     value match {
       case Some(value) => Valid(value)
-      case None => Recoverable("Empty option")
+      case None => Recoverable(new NoSuchElementException(message))
     }
   }
 
@@ -106,23 +103,9 @@ object Validation {
 }
 
 object Invalid {
-  def unapply(invalid: Invalid): Option[Exception] = Some(invalid.exception)
+  def unapply(invalid: Invalid): Option[Throwable] = Some(invalid.exception)
 }
 
 object Recoverable {
   def apply(s: String) = new Recoverable(new NoSuchElementException(s))
-}
-
-object Fatal {
-  def apply(t: Throwable): Unrecoverable = new Fatal(new Exception(t))
-  def apply(str: String): Unrecoverable = new Fatal(new Exception(str))
-}
-
-object CompilerRecoverable {
-  def apply(t: Throwable): Unrecoverable = CompilerRecoverable(
-    new Exception(s"Can't validate at runtime, recovering with compiler: $t")
-  )
-  def apply(str: String): Unrecoverable = CompilerRecoverable(
-    new Exception(s"Can't validate at runtime, recovering with compiler: $str")
-  )
 }
