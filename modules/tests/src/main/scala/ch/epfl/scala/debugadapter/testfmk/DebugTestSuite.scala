@@ -25,7 +25,12 @@ case class DebugCheckState(
     paused: Boolean
 )
 
-abstract class DebugTestSuite extends CommonFunSuite {
+abstract class DebugTestSuite extends CommonFunSuite with DebugTest
+
+// used by the scripted tests
+object DebugTest extends DebugTest
+
+trait DebugTest extends CommonUtils {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
   val executorService = Executors.newFixedThreadPool(5)
   implicit val ec: ExecutionContext = ExecutionContext.fromExecutorService(executorService)
@@ -122,7 +127,7 @@ abstract class DebugTestSuite extends CommonFunSuite {
             assert(bs.size == 1, s"More than one breakpoint in $sourceFile on line $line")
           }
         val configuredBreakpoints = client.setSourceBreakpoints(sourceFile, sourceBreakpoints)
-        assertEquals(configuredBreakpoints.length, sourceBreakpoints.length)
+        assert(configuredBreakpoints.length == sourceBreakpoints.length)
         assert(configuredBreakpoints.forall(_.verified))
       }
     client.configurationDone()
