@@ -50,7 +50,7 @@ private class ClassEntryLookUp(
       missingSourceFileClassFiles.map(_.fullyQualifiedName)
   }
 
-  def classesByNames: Map[String, Iterable[String]] =
+  def classesByScalaName: Map[String, Iterable[String]] =
     fullyQualifiedNames.groupBy[String](NameTransformer.scalaClassName)
 
   def getFullyQualifiedClassName(

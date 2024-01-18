@@ -3,7 +3,6 @@ package ch.epfl.scala.debugadapter.internal.evaluator
 import com.sun.jdi._
 
 import java.nio.file.Path
-import RuntimeEvaluatorExtractors.IsAnyVal
 
 import scala.jdk.CollectionConverters.*
 
@@ -71,7 +70,8 @@ private[internal] class JdiClassLoader(
   }
 
   def mirrorOfLiteral(value: Any): Safe[JdiValue] = value match {
-    case IsAnyVal(value) => Safe(mirrorOfAnyVal(value))
+    case _: Byte | _: Short | _: Char | _: Int | _: Long | _: Float | _: Double | _: Boolean =>
+      Safe(mirrorOfAnyVal(value.asInstanceOf[AnyVal]))
     case value: String => mirrorOf(value)
     case () => Safe(mirrorOfVoid())
     case _ => Safe.failed(new IllegalArgumentException(s"Unsupported literal $value"))

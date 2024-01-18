@@ -8,6 +8,9 @@ private[evaluator] class JdiObject(
     val reference: ObjectReference,
     thread: ThreadReference
 ) extends JdiValue(reference, thread) {
+  def getField(field: Field): JdiValue =
+    JdiValue(reference.getValue(field), thread)
+
   def getField(name: String): JdiValue = {
     val field = reference.referenceType.fieldByName(name)
     JdiValue(reference.getValue(field), thread)

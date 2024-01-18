@@ -146,8 +146,7 @@ object NameTransformer {
   }
 
   def scalaClassName(fqcn: String): String = {
-    val lastDot = fqcn.lastIndexOf('.')
-    val decodedName = decode(fqcn.drop(lastDot + 1))
+    val decodedName = decode(fqcn.split('.').last)
     val lastDollar = decodedName.stripSuffix("$").lastIndexOf('$')
     decodedName.drop(lastDollar + 1)
   }

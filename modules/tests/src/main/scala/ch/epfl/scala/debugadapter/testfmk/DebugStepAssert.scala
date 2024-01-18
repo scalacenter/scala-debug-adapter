@@ -115,14 +115,15 @@ object Evaluation {
   ): SingleStepAssert[Either[String, String]] =
     SingleStepAssert(Evaluation(expression), assertIgnore(expected.toString))
 
-  def failed(expression: String, error: String): SingleStepAssert[Either[String, String]] =
+  def failed(expression: String, error: String)(implicit location: Location): SingleStepAssert[Either[String, String]] =
     SingleStepAssert(Evaluation(expression), assertFailed(error))
 
-  def failed(expression: String): SingleStepAssert[Either[String, String]] =
+  def failed(expression: String)(implicit location: Location): SingleStepAssert[Either[String, String]] =
     SingleStepAssert(Evaluation(expression), resp => assertFailed(resp))
 
   def failedOrIgnore(expression: String, error: String, ignore: Boolean)(implicit
-      ctx: TestingContext
+      ctx: TestingContext,
+      location: Location
   ): SingleStepAssert[Either[String, String]] = {
     SingleStepAssert(
       Evaluation(expression),
@@ -130,7 +131,9 @@ object Evaluation {
     )
   }
 
-  def failedOrIgnore(expression: String, ignore: Boolean)(assertion: String => Unit)(implicit ctx: TestingContext) = {
+  def failedOrIgnore(expression: String, ignore: Boolean)(
+      assertion: String => Unit
+  )(implicit ctx: TestingContext, location: Location) = {
     SingleStepAssert(
       Evaluation(expression),
       if (ignore) assertIgnore("failure") _ else assertFailed(assertion) _
@@ -143,12 +146,15 @@ object Evaluation {
   ): SingleStepAssert[Either[String, String]] =
     new SingleStepAssert(Evaluation(expression), assertSuccess(result))
 
-  def success(expression: String)(assertion: String => Unit): SingleStepAssert[Either[String, String]] = {
+  def success(
+      expression: String
+  )(assertion: String => Unit)(implicit location: Location): SingleStepAssert[Either[String, String]] = {
     new SingleStepAssert(Evaluation(expression), assertSuccess(assertion))
   }
 
   def successOrIgnore(expression: String, result: Any, ignore: Boolean)(implicit
-      ctx: TestingContext
+      ctx: TestingContext,
+      location: Location
   ): SingleStepAssert[Either[String, String]] = {
     val assertion = if (ignore) assertIgnore(result.toString) _ else assertSuccess(result)(_)
     new SingleStepAssert(Evaluation(expression), assertion)
@@ -156,23 +162,25 @@ object Evaluation {
 
   def successOrIgnore(expression: String, ignore: Boolean)(
       assertion: String => Unit
-  )(implicit ctx: TestingContext): SingleStepAssert[Either[String, String]] = {
+  )(implicit ctx: TestingContext, location: Location): SingleStepAssert[Either[String, String]] = {
     new SingleStepAssert(
       Evaluation(expression),
       if (ignore) assertIgnore("sucess") _ else assertSuccess(assertion)(_)
     )
   }
 
-  private def assertFailed(response: Either[String, String]): Unit =
+  private def assertFailed(response: Either[String, String])(implicit location: Location): Unit =
     assert(response.isLeft, clue = s"Expected error, got ${response.toOption.get}$RESET")
 
-  private def assertFailed(assertion: String => Unit)(response: Either[String, String]): Unit = {
+  private def assertFailed(
+      assertion: String => Unit
+  )(response: Either[String, String])(implicit location: Location): Unit = {
     assertFailed(response)
     val error = response.left.toOption.get
     assertion(error)
   }
 
-  private def assertFailed(expectedError: String)(response: Either[String, String]): Unit =
+  private def assertFailed(expectedError: String)(response: Either[String, String])(implicit location: Location): Unit =
     assertFailed(error => assert(clue(error).contains(clue(expectedError))))(response)
 
   private def assertIgnore(
@@ -181,7 +189,9 @@ object Evaluation {
     println(s"${YELLOW}TODO fix in ${ctx.scalaVersion}: expected $expected$RESET")
   }
 
-  private def assertSuccess(assertion: String => Unit)(response: Either[String, String]): Unit = {
+  private def assertSuccess(
+      assertion: String => Unit
+  )(response: Either[String, String])(implicit location: Location): Unit = {
     assert(clue(response).isRight)
     val result = response.toOption.get
     assertion(result)

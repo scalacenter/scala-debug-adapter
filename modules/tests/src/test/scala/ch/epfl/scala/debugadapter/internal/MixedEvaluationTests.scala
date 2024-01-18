@@ -34,9 +34,7 @@ abstract class MixedEvaluationTests(val scalaVersion: ScalaVersion) extends Debu
   lazy val localVar =
     TestingDebuggee.mainClass(MixedEvaluationTestsSource.source, "example.Main", scalaVersion)
 
-  test(
-    "Should produce wrong output at runtime when overloads require compiler to be resolved, but should succeed with a mixed evaluation (fallback to compiler)"
-  ) {
+  test("runtime evaluation resolve wrong overloads") {
     implicit val debuggee = localVar
     check(defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly))(
       Breakpoint(7),

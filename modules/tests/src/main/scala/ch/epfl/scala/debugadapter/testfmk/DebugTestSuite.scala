@@ -1,22 +1,21 @@
 package ch.epfl.scala.debugadapter.testfmk
 
-import ch.epfl.scala.debugadapter.DebugServer
-import java.util.concurrent.Executors
-import scala.concurrent.ExecutionContext
-import com.microsoft.java.debug.core.protocol.Types.StackFrame
-import ch.epfl.scala.debugadapter.GithubUtils
-import ch.epfl.scala.debugadapter.Debuggee
-import scala.concurrent.duration.*
-import ch.epfl.scala.debugadapter.Logger
-import java.net.URI
-import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
-import munit.FunSuite
-import munit.Assertions.*
-import com.microsoft.java.debug.core.protocol.Types.SourceBreakpoint
 import ch.epfl.scala.debugadapter.DebugConfig
-import scala.concurrent.Future
-import scala.concurrent.Await
+import ch.epfl.scala.debugadapter.DebugServer
+import ch.epfl.scala.debugadapter.Debuggee
+import ch.epfl.scala.debugadapter.GithubUtils
+import ch.epfl.scala.debugadapter.Logger
+import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
+import com.microsoft.java.debug.core.protocol.Types.SourceBreakpoint
+import com.microsoft.java.debug.core.protocol.Types.StackFrame
 import com.microsoft.java.debug.core.protocol.Types.Variable
+
+import java.net.URI
+import java.util.concurrent.Executors
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.duration.*
 import scala.util.Properties
 
 case class DebugCheckState(
@@ -26,11 +25,12 @@ case class DebugCheckState(
     paused: Boolean
 )
 
-abstract class DebugTestSuite extends FunSuite with DebugTest {
-  override def munitTimeout: Duration = 120.seconds
-}
+abstract class DebugTestSuite extends CommonFunSuite with DebugTest
 
-trait DebugTest {
+// used by the scripted tests
+object DebugTest extends DebugTest
+
+trait DebugTest extends CommonUtils {
   // the server needs only one thread for delayed responses of the launch and configurationDone requests
   val executorService = Executors.newFixedThreadPool(5)
   implicit val ec: ExecutionContext = ExecutionContext.fromExecutorService(executorService)
@@ -39,7 +39,6 @@ trait DebugTest {
 
   def javaVersion: String = Properties.javaVersion
 
-  def isJava8 = javaVersion.contains("1.8")
   def isScala3(implicit ctx: TestingContext) = ctx.scalaVersion.isScala3
   def isScala2(implicit ctx: TestingContext) = ctx.scalaVersion.isScala2
   def isScala213(implicit ctx: TestingContext) = ctx.scalaVersion.isScala213
@@ -86,7 +85,7 @@ trait DebugTest {
   }
 
   def check(steps: DebugStepAssert*)(implicit debuggee: TestingDebuggee): Unit = {
-    val server = getDebugServer(debuggee)
+    val server = getDebugServer(debuggee) // , logger = PrintLogger)
     val client = TestingDebugClient.connect(server.uri)
     try {
       server.connect()
@@ -128,7 +127,7 @@ trait DebugTest {
             assert(bs.size == 1, s"More than one breakpoint in $sourceFile on line $line")
           }
         val configuredBreakpoints = client.setSourceBreakpoints(sourceFile, sourceBreakpoints)
-        assertEquals(configuredBreakpoints.length, sourceBreakpoints.length)
+        assert(configuredBreakpoints.length == sourceBreakpoints.length)
         assert(configuredBreakpoints.forall(_.verified))
       }
     client.configurationDone()
@@ -179,7 +178,7 @@ trait DebugTest {
       case SingleStepAssert(_: Logpoint, assertion) =>
         state = continueIfPaused(state)
         // A log point needs time for evaluation
-        val event = state.client.outputed(m => m.category == Category.stdout, 16.seconds)
+        val event = state.client.outputed(m => m.category == Category.stdout, defaultTimeout(16.seconds))
         print(s"> ${event.output}")
         assertion(event.output.trim)
       case SingleStepAssert(StepIn, assertion) =>
@@ -195,7 +194,7 @@ trait DebugTest {
         state.client.stepOver(state.threadId)
         state = assertStop(assertion)
       case SingleStepAssert(eval: Evaluation, assertion) =>
-        Await.result(evaluateExpression(eval, assertion), 16.seconds)
+        Await.result(evaluateExpression(eval, assertion), defaultTimeout(16.seconds))
       case SingleStepAssert(Outputed, assertion) =>
         state = continueIfPaused(state)
         val event = state.client.outputed(m => m.category == Category.stdout)
@@ -209,7 +208,7 @@ trait DebugTest {
             step.assertion.asInstanceOf[Either[String, String] => Unit]
           )
         }
-        Await.result(Future.sequence(evaluations), 64.seconds)
+        Await.result(Future.sequence(evaluations), defaultTimeout(64.seconds))
       case SingleStepAssert(localVariable: LocalVariable, assertion) =>
         inspect(localVariable, assertion)
       case SingleStepAssert(Custom(f), _) => f()
@@ -237,5 +236,3 @@ trait DebugTest {
     newState
   }
 }
-
-object DebugTest extends DebugTest

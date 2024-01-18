@@ -1,70 +1,110 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import ch.epfl.scala.debugadapter.Logger
-import scala.meta.{Type => _, _}
+import com.sun.jdi.ClassType
+import ch.epfl.scala.debugadapter.internal.evaluator.RuntimeEvaluationTree.*
 
-trait RuntimeValidator {
-  def frame: JdiFrame
-  def logger: Logger
+class RuntimeEvaluation(frame: JdiFrame, logger: Logger) {
+  def evaluate(stat: RuntimeEvaluationTree): Safe[JdiValue] =
+    eval(stat).map(_.derefIfRef)
 
-  def validate(expression: String): Validation[RuntimeEvaluableTree]
+  private def eval(stat: RuntimeEvaluationTree): Safe[JdiValue] =
+    stat match {
+      case Value(value, _) => value
+      case LocalVar(varName, _) => Safe.successful(frame.variableByName(varName).map(frame.variableValue).get)
+      case primitive: CallBinaryOp => invokePrimitive(primitive)
+      case primitive: CallUnaryOp => invokePrimitive(primitive)
+      case StaticModule(mod) => Safe(JdiObject(mod.instances(1).get(0), frame.thread))
+      case NestedModule(_, init) => invoke(init)
+      case This(obj) => Safe(JdiValue(obj.instances(1).get(0), frame.thread))
+      case field: InstanceField => evaluateField(field)
+      case staticField: StaticField => evaluateStaticField(staticField)
+      case instance: NewInstance => instantiate(instance)
+      case method: CallInstanceMethod => invoke(method)
+      case array: ArrayElem => evaluateArrayElement(array)
+      case branching: If => evaluateIf(branching)
+      case staticMethod: CallStaticMethod => invokeStatic(staticMethod)
+      case assign: Assign => evaluateAssign(assign)
+    }
 
-  def validate(expression: Stat): Validation[RuntimeEvaluableTree]
+  private def evaluateField(tree: InstanceField): Safe[JdiValue] =
+    eval(tree.qualifier).map(_.asObject.getField(tree.field))
 
-  def validateBlock(block: Term.Block): Validation[RuntimeEvaluableTree]
+  private def evaluateStaticField(tree: StaticField): Safe[JdiValue] =
+    Safe(JdiValue(tree.field.declaringType.getValue(tree.field), frame.thread))
 
-  def validateLiteral(lit: Lit): Validation[RuntimeEvaluableTree]
+  private def invokeStatic(tree: CallStaticMethod): Safe[JdiValue] =
+    for {
+      args <- tree.args.map(eval).traverse
+      loader <- frame.classLoader()
+      argsBoxedIfNeeded <- loader.boxUnboxOnNeed(tree.method.argumentTypes(), args)
+      result <- JdiClass(tree.qualifier, frame.thread).invokeStatic(tree.method, argsBoxedIfNeeded)
+    } yield result
 
-  def validateName(value: String, methodFirst: Boolean): Validation[RuntimeEvaluableTree]
+  private def invokePrimitive(tree: CallBinaryOp): Safe[JdiValue] =
+    for {
+      lhs <- eval(tree.lhs).flatMap(_.unboxIfPrimitive)
+      rhs <- eval(tree.rhs).flatMap(_.unboxIfPrimitive)
+      loader <- frame.classLoader()
+      result <- tree.op.evaluate(lhs, rhs, loader)
+    } yield result
 
-  def validateMethod(call: Call): Validation[RuntimeEvaluableTree]
+  private def invokePrimitive(tree: CallUnaryOp): Safe[JdiValue] =
+    for {
+      rhs <- eval(tree.rhs).flatMap(_.unboxIfPrimitive)
+      loader <- frame.classLoader()
+      result <- tree.op.evaluate(rhs, loader)
+    } yield result
 
-  def validateSelect(select: Term.Select): Validation[RuntimeEvaluableTree]
+  private def invoke(tree: CallInstanceMethod): Safe[JdiValue] =
+    for {
+      qualValue <- eval(tree.qualifier)
+      argsValues <- tree.args.map(eval).traverse
+      loader <- frame.classLoader()
+      argsBoxedIfNeeded <- loader.boxUnboxOnNeed(tree.method.argumentTypes(), argsValues)
+      result <- qualValue.asObject.invoke(tree.method, argsBoxedIfNeeded)
+    } yield result
 
-  def validateNew(newValue: Term.New): Validation[RuntimeEvaluableTree]
+  private def instantiate(tree: NewInstance): Safe[JdiObject] =
+    for {
+      args <- tree.init.args.map(eval).traverse
+      loader <- frame.classLoader()
+      boxedUnboxedArgs <- loader.boxUnboxOnNeed(tree.init.method.argumentTypes(), args)
+      instance <- JdiClass(tree.`type`, frame.thread).newInstance(tree.init.method, boxedUnboxedArgs)
+    } yield instance
 
-  def validateOuter(tree: RuntimeTree): Validation[RuntimeEvaluableTree]
+  private def evaluateArrayElement(tree: ArrayElem): Safe[JdiValue] =
+    for {
+      array <- eval(tree.array)
+      index <- eval(tree.index).flatMap(_.unboxIfPrimitive).flatMap(_.toInt)
+    } yield array.asArray.getValue(index)
 
-  def validateIf(tree: Term.If): Validation[RuntimeEvaluableTree]
+  private def evaluateIf(tree: If): Safe[JdiValue] =
+    for {
+      predicate <- eval(tree.p).flatMap(_.unboxIfPrimitive).flatMap(_.toBoolean)
+      value <- if (predicate) eval(tree.thenp) else eval(tree.elsep)
+    } yield value
 
-  def validateAssign(tree: Term.Assign): Validation[RuntimeEvaluableTree]
+  private def evaluateAssign(tree: Assign): Safe[JdiValue] = {
+    eval(tree.rhs)
+      .flatMap { rhsValue =>
+        tree.lhs match {
+          case InstanceField(field, qualifier) =>
+            eval(qualifier).map { qualValue =>
+              qualValue.asObject.reference.setValue(field, rhsValue.value)
+            }
+          case StaticField(field) =>
+            Safe(field.declaringType.asInstanceOf[ClassType].setValue(field, rhsValue.value))
+          case localVar: LocalVar =>
+            val localVarRef = frame.variableByName(localVar.name)
+            Safe(localVarRef.map(frame.setVariable(_, rhsValue)).get)
+        }
+      }
+      .map(_ => JdiValue(frame.thread.virtualMachine.mirrorOfVoid, frame.thread))
+  }
 }
 
-trait RuntimeEvaluator {
-  def frame: JdiFrame
-  def logger: Logger
-
-  /**
-   * Evaluates an expression. Recursively evaluates its sub-expressions
-   *
-   * The debugger encapsulate variables in references. The returned value must be dereferenced to get the actual value
-   *
-   * @param stat
-   * @return a [[Safe[JdiValue]]] of the result of the evaluation
-   */
-  def evaluate(stat: RuntimeEvaluableTree): Safe[JdiValue]
-
-  def evaluateLiteral(tree: LiteralTree): Safe[JdiValue]
-
-  def evaluateField(tree: InstanceFieldTree): Safe[JdiValue]
-
-  def evaluateStaticField(tree: StaticFieldTree): Safe[JdiValue]
-
-  def invokeStatic(tree: StaticMethodTree): Safe[JdiValue]
-
-  def invokePrimitive(tree: PrimitiveBinaryOpTree): Safe[JdiValue]
-
-  def invokePrimitive(tree: PrimitiveUnaryOpTree): Safe[JdiValue]
-
-  def invoke(tree: InstanceMethodTree): Safe[JdiValue]
-
-  def evaluateModule(tree: ModuleTree): Safe[JdiValue]
-
-  def instantiate(tree: NewInstanceTree): Safe[JdiObject]
-
-  def evaluateArrayElement(tree: ArrayElemTree): Safe[JdiValue]
-
-  def evaluateIf(tree: IfTree): Safe[JdiValue]
-
-  def evaluateAssign(tree: AssignTree): Safe[JdiValue]
+object RuntimeEvaluation {
+  def apply(frame: JdiFrame, logger: Logger): RuntimeEvaluation =
+    new RuntimeEvaluation(frame, logger)
 }

@@ -12,11 +12,10 @@ import ch.epfl.scala.debugadapter.Logger
 
 sealed abstract class Validation[+A] {
   def isValid: Boolean
-  def isInvalid: Boolean = !isValid
-  def isEmpty: Boolean = isInvalid
+  def isEmpty: Boolean = !isValid
 
-  def filter(p: A => Boolean, runtimeFatal: Boolean = false): Validation[A]
-  def filterNot(p: A => Boolean, runtimeFatal: Boolean = false): Validation[A] = filter(!p(_), runtimeFatal)
+  def filter(p: A => Boolean): Validation[A]
+  def filterNot(p: A => Boolean): Validation[A] = filter(!p(_))
   def withFilter(p: A => Boolean): Validation[A] = filter(p)
 
   def map[B](f: A => B)(implicit logger: Logger): Validation[B]
@@ -39,9 +38,8 @@ final case class Valid[+A](value: A) extends Validation[A]() {
   override def getOrElse[B >: A](f: => B): B = value
   override def orElse[B >: A](f: => Validation[B]): Validation[B] = this
 
-  override def filter(p: A => Boolean, fatal: Boolean): Validation[A] =
+  override def filter(p: A => Boolean): Validation[A] =
     if (p(value)) this
-    else if (fatal) CompilerRecoverable(s"Predicate does not hold for $value")
     else Recoverable(s"Predicate does not hold for $value")
 
   override def toOption: Option[A] = Some(value)
@@ -54,7 +52,7 @@ sealed abstract class Invalid(val exception: Exception) extends Validation[Nothi
   override def get = throw exception
   override def getOrElse[B >: Nothing](f: => B): B = f
 
-  override def filter(p: Nothing => Boolean, fatal: Boolean): Validation[Nothing] = this
+  override def filter(p: Nothing => Boolean): Validation[Nothing] = this
 
   override def toOption: Option[Nothing] = None
 }
