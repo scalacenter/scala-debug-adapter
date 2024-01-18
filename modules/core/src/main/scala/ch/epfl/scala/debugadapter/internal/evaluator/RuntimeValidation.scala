@@ -436,8 +436,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       name: String,
       args: Seq[jdi.Type]
   ): Validation[jdi.Method] = {
-    val encodedName = NameTransformer.encode(name)
-    val candidates = ref.methodsByName(encodedName).asScala
+    val candidates = findMethodsByName(ref, name)
     val unboxedCandidates = candidates.filter(argsMatch(_, args, boxing = false))
     val boxedCandidates = unboxedCandidates.size match {
       case 0 => candidates.filter(argsMatch(_, args, boxing = true))
@@ -481,20 +480,21 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
     noArgs && isSingleton && isSingletonInstantiation
   }
 
-  private def zeroArgMethodByName(
-      ref: jdi.ReferenceType,
-      name: String
-  ): Validation[jdi.Method] = {
-    val encodedName = NameTransformer.encode(name)
-    ref.methodsByName(encodedName).asScala.filter(_.argumentTypeNames.isEmpty) match {
-      case Buffer() => Recoverable(s"Cannot find a proper method $name with no args on $ref")
-      case Buffer(head) => Valid(head).map(loadClassOnNeed)
-      case buffer =>
-        buffer
+  private def zeroArgMethodByName(ref: jdi.ReferenceType, name: String): Validation[jdi.Method] = {
+    findMethodsByName(ref, name).filter(_.argumentTypeNames.isEmpty) match {
+      case Seq() => Recoverable(s"Cannot find a proper method $name with no args on $ref")
+      case Seq(method) => Valid(method).map(loadClassOnNeed)
+      case methods =>
+        methods
           .filterNot(_.isBridge())
           .validateSingle(s"Cannot find a proper method $name with no args on $ref")
           .map(loadClassOnNeed)
     }
+  }
+
+  private def findMethodsByName(ref: jdi.ReferenceType, name: String): Seq[jdi.Method] = {
+    val encodedName = if (name == "<init>" && ref.isInstanceOf[jdi.ClassType]) name else NameTransformer.encode(name)
+    ref.methodsByName(encodedName).asScala.toSeq
   }
 
   private def findMethodBySignedName(
