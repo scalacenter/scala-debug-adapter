@@ -80,7 +80,7 @@ abstract class DebugTestSuite extends CommonFunSuite {
   }
 
   def check(steps: DebugStepAssert*)(implicit debuggee: TestingDebuggee): Unit = {
-    val server = getDebugServer(debuggee)
+    val server = getDebugServer(debuggee) // , logger = PrintLogger)
     val client = TestingDebugClient.connect(server.uri)
     try {
       server.connect()

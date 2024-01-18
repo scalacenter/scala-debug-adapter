@@ -221,7 +221,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
       ),
       Breakpoint(15),
       DebugStepAssert.inParallel(
-        Evaluation.failed("coucou"),
+        Evaluation.success("coucou", "coucou"),
         Evaluation.success("lapin", "lapin"),
         Evaluation.success("love", "love")
       )
@@ -276,13 +276,13 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
       Breakpoint(11),
       DebugStepAssert.inParallel(
         Evaluation.success("inner.helloInner()", "hello inner 42"),
-        Evaluation.failed("inner.helloInner"),
+        Evaluation.success("inner.helloInner", "hello inner 42"),
         Evaluation.success("Main.StaticInner.z", 84),
         Evaluation.success("Foo.StaticFriendFoo.z", 168),
         Evaluation.failed("foo.friendFoo(new Foo()).z"),
         Evaluation.failed("foo.friendFoo(new Foo()).staticMethod()"),
         Evaluation.success("new Foo().friendFoo(new Foo()).y", 42),
-        Evaluation.failed("new Foo().friendFoo(new Foo()).greet"),
+        Evaluation.success("new Foo().friendFoo(new Foo()).greet", "Friend"),
         Evaluation.success("Main.StaticInner.StaticDoubleInner.z", 168)
       )
     )

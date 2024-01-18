@@ -229,38 +229,6 @@ object RuntimeEvaluationTree {
     }
   }
 
-  object If {
-
-    /**
-     * Returns the type of the branch that is chosen, if any
-     *
-     * @param t1
-     * @param t2
-     * @return Some(true) if t1 is chosen, Some(false) if t2 is chosen, None if no branch is chosen
-     */
-    def apply(
-        p: RuntimeEvaluationTree,
-        ifTrue: RuntimeEvaluationTree,
-        ifFalse: RuntimeEvaluationTree,
-        // ! This is a hack, passing a wrong method would lead to inconsistent trees
-        assignableFrom: (jdi.Type, jdi.Type) => Boolean,
-        objType: => jdi.Type
-    ): Validation[If] = {
-      val pType = p.`type`
-      val tType = ifTrue.`type`
-      val fType = ifFalse.`type`
-
-      if (isBoolean(p.`type`))
-        if (assignableFrom(tType, fType)) Valid(If(p, ifTrue, ifFalse, tType))
-        else if (assignableFrom(fType, tType)) Valid(If(p, ifTrue, ifFalse, fType))
-        else Valid(If(p, ifTrue, ifFalse, objType))
-      else CompilerRecoverable("A predicate must be a boolean")
-    }
-
-    private def isBoolean(tpe: jdi.Type): Boolean =
-      tpe.isInstanceOf[jdi.BooleanType] || tpe.name == "java.lang.Boolean"
-  }
-
   case class Assign(
       lhs: Assignable,
       rhs: RuntimeEvaluationTree,
