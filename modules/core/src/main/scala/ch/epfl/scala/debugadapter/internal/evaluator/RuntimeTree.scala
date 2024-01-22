@@ -174,11 +174,6 @@ object RuntimeEvaluationTree {
     override def prettyPrint(depth: Int): String = s"This(${`type`})"
   }
 
-  object This {
-    def apply(ths: Option[JdiObject])(implicit logger: Logger): Validation[This] =
-      Validation.fromOption(ths).map(ths => This(ths.reference.referenceType()))
-  }
-
   case class StaticModule(
       `type`: jdi.ReferenceType
   ) extends RuntimeEvaluationTree {
@@ -248,7 +243,7 @@ object RuntimeEvaluationTree {
     def apply(lhs: RuntimeEvaluationTree, rhs: RuntimeEvaluationTree, tpe: jdi.Type): Validation[Assign] =
       lhs match {
         case lhs: Assignable => Valid(Assign(lhs, rhs, tpe))
-        case _ => CompilerRecoverable("Left hand side of an assignment must be assignable")
+        case _ => Recoverable("Left hand side of an assignment must be assignable")
       }
   }
 }

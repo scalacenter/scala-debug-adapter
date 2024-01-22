@@ -5,8 +5,6 @@ import scala.util.Failure
 import scala.util.Success
 import ch.epfl.scala.debugadapter.Logger
 
-import scala.jdk.CollectionConverters.*
-
 package object evaluator {
   implicit class SafeSeq[A](seq: Seq[Safe[A]]) {
     def traverse: Safe[Seq[A]] = {
@@ -35,21 +33,5 @@ package object evaluator {
         safeTail.flatMap(tail => safeHead.map(head => head +: tail))
       }
     }
-  }
-
-  implicit class SeqExtensions[A](seq: Seq[A]) {
-    def toValidation(message: String): Validation[A] =
-      seq.size match {
-        case 1 => Valid(seq.head)
-        case 0 => Recoverable(message)
-        case _ => CompilerRecoverable(s"$message: multiple values found")
-      }
-
-    def asJavaList = seq.asJava
-  }
-
-  implicit class JavaListToScala[A](list: java.util.List[A]) {
-    def asScalaList: List[A] = list.asScala.toList
-    def asScalaSeq: Seq[A] = list.asScala.toSeq
   }
 }
