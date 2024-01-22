@@ -15,8 +15,8 @@ import tastyquery.Symbols.TermSymbol
 
 import java.{util => ju}
 
-class Scala30StepFilterBridgeTests extends ScalaStepFilterBridgeTests(ScalaVersion.`3.0`)
-class Scala31PlusStepFilterBridgeTests extends ScalaStepFilterBridgeTests(ScalaVersion.`3.1+`)
+class Scala33StepFilterBridgeTests extends ScalaStepFilterBridgeTests(ScalaVersion.`3.3`)
+class Scala34StepFilterBridgeTests extends ScalaStepFilterBridgeTests(ScalaVersion.`3.4`)
 
 abstract class ScalaStepFilterBridgeTests(scalaVersion: ScalaVersion) extends FunSuite:
   test("mixin-forwarders") {

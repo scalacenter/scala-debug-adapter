@@ -2,7 +2,7 @@ package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testfmk.*
 
-class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1+`) {
+class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.3`) {
   test("step into method with @targetName") {
     val source =
       """|package example

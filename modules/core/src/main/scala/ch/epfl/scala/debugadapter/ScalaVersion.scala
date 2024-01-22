@@ -20,5 +20,6 @@ object ScalaVersion {
   val `2.12` = ScalaVersion(BuildInfo.scala212)
   val `2.13` = ScalaVersion(BuildInfo.scala213)
   val `3.0` = ScalaVersion(BuildInfo.scala30)
-  val `3.1+` = ScalaVersion(BuildInfo.scala31Plus)
+  val `3.3` = ScalaVersion(BuildInfo.scala33)
+  val `3.4` = ScalaVersion(BuildInfo.scala34)
 }

@@ -9,9 +9,9 @@ import dotty.tools.dotc.core.Names.*
 import dotty.tools.dotc.core.Symbols.*
 import dotty.tools.dotc.core.Types.*
 import dotty.tools.dotc.transform.MegaPhase.MiniPhase
-import dotty.tools.dotc.transform.SymUtils.*
 import dotty.tools.dotc.core.StdNames.*
 import dotty.tools.dotc.core.NameKinds.QualifiedInfo
+import dotty.tools.dotc.evaluation.SymUtils.*
 import dotty.tools.dotc.report
 import dotty.tools.dotc.core.Phases
 import dotty.tools.dotc.core.TypeErasure.ErasedValueType

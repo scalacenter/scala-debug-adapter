@@ -3,7 +3,7 @@ package ch.epfl.scala.debugadapter
 import ch.epfl.scala.debugadapter.testfmk.*
 
 class Scala213SourceBreakpointTests extends SourceBreakpointTests(ScalaVersion.`2.13`)
-class Scala3SourceBreakpointTests extends SourceBreakpointTests(ScalaVersion.`3.1+`)
+class Scala3SourceBreakpointTests extends SourceBreakpointTests(ScalaVersion.`3.3`)
 
 abstract class SourceBreakpointTests(scalaVersion: ScalaVersion) extends DebugTestSuite {
   test("evaluate simple breakpoint") {
