@@ -47,6 +47,9 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
                 // if cls is a value class then the local $this is the erased value,
                 // but we expect an instance of the value class instead
                 gen.boxValueClass(cls, gen.getLocalValue("$this"))
+              else if cls.is(ModuleClass) && !exprCtx.localVariables.contains("$this") then
+                // in Scala 3.4: an anonfun in an object is static
+                gen.getStaticObject(cls)
               else gen.getLocalValue("$this")
             case EvaluationStrategy.LocalOuter(cls) =>
               gen.getLocalValue("$outer")

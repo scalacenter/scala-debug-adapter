@@ -2303,7 +2303,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
-      Breakpoint(8), // Stops once in the constructor of B
+      if (isScala33) Breakpoint(8) else NoStep(), // Stops once in the constructor of B
       Breakpoint(8),
       Evaluation.success("x1 + x2 + x3", "x1x2x3")
     )
@@ -2552,9 +2552,9 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(12),
-      Breakpoint(12),
-      Breakpoint(15),
-      Breakpoint(20), // in A#m
+      if (isScala33) Breakpoint(12) else NoStep(),
+      if (isScala33) Breakpoint(15) else NoStep(),
+      Breakpoint(20),
       DebugStepAssert.inParallel(Evaluation.success("A.A1.a", 1), Evaluation.success("A.A2.a", 2)),
       Breakpoint(15),
       DebugStepAssert.inParallel(
