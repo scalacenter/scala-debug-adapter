@@ -48,7 +48,7 @@ class HotCodeReplaceTests extends DebugTestSuite {
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(
       Seq("Main.scala" -> source, "Foo.scala" -> fooSource),
       "example.Main",
-      ScalaVersion.`3.1+`
+      ScalaVersion.`3.3`
     )
     check(defaultConfig.copy(testMode = false))(
       Breakpoint(5),

@@ -3,7 +3,7 @@ package ch.epfl.scala.debugadapter
 import ch.epfl.scala.debugadapter.testfmk.*
 
 class ScalaStackTraceTests extends DebugTestSuite {
-  val scalaVersion = ScalaVersion.`3.1+`
+  val scalaVersion = ScalaVersion.`3.3`
 
   test("anonfun") {
     val source =

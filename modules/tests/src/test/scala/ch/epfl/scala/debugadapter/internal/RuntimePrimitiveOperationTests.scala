@@ -9,7 +9,7 @@ import ch.epfl.scala.debugadapter.testfmk.DebugStepAssert
 import ch.epfl.scala.debugadapter.testfmk.Evaluation
 
 class RuntimePrimitiveOperationTests extends DebugTestSuite {
-  val scalaVersion = ScalaVersion.`3.1+`
+  val scalaVersion = ScalaVersion.`3.3`
   val source =
     """|package example
        |
