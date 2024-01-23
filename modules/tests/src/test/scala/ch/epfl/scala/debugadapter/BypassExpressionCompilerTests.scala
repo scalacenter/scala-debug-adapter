@@ -363,7 +363,6 @@ class BypassExpressionCompilerTests extends DebugTestSuite {
   }
 
   test("evaluate capture of pattern") {
-    assume(!scalaVersion.isScala30) // Won't be fixed in Scala 3.0
     val source =
       """|package example
          |
