@@ -49,7 +49,7 @@ class Scala3SourceBreakpointTests extends SourceBreakpointTests(ScalaVersion.`3.
   }
 }
 
-class SourceBreakpointTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
+abstract class SourceBreakpointTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
   test("evaluate simple breakpoint") {
     val source =
       """|package example

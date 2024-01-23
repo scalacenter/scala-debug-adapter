@@ -9,6 +9,9 @@ class Scala33BinaryDecoderTests extends BinaryDecoderTests(ScalaVersion.`3.3`)
 class Scala34BinaryDecoderTests extends BinaryDecoderTests(ScalaVersion.`3.4`)
 
 abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDecoderSuite:
+  def isScala33 = scalaVersion.isScala33
+  def isScala34 = scalaVersion.isScala34
+
   test("mixin and static forwarders") {
     val source =
       """|package example
@@ -930,13 +933,15 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
     val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.A",
-      "java.lang.String y$1(java.lang.String x$2, scala.runtime.LazyRef y$lzy1$2)",
+      if isScala33 then "java.lang.String y$1(java.lang.String x$2, scala.runtime.LazyRef y$lzy1$2)"
+      else "java.lang.String y$1(scala.runtime.LazyRef y$lzy1$2, java.lang.String x$2)",
       "A.m.y: String",
       skip = true
     )
     decoder.assertDecode(
       "example.A",
-      "java.lang.String y$lzyINIT1$1(java.lang.String x$1, scala.runtime.LazyRef y$lzy1$1)",
+      if isScala33 then "java.lang.String y$lzyINIT1$1(java.lang.String x$1, scala.runtime.LazyRef y$lzy1$1)"
+      else "java.lang.String y$lzyINIT1$1(scala.runtime.LazyRef y$lzy1$1, java.lang.String x$1)",
       "A.m.y.<lazy init>: String"
     )
   }
@@ -1127,31 +1132,40 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
     val source =
       """|package example
          |
-         |class A {
+         |class A:
          |  def m(x: Int): String ?=> String = ???
          |  def m(): (Int, String) ?=> Int = ???
          |  def m(x: String): Int ?=> String ?=> String = ???
-         |  // def mbis: ? ?=> String = ???
-         |}
          |""".stripMargin
     val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.A",
-      "java.lang.String m(int x, java.lang.String evidence$1)",
+      if isScala33 then "java.lang.String m(int x, java.lang.String evidence$1)"
+      else "java.lang.String m(int x, java.lang.String contextual$1)",
       "A.m(x: Int): String ?=> String"
     )
     decoder.assertDecode(
       "example.A",
-      "int m(int evidence$2, java.lang.String evidence$3)",
+      if isScala33 then "int m(int evidence$2, java.lang.String evidence$3)"
+      else "int m(int contextual$2, java.lang.String contextual$3)",
       "A.m(): (Int, String) ?=> Int"
     )
     decoder.assertDecode(
       "example.A",
-      "java.lang.String m(java.lang.String x, int evidence$4, java.lang.String evidence$5)",
+      if isScala33 then "java.lang.String m(java.lang.String x, int evidence$4, java.lang.String evidence$5)"
+      else "java.lang.String m(java.lang.String x, int contextual$4, java.lang.String contextual$5)",
       "A.m(x: String): Int ?=> String ?=> String"
     )
-    // TODO uncomment in 3.3.2 or 3.3.3
-    // decoder.assertDecode("example.A", "java.lang.String mbis(java.lang.Object evidence$5)", "A.m: ? ?=> String")
+    // TODO try in 3.3.2 or 3.3.3
+    if isScala34 then
+      val source =
+        """|package example
+           |
+           |class A:
+           |  def mbis: ? ?=> String = ???
+           |""".stripMargin
+      val decoder = TestingDecoder(source, scalaVersion)
+      decoder.assertDecode("example.A", "java.lang.String mbis(java.lang.Object contextual$1)", "A.mbis: ? ?=> String")
   }
 
   test("trait param") {
@@ -1172,6 +1186,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
   }
 
   test("lifted try") {
+    assume(isScala33)
     val source =
       """|package example
          |
@@ -1623,12 +1638,14 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
     val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.A",
-      "scala.Option m$$anonfun$2(scala.Tuple2 x$1)",
+      if isScala33 then "scala.Option m$$anonfun$2(scala.Tuple2 x$1)"
+      else "scala.Option m$$anonfun$1(scala.Tuple2 x$1)",
       "A.m.<anon fun>((String, String)): Option[String]"
     )
     decoder.assertDecode(
       "example.A",
-      "scala.Option m$$anonfun$2$$anonfun$2(scala.Tuple2 x$1)",
+      if isScala33 then "scala.Option m$$anonfun$2$$anonfun$2(scala.Tuple2 x$1)"
+      else "scala.Option m$$anonfun$1$$anonfun$2(scala.Tuple2 x$1)",
       "A.m.<anon fun>.<anon fun>((List[(String, String)], List[String])): Option[String]"
     )
   }
@@ -1668,7 +1685,9 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
     )
     decoder.assertDecode(
       "example.Test",
-      "java.lang.String $anonfun$2(scala.Function1 f$proxy1$1, example.Logger Logger_this$1, java.lang.String x)",
+      if isScala33 then
+        "java.lang.String $anonfun$2(scala.Function1 f$proxy1$1, example.Logger Logger_this$1, java.lang.String x)"
+      else "java.lang.String $anonfun$2(example.Logger Logger_this$1, scala.Function1 f$proxy1$1, java.lang.String x)",
       "Logger.m2.<anon fun>(x: String): String"
     )
     decoder.assertDecode(
