@@ -8,10 +8,10 @@ import dotty.tools.dotc.core.Flags.*
 import dotty.tools.dotc.core.Names.*
 import dotty.tools.dotc.core.Symbols.*
 import dotty.tools.dotc.core.Types.*
-import dotty.tools.dotc.transform.SymUtils.*
 import dotty.tools.dotc.core.DenotTransformers.DenotTransformer
 import dotty.tools.dotc.core.Denotations.SingleDenotation
 import dotty.tools.dotc.core.SymDenotations.SymDenotation
+import dotty.tools.dotc.evaluation.SymUtils.*
 import dotty.tools.dotc.transform.MacroTransform
 import dotty.tools.dotc.core.Phases.*
 import dotty.tools.dotc.report

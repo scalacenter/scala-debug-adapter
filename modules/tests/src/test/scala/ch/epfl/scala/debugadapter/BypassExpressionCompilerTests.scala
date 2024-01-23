@@ -3,7 +3,7 @@ package ch.epfl.scala.debugadapter
 import ch.epfl.scala.debugadapter.testfmk.*
 
 class BypassExpressionCompilerTests extends DebugTestSuite {
-  private val scalaVersion = ScalaVersion.`3.1+`
+  private val scalaVersion = ScalaVersion.`3.3`
   protected override def defaultConfig: DebugConfig =
     super.defaultConfig.copy(evaluationMode = DebugConfig.SimpleEvaluationOnly)
 
@@ -363,7 +363,6 @@ class BypassExpressionCompilerTests extends DebugTestSuite {
   }
 
   test("evaluate capture of pattern") {
-    assume(!scalaVersion.isScala30) // Won't be fixed in Scala 3.0
     val source =
       """|package example
          |

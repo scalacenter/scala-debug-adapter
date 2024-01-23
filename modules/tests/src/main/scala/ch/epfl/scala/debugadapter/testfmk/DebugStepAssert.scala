@@ -34,15 +34,15 @@ object DebugStepAssert {
     assertEquals(frame.line, expectedLine)
   }
 
-  def assertOnFrame(expectedName: String)(frame: StackFrame): Unit =
+  def assertOnFrame(expectedName: String)(frame: StackFrame)(implicit location: Location): Unit =
     assertEquals(frame.name, expectedName)
 }
 
 object Breakpoint {
-  def apply(line: Int)(implicit ctx: TestingContext): SingleStepAssert[StackFrame] =
+  def apply(line: Int)(implicit ctx: TestingContext, location: Location): SingleStepAssert[StackFrame] =
     Breakpoint(ctx.mainSource, line)
 
-  def apply(sourceFile: Path, line: Int): SingleStepAssert[StackFrame] = {
+  def apply(sourceFile: Path, line: Int)(implicit location: Location): SingleStepAssert[StackFrame] = {
     val breakpoint = Breakpoint(sourceFile, line, None)
     SingleStepAssert(breakpoint, assertOnFrame(sourceFile, line))
   }

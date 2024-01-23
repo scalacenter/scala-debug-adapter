@@ -4,7 +4,7 @@ import ch.epfl.scala.debugadapter.testfmk.*
 
 class Scala212EvaluationTests extends Scala2EvaluationTests(ScalaVersion.`2.12`)
 class Scala213EvaluationTests extends Scala2EvaluationTests(ScalaVersion.`2.13`) {
-  if (ScalaVersion.`3.1+`.isRelease) {
+  if (ScalaVersion.`3.3`.isRelease) {
     test("should use tasty-reader") {
       val scala2Source =
         """|package example
@@ -33,7 +33,7 @@ class Scala213EvaluationTests extends Scala2EvaluationTests(ScalaVersion.`2.13`)
       implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(
         scala3Source,
         "example.Main",
-        ScalaVersion.`3.1+`,
+        ScalaVersion.`3.3`,
         Seq.empty,
         Seq(scala2Debugee.mainModule)
       )
@@ -44,8 +44,8 @@ class Scala213EvaluationTests extends Scala2EvaluationTests(ScalaVersion.`2.13`)
     }
   }
 }
-class Scala30EvaluationTests extends Scala3EvaluationTests(ScalaVersion.`3.0`)
-class Scala31PlusEvaluationTests extends Scala3EvaluationTests(ScalaVersion.`3.1+`)
+class Scala33EvaluationTests extends Scala3EvaluationTests(ScalaVersion.`3.3`)
+class Scala34EvaluationTests extends Scala3EvaluationTests(ScalaVersion.`3.4`)
 
 abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTestSuite {
   protected override def defaultConfig: DebugConfig =
@@ -556,10 +556,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
-      Breakpoint(7),
-      Evaluation.success("a1", if (isScala3) new NoSuchFieldException("$outer") else new NoSuchFieldError("$outer"))
-    )
+    check(Breakpoint(7), Evaluation.success("a1", noSuchFieldError))
   }
 
   test("evaluate from an local class") {
@@ -893,10 +890,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.success("x1", "x1"), // captured by B
         Evaluation.success("m()", "x1x2"), // captures x2
         Evaluation.success("this.m()", "x1"),
-        Evaluation.success(
-          "A.this.m()",
-          if (isScala3) new NoSuchFieldException("$outer") else new NoSuchFieldError("$outer")
-        ),
+        Evaluation.success("A.this.m()", noSuchFieldError),
         Evaluation.successOrIgnore("new B", isScala2)(result => assert(result.startsWith("A$B$1@")))
       ), // captures x1
       Breakpoint(22), // in B#m#m
@@ -1060,8 +1054,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(
       Breakpoint(7),
       Evaluation.successOrIgnore("x", 1, isScala2),
-      if (isScala3) Evaluation.failed("y")
-      else Evaluation.success("y", 2),
+      if (isScala3) Evaluation.failed("y") else Evaluation.success("y", 2),
       Evaluation.successOrIgnore(
         """|lazy val z = 2
            |z""".stripMargin,
@@ -1408,14 +1401,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       ),
       Breakpoint(6),
       DebugStepAssert.inParallel(
-        if (isScala3) Evaluation.failed("self", "not supported")
-        else Evaluation.success("self", "foo"),
-        if (isScala3) Evaluation.failed("size", "not supported")
-        else Evaluation.success("size", 2),
-        if (isScala3) Evaluation.failed("m(1)", "not supported")
-        else Evaluation.success("m(1)", "fo"),
-        if (isScala3) Evaluation.failed("this.m(1)", "not supported")
-        else Evaluation.success("this.m(1)", "ff")
+        if (isScala3) Evaluation.failed("self", "not supported") else Evaluation.success("self", "foo"),
+        if (isScala3) Evaluation.failed("size", "not supported") else Evaluation.success("size", 2),
+        if (isScala3) Evaluation.failed("m(1)", "not supported") else Evaluation.success("m(1)", "fo"),
+        if (isScala3) Evaluation.failed("this.m(1)", "not supported") else Evaluation.success("this.m(1)", "ff")
       )
     )
   }
@@ -1503,12 +1492,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.munitTestSuite(source, "example.MySuite", scalaVersion)
-    check(
-      Breakpoint(6),
-      // the program stops twice before Scala 3.2
-      if (!isScala31Plus) Breakpoint(6) else NoStep(),
-      Evaluation.success("1 + 1", 2)
-    )
+    check(Breakpoint(6), Evaluation.success("1 + 1", 2))
   }
 
   test("evaluate lambdas") {
@@ -1956,8 +1940,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Breakpoint(8), // still in the same lifted lambda (the line position does not make any sense)
         Breakpoint(9), // again in the lifted lambda
         Breakpoint(8), // going out of the lifted lambda
-        if (isScala31Plus) Breakpoint(8) else NoStep(), // regression in Scala 3.2.2
-        if (isScala31Plus) Breakpoint(9) else NoStep(), // regression in Scala 3.2.2
+        Breakpoint(8), // regression in Scala 3.2.2
+        Breakpoint(9), // regression in Scala 3.2.2
         Breakpoint(13), // calling withFilter
         Breakpoint(13),
         Evaluation.success("x", 1),
@@ -1992,7 +1976,6 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
   }
 
   test("evaluate capture of pattern") {
-    assume(!scalaVersion.isScala30) // Won't be fixed in Scala 3.0
     val source =
       """|package example
          |
@@ -2171,6 +2154,9 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       )
     )
   }
+
+  def noSuchFieldError(implicit ctx: TestingContext): Throwable =
+    if (isScala3) new NoSuchFieldException("$outer") else new NoSuchFieldError("$outer")
 }
 
 abstract class Scala2EvaluationTests(val scalaVersion: ScalaVersion) extends ScalaEvaluationTests(scalaVersion) {
@@ -2303,7 +2289,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
-      Breakpoint(8), // Stops once in the constructor of B
+      if (isScala33) Breakpoint(8) else NoStep(), // Stops once in the constructor of B
       Breakpoint(8),
       Evaluation.success("x1 + x2 + x3", "x1x2x3")
     )
@@ -2552,9 +2538,9 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(12),
-      Breakpoint(12),
-      Breakpoint(15),
-      Breakpoint(20), // in A#m
+      if (isScala33) Breakpoint(12) else NoStep(),
+      if (isScala33) Breakpoint(15) else NoStep(),
+      Breakpoint(20),
       DebugStepAssert.inParallel(Evaluation.success("A.A1.a", 1), Evaluation.success("A.A2.a", 2)),
       Breakpoint(15),
       DebugStepAssert.inParallel(
