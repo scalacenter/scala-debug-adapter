@@ -122,7 +122,7 @@ class MetalsClassBreakpointSuite extends FunSuite {
          |}
          |""".stripMargin,
       "a.b.Main$package$",
-      scalaVersion = ScalaVersion.`3.0`
+      scalaVersion = ScalaVersion.`3.3`
     )
   }
 
@@ -136,10 +136,9 @@ class MetalsClassBreakpointSuite extends FunSuite {
          |>>  def unapply(s: String): Boolean = s.size % 2 == 0
          |  }
          |}
-         |
          |""".stripMargin,
-      "a.Main$package$Even$1$",
-      scalaVersion = ScalaVersion.`3.0`
+      "a.Main$package$Even$2$",
+      scalaVersion = ScalaVersion.`3.3`
     )
   }
 
@@ -159,7 +158,7 @@ class MetalsClassBreakpointSuite extends FunSuite {
          |
          |""".stripMargin,
       "a.Main$package$",
-      scalaVersion = ScalaVersion.`3.0`
+      scalaVersion = ScalaVersion.`3.3`
     )
   }
 
@@ -169,16 +168,11 @@ class MetalsClassBreakpointSuite extends FunSuite {
       scalaVersion: ScalaVersion = ScalaVersion.`2.13`
   ): Unit = {
     val source = original.replace(">>", "  ")
-    val lineNumber =
-      original.linesIterator.toSeq.indexWhere(_.contains(">>")) + 1
-
+    val lineNumber = original.linesIterator.toSeq.indexWhere(_.contains(">>")) + 1
     val debuggee = TestingDebuggee.mainClass(source, "Main", scalaVersion)
     val lookUp = ClassEntryLookUp(debuggee.mainModule, NoopLogger)
-
     val sourceFileKey = SourceFileKey(debuggee.sourceFiles.head.toUri)
-
-    val className =
-      lookUp.getFullyQualifiedClassName(sourceFileKey, lineNumber)
+    val className = lookUp.getFullyQualifiedClassName(sourceFileKey, lineNumber)
     assert(className.contains(expectedClassName))
   }
 }

@@ -69,7 +69,7 @@ package ch.epfl.scala.debugadapter
 import ch.epfl.scala.debugadapter.testfmk.*
 
 class MyDebugTests extends DebugTestSuite {
-  private val scalaVersion: ScalaVersion = ScalaVersion.`3.1+`
+  private val scalaVersion: ScalaVersion = ScalaVersion.`3.3`
 
   test("my simple test") {
     val source =

@@ -141,7 +141,7 @@ object JavaRuntimeEvaluatorEnvironments {
 }
 
 class JavaRuntimeEvaluatorTests extends DebugTestSuite {
-  val scalaVersion = ScalaVersion.`3.1+`
+  val scalaVersion = ScalaVersion.`3.3`
   lazy val nested =
     TestingDebuggee.fromJavaSource(JavaRuntimeEvaluatorEnvironments.nested, "example.Main", scalaVersion)
   lazy val preEvaluation =

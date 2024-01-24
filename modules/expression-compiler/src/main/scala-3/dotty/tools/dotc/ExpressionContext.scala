@@ -6,7 +6,7 @@ import dotty.tools.dotc.core.Types.*
 import dotty.tools.dotc.core.Names.*
 import dotty.tools.dotc.core.Flags.*
 import dotty.tools.dotc.core.Contexts.*
-import dotty.tools.dotc.transform.SymUtils.*
+import dotty.tools.dotc.evaluation.SymUtils.*
 
 class ExpressionContext(
     uniqueName: String,

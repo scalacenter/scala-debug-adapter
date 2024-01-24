@@ -6,7 +6,7 @@ import ch.epfl.scala.debugadapter.DebugConfig
 
 class Scala212RuntimePreEvaluationTests extends RuntimePreEvaluationTests(ScalaVersion.`2.12`)
 class Scala213RuntimePreEvaluationTests extends RuntimePreEvaluationTests(ScalaVersion.`2.13`)
-class Scala3RuntimePreEvaluationTests extends RuntimePreEvaluationTests(ScalaVersion.`3.1+`)
+class Scala3RuntimePreEvaluationTests extends RuntimePreEvaluationTests(ScalaVersion.`3.3`)
 
 abstract class RuntimePreEvaluationTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
 

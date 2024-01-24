@@ -14,7 +14,7 @@ import scala.concurrent.duration.*
  *  It is not meant to be run in the CI
  */
 class ExpressionCompilerDebug extends munit.FunSuite:
-  val scalaVersion = ScalaVersion.`3.1+`
+  val scalaVersion = ScalaVersion.`3.3`
   val compiler = new ExpressionCompilerBridge
 
   override def munitTimeout: Duration = 1.hour

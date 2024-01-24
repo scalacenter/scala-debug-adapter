@@ -107,8 +107,10 @@ trait BinaryDecoderSuite extends CommonFunSuite:
     ): binary.Method =
       val binaryMethods = decoder.classLoader.loadClass(declaringType).declaredMethods
       def notFoundMessage: String =
-        s"Cannot find method '$method':\n" + binaryMethods.map(m => s"  " + formatMethod(m)).mkString("\n")
-      binaryMethods.find(m => formatMethod(m) == method).getOrElse(throw new Exception(notFoundMessage))
+        s"""|$method
+            |    Available binary methods in $declaringType are:
+            |""".stripMargin + binaryMethods.map(m => s"        " + formatMethod(m)).mkString("\n")
+      binaryMethods.find(m => formatMethod(m) == method).getOrElse(throw new NoSuchElementException(notFoundMessage))
 
     private def tryDecode(cls: binary.ClassType, counter: Counter): Option[DecodedClass] =
       try

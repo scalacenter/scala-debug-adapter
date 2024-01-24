@@ -30,7 +30,11 @@ class Scala213RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`
     )
   }
 }
-class Scala31RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`3.1+`) {
+
+class Scala33RuntimeEvaluatorTests extends Scala3RuntimeEvaluatorTests(ScalaVersion.`3.3`)
+class Scala34RuntimeEvaluatorTests extends Scala3RuntimeEvaluatorTests(ScalaVersion.`3.4`)
+
+abstract class Scala3RuntimeEvaluatorTests(scalaVersion: ScalaVersion) extends RuntimeEvaluatorTests(scalaVersion) {
   test("Should access to wrapping 'object' methods") {
     implicit val debuggee = nested
     check(config = defaultConfig.copy(testMode = false))(
@@ -330,7 +334,6 @@ class Scala31RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`3
   }
 
   test("evaluate capture of pattern") {
-    assume(!scalaVersion.isScala30) // Won't be fixed in Scala 3.0
     val source =
       """|package example
          |
@@ -1259,11 +1262,8 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
          |}
          """.stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    if (scalaVersion == ScalaVersion.`3.1+`)
-      check(
-        Breakpoint(7),
-        Evaluation.success("~~.x", 43)
-      )
+    if (scalaVersion == ScalaVersion.`3.3` || scalaVersion == ScalaVersion.`3.4`)
+      check(Breakpoint(7), Evaluation.success("~~.x", 43))
 
     check(
       Breakpoint(22),

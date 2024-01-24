@@ -50,7 +50,7 @@ object Breakpoint {
     SingleStepAssert(breakpoint, assertOnFrame(ctx.mainSource, line))
   }
 
-  def apply(sourceFile: Path, line: Int): SingleStepAssert[Array[StackFrame]] = {
+  def apply(sourceFile: Path, line: Int)(implicit location: Location): SingleStepAssert[Array[StackFrame]] = {
     val breakpoint = Breakpoint(sourceFile, line, None)
     SingleStepAssert(breakpoint, assertOnFrame(sourceFile, line))
   }

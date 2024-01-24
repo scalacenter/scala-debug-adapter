@@ -5,7 +5,13 @@ import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 import scala.util.Properties
 import tastyquery.Exceptions.*
 
-class BinaryDecoderTests extends BinaryDecoderSuite:
+class Scala33BinaryDecoderTests extends BinaryDecoderTests(ScalaVersion.`3.3`)
+class Scala34BinaryDecoderTests extends BinaryDecoderTests(ScalaVersion.`3.4`)
+
+abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDecoderSuite:
+  def isScala33 = scalaVersion.isScala33
+  def isScala34 = scalaVersion.isScala34
+
   test("mixin and static forwarders") {
     val source =
       """|package example
@@ -43,7 +49,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |
          |object F extends A
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     val javaSig = "java.lang.String m()"
     val staticTraitAccessor = "java.lang.String m$(example.A $this)"
 
@@ -75,7 +81,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |    class C extends D
          |    object F extends D
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$D$1", "Main.main.D")
     decoder.assertDecode("example.Main$C$1", "Main.main.C")
     decoder.assertDecode("example.Main$F$2$", "Main.main.F")
@@ -106,7 +112,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |        A()
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$", "void example$Main$Bar$1$$_$A$3()", "Main.m.….m.A(): Unit")
   }
 
@@ -137,7 +143,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  }
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A", "void m$1(java.lang.String y$1)", "A.m1.m: Unit")
     decoder.assertDecode(
       "example.A",
@@ -174,7 +180,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |case class D(d1: String)
          |
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
 
     def getter(field: String): String = s"java.lang.String $field()"
     def setter(field: String, param: String = "x$1"): String = s"void ${field}_$$eq(java.lang.String $param)"
@@ -213,7 +219,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  override def m(): String = "string"
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
 
     def javaSig(returnType: String): String = s"java.lang.Object m()"
 
@@ -231,7 +237,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |    class C:
          |      private val y = x+2
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
 
     decoder.assertDecode(
       "example.A$B$C",
@@ -250,7 +256,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def m3(using String , Int): Unit = ()
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$", "int m1(int x, int y)", "Main.m1(using x: Int, y: Int): Int")
     decoder.assertDecode("example.Main$", "int m2(int x)", "Main.m2(implicit x: Int): Int")
     decoder.assertDecode(
@@ -297,7 +303,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |    class C extends A 
          |    class G extends A
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$C$1", "Main.m.C")
     decoder.assertDecode("example.Main$E$1$F", "Main.m.E.F")
     decoder.assertDecode("example.Main$G$1", "Main.m.G")
@@ -317,7 +323,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |            def m(t : D) : D = 
          |              t
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$", "example.Main$D$1 m$1(example.Main$D$1 t)", "Main.A.….m.m(t: D): D")
     decoder.assertDecode("example.Main$A$B$1", "void <init>()", "Main.A.….B.<init>(): Unit")
   }
@@ -330,7 +336,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |    def ++ = 1
          |    class ++
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.$plus$plus", "int $plus$plus$1()", "++.m.++: Int")
     decoder.assertDecode("example.$plus$plus$$plus$plus$2", "++.m.++")
   }
@@ -345,7 +351,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  }
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A$", "java.lang.String m$extension(java.lang.String $this)", "A.m(): String")
     decoder.assertDecode(
       "example.A",
@@ -376,7 +382,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  }
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A$", "java.lang.String m$2(java.lang.String t)", "A.m.m(t: String): String")
     decoder.assertDecode("example.A$", "java.lang.String m$1()", "A.m.m: String")
   }
@@ -393,7 +399,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |
          |class A
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$", "java.lang.String m(example.A a)", "Main.m()(a: A): String")
   }
 
@@ -414,7 +420,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |}
          |""".stripMargin
 
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
 
     decoder.assertDecode("example.A$", "java.lang.String a()", "A.a: String", skip = true)
     decoder.assertDecode("example.A$", "java.lang.String b()", "A.b: String", skip = true)
@@ -441,7 +447,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |
          |case class A(a: String)
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
 
     decoder.assertDecode("example.A", "java.lang.String toString()", "A.toString(): String", skip = true)
     decoder.assertDecode("example.A", "example.A copy(java.lang.String a)", "A.copy(a: String): A", skip = true)
@@ -477,7 +483,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def m =
          |    List("").map(x => x + 1)
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.A",
       "java.lang.String m$$anonfun$1(boolean x)",
@@ -504,7 +510,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |    b.n
          |
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A$$anon$1", "A.m.<anon class>")
   }
 
@@ -517,7 +523,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |}
          |""".stripMargin
 
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A", "example.A m()", "A.m(): A.this.type")
   }
 
@@ -538,7 +544,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |    m
          |""".stripMargin
 
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.B", "int $anonfun$1(int x)", "example.m.<anon fun>(x: Int): Int")
     decoder.assertDecode("example.B$$anon$1", "example.m.<anon class>")
   }
@@ -557,7 +563,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |
          |""".stripMargin
 
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$$anon$1", "Main.<anon Ordering>")
     decoder.assertDecode(
       "example.Main$$anon$1",
@@ -608,7 +614,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  }
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
 
     decoder.assertDecode("example.A", "java.lang.String m$default$1()", "A.m.<default 1>: String")
     decoder.assertDecode("example.A", "int m$default$2()", "A.m.<default 2>: Int")
@@ -632,7 +638,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def m(xs: List[String]): String = xs.mkString(", ")
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
 
     decoder.assertDecode("example.A", "int m(scala.collection.immutable.List xs)", "A.m(xs: List[Int]): Int")
     decoder.assertDecode(
@@ -685,7 +691,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |}
          |""".stripMargin
 
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
 
     def assertDecode(javaSig: String, expected: String)(using munit.Location): Unit =
       decoder.assertDecode("example.Main$", javaSig, expected)
@@ -718,7 +724,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def m1(x: "a"): 1 = 1
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A", "int m1(java.lang.String x)", "A.m1(x: \"a\"): 1")
   }
 
@@ -734,7 +740,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def m(x: Foo): Bar  = x.toString
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$", "java.lang.String m(example.A x)", "Main.m(x: Foo): Bar")
   }
 
@@ -755,7 +761,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  }
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$", "example.B m1()", "Main.m1(): A & B {...}")
     decoder.assertDecode("example.Main$", "java.lang.Object m2()", "Main.m2(): Object {...}")
   }
@@ -773,7 +779,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def m2[T <: X](x: T) = x  
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.B", "example.A m1(example.A x)", "B.m1(x: X): X")
     decoder.assertDecode("example.B", "example.A m2(example.A x)", "B.m2[T](x: T): T")
   }
@@ -791,7 +797,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def today(): Enumeration#Value = WeekDay.Mon
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$", "scala.Enumeration$Value today()", "Main.today(): Enumeration.Value")
   }
 
@@ -804,7 +810,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def m(xs: Array[String]): Null = null
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$", "scala.runtime.Nothing$ m(int[] xs)", "Main.m(xs: Array[Int]): Nothing")
     decoder.assertDecode(
       "example.Main$",
@@ -821,7 +827,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def m[T](xs: Array[T]): Array[T] = xs
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.Main$",
       "java.lang.Object m(java.lang.Object xs)",
@@ -837,7 +843,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def m[T](x: B[T]): B[T] = x
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A", "java.lang.Object m(java.lang.Object x)", "A.m[T](x: B[T]): B[T]")
   }
 
@@ -851,7 +857,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |
          |class B extends A
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A", "void $init$(example.A $this)", "A.<init>(): Unit")
     decoder.assertDecode("example.B", "void <init>()", "B.<init>(): Unit")
   }
@@ -864,7 +870,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def m(as: String*): String = as.mkString(", ")
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.A",
       "java.lang.String m(scala.collection.immutable.Seq as)",
@@ -885,7 +891,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |}
          |""".stripMargin
 
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$", "java.lang.String $amp(example.$less$greater x)", "Main.&(x: <>): String")
     decoder.assertDecode("example.$less$greater", "example.$less$greater m()", "<>.m: <>")
   }
@@ -905,7 +911,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |}
          |""".stripMargin
 
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$", "int rec$1(int x, int acc)", "Main.fac.rec(x: Int, acc: Int): Int")
   }
 
@@ -924,16 +930,18 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |}
          |""".stripMargin
 
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.A",
-      "java.lang.String y$1(java.lang.String x$2, scala.runtime.LazyRef y$lzy1$2)",
+      if isScala33 then "java.lang.String y$1(java.lang.String x$2, scala.runtime.LazyRef y$lzy1$2)"
+      else "java.lang.String y$1(scala.runtime.LazyRef y$lzy1$2, java.lang.String x$2)",
       "A.m.y: String",
       skip = true
     )
     decoder.assertDecode(
       "example.A",
-      "java.lang.String y$lzyINIT1$1(java.lang.String x$1, scala.runtime.LazyRef y$lzy1$1)",
+      if isScala33 then "java.lang.String y$lzyINIT1$1(java.lang.String x$1, scala.runtime.LazyRef y$lzy1$1)"
+      else "java.lang.String y$lzyINIT1$1(scala.runtime.LazyRef y$lzy1$1, java.lang.String x$1)",
       "A.m.y.<lazy init>: String"
     )
   }
@@ -959,7 +967,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  private def m: Int = 1
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Outer", "java.lang.String example$Outer$$foo()", "Outer.foo: String")
     decoder.assertDecode("example.A$", "int example$A$$$m()", "A.m: Int")
   }
@@ -974,7 +982,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def foo : Foo[[X] =>> Either[X, Int]] = ???
          |""".stripMargin
 
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$", "example.Foo foo()", "Main.foo: Foo[[X] =>> Either[X, Int]]")
   }
 
@@ -988,7 +996,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |    ()
          |""".stripMargin
 
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.Main$A$1", "Main.m.A")
   }
 
@@ -998,7 +1006,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def foo: String = ???
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.package$", "java.lang.String foo()", "example.foo: String")
     decoder.assertDecode(
       "example.package",
@@ -1014,7 +1022,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |
          |def foo: String = ???
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.decoder$package$", "java.lang.String foo()", "example.foo: String")
     decoder.assertDecode(
       "example.decoder$package",
@@ -1033,7 +1041,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def m(x: String): String = ""
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A", "java.lang.String m()", "A.m: String", skip = true)
     decoder.assertDecode("example.A", "java.lang.String m(java.lang.String x)", "A.m(x: String): String")
   }
@@ -1046,7 +1054,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def m(x: String): String = x.takeWhile(_ != '.')
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.A",
       "boolean m$$anonfun$adapted$1(java.lang.Object _$1)",
@@ -1086,7 +1094,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  }
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.B1$", "scala.Function0 B1$$superArg$1()", "B1.<init>.<super arg>: () => \"\"")
     decoder.assertDecode(
       "example.B1$",
@@ -1124,31 +1132,40 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     val source =
       """|package example
          |
-         |class A {
+         |class A:
          |  def m(x: Int): String ?=> String = ???
          |  def m(): (Int, String) ?=> Int = ???
          |  def m(x: String): Int ?=> String ?=> String = ???
-         |  // def mbis: ? ?=> String = ???
-         |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.A",
-      "java.lang.String m(int x, java.lang.String evidence$1)",
+      if isScala33 then "java.lang.String m(int x, java.lang.String evidence$1)"
+      else "java.lang.String m(int x, java.lang.String contextual$1)",
       "A.m(x: Int): String ?=> String"
     )
     decoder.assertDecode(
       "example.A",
-      "int m(int evidence$2, java.lang.String evidence$3)",
+      if isScala33 then "int m(int evidence$2, java.lang.String evidence$3)"
+      else "int m(int contextual$2, java.lang.String contextual$3)",
       "A.m(): (Int, String) ?=> Int"
     )
     decoder.assertDecode(
       "example.A",
-      "java.lang.String m(java.lang.String x, int evidence$4, java.lang.String evidence$5)",
+      if isScala33 then "java.lang.String m(java.lang.String x, int evidence$4, java.lang.String evidence$5)"
+      else "java.lang.String m(java.lang.String x, int contextual$4, java.lang.String contextual$5)",
       "A.m(x: String): Int ?=> String ?=> String"
     )
-    // TODO uncomment in 3.3.2 or 3.3.3
-    // decoder.assertDecode("example.A", "java.lang.String mbis(java.lang.Object evidence$5)", "A.m: ? ?=> String")
+    // TODO try in 3.3.2 or 3.3.3
+    if isScala34 then
+      val source =
+        """|package example
+           |
+           |class A:
+           |  def mbis: ? ?=> String = ???
+           |""".stripMargin
+      val decoder = TestingDecoder(source, scalaVersion)
+      decoder.assertDecode("example.A", "java.lang.String mbis(java.lang.Object contextual$1)", "A.mbis: ? ?=> String")
   }
 
   test("trait param") {
@@ -1159,7 +1176,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |
          |class B(x: Int)(using String) extends A(1, 2, 3)
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     // todo fix: should be a BinaryTraitParamGetter
     decoder.assertDecode("example.B", "int x()", "B.x: Int", skip = true)
     decoder.assertDecode("example.B", "int y()", "B.y: Int", skip = true)
@@ -1169,6 +1186,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
   }
 
   test("lifted try") {
+    assume(isScala33)
     val source =
       """|package example
          |
@@ -1187,7 +1205,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |
          |   def m4 = "" + m3
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A", "java.lang.String liftedTree1$1()", "A.<try>: \"\" | \"\"")
     decoder.assertDecode("example.A", "java.lang.String liftedTree2$1()", "A.<try>: \"\" | \"\"")
     decoder.assertDecode("example.A", "java.lang.String liftedTree3$1()", "A.m1.<try>: \"\" | \"\"")
@@ -1208,7 +1226,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |    foo(1 + 1)
          |}
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A", "java.lang.Object foo(scala.Function0 x)", "A.foo[T](x: => T): T")
     decoder.assertDecode("example.A", "java.lang.String $init$$$anonfun$1()", "A.<by-name arg>: String")
     decoder.assertDecode("example.A", "int m$$anonfun$1()", "A.m.<by-name arg>: Int")
@@ -1228,7 +1246,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  object F
          |""".stripMargin
 
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A", "example.A$B$ B()", "A.B: B")
     decoder.assertDecode("example.A", "example.A$B$ B$(example.A $this)", "A.B.<static forwarder>: B", skip = true)
     decoder.assertDecode("example.C$", "example.A$B$ B()", "C.B: B", skip = true)
@@ -1249,7 +1267,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |
          |object B extends A[String]
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.B",
       "java.lang.String foo(java.lang.Object arg0)",
@@ -1266,7 +1284,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |
          |class B(foo: String) extends A(foo)
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.B", "java.lang.String foo$accessor()", "B.foo: String", skip = true)
   }
 
@@ -1281,7 +1299,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |
          |object C extends A
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.B",
       "void example$A$_setter_$example$A$$foo_$eq(java.lang.String x$0)",
@@ -1315,7 +1333,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |class C extends B[String]
          |""".stripMargin
 
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.B",
       "java.lang.String example$B$$super$foo(java.lang.Object x)",
@@ -1355,8 +1373,8 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  @scala.annotation.varargs
          |  def m(args: String*): Int = args.size
          |""".stripMargin
-    val javaModule = TestingDebuggee.fromJavaSource(javaSource, "example", ScalaVersion.`3.1+`).mainModule
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`, Seq(javaModule))
+    val javaModule = TestingDebuggee.fromJavaSource(javaSource, "example", scalaVersion).mainModule
+    val decoder = TestingDecoder(source, scalaVersion, Seq(javaModule))
     decoder.assertDecode(
       "example.B",
       "java.lang.String m(java.lang.Object[] args)",
@@ -1386,7 +1404,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |
          |object B extends A
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A", "boolean apply(double x)", "A.apply(x: Double): Boolean")
     decoder.assertDecode(
       "example.A",
@@ -1440,7 +1458,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |object B extends A:
          |  inline override def m[T](x: => T): T = x
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.B", "java.lang.String x$proxy2$1(java.lang.String s$1)", "B.m.<by-name arg>: String")
     decoder.assertDecode("example.B$", "java.lang.Object x$proxy1$1(scala.Function0 x$1)", "B.m.<by-name arg>: T")
   }
@@ -1463,7 +1481,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |class C(x: String) extends AnyVal:
          |  inline def m: String = x + x
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.A",
       "java.lang.String inline$x$i2(example.A$AA x$0)",
@@ -1533,7 +1551,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |object A:
          |  val x: String => String = identity
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.A$",
       "java.lang.Object $deserializeLambda$(java.lang.invoke.SerializedLambda arg0)",
@@ -1549,7 +1567,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  case B extends A("b")
          |  case C extends A("c")
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.A",
       "void <init>(java.lang.String x, java.lang.String _$name, int _$ordinal)",
@@ -1567,7 +1585,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |    lazy val (x, y) = ("x", "y")
          |    (x, y)
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A", "java.lang.Object $1$$lzyINIT1()", "A.<anon>.<lazy init>: (String, String)")
     decoder.assertDecode("example.A", "scala.Tuple2 $1$()", "A.<anon>: (String, String)", skip = true)
     decoder.assertDecode(
@@ -1595,7 +1613,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |    def m3: String = x + x
          |    () 
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.A",
       "java.lang.String example$A$$_$m3$1$(example.A $this)",
@@ -1617,15 +1635,17 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |      formatted <- Some("")
          |    } yield formatted
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.A",
-      "scala.Option m$$anonfun$2(scala.Tuple2 x$1)",
+      if isScala33 then "scala.Option m$$anonfun$2(scala.Tuple2 x$1)"
+      else "scala.Option m$$anonfun$1(scala.Tuple2 x$1)",
       "A.m.<anon fun>((String, String)): Option[String]"
     )
     decoder.assertDecode(
       "example.A",
-      "scala.Option m$$anonfun$2$$anonfun$2(scala.Tuple2 x$1)",
+      if isScala33 then "scala.Option m$$anonfun$2$$anonfun$2(scala.Tuple2 x$1)"
+      else "scala.Option m$$anonfun$1$$anonfun$2(scala.Tuple2 x$1)",
       "A.m.<anon fun>.<anon fun>((List[(String, String)], List[String])): Option[String]"
     )
   }
@@ -1657,7 +1677,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |    logger.rec(true)(x => xs.map(y => x + y).mkString)
          |""".stripMargin
 
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.Test",
       "java.lang.String $anonfun$1(scala.collection.immutable.List xs$1, java.lang.String x)",
@@ -1665,7 +1685,9 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
     )
     decoder.assertDecode(
       "example.Test",
-      "java.lang.String $anonfun$2(scala.Function1 f$proxy1$1, example.Logger Logger_this$1, java.lang.String x)",
+      if isScala33 then
+        "java.lang.String $anonfun$2(scala.Function1 f$proxy1$1, example.Logger Logger_this$1, java.lang.String x)"
+      else "java.lang.String $anonfun$2(example.Logger Logger_this$1, scala.Function1 f$proxy1$1, java.lang.String x)",
       "Logger.m2.<anon fun>(x: String): String"
     )
     decoder.assertDecode(
@@ -1757,7 +1779,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def foo(c: Codec[(Int, Int)]): Codec[(Int, Int)] =
          |    rec(c)
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.Test$",
       "scala.Product foo$$anonfun$1(scala.Tuple2 x)",
@@ -1789,7 +1811,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  def m(x: Value[T]): Unit = ???
          |  
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.B", "void m(java.lang.String x)", "B.m(x: Type): Unit")
     decoder.assertDecode("example.C", "void m(java.lang.Integer x)", "C.m(x: Value[T]): Unit")
   }
@@ -1807,7 +1829,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |  
          |  def test: Consumer[String] = m(println)
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A", "void test$$anonfun$1(java.lang.String x)", "A.test.<anon fun>(x: String): Unit")
   }
 
@@ -1886,7 +1908,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |    (x: String) => TypeRepr.of[A[T]]
          |
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.B",
       "java.lang.Object m$$anonfun$1(scala.quoted.Type tpe$1, java.lang.String x)",
@@ -1910,7 +1932,7 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |
          |object $
          |""".stripMargin
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)
+    val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.$", "java.lang.String $()", "$.$: String")
     decoder.assertDecode("example.$$", "$")
   }
@@ -1940,5 +1962,5 @@ class BinaryDecoderTests extends BinaryDecoderSuite:
          |    b.m()
          |""".stripMargin
     // tasty-query#428
-    val decoder = TestingDecoder(source, ScalaVersion.`3.1+`)(using ThrowOrWarn.ignore)
+    val decoder = TestingDecoder(source, scalaVersion)(using ThrowOrWarn.ignore)
     decoder.assertDecode("example.A$B$1", "A.m.B")
