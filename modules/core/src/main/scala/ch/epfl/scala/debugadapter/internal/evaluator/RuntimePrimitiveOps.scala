@@ -55,25 +55,17 @@ object RuntimePrimitiveOps {
       } yield result
   }
 
-  /* -------------------------------------------------------------------------- */
-  /*                         Primitive binary operations                        */
-  /* -------------------------------------------------------------------------- */
   object BinaryOp {
-    def apply(
-        lhs: RuntimeEvaluationTree,
-        rhs: RuntimeEvaluationTree,
-        op: String
-    ): Validation[BinaryOp] = {
+    def apply(lhs: Type, rhs: Type, op: String): Validation[BinaryOp] = {
+      def notDefined = Recoverable(s"The $op operator is not defined on ${lhs.name} and ${rhs.name}")
       op match {
         case "==" => Valid(Eq)
         case "!=" => Valid(Neq)
-        case _ if !isPrimitive(lhs.`type`) || !isPrimitive(rhs.`type`) =>
-          Recoverable("Primitive operations don't support reference types")
-        case "&&" if isBoolean(lhs.`type`) && isBoolean(rhs.`type`) => Valid(And)
-        case "||" if isBoolean(lhs.`type`) && isBoolean(rhs.`type`) => Valid(Or)
-        case "&&" | "||" => Recoverable("Boolean operations don't support numeric types")
-        case _ if !isNumeric(lhs.`type`) || !isNumeric(rhs.`type`) =>
-          Recoverable("Numeric operations don't support boolean types")
+        case _ if !isPrimitive(lhs) || !isPrimitive(rhs) => notDefined
+        case "&&" if isBoolean(lhs) && isBoolean(rhs) => Valid(And)
+        case "||" if isBoolean(lhs) && isBoolean(rhs) => Valid(Or)
+        case "&&" | "||" => notDefined
+        case _ if !isNumeric(lhs) || !isNumeric(rhs) => notDefined
         case "+" => Valid(Plus)
         case "-" => Valid(Minus)
         case "*" => Valid(Times)
@@ -83,19 +75,9 @@ object RuntimePrimitiveOps {
         case "<=" => Valid(LessOrEqual)
         case ">" => Valid(Greater)
         case ">=" => Valid(GreaterOrEqual)
-        case _ => Recoverable(s"$op is not a primitive binary operation")
+        case _ => notDefined
       }
     }
-
-    def apply(
-        lhs: RuntimeEvaluationTree,
-        args: Seq[RuntimeEvaluationTree],
-        op: String
-    ): Validation[BinaryOp] =
-      args match {
-        case Seq(rhs) => apply(lhs, rhs, op)
-        case _ => Recoverable("Too many arguments")
-      }
   }
 
   /* --------------------------- Numeric operations --------------------------- */
@@ -272,7 +254,6 @@ object RuntimePrimitiveOps {
   case object And extends BooleanOp
   case object Or extends BooleanOp
 
-  /* --------------------------- Object operations --------------------------- */
   sealed trait ObjectOp extends BinaryOp {
     override def typeCheck(lhs: Type, rhs: Type): PrimitiveType =
       lhs.virtualMachine().mirrorOf(true).`type`().asInstanceOf[PrimitiveType]
@@ -294,9 +275,6 @@ object RuntimePrimitiveOps {
   case object Eq extends ObjectOp
   case object Neq extends ObjectOp
 
-  /* -------------------------------------------------------------------------- */
-  /*                         Primitive unary operations                         */
-  /* -------------------------------------------------------------------------- */
   case object Not extends UnaryOp {
     override def evaluate(rhs: JdiValue, loader: JdiClassLoader) =
       rhs.toBoolean.map(v => loader.mirrorOf(!v))
@@ -304,15 +282,14 @@ object RuntimePrimitiveOps {
   }
 
   object UnaryOp {
-    def apply(rhs: RuntimeEvaluationTree, op: String): Validation[UnaryOp] = {
+    def apply(rhs: Type, op: String): Validation[UnaryOp] =
       op match {
-        case "unary_+" if isNumeric(rhs.`type`) => Valid(UnaryPlus)
-        case "unary_-" if isNumeric(rhs.`type`) => Valid(UnaryMinus)
-        case "unary_~" if isIntegral(rhs.`type`) => Valid(UnaryBitwiseNot)
-        case "unary_!" if isBoolean(rhs.`type`) => Valid(Not)
-        case _ => Recoverable("Not a primitive unary operation")
+        case "unary_+" if isNumeric(rhs) => Valid(UnaryPlus)
+        case "unary_-" if isNumeric(rhs) => Valid(UnaryMinus)
+        case "unary_~" if isIntegral(rhs) => Valid(UnaryBitwiseNot)
+        case "unary_!" if isBoolean(rhs) => Valid(Not)
+        case _ => Recoverable(s"$op is not defined on ${rhs.name}")
       }
-    }
   }
 
   /* -------------------------------------------------------------------------- */

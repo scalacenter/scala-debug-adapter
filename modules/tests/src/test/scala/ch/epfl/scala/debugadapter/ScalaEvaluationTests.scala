@@ -167,7 +167,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.success("this.B.b1", "b1"),
         Evaluation.success("A.B.b1", "b1"),
         Evaluation.success("A.this.B.b1", "b1"),
-        Evaluation.failed("B.b2"),
+        Evaluation.failed("B.b2", "cannot be accessed"),
         Evaluation.success("B.b3", "b3"),
         Evaluation.success("A.B.b3", "b3"),
         Evaluation.success("B.b4", "b4"),
@@ -213,7 +213,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.success("B.b1(\"foo\")", "b1: foo"),
         Evaluation.success("B.b2(\"foo\")", "b2: foo"),
         Evaluation.success("C.c1(\"foo\")", "c1: foo"),
-        Evaluation.failed("C.c2(\"foo\")")
+        Evaluation.failed("C.c2(\"foo\")", "cannot be accessed")
       )
     )
   }
@@ -1055,7 +1055,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(
       Breakpoint(7),
       Evaluation.successOrIgnore("x", 1, isScala2),
-      if (isScala3) Evaluation.failed("y") else Evaluation.success("y", 2),
+      if (isScala3) Evaluation.failed("y", "local lazy val not supported")
+      else Evaluation.success("y", 2),
       Evaluation.successOrIgnore(
         """|lazy val z = 2
            |z""".stripMargin,

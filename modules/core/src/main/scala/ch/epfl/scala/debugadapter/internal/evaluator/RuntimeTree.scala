@@ -1,7 +1,6 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
 import com.sun.jdi
-import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.internal.evaluator.RuntimePrimitiveOps.*
 
 sealed trait RuntimeEvaluationTree {
@@ -20,7 +19,7 @@ object RuntimeEvaluationTree {
 
   sealed trait Field extends Assignable {
     def field: jdi.Field
-    def immutable: Boolean = field.isFinal
+    def isMutable: Boolean = !field.isFinal
   }
 
   case class LocalVar(name: String, `type`: jdi.Type) extends Assignable {
@@ -100,16 +99,6 @@ object RuntimeEvaluationTree {
     }
   }
 
-  object CallBinaryOp {
-    def apply(lhs: RuntimeEvaluationTree, args: Seq[RuntimeEvaluationTree], name: String)(implicit
-        logger: Logger
-    ): Validation[CallBinaryOp] =
-      args match {
-        case Seq(rhs) => BinaryOp(lhs, rhs, name).map(CallBinaryOp(lhs, rhs, _))
-        case _ => Recoverable(s"Too many arguments")
-      }
-  }
-
   case class ArrayElem(array: RuntimeEvaluationTree, index: RuntimeEvaluationTree, `type`: jdi.Type)
       extends RuntimeEvaluationTree {
     override def prettyPrint(depth: Int): String = {
@@ -154,12 +143,6 @@ object RuntimeEvaluationTree {
     }
   }
 
-  object CallUnaryOp {
-    def apply(rhs: RuntimeEvaluationTree, name: String)(implicit logger: Logger): Validation[CallUnaryOp] = {
-      UnaryOp(rhs, name).map(CallUnaryOp(rhs, _))
-    }
-  }
-
   case class NewInstance(init: CallStaticMethod) extends RuntimeEvaluationTree {
     override lazy val `type`: jdi.ReferenceType = init.method.declaringType() // .asInstanceOf[jdi.ClassType]
     override def prettyPrint(depth: Int): String = {
@@ -174,9 +157,7 @@ object RuntimeEvaluationTree {
     override def prettyPrint(depth: Int): String = s"This(${`type`})"
   }
 
-  case class StaticModule(
-      `type`: jdi.ReferenceType
-  ) extends RuntimeEvaluationTree {
+  case class StaticModule(`type`: jdi.ClassType) extends RuntimeEvaluationTree {
     override def prettyPrint(depth: Int): String = {
       val indent = "\t" * (depth + 1)
       s"""|StaticModule(
@@ -237,13 +218,5 @@ object RuntimeEvaluationTree {
           |${indent}t= ${`type`}
           |${indent.dropRight(1)})""".stripMargin
     }
-  }
-
-  object Assign {
-    def apply(lhs: RuntimeEvaluationTree, rhs: RuntimeEvaluationTree, tpe: jdi.Type): Validation[Assign] =
-      lhs match {
-        case lhs: Assignable => Valid(Assign(lhs, rhs, tpe))
-        case _ => Recoverable("Left hand side of an assignment must be assignable")
-      }
   }
 }

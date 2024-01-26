@@ -52,7 +52,7 @@ class HotCodeReplaceTests extends DebugTestSuite {
     )
     check(defaultConfig.copy(testMode = false))(
       Breakpoint(5),
-      Evaluation.failed("A"),
+      Evaluation.failed("A", "A is not a local variable"),
       Breakpoint(debuggee.getPathOf("Foo.scala"), 5),
       Custom {
         debuggee.compileScala(newFooSource, "Foo.scala")
