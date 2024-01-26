@@ -1,13 +1,8 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter.testfmk.DebugTestSuite
-import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
-import ch.epfl.scala.debugadapter.ScalaVersion
-import ch.epfl.scala.debugadapter.testfmk.Breakpoint
-import ch.epfl.scala.debugadapter.testfmk.DebugStepAssert
-import ch.epfl.scala.debugadapter.testfmk.Evaluation
 import ch.epfl.scala.debugadapter.DebugConfig
-import ch.epfl.scala.debugadapter.testfmk.ObjectRef
+import ch.epfl.scala.debugadapter.ScalaVersion
+import ch.epfl.scala.debugadapter.testfmk.*
 
 class JavaRuntimeEvaluatorTests extends DebugTestSuite {
   val scalaVersion = ScalaVersion.`3.3`
@@ -351,6 +346,25 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     check(
       Breakpoint(5),
       Evaluation.success("B.bar", "bar")
+    )
+  }
+
+  test("#631 - in ReferenceQueue.<init>") {
+    val source =
+      """|package example
+         |
+         |import java.lang.ref.ReferenceQueue
+         |
+         |object Main:
+         |  def main(args: Array[String]): Unit =
+         |    new ReferenceQueue[Int]()
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(7),
+      StepIn.method("ReferenceQueue.<init>(): void"),
+      LocalVariable.inspect("this")(_.exists(v => v.name == "head")),
+      Evaluation.success("head", null)
     )
   }
 }

@@ -201,6 +201,7 @@ object Evaluation {
     assert(clue(response).isRight)
     val result = response.toOption.get
     expectedResult match {
+      case null => assertEquals(result, "null")
       case ObjectRef(clsName) =>
         assert(result.startsWith(clsName + "@"))
       case expected: String =>
