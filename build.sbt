@@ -203,7 +203,7 @@ lazy val unpickler3: Project = project
     scalaVersion := Dependencies.scala33,
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
-      "ch.epfl.scala" %% "tasty-query" % "1.2.0",
+      "ch.epfl.scala" %% "tasty-query" % "1.2.1",
       Dependencies.asm,
       Dependencies.asmUtil,
       Dependencies.munit % Test
