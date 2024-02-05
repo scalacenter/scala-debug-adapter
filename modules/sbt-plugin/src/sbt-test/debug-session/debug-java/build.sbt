@@ -12,7 +12,7 @@ def checkDebugJavaWithGSpecializedTask = Def.inputTask {
   val uri = (Compile / startMainClassDebugSession).evaluated
   val source = (Compile / sources).value.head.toPath
   implicit val context: TestingContext = TestingContext(source, "3.3.0")
-  DebugTest.check(uri)(Breakpoint(source, 6), Evaluation.failed("x"))
+  DebugTest.check(uri)(Breakpoint(source, 6), Evaluation.failed("x", "Missing scala-expression-compiler"))
 }
 
 lazy val debugJavaWithG =
