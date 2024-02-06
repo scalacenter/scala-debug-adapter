@@ -1,16 +1,12 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter.testfmk.DebugTestSuite
-import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
-import ch.epfl.scala.debugadapter.ScalaVersion
-import ch.epfl.scala.debugadapter.testfmk.Breakpoint
-import ch.epfl.scala.debugadapter.testfmk.DebugStepAssert
-import ch.epfl.scala.debugadapter.testfmk.Evaluation
 import ch.epfl.scala.debugadapter.DebugConfig
-import ch.epfl.scala.debugadapter.testfmk.ObjectRef
+import ch.epfl.scala.debugadapter.ScalaVersion
+import ch.epfl.scala.debugadapter.testfmk.*
 
-object JavaRuntimeEvaluatorEnvironments {
-  val nested =
+class JavaRuntimeEvaluatorTests extends DebugTestSuite {
+  val scalaVersion = ScalaVersion.`3.3`
+  val nestedSource =
     """|package example;
        |
        |public class Main {
@@ -77,75 +73,7 @@ object JavaRuntimeEvaluatorEnvironments {
        |}
        |
     """.stripMargin
-
-  val preEvaluation =
-    """|package example;
-       |
-       |public class Main {
-       |  public static void main(String[] args) {
-       |    Test testA = new A();
-       |    Test testB = new B();
-       |    Test aa = new AA();
-       |    System.out.println("ok");
-       |  }
-       |
-       |  public static String foo(Test t) { return t.test(); }
-       |  public static String foo(SubTestA t) { return t.a(); }
-       |  public static String foo(Test t, SubTestA a) { return t.test(a.a()); }
-       |  public static String foo(SubTestB b, SubTestA a) { return b.b() + " " + a.a(); }
-       |  public static String foo(SubA aa, Test t) { return aa.aa() + " " + t.test(); }
-       |}
-       |
-       |interface Test {
-       |  default String test() {
-       |    return "test";
-       |  }
-       |  default String test(String s) {
-       |    return "test " + s;
-       |  }
-       |}
-       |
-       |interface SubTestA extends Test {
-       |  String a();
-       |}
-       |
-       |interface SubA extends SubTestA {
-       |  String aa();
-       |}
-       |
-       |interface SubTestB extends Test {
-       |  String b();
-       |}
-       |
-       |abstract class TestImpl implements Test {
-       |}
-       |
-       |class A extends TestImpl implements SubTestA {
-       |  public String a() {
-       |    return "a";
-       |  }
-       |}
-       |
-       |class AA extends A implements SubA {
-       |  public String aa() {
-       |    return "2a";
-       |  }
-       |}
-       |
-       |class B extends TestImpl implements SubTestB {
-       |  public String b() {
-       |    return "b";
-       |  }
-       |}
-       |""".stripMargin
-}
-
-class JavaRuntimeEvaluatorTests extends DebugTestSuite {
-  val scalaVersion = ScalaVersion.`3.3`
-  lazy val nested =
-    TestingDebuggee.fromJavaSource(JavaRuntimeEvaluatorEnvironments.nested, "example.Main", scalaVersion)
-  lazy val preEvaluation =
-    TestingDebuggee.fromJavaSource(JavaRuntimeEvaluatorEnvironments.preEvaluation, "example.Main", scalaVersion)
+  lazy val nested = TestingDebuggee.fromJavaSource(nestedSource, "example.Main", scalaVersion)
 
   protected override def defaultConfig: DebugConfig =
     super.defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly)
@@ -168,7 +96,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
       DebugStepAssert.inParallel(
         Evaluation.success("i", 0),
         Evaluation.success("main", ObjectRef("Main")),
-        Evaluation.failed("x")
+        Evaluation.failed("x", "x is not a local variable")
       )
     )
   }
@@ -214,10 +142,10 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
         Evaluation.success("Foo.foofoo", "foofoo"),
         Evaluation.success("SuperFoo.foofoo", "superfoofoo"),
         Evaluation.success("coucou", "coucou"),
-        Evaluation.failed("lapin"),
-        Evaluation.failed("love"),
-        Evaluation.failed("main.coucou"),
-        Evaluation.failed("foo.foofoo")
+        Evaluation.failed("lapin", "lapin is not a local variable"),
+        Evaluation.failed("love", "love is not a local variable"),
+        Evaluation.failed("main.coucou", "Cannot access static field coucou from instance of a class"),
+        Evaluation.failed("foo.foofoo", "Cannot access static field foofoo from instance of a class")
       ),
       Breakpoint(15),
       DebugStepAssert.inParallel(
@@ -259,8 +187,8 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     check(
       Breakpoint(8),
       Evaluation.success("staticMethod()", "i am static"),
-      Evaluation.failed("main.staticMethod()"),
-      Evaluation.failed("foo()"),
+      Evaluation.failed("main.staticMethod()", "Cannot access static method staticMethod from instance of a class"),
+      Evaluation.failed("foo()", "`this` is not available in a static context"),
       Breakpoint(12),
       DebugStepAssert.inParallel(
         Evaluation.success("Main.staticMethod()", "i am static"),
@@ -279,8 +207,8 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
         Evaluation.success("inner.helloInner", "hello inner 42"),
         Evaluation.success("Main.StaticInner.z", 84),
         Evaluation.success("Foo.StaticFriendFoo.z", 168),
-        Evaluation.failed("foo.friendFoo(new Foo()).z"),
-        Evaluation.failed("foo.friendFoo(new Foo()).staticMethod()"),
+        Evaluation.failed("foo.friendFoo(new Foo()).z", "Cannot access static field z from instance of a class."),
+        Evaluation.failed("foo.friendFoo(new Foo()).staticMethod()", "Cannot find method staticMethod"),
         Evaluation.success("new Foo().friendFoo(new Foo()).y", 42),
         Evaluation.success("new Foo().friendFoo(new Foo()).greet", "Friend"),
         Evaluation.success("Main.StaticInner.StaticDoubleInner.z", 168)
@@ -305,7 +233,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
       Breakpoint(11),
       DebugStepAssert.inParallel(
         Evaluation.success("StaticInner.staticMethod()", "i am static static_inner"),
-        Evaluation.failed("Main.Inner.staticMethod()"),
+        Evaluation.failed("Main.Inner.staticMethod()", "Cannot find method staticMethod"),
         Evaluation.success("Main.StaticInner.staticMethod()", "i am static static_inner"),
         Evaluation.success("Foo.StaticFriendFoo.staticMethod()", "i am static static_friend_foo")
       )
@@ -313,7 +241,67 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
   }
 
   test("pre evaluate method and resolve most precise method") {
-    implicit val debuggee = preEvaluation
+    val source =
+      """|package example;
+         |
+         |public class Main {
+         |  public static void main(String[] args) {
+         |    Test testA = new A();
+         |    Test testB = new B();
+         |    Test aa = new AA();
+         |    System.out.println("ok");
+         |  }
+         |
+         |  public static String foo(Test t) { return t.test(); }
+         |  public static String foo(SubTestA t) { return t.a(); }
+         |  public static String foo(Test t, SubTestA a) { return t.test(a.a()); }
+         |  public static String foo(SubTestB b, SubTestA a) { return b.b() + " " + a.a(); }
+         |  public static String foo(SubA aa, Test t) { return aa.aa() + " " + t.test(); }
+         |}
+         |
+         |interface Test {
+         |  default String test() {
+         |    return "test";
+         |  }
+         |  default String test(String s) {
+         |    return "test " + s;
+         |  }
+         |}
+         |
+         |interface SubTestA extends Test {
+         |  String a();
+         |}
+         |
+         |interface SubA extends SubTestA {
+         |  String aa();
+         |}
+         |
+         |interface SubTestB extends Test {
+         |  String b();
+         |}
+         |
+         |abstract class TestImpl implements Test {
+         |}
+         |
+         |class A extends TestImpl implements SubTestA {
+         |  public String a() {
+         |    return "a";
+         |  }
+         |}
+         |
+         |class AA extends A implements SubA {
+         |  public String aa() {
+         |    return "2a";
+         |  }
+         |}
+         |
+         |class B extends TestImpl implements SubTestB {
+         |  public String b() {
+         |    return "b";
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
     check(
       Breakpoint(8),
       DebugStepAssert.inParallel(
@@ -323,7 +311,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
         Evaluation.success("Main.foo(testA)", "a"),
         Evaluation.success("Main.foo(testB, testA)", "b a"),
         Evaluation.success("Main.foo(aa, testB)", "2a test"),
-        Evaluation.failed("Main.foo(aa, testA)")
+        Evaluation.failed("Main.foo(aa, testA)", "Cannot find method foo with arguments")
       )
     )
   }
@@ -358,6 +346,25 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
     check(
       Breakpoint(5),
       Evaluation.success("B.bar", "bar")
+    )
+  }
+
+  test("#631 - in ReferenceQueue.<init>") {
+    val source =
+      """|package example
+         |
+         |import java.lang.ref.ReferenceQueue
+         |
+         |object Main:
+         |  def main(args: Array[String]): Unit =
+         |    new ReferenceQueue[Int]()
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(7),
+      StepIn.method("ReferenceQueue.<init>(): void"),
+      LocalVariable.inspect("this")(_.exists(v => v.name == "head")),
+      Evaluation.success("head", null)
     )
   }
 }

@@ -4,7 +4,7 @@ import com.sun.jdi.*
 
 import scala.util.Try
 
-private[internal] class MessageLogger() {
+private[internal] object MessageLogger {
   def log(logMessage: PlainLogMessage, frame: JdiFrame): Try[Value] = {
     val result = for {
       classLoader <- frame.classLoader()

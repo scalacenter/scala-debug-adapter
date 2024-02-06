@@ -1,12 +1,6 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import com.sun.jdi.ClassLoaderReference
-import com.sun.jdi.LocalVariable
-import com.sun.jdi.StackFrame
-import com.sun.jdi.ThreadReference
-import com.sun.jdi.ReferenceType
-import com.sun.jdi.PrimitiveType
-import com.sun.jdi.{BooleanType, ByteType, CharType, DoubleType, FloatType, IntegerType, LongType, ShortType}
+import com.sun.jdi.*
 
 import scala.jdk.CollectionConverters.*
 
@@ -34,7 +28,10 @@ final case class JdiFrame(thread: ThreadReference, depth: Int) {
     Option(current().thisObject).map(JdiObject(_, thread))
 
   def variables(): Seq[LocalVariable] =
-    current().visibleVariables.asScala.toSeq
+    try current().visibleVariables.asScala.toSeq
+    catch {
+      case _: AbsentInformationException => Seq.empty
+    }
 
   def variablesAndValues(): Seq[(LocalVariable, JdiValue)] =
     variables().map(v => v -> JdiValue(current().getValue(v), thread))

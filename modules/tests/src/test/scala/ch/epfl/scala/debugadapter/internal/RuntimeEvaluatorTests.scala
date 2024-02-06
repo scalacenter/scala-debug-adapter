@@ -759,18 +759,23 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   protected override def defaultConfig: DebugConfig =
     super.defaultConfig.copy(evaluationMode = DebugConfig.RuntimeEvaluationOnly)
 
-  test("Should not compute by-name param or Function0 expression") {
+  test("do not compute by-name param or Function0") {
     implicit val debuggee: TestingDebuggee =
       TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.byNameFunction0, "example.Main", scalaVersion)
-    check(Breakpoint(10), Evaluation.failed("x"), Breakpoint(13), Evaluation.failed("x"))
+    check(
+      Breakpoint(10),
+      Evaluation.failed("x", "x could be a by-name argument"),
+      Breakpoint(13),
+      Evaluation.failed("x", "x could be a by-name argument")
+    )
   }
 
-  test("should retrieve the value of a local variable from jdi") {
+  test("local variable") {
     implicit val debuggee = localVar
     check(
       Breakpoint(6),
       Evaluation.success("name", "world"),
-      Evaluation.failed("unknown")
+      Evaluation.failed("unknown", "unknown is not a local variable")
     )
 
   }
@@ -839,16 +844,16 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should compute a method call on an instance of a class") {
+  test("method call on an instance of a class") {
     implicit val debuggee = method
     check(
       Breakpoint(10),
       DebugStepAssert.inParallel(
         Evaluation.success("f1.foo", "hello foo"),
         Evaluation.success("f1.bar(\"hello \", 42)", "hello 42"),
-        Evaluation.failed("f1.bar(\"hello \", 42, 42)"),
-        Evaluation.failed("f1.bar(\"hello \")"),
-        Evaluation.failed("f1.bar(42, 42)"),
+        Evaluation.failed("f1.bar(\"hello \", 42, 42)", "Cannot find method bar"),
+        Evaluation.failed("f1.bar(\"hello \")", "Cannot find method bar"),
+        Evaluation.failed("f1.bar(42, 42)", "Cannot find method bar"),
         Evaluation.success("f2.bar(42)", "hello 42"),
         Evaluation.success("f2 bar 42", "hello 42"),
         Evaluation.successOrIgnore("(1 +: list).toString()", "List(1, 0)", scalaVersion == ScalaVersion.`2.12`)
@@ -864,14 +869,14 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should fail if the method doest not exists or arguments aren't correct (in count & types)") {
+  test("incorrect arguments") {
     implicit val debuggee = method
     check(
       Breakpoint(10),
       DebugStepAssert.inParallel(
-        Evaluation.failed("f1.bar(\"hello \", 42, 42)"),
-        Evaluation.failed("f1.bar(\"hello \")"),
-        Evaluation.failed("f1.bar(42, 42)")
+        Evaluation.failed("f1.bar(\"hello \", 42, 42)", "Cannot find method bar"),
+        Evaluation.failed("f1.bar(\"hello \")", "Cannot find method bar"),
+        Evaluation.failed("f1.bar(42, 42)", "Cannot find method bar")
       )
     )
   }
@@ -884,7 +889,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("test(foo)", "foo"),
         Evaluation.success("test(bar)", "bar"),
         Evaluation.success("test(baz)", "baz"),
-        Evaluation.failed("test(bar, subBar)"),
+        Evaluation.failed("test(bar, subBar)", "Cannot find method test"),
         Evaluation.success("test(bar, baz)", "bar, baz"),
         Evaluation.success("test(foo, subBar)", "foo, subBar"),
         Evaluation.success("test(foo, subCool)", "foo, subCool"),
@@ -906,7 +911,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("f1.foo_v2_apply.bar(42)", "hello 42"),
         Evaluation.success("inner(42).x", 42),
         Evaluation.success("list(0).toString()", "0"),
-        Evaluation.failed("list(1)")
+        Evaluation.failed("list(1)", "java.lang.IndexOutOfBoundsException: 1")
       )
     )
   }
@@ -923,9 +928,12 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("arr(by)", 3),
         Evaluation.success("arr(new Integer(2))", 3),
         Evaluation.success("arr(new Character('\u0000'))", 1),
-        Evaluation.failed("arr(3)"),
+        Evaluation.failed("arr(3)", "java.lang.IndexOutOfBoundsException"),
         Evaluation.success("test(arr)", "1,2,3"),
-        Evaluation.failed("test(Array(Test(1), Test(2), Test(3)))")
+        Evaluation.failed(
+          "test(Array(Test(1), Test(2), Test(3)))",
+          "Cannot find method Array"
+        ) // todo how to create arrays?
       )
     )
   }
@@ -939,12 +947,13 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("list(2).toString", "3"),
         Evaluation.success("list(new Integer(2)).toString", "3"),
         Evaluation.successOrIgnore("list(new Character('\u0000')).toString", "1", true),
-        Evaluation.failed("list(3)"),
+        Evaluation.failed("list(3)", "java.lang.IndexOutOfBoundsException"),
         Evaluation.success("map(1)", "one"),
         Evaluation.success("map(2)", "two"),
         Evaluation.success("map(new Integer(2))", "two"),
         Evaluation.successOrIgnore("map(new Character('\u0000'))", "one", true),
-        Evaluation.failed("map(3)"),
+        // todo distinguish evaluation exception from MethodInvocationFailed
+        Evaluation.failed("map(3)", "key not found: 3"),
         Evaluation.success("set(1)", true),
         Evaluation.success("set(2)", true),
         Evaluation.success("set(new Integer(2))", true),
@@ -954,7 +963,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("seq(2).toString", "3"),
         Evaluation.success("seq(new Integer(2)).toString", "3"),
         Evaluation.successOrIgnore("seq(new Character('\u0000')).toString", "1", true),
-        Evaluation.failed("seq(3)"),
+        Evaluation.failed("seq(3)", "java.lang.IndexOutOfBoundsException: 3"),
         Evaluation.success("vector(0).toString", "1"),
         Evaluation.success("vector(2).toString", "3"),
         Evaluation.success("vector(new Integer(2)).toString", "3"),
@@ -980,7 +989,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Breakpoint(10),
       DebugStepAssert.inParallel(
         Evaluation.success("inner(new Integer(42)).x", 42),
-        Evaluation.failed("inner(new Boolean(true)).x")
+        Evaluation.failed("inner(new Boolean(true)).x", "Cannot find method inner")
       )
     )
   }
@@ -1002,7 +1011,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     check(
       Breakpoint(10),
       Evaluation.success("bar(\"hello \", 42)", "hello 42"),
-      Evaluation.failed("bar(List(1, 2, 3))")
+      Evaluation.failed("bar(List(1, 2, 3))", "Cannot find method List")
     )
   }
 
@@ -1052,10 +1061,10 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     implicit val debuggee = nested
     check(
       Breakpoint(10),
-      Evaluation.failed("Foo.FriendFoo.greet"),
-      Evaluation.failed("Foo.FriendFoo(Foo()).greet"),
-      Evaluation.failed("Foo().friendFoo.InnerFriendFoo.str"),
-      Evaluation.failed("Foo().friendFoo.InnerFriendFoo().str")
+      Evaluation.failed("Foo.FriendFoo.greet", "greet is not a field"),
+      Evaluation.failed("Foo.FriendFoo(Foo()).greet", "Cannot find method FriendFoo"),
+      Evaluation.failed("Foo().friendFoo.InnerFriendFoo.str", "Cannot access instance field str from static context"),
+      Evaluation.failed("Foo().friendFoo.InnerFriendFoo().str", "Cannot find method InnerFriendFoo")
     )
   }
 
@@ -1090,7 +1099,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("Nested(100).InnerNested.y", 142),
         Evaluation.success("Nested(42).InnerNested.y", 84),
         Evaluation.success("Nested(84).InnerNested.y", 126),
-        Evaluation.failed("Nested.InnerNested.y")
+        Evaluation.failed("Nested.InnerNested.y", "InnerNested is not a field")
       )
     )
   }
@@ -1102,7 +1111,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       DebugStepAssert.inParallel(
         Evaluation.success("foo.getClass", ObjectRef("Class (Foo)")),
         Evaluation.success("Foo", ObjectRef("Foo$")),
-        Evaluation.failed("NoObject")
+        Evaluation.failed("NoObject", "NoObject is not a local variable")
       )
     )
   }
@@ -1160,9 +1169,9 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("test(if(true) x else t)", "int 1"),
         Evaluation.success("(if(true) Test(-1) else x).i", -1),
         Evaluation.success("(if(false) x else Test(-1)).i", -1),
-        Evaluation.failed("test(if(Test(-1).i == -1) Test(-1) else x)"),
+        Evaluation.failed("test(if(Test(-1).i == -1) Test(-1) else x)", "Cannot find method test"),
         Evaluation.success("(if (isTrue) new B else new C).x", "a"),
-        Evaluation.failed("(if (isTrue) 1 else \"a string\").x")
+        Evaluation.failed("(if (isTrue) 1 else \"a string\").x", "x is not a field")
       )
     )
   }
@@ -1308,7 +1317,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("should assign values to local var and fields") {
+  test("assign values to local var and fields") {
     val source =
       """|package example
          |
@@ -1335,26 +1344,25 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    def assignSuccess(expr: String) = Evaluation.success(expr)(res => res == "<void value>")
     check(
       Breakpoint(21),
-      assignSuccess("a.a = 42"),
+      Evaluation.success("a.a = 42", ()),
       Evaluation.success("a.a", 42),
-      assignSuccess("a.f.a = 64"),
+      Evaluation.success("a.f.a = 64", ()),
       Evaluation.success("a.f.a", 64),
-      assignSuccess("b = 42"),
+      Evaluation.success("b = 42", ()),
       Evaluation.success("Main.b", 0),
       Evaluation.success("b", 42),
-      assignSuccess("c = 42"),
+      Evaluation.success("c = 42", ()),
       Evaluation.success("c", 42),
-      assignSuccess("a.l = new C"),
+      Evaluation.success("a.l = new C", ()),
       Evaluation.success("a.l", ObjectRef("C")),
-      assignSuccess("bc.c = 42"),
+      Evaluation.success("bc.c = 42", ()),
       Evaluation.success("bc.c", 42),
-      Evaluation.failed("a.a = \"str\""),
-      Evaluation.failed("a.f.a = \"str\""),
-      Evaluation.failed("b = \"str\""),
-      Evaluation.failed("Main.b = \"str\"")
+      Evaluation.failed("a.a = \"str\"", "Cannot assign java.lang.String to int"),
+      Evaluation.failed("a.f.a = \"str\"", "Cannot assign java.lang.String to int"),
+      Evaluation.failed("b = \"str\"", "Cannot assign java.lang.String to int"),
+      Evaluation.failed("Main.b = \"str\"", "Cannot assign java.lang.String to int")
     )
   }
 

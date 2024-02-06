@@ -8,7 +8,6 @@ import ch.epfl.scala.debugadapter.EvaluationFailed
 import ch.epfl.scala.debugadapter.JavaRuntime
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.ManagedEntry
-import ch.epfl.scala.debugadapter.UnmanagedEntry
 import ch.epfl.scala.debugadapter.internal.evaluator.*
 import com.microsoft.java.debug.core.IEvaluatableBreakpoint
 import com.microsoft.java.debug.core.adapter.IDebugAdapterContext
@@ -27,9 +26,9 @@ import ScalaExtension.*
 
 private[internal] class EvaluationProvider(
     sourceLookUp: SourceLookUpProvider,
-    messageLogger: MessageLogger,
-    scalaEvaluators: Map[ClassEntry, ScalaEvaluator],
-    mode: DebugConfig.EvaluationMode,
+    compilers: Map[ClassEntry, ExpressionCompiler],
+    evaluationMode: DebugConfig.EvaluationMode,
+    testMode: Boolean,
     logger: Logger
 ) extends IEvaluationProvider {
 
@@ -65,15 +64,13 @@ private[internal] class EvaluationProvider(
     val location = frame.current().location
     val locationCode = (location.method.name, location.codeIndex).hashCode
     val expression =
-      if (breakpoint.getCompiledExpression(locationCode) != null) {
+      if (breakpoint.getCompiledExpression(locationCode) != null)
         breakpoint.getCompiledExpression(locationCode).asInstanceOf[Try[PreparedExpression]]
-      } else if (breakpoint.containsConditionalExpression) {
+      else if (breakpoint.containsConditionalExpression)
         prepare(breakpoint.getCondition, frame, preEvaluation = false)
-      } else if (breakpoint.containsLogpointExpression) {
+      else if (breakpoint.containsLogpointExpression)
         prepareLogMessage(breakpoint.getLogMessage, frame)
-      } else {
-        Failure(new Exception("Missing expression"))
-      }
+      else Failure(new Exception("Missing expression"))
     breakpoint.setCompiledExpression(locationCode, expression)
     val evaluation = for {
       expression <- expression
@@ -104,58 +101,59 @@ private[internal] class EvaluationProvider(
     completeFuture(invocation.getResult, thread)
   }
 
-  private def getScalaEvaluator(fqcn: String): Try[ScalaEvaluator] =
-    for {
-      entry <- sourceLookUp.getClassEntry(fqcn).toTry(s"Unknown class $fqcn")
-      evaluator <- scalaEvaluators.get(entry).toTry(missingEvaluatorMessage(entry))
-    } yield evaluator
-
-  private def missingEvaluatorMessage(entry: ClassEntry): String =
-    entry match {
-      case m: ManagedEntry =>
-        m.scalaVersion match {
-          case None => s"Unsupported evaluation in Java classpath entry: ${entry.name}"
-          case Some(sv) =>
-            s"""|Missing scala-expression-compiler_$sv with version ${BuildInfo.version}.
-                |You can open an issue at https://github.com/scalacenter/scala-debug-adapter.""".stripMargin
-        }
-      case _: JavaRuntime => s"Unsupported evaluation in JDK: ${entry.name}"
-      case _: UnmanagedEntry => s"Unsupported evaluation in unmanaged classpath entry: ${entry.name}"
-      case _ => s"Unsupported evaluation in ${entry.name}"
-    }
-
   private def prepareLogMessage(message: String, frame: JdiFrame): Try[PreparedExpression] = {
     if (!message.contains("$")) {
       Success(PlainLogMessage(message))
-    } else if (mode.allowScalaEvaluation) {
+    } else if (evaluationMode.allowScalaEvaluation) {
       val tripleQuote = "\"\"\""
       val expression = s"""println(s$tripleQuote$message$tripleQuote)"""
-      compile(expression, frame)
-    } else Failure(new EvaluationFailed(s"Cannot evaluate logpoint '$message' with $mode mode"))
+      getScalaEvaluator(frame).flatMap(_.compile(expression))
+    } else Failure(new EvaluationFailed(s"Cannot evaluate logpoint '$message' with $evaluationMode mode"))
   }
 
-  private def prepare(expression: String, frame: JdiFrame, preEvaluation: Boolean): Try[PreparedExpression] =
-    if (mode.allowRuntimeEvaluation)
+  private def prepare(expression: String, frame: JdiFrame, preEvaluation: Boolean): Try[PreparedExpression] = {
+    val scalaEvaluator = getScalaEvaluator(frame)
+    def compiledExpression = scalaEvaluator.flatMap(_.compile(expression))
+    if (evaluationMode.allowRuntimeEvaluation) {
       runtimeEvaluator.validate(expression, frame, preEvaluation) match {
-        case Success(expr) if mode.allowScalaEvaluation && containsMethodCall(expr.tree) =>
-          compile(expression, frame).orElse(Success(expr))
+        case Success(expr) if scalaEvaluator.isSuccess && containsMethodCall(expr.tree) =>
+          Success(compiledExpression.getOrElse(expr))
         case success: Success[RuntimeExpression] => success
         case failure: Failure[RuntimeExpression] =>
-          if (mode.allowScalaEvaluation) compile(expression, frame) else failure
+          if (scalaEvaluator.isSuccess) compiledExpression
+          else failure
       }
-    else if (mode.allowScalaEvaluation) compile(expression, frame)
+    } else if (evaluationMode.allowScalaEvaluation) compiledExpression
     else Failure(new EvaluationFailed(s"Evaluation is disabled"))
-
-  private def compile(expression: String, frame: JdiFrame): Try[CompiledExpression] = {
-    val fqcn = frame.current().location.declaringType.name
-    for {
-      evaluator <- getScalaEvaluator(fqcn)
-      sourceContent <- sourceLookUp
-        .getSourceContentFromClassName(fqcn)
-        .toTry(s"Cannot find source file of class $fqcn")
-      preparedExpression <- evaluator.compile(sourceContent, expression, frame)
-    } yield preparedExpression
   }
+
+  private def getScalaEvaluator(frame: JdiFrame): Try[ScalaEvaluator] =
+    if (evaluationMode.allowScalaEvaluation)
+      for {
+        fqcn <- Try(frame.current().location.declaringType.name)
+        entry <- sourceLookUp.getClassEntry(fqcn).toTry(s"Unknown class $fqcn")
+        compiler <- compilers.get(entry).toTry(missingCompilerMessage(entry))
+        sourceContent <- sourceLookUp
+          .getSourceContentFromClassName(fqcn)
+          .toTry(s"Cannot find source file of class $fqcn")
+      } yield new ScalaEvaluator(sourceContent, frame, compiler, logger, testMode)
+    else Failure(new Exception("Scala evaluation is not allowed"))
+
+  private def missingCompilerMessage(entry: ClassEntry): String =
+    entry match {
+      case m: ManagedEntry =>
+        m.scalaVersion match {
+          case None =>
+            s"Failed resolving scala-expression-compiler:${BuildInfo.version} for ${entry.name} (Missing Scala Version)"
+          case Some(sv) =>
+            s"""|Failed resolving scala-expression-compiler:${BuildInfo.version} for Scala $sv.
+                |Please open an issue at https://github.com/scalacenter/scala-debug-adapter.""".stripMargin
+        }
+      case _: JavaRuntime =>
+        s"Failed resolving scala-expression-compiler:${BuildInfo.version} for ${entry.name} (Missing Scala Version)"
+      case _ =>
+        s"Failed resolving scala-expression-compiler:${BuildInfo.version} for ${entry.name} (Unknown Scala Version)"
+    }
 
   private def containsMethodCall(tree: RuntimeEvaluationTree): Boolean = {
     import RuntimeEvaluationTree.*
@@ -173,13 +171,12 @@ private[internal] class EvaluationProvider(
 
   private def evaluate(expression: PreparedExpression, frame: JdiFrame): Try[Value] = evaluationBlock {
     expression match {
-      case logMessage: PlainLogMessage => messageLogger.log(logMessage, frame)
+      case logMessage: PlainLogMessage => MessageLogger.log(logMessage, frame)
       case expr: RuntimeExpression => runtimeEvaluator.evaluate(expr, frame)
       case expr: CompiledExpression =>
-        val fqcn = frame.current().location.declaringType.name
         for {
-          scalaEvaluator <- getScalaEvaluator(fqcn)
-          compiledExpression <- scalaEvaluator.evaluate(expr, frame)
+          scalaEvaluator <- getScalaEvaluator(frame)
+          compiledExpression <- scalaEvaluator.evaluate(expr)
         } yield compiledExpression
     }
   }
@@ -204,22 +201,12 @@ private[internal] class EvaluationProvider(
 }
 
 private[internal] object EvaluationProvider {
-  def apply(
-      debuggee: Debuggee,
-      tools: DebugTools,
-      logger: Logger,
-      config: DebugConfig
-  ): IEvaluationProvider = {
-    val scalaEvaluators = tools.expressionCompilers.view.map { case (entry, compiler) =>
-      (entry, new ScalaEvaluator(entry, compiler, logger, config.testMode))
-    }.toMap
-    val messageLogger = new MessageLogger()
+  def apply(debuggee: Debuggee, tools: DebugTools, logger: Logger, config: DebugConfig): IEvaluationProvider =
     new EvaluationProvider(
       tools.sourceLookUp,
-      messageLogger,
-      scalaEvaluators,
+      tools.expressionCompilers,
       config.evaluationMode,
+      config.testMode,
       logger
     )
-  }
 }

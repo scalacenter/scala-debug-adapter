@@ -118,9 +118,6 @@ object Evaluation {
   def failed(expression: String, error: String)(implicit location: Location): SingleStepAssert[Either[String, String]] =
     SingleStepAssert(Evaluation(expression), assertFailed(error))
 
-  def failed(expression: String)(implicit location: Location): SingleStepAssert[Either[String, String]] =
-    SingleStepAssert(Evaluation(expression), resp => assertFailed(resp))
-
   def failedOrIgnore(expression: String, error: String, ignore: Boolean)(implicit
       ctx: TestingContext,
       location: Location
@@ -204,13 +201,13 @@ object Evaluation {
     assert(clue(response).isRight)
     val result = response.toOption.get
     expectedResult match {
+      case null => assertEquals(result, "null")
       case ObjectRef(clsName) =>
         assert(result.startsWith(clsName + "@"))
       case expected: String =>
         assertEquals(result, '"'.toString + expected + '"')
       case () =>
-        if (ctx.scalaVersion.isScala3) assert(result.endsWith('"'.toString + "()" + '"'))
-        else assertEquals(result, "<void value>")
+        assert(result.endsWith('"'.toString + "()" + '"') || result == "<void value>")
       case expected @ (_: Boolean | _: Byte | _: Char | _: Int | _: Long | _: Short) =>
         assertEquals(result, expected.toString)
       case floating @ (_: Double | _: Float) =>
