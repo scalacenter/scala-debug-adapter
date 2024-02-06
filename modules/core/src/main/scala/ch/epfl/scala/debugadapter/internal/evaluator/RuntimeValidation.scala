@@ -65,7 +65,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       case instance: Term.New => validateNew(instance)
       case block: Term.Block => validateBlock(block)
       case assign: Term.Assign => validateAssign(assign)
-      case _ => Recoverable("Expression not supported at runtime")
+      case _ => Recoverable(s"Cannot evaluate '$expression' at runtime")
     }
 
   private def validateAsValueOrClass(expression: Stat): Validation[Either[RuntimeEvaluationTree, jdi.ReferenceType]] =

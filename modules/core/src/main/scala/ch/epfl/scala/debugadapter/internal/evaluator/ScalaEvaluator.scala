@@ -1,6 +1,5 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import ch.epfl.scala.debugadapter.ClassEntry
 import ch.epfl.scala.debugadapter.Logger
 import com.sun.jdi._
 
@@ -10,15 +9,16 @@ import java.nio.file.Path
 import scala.util.Try
 
 private[internal] class ScalaEvaluator(
-    entry: ClassEntry,
+    sourceContent: String,
+    frame: JdiFrame,
     compiler: ExpressionCompiler,
     logger: Logger,
     testMode: Boolean
 ) {
-  def evaluate(expression: CompiledExpression, frame: JdiFrame): Try[Value] =
-    evaluate(expression.classDir, expression.className, frame)
+  def evaluate(expression: CompiledExpression): Try[Value] =
+    evaluate(expression.classDir, expression.className)
 
-  def compile(sourceContent: String, expression: String, frame: JdiFrame): Try[CompiledExpression] = {
+  def compile(expression: String): Try[CompiledExpression] = {
     logger.debug(s"Compiling expression '$expression'")
     val location = frame.current().location
     val line = location.lineNumber
@@ -38,7 +38,7 @@ private[internal] class ScalaEvaluator(
     val compiledExpression =
       for {
         classLoader <- frame.classLoader()
-        (names, values) <- extractValuesAndNames(frame, classLoader)
+        (names, values) <- extractValuesAndNames(classLoader)
         localNames = names.map(_.stringValue).toSet
         _ <- compiler
           .compile(outDir, expressionClassName, sourceFile, line, expression, localNames, packageName, testMode)
@@ -47,16 +47,16 @@ private[internal] class ScalaEvaluator(
     compiledExpression.getResult
   }
 
-  private def evaluate(classDir: Path, className: String, frame: JdiFrame): Try[Value] = {
+  private def evaluate(classDir: Path, className: String): Try[Value] = {
     val evaluatedValue = for {
       classLoader <- frame.classLoader()
-      (names, values) <- extractValuesAndNames(frame, classLoader)
+      (names, values) <- extractValuesAndNames(classLoader)
       namesArray <- classLoader.createArray("java.lang.String", names)
       valuesArray <- classLoader.createArray("java.lang.Object", values)
       args = List(namesArray, valuesArray)
       expressionInstance <- createExpressionInstance(classLoader, classDir, className, args)
       evaluatedValue <- evaluateExpression(expressionInstance)
-      _ <- updateVariables(valuesArray, frame)
+      _ <- updateVariables(valuesArray)
       unboxedValue <- evaluatedValue.unboxIfPrimitive
     } yield unboxedValue.value
     evaluatedValue.getResult
@@ -97,15 +97,12 @@ private[internal] class ScalaEvaluator(
    * - fields from this object
    * @return Tuple of extracted names and values
    */
-  private def extractValuesAndNames(
-      frameRef: JdiFrame,
-      classLoader: JdiClassLoader
-  ): Safe[(Seq[JdiString], Seq[JdiValue])] = {
+  private def extractValuesAndNames(classLoader: JdiClassLoader): Safe[(Seq[JdiString], Seq[JdiValue])] = {
     def extractVariablesFromFrame(): Safe[(Seq[JdiString], Seq[JdiValue])] = {
-      val localVariables = frameRef.variablesAndValues().map { case (variable, value) => (variable.name, value) }
+      val localVariables = frame.variablesAndValues().map { case (variable, value) => (variable.name, value) }
       // Exclude the this object if there already is a local $this variable
       // The Scala compiler uses `$this` in the extension methods of AnyVal classes
-      val thisObject = frameRef.thisObject.filter(_ => !localVariables.contains("$this")).map("$this".->)
+      val thisObject = frame.thisObject.filter(_ => !localVariables.contains("$this")).map("$this".->)
       (localVariables ++ thisObject)
         .map { case (name, value) =>
           for {
@@ -131,7 +128,7 @@ private[internal] class ScalaEvaluator(
       // expression evaluator.
       // It is dangerous because local values can shadow fields
       // TODO: adapt Scala 2 expression compiler
-      (fieldNames, fieldValues) <- frameRef.thisObject
+      (fieldNames, fieldValues) <- frame.thisObject
         .filter(_ => compiler.scalaVersion.isScala2)
         .map(extractFields)
         .getOrElse(Safe((Nil, Nil)))
@@ -145,7 +142,7 @@ private[internal] class ScalaEvaluator(
     }
   }
 
-  private def updateVariables(variableArray: JdiArray, frame: JdiFrame): Safe[Unit] = {
+  private def updateVariables(variableArray: JdiArray): Safe[Unit] = {
     frame
       .variables()
       .zip(variableArray.getValues)
