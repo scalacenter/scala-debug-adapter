@@ -61,6 +61,7 @@ object RuntimePrimitiveOps {
       op match {
         case "==" => Valid(Eq)
         case "!=" => Valid(Neq)
+        case _ if lhs == null || rhs == null => Recoverable(s"The $op operator is not defined on null value")
         case _ if !isPrimitive(lhs) || !isPrimitive(rhs) => notDefined
         case "&&" if isBoolean(lhs) && isBoolean(rhs) => Valid(And)
         case "||" if isBoolean(lhs) && isBoolean(rhs) => Valid(Or)
@@ -102,7 +103,7 @@ object RuntimePrimitiveOps {
       }
 
     private def referenceTypeCheck(lhs: Type, rhs: Type): Option[Type] = {
-      (lhs.name(), rhs.name()) match {
+      (lhs.name, rhs.name) match {
         case ("java.lang.Double", _) => Some(lhs)
         case (_, "java.lang.Double") => Some(rhs)
         case ("java.lang.Float", _) => Some(lhs)
@@ -284,6 +285,7 @@ object RuntimePrimitiveOps {
   object UnaryOp {
     def apply(rhs: Type, op: String): Validation[UnaryOp] =
       op match {
+        case _ if rhs == null => Recoverable(s"$op is not defined on null")
         case "unary_+" if isNumeric(rhs) => Valid(UnaryPlus)
         case "unary_-" if isNumeric(rhs) => Valid(UnaryMinus)
         case "unary_~" if isIntegral(rhs) => Valid(UnaryBitwiseNot)

@@ -371,16 +371,6 @@ object RuntimeEvaluatorEnvironments {
        |    x()
        |}
        |""".stripMargin
-  val localVarTestSource =
-    """|package example
-       |
-       |object Main {
-       |  def main(args: Array[String]): Unit = {
-       |    val name = "world"
-       |    println(name)
-       |  }
-       |}
-       |""".stripMargin
 
   val fieldSource =
     """|package example
@@ -598,25 +588,6 @@ object RuntimeEvaluatorEnvironments {
        |}
        |""".stripMargin
 
-  val arraysSource =
-    """|package example
-       |
-       |object Main {
-       |  def main(args: Array[String]): Unit = {
-       |    val arr = Array(1, 2, 3)
-       |    val sh: Short = 2
-       |    val ch: Char = 2
-       |    val by: Byte = 2
-       |    println("ok")
-       |  }
-       |
-       |  def test(arr: Array[Int]): String = arr.mkString(",")
-       |
-       |  def test(arr: Array[Test]): String = arr.map(_.i).mkString(",")
-       |
-       |  case class Test(i: Int)
-       |}
-       |""".stripMargin
   val collectionSource =
     """|package example
        |
@@ -733,8 +704,6 @@ object RuntimeEvaluatorEnvironments {
 }
 
 abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
-  lazy val localVar =
-    TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.localVarTestSource, "example.Main", scalaVersion)
   lazy val field = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.fieldSource, "example.Main", scalaVersion)
   lazy val method = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.methodSource, "example.Main", scalaVersion)
   lazy val overloads =
@@ -743,8 +712,6 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   lazy val cls = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.cls, "example.Main", scalaVersion)
   lazy val boxingOverloads =
     TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.boxingOverloads, "example.Main", scalaVersion)
-  lazy val arrays =
-    TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.arraysSource, "example.Main", scalaVersion)
   lazy val collections =
     TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.collectionSource, "example.Main", scalaVersion)
   lazy val inners =
@@ -771,13 +738,22 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   }
 
   test("local variable") {
-    implicit val debuggee = localVar
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val name = "world"
+         |    println(name)
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(6),
       Evaluation.success("name", "world"),
       Evaluation.failed("unknown", "unknown is not a local variable")
     )
-
   }
 
   test("instance fields") {
@@ -916,8 +892,24 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
-  test("Should work on arrays") {
-    implicit val debuggee: TestingDebuggee = arrays
+  test("arrays") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val arr = Array(1, 2, 3)
+         |    val sh: Short = 2
+         |    val ch: Char = 2
+         |    val by: Byte = 2
+         |    println("ok")
+         |  }
+         |  def test(arr: Array[Int]): String = arr.mkString(",")
+         |  def test(arr: Array[Test]): String = arr.map(_.i).mkString(",")
+         |  case class Test(i: Int)
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(9),
       DebugStepAssert.inParallel(
@@ -1393,5 +1385,21 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Evaluation.success("this.test.t.a", 42),
       Evaluation.success("Main.test.t.a", 42)
     )
+  }
+
+  test("accept null as an argument") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    println("Hello, World!")
+         |  }
+         |
+         |  def m(x: String): String = x
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(5), Evaluation.success("m(null)", null))
   }
 }
