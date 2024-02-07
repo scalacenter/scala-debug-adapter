@@ -921,7 +921,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("arr(by)", 3),
         Evaluation.success("arr(new Integer(2))", 3),
         Evaluation.success("arr(new Character('\u0000'))", 1),
-        Evaluation.failed("arr(3)", "java.lang.IndexOutOfBoundsException"),
+        Evaluation.failed("arr(3)", "Invalid array range: 3 to 3."),
         Evaluation.success("test(arr)", "1,2,3"),
         Evaluation.failed(
           "test(Array(Test(1), Test(2), Test(3)))",

@@ -94,7 +94,7 @@ private[internal] class EvaluationProvider(
         .invoke(methodName, methodSignature, wrappedArgs)
         .recover {
           // if invocation throws an exception, we return that exception as the result
-          case MethodInvocationFailed(msg, Some(exception)) => exception
+          case RuntimeException(msg, Some(exception)) => exception
         }
         .map(_.value)
     }
@@ -180,7 +180,7 @@ private[internal] class EvaluationProvider(
         } yield compiledExpression
     }
     // if evaluation throws an exception, we return that exception as the result
-    result.recover { case MethodInvocationFailed(_, Some(exception)) => exception.value }
+    result.recover { case RuntimeException(_, Some(exception)) => exception.value }
   }
 
   private def completeFuture[T](result: Try[T], thread: ThreadReference): CompletableFuture[T] = {

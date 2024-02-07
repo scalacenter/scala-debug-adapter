@@ -77,7 +77,8 @@ class RuntimeEvaluation(frame: JdiFrame, logger: Logger) {
     for {
       array <- eval(tree.array)
       index <- eval(tree.index).flatMap(_.unboxIfPrimitive).flatMap(_.toInt)
-    } yield array.asArray.getValue(index)
+      value <- array.asArray.getValue(index)
+    } yield value
 
   private def evaluateIf(tree: If): Safe[JdiValue] =
     for {

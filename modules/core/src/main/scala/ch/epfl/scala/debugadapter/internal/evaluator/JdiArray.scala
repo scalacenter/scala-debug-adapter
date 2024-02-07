@@ -14,7 +14,10 @@ class JdiArray(arrayRef: ArrayReference, thread: ThreadReference) extends JdiObj
 
   def getValues: Seq[JdiValue] = arrayRef.getValues.asScala.toSeq.map(JdiValue(_, thread))
 
-  def getValue(i: Int): JdiValue = JdiValue(arrayRef.getValue(i), thread)
+  def getValue(i: Int): Safe[JdiValue] =
+    Safe(JdiValue(arrayRef.getValue(i), thread)).recoverWith { case e: IndexOutOfBoundsException =>
+      Safe.failed(RuntimeException(e.getMessage, None))
+    }
 }
 
 object JdiArray {

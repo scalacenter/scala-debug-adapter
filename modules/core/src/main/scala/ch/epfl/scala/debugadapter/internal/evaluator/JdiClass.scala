@@ -28,7 +28,7 @@ private[internal] class JdiClass(
     for {
       _ <- prepareMethod(ctr)
       instance <- Safe(cls.newInstance(thread, ctr, args.map(_.value).asJava, ObjectReference.INVOKE_SINGLE_THREADED))
-        .recoverWith(wrapInvocationException(thread))
+        .recoverWith(wrapInvocationException)
     } yield JdiObject(instance, thread)
 
   // Load the argument types of the method to avoid ClassNotLoadedException
@@ -64,7 +64,7 @@ private[internal] class JdiClass(
   def invokeStatic(method: Method, args: Seq[JdiValue]): Safe[JdiValue] =
     Safe(cls.invokeMethod(thread, method, args.map(_.value).asJava, ObjectReference.INVOKE_SINGLE_THREADED))
       .map(JdiValue(_, thread))
-      .recoverWith(wrapInvocationException(thread))
+      .recoverWith(wrapInvocationException)
 }
 
 object JdiClass {

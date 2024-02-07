@@ -149,7 +149,7 @@ object RuntimePrimitiveOps {
           case GreaterOrEqual => fractional.gteq(x, y)
         }
         .map(clsLoader.mirrorOfAnyVal)
-        .recoverWith { case e: ArithmeticException => Safe.failed(MethodInvocationFailed(e.getMessage, None)) }
+        .recoverWith { case e: ArithmeticException => Safe.failed(RuntimeException(e.getMessage, None)) }
     }
 
     private def computeIntegral[T <: AnyVal](x: T, y: T, clsLoader: JdiClassLoader)(implicit
@@ -169,7 +169,7 @@ object RuntimePrimitiveOps {
           case GreaterOrEqual => integral.gteq(x, y)
         }
         .map(clsLoader.mirrorOfAnyVal)
-        .recoverWith { case e: ArithmeticException => Safe.failed(MethodInvocationFailed(e.getMessage, None)) }
+        .recoverWith { case e: ArithmeticException => Safe.failed(RuntimeException(e.getMessage, None)) }
     }
 
     def evaluate(lhs: JdiValue, rhs: JdiValue, loader: JdiClassLoader) = {
