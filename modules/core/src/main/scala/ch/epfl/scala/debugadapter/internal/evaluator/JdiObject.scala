@@ -8,13 +8,9 @@ private[evaluator] class JdiObject(
     val reference: ObjectReference,
     thread: ThreadReference
 ) extends JdiValue(reference, thread) {
-  def getField(field: Field): JdiValue =
-    JdiValue(reference.getValue(field), thread)
+  def getField(field: Field): JdiValue = JdiValue(reference.getValue(field), thread)
 
-  def getField(name: String): JdiValue = {
-    val field = reference.referenceType.fieldByName(name)
-    JdiValue(reference.getValue(field), thread)
-  }
+  def getField(name: String): JdiValue = getField(reference.referenceType.fieldByName(name))
 
   def invoke(methodName: String, args: Seq[JdiValue]): Safe[JdiValue] = {
     val m = reference.referenceType.methodsByName(methodName).get(0)
@@ -44,8 +40,7 @@ private[evaluator] class JdiObject(
 
   // we use a Seq instead of a Map because the ScalaEvaluator rely on the order of the fields
   def fields: Seq[(String, JdiValue)] =
-    reference.referenceType.fields.asScala.toSeq
-      .map(f => (f.name, JdiValue(reference.getValue(f), thread)))
+    reference.referenceType.fields.asScala.toSeq.map(f => (f.name, getField(f)))
 }
 
 private[internal] object JdiObject {
