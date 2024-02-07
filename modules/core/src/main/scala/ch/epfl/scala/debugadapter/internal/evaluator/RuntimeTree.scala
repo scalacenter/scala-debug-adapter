@@ -110,25 +110,6 @@ object RuntimeEvaluationTree {
     }
   }
 
-  object ArrayElem {
-    def apply(tree: RuntimeEvaluationTree, index: Seq[RuntimeEvaluationTree]): Validation[ArrayElem] = {
-      val integerTypes = Seq("java.lang.Integer", "java.lang.Short", "java.lang.Byte", "java.lang.Character")
-      if (index.size < 1 || index.size > 1) Recoverable("Array accessor must have one argument")
-      else
-        (tree, tree.`type`) match {
-          case (tree: RuntimeEvaluationTree, arr: jdi.ArrayType) =>
-            index.head.`type` match {
-              case idx @ (_: jdi.IntegerType | _: jdi.ShortType | _: jdi.ByteType | _: jdi.CharType) =>
-                Valid(new ArrayElem(tree, index.head, arr.componentType()))
-              case ref: jdi.ReferenceType if integerTypes.contains(ref.name) =>
-                Valid(new ArrayElem(tree, index.head, arr.componentType()))
-              case _ => Recoverable("Array index must be an integer")
-            }
-          case _ => Recoverable("Not an array accessor")
-        }
-    }
-  }
-
   case class CallUnaryOp(
       rhs: RuntimeEvaluationTree,
       op: UnaryOp

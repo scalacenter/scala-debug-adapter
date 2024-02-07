@@ -78,6 +78,7 @@ object Safe {
 
   def apply[A](a: Try[A]): Safe[A] = {
     a match {
+      case null => new Safe(Success(null).asInstanceOf, () => ())
       case Success(value) =>
         value match {
           case obj: ObjectReference =>

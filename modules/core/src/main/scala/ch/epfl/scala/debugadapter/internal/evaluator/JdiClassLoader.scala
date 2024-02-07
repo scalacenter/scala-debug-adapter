@@ -74,6 +74,7 @@ private[internal] class JdiClassLoader(
       Safe(mirrorOfAnyVal(value.asInstanceOf[AnyVal]))
     case value: String => mirrorOf(value)
     case () => Safe(mirrorOfVoid())
+    case null => Safe(JdiValue(null, thread))
     case _ => Safe.failed(new IllegalArgumentException(s"Unsupported literal $value"))
   }
 

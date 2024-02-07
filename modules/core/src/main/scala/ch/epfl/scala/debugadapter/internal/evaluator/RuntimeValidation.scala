@@ -129,7 +129,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
   private def validateLiteral(lit: Lit): Validation[RuntimeEvaluationTree] =
     classLoader.map { loader =>
       val value = loader.mirrorOfLiteral(lit.value)
-      val tpe = loader.mirrorOfLiteral(lit.value).map(_.value.`type`).extract.get
+      val tpe = if (lit.value == null) null else value.map(_.value.`type`).extract.get
       Value(value, tpe)
     }
 
@@ -217,7 +217,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
     candidates
       .validateSingle(s"Cannot find top-level class $name")
       .flatMap(loadClass)
-      .map(StaticOrTopLevelClass)
+      .map(StaticOrTopLevelClass.apply)
   }
 
   private def getAllFullyQualifiedClassNames(name: String): Seq[String] = {
@@ -297,7 +297,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       qualifier: RuntimeEvaluationTree,
       args: Seq[RuntimeEvaluationTree]
   ): Validation[RuntimeEvaluationTree] =
-    findMethodBySignedName(qualifier, "apply", args).orElse(ArrayElem(qualifier, args))
+    findMethodBySignedName(qualifier, "apply", args).orElse(asArrayElem(qualifier, args))
 
   private def findMethodInThisOrOuter(
       thisOrOuter: RuntimeEvaluationTree,
@@ -370,7 +370,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
   }
 
   private def isBoolean(tpe: jdi.Type): Boolean =
-    tpe.isInstanceOf[jdi.BooleanType] || tpe.name == "java.lang.Boolean"
+    tpe != null && (tpe.isInstanceOf[jdi.BooleanType] || tpe.name == "java.lang.Boolean")
 
   private def validateAssign(tree: Term.Assign): Validation[RuntimeEvaluationTree] = {
     val lhs =
@@ -397,7 +397,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       rhs <- validateAsValue(tree.rhs)
         .filter(
           rhs => isAssignableFrom(rhs.`type`, lhs.`type`),
-          rhs => s"Cannot assign ${rhs.`type`.name} to ${lhs.`type`.name}"
+          rhs => s"Cannot assign ${nameOrNull(rhs.`type`)} to ${nameOrNull(lhs.`type`)}"
         )
       unit <- unitTree
     } yield Assign(lhs, rhs, unit.`type`)
@@ -420,17 +420,14 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
   private def moreSpecificThan(m1: jdi.Method, m2: jdi.Method): Boolean = {
     m1.argumentTypes()
       .asScala
-      .zip(m2.argumentTypes().asScala)
+      .zip(m2.argumentTypes.asScala)
       .forall {
-        case (t1, t2) if t1.name == t2.name => true
+        case (t1, t2) if nameOrNull(t1) == nameOrNull(t2) => true
         case (_: jdi.PrimitiveType, _) => true
         case (_, _: jdi.PrimitiveType) => true
         case (r1: jdi.ReferenceType, r2: jdi.ReferenceType) => isAssignableFrom(r1, r2)
       }
   }
-
-  private def argsMatch(method: jdi.Method, args: Seq[jdi.Type], boxing: Boolean): Boolean =
-    method.argumentTypeNames().size() == args.size && areAssignableFrom(method, args, boxing)
 
   /**
    * @see <a href="https://docs.oracle.com/javase/specs/jls/se20/html/jls-15.html#jls-15.12.2.5">JLS#15.12.2.5. Choosing the most specific method</a>
@@ -468,9 +465,9 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       args: Seq[jdi.Type]
   ): Validation[jdi.Method] = {
     val candidates = findMethodsByName(ref, name)
-    val unboxedCandidates = candidates.filter(argsMatch(_, args, boxing = false))
+    val unboxedCandidates = candidates.filter(matchArguments(_, args, boxing = false))
     val boxedCandidates = unboxedCandidates.size match {
-      case 0 => candidates.filter(argsMatch(_, args, boxing = true))
+      case 0 => candidates.filter(matchArguments(_, args, boxing = true))
       case _ => unboxedCandidates
     }
     val withoutBridges = boxedCandidates.size match {
@@ -481,10 +478,9 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       case 0 | 1 => withoutBridges
       case _ => filterMostPreciseMethod(withoutBridges)
     }
+    def formatArgs = args.map(nameOrNull).mkString("[", ", ", "]")
     finalCandidates
-      .validateSingle(
-        s"Cannot find method $name with arguments of types ${args.map(_.name).mkString("[", ", ", "]")} in ${ref.name}"
-      )
+      .validateSingle(s"Cannot find method $name with arguments of types $formatArgs in ${ref.name}")
       .map(loadClassOnNeed)
   }
 
@@ -579,22 +575,20 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
 
     (got, expected) match {
       case (g: jdi.ArrayType, at: jdi.ArrayType) =>
-        checkClassStatus(at.componentType())
-        g.componentType().equals(at.componentType())
+        checkClassStatus(at.componentType)
+        g.componentType.equals(at.componentType)
       case (g: jdi.PrimitiveType, pt: jdi.PrimitiveType) => got.equals(pt)
       case (g: jdi.ReferenceType, ref: jdi.ReferenceType) => referenceTypesMatch(g, ref)
       case (_: jdi.VoidType, _: jdi.VoidType) => true
-      case (g: jdi.ReferenceType, pt: jdi.PrimitiveType) =>
-        isAssignableFrom(g, frame.getPrimitiveBoxedClass(pt))
-      case (g: jdi.PrimitiveType, ct: jdi.ReferenceType) =>
-        isAssignableFrom(frame.getPrimitiveBoxedClass(g), ct)
-
+      case (g: jdi.ReferenceType, pt: jdi.PrimitiveType) => isAssignableFrom(g, frame.getPrimitiveBoxedClass(pt))
+      case (g: jdi.PrimitiveType, ct: jdi.ReferenceType) => isAssignableFrom(frame.getPrimitiveBoxedClass(g), ct)
+      case (null, _: jdi.ReferenceType) => true
       case _ => false
     }
   }
 
-  private def areAssignableFrom(method: jdi.Method, args: Seq[jdi.Type], boxing: Boolean): Boolean =
-    method.argumentTypes.size == args.size &&
+  private def matchArguments(method: jdi.Method, args: Seq[jdi.Type], boxing: Boolean): Boolean =
+    method.argumentTypeNames.size == args.size &&
       method.argumentTypes.asScala.zip(args).forall {
         case (_: jdi.PrimitiveType, _: jdi.ReferenceType) if !boxing => false
         case (_: jdi.ReferenceType, _: jdi.PrimitiveType) if !boxing => false
@@ -652,10 +646,10 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
   }
 
   private def getCommonSuperClass(tpe1: jdi.Type, tpe2: jdi.Type): Validation[jdi.Type] = {
-    def getSuperClasses(of: jdi.Type): Array[jdi.ClassType] =
-      of match {
+    def getSuperClasses(tpe: jdi.Type): Array[jdi.ClassType] =
+      tpe match {
         case cls: jdi.ClassType =>
-          Iterator.iterate(cls)(cls => cls.superclass()).takeWhile(_ != null).toArray
+          Iterator.iterate(cls)(cls => cls.superclass).takeWhile(_ != null).toArray
         case _ => Array()
       }
 
@@ -663,7 +657,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
     val superClasses2 = getSuperClasses(tpe2)
     Validation.fromOption(
       superClasses1.find(superClasses2.contains),
-      s"${tpe1.name} and ${tpe2.name} do not have any common super class"
+      s"${nameOrNull(tpe1)} and ${nameOrNull(tpe2)} do not have any common super class"
     )
   }
 
@@ -701,7 +695,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
 
   private def asStaticModule(tpe: jdi.Type): Validation[RuntimeEvaluationTree] =
     if (isStaticModule(tpe)) Valid(preEvaluate(StaticModule(tpe.asInstanceOf[jdi.ClassType])))
-    else Recoverable(s"${tpe.name} is not a static module")
+    else Recoverable(s"${nameOrNull(tpe)} is not a static module")
 
   private def asModule(tpe: jdi.ReferenceType, qualifier: RuntimeEvaluationTree): Validation[RuntimeEvaluationTree] =
     if (isStaticModule(tpe)) asStaticModule(tpe)
@@ -745,6 +739,31 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
   ): Validation[CallMethod] =
     if (method.isStatic) Valid(CallStaticMethod(method, args, qualifier))
     else Recoverable(s"Cannot access instance method ${method.name} from static context")
+
+  private def asArrayElem(
+      array: RuntimeEvaluationTree,
+      args: Seq[RuntimeEvaluationTree]
+  ): Validation[RuntimeEvaluationTree] = {
+    val integerTypes = Seq("java.lang.Integer", "java.lang.Short", "java.lang.Byte", "java.lang.Character")
+    if (args.size != 1) Recoverable("Array accessor must have one argument")
+    else {
+      val index = args.head
+      array.`type` match {
+        case arrayTpe: jdi.ArrayType =>
+          index.`type` match {
+            case (_: jdi.IntegerType | _: jdi.ShortType | _: jdi.ByteType | _: jdi.CharType) =>
+              Valid(preEvaluate(new ArrayElem(array, index, arrayTpe.componentType)))
+            case ref: jdi.ReferenceType if integerTypes.contains(ref.name) =>
+              Valid(preEvaluate(new ArrayElem(array, index, arrayTpe.componentType)))
+            case tpe => Recoverable(s"Array index must be an integer, found ${tpe.name}")
+          }
+        case tpe => Recoverable(s"${tpe.name} is not an array")
+      }
+    }
+  }
+
+  private def nameOrNull(tpe: jdi.Type): String =
+    if (tpe == null) "null" else tpe.name
 
   private implicit class IterableExtensions[A](iter: Iterable[A]) {
     def validateSingle(message: String): Validation[A] =
