@@ -170,7 +170,7 @@ private[internal] class EvaluationProvider(
   }
 
   private def evaluate(expression: PreparedExpression, frame: JdiFrame): Try[Value] = evaluationBlock {
-    expression match {
+    val result = expression match {
       case logMessage: PlainLogMessage => MessageLogger.log(logMessage, frame)
       case expr: RuntimeExpression => runtimeEvaluator.evaluate(expr, frame)
       case expr: CompiledExpression =>
@@ -179,6 +179,8 @@ private[internal] class EvaluationProvider(
           compiledExpression <- scalaEvaluator.evaluate(expr)
         } yield compiledExpression
     }
+    // if evaluation throws an exception, we return that exception as the result
+    result.recover { case MethodInvocationFailed(_, Some(exception)) => exception.value }
   }
 
   private def completeFuture[T](result: Try[T], thread: ThreadReference): CompletableFuture[T] = {

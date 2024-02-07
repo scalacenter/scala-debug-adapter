@@ -132,50 +132,44 @@ object RuntimePrimitiveOps {
         fractional: Fractional[T]
     ): Safe[JdiValue] = {
       import Fractional.Implicits._
-      val result: Option[AnyVal] = this match {
-        case Plus => Some(x + y)
-        case Minus => Some(x - y)
-        case Times => Some(x * y)
-        case Div if y != 0 => Some(x / y)
-        case Modulo if y != 0 =>
-          x match {
-            case d: Double => Some(d % y.asInstanceOf[Double])
-            case f: Float => Some(f % y.asInstanceOf[Float])
-          }
-        case Div | Modulo => None
-        case Less => Some(fractional.lt(x, y))
-        case LessOrEqual => Some(fractional.lteq(x, y))
-        case Greater => Some(fractional.gt(x, y))
-        case GreaterOrEqual => Some(fractional.gteq(x, y))
-      }
-
-      result match {
-        case Some(value) => Safe.successful(clsLoader.mirrorOfAnyVal(value))
-        case None => Safe.failed(MethodInvocationFailed("Division by zero", None))
-      }
+      Safe(this)
+        .map {
+          case Plus => x + y
+          case Minus => x - y
+          case Times => x * y
+          case Div => x / y
+          case Modulo =>
+            x match {
+              case d: Double => d % y.asInstanceOf[Double]
+              case f: Float => f % y.asInstanceOf[Float]
+            }
+          case Less => fractional.lt(x, y)
+          case LessOrEqual => fractional.lteq(x, y)
+          case Greater => fractional.gt(x, y)
+          case GreaterOrEqual => fractional.gteq(x, y)
+        }
+        .map(clsLoader.mirrorOfAnyVal)
+        .recoverWith { case e: ArithmeticException => Safe.failed(MethodInvocationFailed(e.getMessage, None)) }
     }
 
     private def computeIntegral[T <: AnyVal](x: T, y: T, clsLoader: JdiClassLoader)(implicit
         integral: Integral[T]
     ): Safe[JdiValue] = {
       import Integral.Implicits._
-      val result: Option[AnyVal] = this match {
-        case Plus => Some(x + y)
-        case Minus => Some(x - y)
-        case Times => Some(x * y)
-        case Div if y != 0 => Some(x / y)
-        case Modulo if y != 0 => Some(x % y)
-        case Div | Modulo => None
-        case Less => Some(integral.lt(x, y))
-        case LessOrEqual => Some(integral.lteq(x, y))
-        case Greater => Some(integral.gt(x, y))
-        case GreaterOrEqual => Some(integral.gteq(x, y))
-      }
-
-      result match {
-        case Some(value) => Safe.successful(clsLoader.mirrorOfAnyVal(value))
-        case None => Safe.failed(MethodInvocationFailed("Division by zero", None))
-      }
+      Safe(this)
+        .map {
+          case Plus => x + y
+          case Minus => x - y
+          case Times => x * y
+          case Div => x / y
+          case Modulo => x % y
+          case Less => integral.lt(x, y)
+          case LessOrEqual => integral.lteq(x, y)
+          case Greater => integral.gt(x, y)
+          case GreaterOrEqual => integral.gteq(x, y)
+        }
+        .map(clsLoader.mirrorOfAnyVal)
+        .recoverWith { case e: ArithmeticException => Safe.failed(MethodInvocationFailed(e.getMessage, None)) }
     }
 
     def evaluate(lhs: JdiValue, rhs: JdiValue, loader: JdiClassLoader) = {
