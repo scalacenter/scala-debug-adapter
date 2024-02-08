@@ -31,7 +31,7 @@ final class ExpressionCompilerBridge {
     ) ++ options :+ sourceFile.toString
 
     val command = new CompilerCommand(args, errorConsumer.accept(_))
-    val reporter = new StoreReporter() // cannot fix because of Scala 2.10
+    val reporter = new StoreReporter() // cannot fix because of Scala 2.12
     val global = new ExpressionGlobal(
       command.settings,
       reporter,

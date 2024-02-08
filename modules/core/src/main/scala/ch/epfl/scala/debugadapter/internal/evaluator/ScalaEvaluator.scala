@@ -62,14 +62,8 @@ private[internal] class ScalaEvaluator(
     evaluatedValue.getResult
   }
 
-  private def evaluateExpression(expressionInstance: JdiObject): Safe[JdiValue] = {
-    expressionInstance
-      .invoke("evaluate", List())
-      .recover {
-        // if evaluation throws an exception, we return that exception as the result
-        case MethodInvocationFailed(msg, Some(exception)) => exception
-      }
-  }
+  private def evaluateExpression(expressionInstance: JdiObject): Safe[JdiValue] =
+    expressionInstance.invoke("evaluate", List())
 
   /**
    * In order to load the previously compiled Expression class, we need to

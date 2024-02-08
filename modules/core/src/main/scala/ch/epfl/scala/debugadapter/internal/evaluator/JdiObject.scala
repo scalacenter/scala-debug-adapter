@@ -8,13 +8,9 @@ private[evaluator] class JdiObject(
     val reference: ObjectReference,
     thread: ThreadReference
 ) extends JdiValue(reference, thread) {
-  def getField(field: Field): JdiValue =
-    JdiValue(reference.getValue(field), thread)
+  def getField(field: Field): JdiValue = JdiValue(reference.getValue(field), thread)
 
-  def getField(name: String): JdiValue = {
-    val field = reference.referenceType.fieldByName(name)
-    JdiValue(reference.getValue(field), thread)
-  }
+  def getField(name: String): JdiValue = getField(reference.referenceType.fieldByName(name))
 
   def invoke(methodName: String, args: Seq[JdiValue]): Safe[JdiValue] = {
     val m = reference.referenceType.methodsByName(methodName).get(0)
@@ -29,24 +25,22 @@ private[evaluator] class JdiObject(
   def classObject: JdiClass = JdiClass(reference.referenceType, thread)
   def classLoader: JdiClassLoader = JdiClassLoader(reference.referenceType.classLoader, thread)
 
-  def invoke(method: Method, args: Seq[JdiValue]): Safe[JdiValue] = {
+  def invoke(method: Method, args: Seq[JdiValue]): Safe[JdiValue] =
     Safe(reference.invokeMethod(thread, method, args.map(_.value).asJava, ObjectReference.INVOKE_SINGLE_THREADED))
       .map(JdiValue(_, thread))
-      .recoverWith(wrapInvocationException(thread))
-  }
+      .recoverWith(wrapInvocationException)
 
-  protected def wrapInvocationException(thread: ThreadReference): PartialFunction[Throwable, Safe[Nothing]] = {
+  protected val wrapInvocationException: PartialFunction[Throwable, Safe[Nothing]] = {
     case invocationException: InvocationException =>
       for {
         exception <- Safe(invocationException.exception).map(JdiObject(_, thread))
         message <- exception.invoke("toString", List()).map(_.asString.stringValue).recover { case _ => "" }
-      } yield throw new MethodInvocationFailed(message, Some(exception))
+      } yield throw new RuntimeException(message, Some(exception))
   }
 
   // we use a Seq instead of a Map because the ScalaEvaluator rely on the order of the fields
   def fields: Seq[(String, JdiValue)] =
-    reference.referenceType.fields.asScala.toSeq
-      .map(f => (f.name, JdiValue(reference.getValue(f), thread)))
+    reference.referenceType.fields.asScala.toSeq.map(f => (f.name, getField(f)))
 }
 
 private[internal] object JdiObject {

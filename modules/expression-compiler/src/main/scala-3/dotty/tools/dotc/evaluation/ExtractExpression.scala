@@ -16,6 +16,7 @@ import dotty.tools.dotc.transform.MacroTransform
 import dotty.tools.dotc.core.Phases.*
 import dotty.tools.dotc.report
 import dotty.tools.dotc.util.SrcPos
+import scala.annotation.nowarn
 
 class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform with DenotTransformer:
   override def phaseName: String = ExtractExpression.name
@@ -39,7 +40,7 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
 
   override protected def newTransformer(using Context): Transformer =
     new Transformer:
-      var expressionTree: Tree = _
+      var expressionTree: Tree = null
       override def transform(tree: Tree)(using Context): Tree =
         tree match
           case PackageDef(pid, stats) =>

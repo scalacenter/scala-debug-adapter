@@ -3,6 +3,7 @@ package ch.epfl.scala.debugadapter.internal
 import ch.epfl.scala.debugadapter.testfmk.*
 import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.DebugConfig
+import java.{util => ju}
 
 class Scala212RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`2.12`) {
   test("Should access to wrapping 'object' methods") {
@@ -887,7 +888,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("f1.foo_v2_apply.bar(42)", "hello 42"),
         Evaluation.success("inner(42).x", 42),
         Evaluation.success("list(0).toString()", "0"),
-        Evaluation.failed("list(1)", "java.lang.IndexOutOfBoundsException: 1")
+        Evaluation.success("list(1)", new IndexOutOfBoundsException("1"))
       )
     )
   }
@@ -920,7 +921,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("arr(by)", 3),
         Evaluation.success("arr(new Integer(2))", 3),
         Evaluation.success("arr(new Character('\u0000'))", 1),
-        Evaluation.failed("arr(3)", "java.lang.IndexOutOfBoundsException"),
+        Evaluation.failed("arr(3)", "Invalid array range: 3 to 3."),
         Evaluation.success("test(arr)", "1,2,3"),
         Evaluation.failed(
           "test(Array(Test(1), Test(2), Test(3)))",
@@ -939,13 +940,12 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("list(2).toString", "3"),
         Evaluation.success("list(new Integer(2)).toString", "3"),
         Evaluation.successOrIgnore("list(new Character('\u0000')).toString", "1", true),
-        Evaluation.failed("list(3)", "java.lang.IndexOutOfBoundsException"),
+        Evaluation.success("list(3)", new IndexOutOfBoundsException("3")),
         Evaluation.success("map(1)", "one"),
         Evaluation.success("map(2)", "two"),
         Evaluation.success("map(new Integer(2))", "two"),
         Evaluation.successOrIgnore("map(new Character('\u0000'))", "one", true),
-        // todo distinguish evaluation exception from MethodInvocationFailed
-        Evaluation.failed("map(3)", "key not found: 3"),
+        Evaluation.success("map(3)", new ju.NoSuchElementException("key not found: 3")),
         Evaluation.success("set(1)", true),
         Evaluation.success("set(2)", true),
         Evaluation.success("set(new Integer(2))", true),
@@ -955,7 +955,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("seq(2).toString", "3"),
         Evaluation.success("seq(new Integer(2)).toString", "3"),
         Evaluation.successOrIgnore("seq(new Character('\u0000')).toString", "1", true),
-        Evaluation.failed("seq(3)", "java.lang.IndexOutOfBoundsException: 3"),
+        Evaluation.success("seq(3)", new IndexOutOfBoundsException("3")),
         Evaluation.success("vector(0).toString", "1"),
         Evaluation.success("vector(2).toString", "3"),
         Evaluation.success("vector(new Integer(2)).toString", "3"),
