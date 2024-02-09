@@ -17,7 +17,8 @@ def checkBreakpointTask = Def.inputTask {
 
 def checkHotCodeReplaceTask = Def.task {
   val _ = (Compile / compile).value
-  DebugTest.runChecks(DebugState.state)(Seq(RedefineClasses(), Outputed("C")))
+  implicit val context: TestingContext = TestingContext(sourceToDebug.value, scalaV)
+  DebugTest.runChecks(DebugState.state)(Seq(RedefineClasses(), Outputed("C"), Breakpoint(6), Outputed("D")))
 }
 
 def checkNoHotCodeReplaceTask = Def.task {

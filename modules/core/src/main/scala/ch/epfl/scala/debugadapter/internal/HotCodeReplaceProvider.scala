@@ -113,7 +113,7 @@ class HotCodeReplaceProvider(
           _ => attemptPopFrames(suspendedThreads, classesToReplace),
           e => Try(warnOrThrow("Cannot pop frames")).map(_ => Seq.empty)
         )
-        _ = publishEvent(HotCodeReplaceEvent.EventType.STARTING, "Start hot code replacement procedure...")
+        _ = publishEvent(HotCodeReplaceEvent.EventType.STARTING, "Starting hot code replacement...")
         _ = redefineClasses(classesToReplace)
         res <-
           if (containsObsoleteMethods(suspendedThreads)) {
