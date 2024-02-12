@@ -16,7 +16,7 @@ import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
 import scala.util.Try
 
-class Scala3UnpicklerBridge(
+class Scala3DecoderBridge(
     debuggee: Debuggee,
     cls: Class[?],
     var bridge: Any,
@@ -24,10 +24,10 @@ class Scala3UnpicklerBridge(
     formatMethod: Method,
     testMode: Boolean,
     logger: Logger
-) extends ScalaUnpickler(debuggee.scalaVersion, testMode) {
+) extends ScalaDecoder(debuggee.scalaVersion, testMode) {
 
   override def reload(): Unit =
-    bridge = Scala3UnpicklerBridge.load(debuggee, cls, logger, testMode)
+    bridge = Scala3DecoderBridge.load(debuggee, cls, logger, testMode)
 
   override protected def skipScala(method: jdi.Method): Boolean = {
     try skipMethod.invoke(bridge, method).asInstanceOf[Boolean]
@@ -46,8 +46,8 @@ class Scala3UnpicklerBridge(
   }
 }
 
-object Scala3UnpicklerBridge {
-  def load(debuggee: Debuggee, unpicklerClass: Class[?], logger: Logger, testMode: Boolean) = {
+object Scala3DecoderBridge {
+  def load(debuggee: Debuggee, decoderClass: Class[?], logger: Logger, testMode: Boolean) = {
     val javaRuntimeJars = debuggee.javaRuntime.toSeq.flatMap {
       case Java8(_, classJars, _) => classJars
       case java9OrAbove: Java9OrAbove =>
@@ -57,7 +57,7 @@ object Scala3UnpicklerBridge {
     }
     val debuggeeClasspath = debuggee.classPath.toArray ++ javaRuntimeJars
     val warnLogger: Consumer[String] = msg => logger.warn(msg)
-    val ctr = unpicklerClass.getConstructor(classOf[Array[Path]], classOf[Consumer[String]], classOf[Boolean])
+    val ctr = decoderClass.getConstructor(classOf[Array[Path]], classOf[Consumer[String]], classOf[Boolean])
 
     ctr.newInstance(debuggeeClasspath, warnLogger, testMode: java.lang.Boolean)
   }
@@ -67,16 +67,16 @@ object Scala3UnpicklerBridge {
       classLoader: ClassLoader,
       logger: Logger,
       testMode: Boolean
-  ): Try[Scala3UnpicklerBridge] = {
+  ): Try[Scala3DecoderBridge] = {
     Try {
-      val className = "ch.epfl.scala.debugadapter.internal.stacktrace.Scala3UnpicklerBridge"
+      val className = "ch.epfl.scala.debugadapter.internal.stacktrace.Scala3DecoderBridge"
       val cls = classLoader.loadClass(className)
 
       val bridge = load(debuggee, cls, logger, testMode)
       val skipMethod = cls.getMethod("skipMethod", classOf[Any])
       val formatMethod = cls.getMethod("formatMethod", classOf[Any])
 
-      new Scala3UnpicklerBridge(debuggee, cls, bridge, skipMethod, formatMethod, testMode, logger)
+      new Scala3DecoderBridge(debuggee, cls, bridge, skipMethod, formatMethod, testMode, logger)
     }
   }
 }

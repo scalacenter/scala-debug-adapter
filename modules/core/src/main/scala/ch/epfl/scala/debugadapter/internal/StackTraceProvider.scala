@@ -11,17 +11,17 @@ import java.util.Optional
 
 class StackTraceProvider(
     runtimeFilter: RuntimeStepFilter,
-    scalaUnpickler: ScalaUnpickler,
+    decoder: ScalaDecoder,
     logger: Logger,
     testMode: Boolean
 ) extends JavaStackTraceProvider() {
 
-  private val stepFilters: Seq[StepFilter] = Seq(ClassLoadingFilter, runtimeFilter, scalaUnpickler)
+  private val stepFilters: Seq[StepFilter] = Seq(ClassLoadingFilter, runtimeFilter, decoder)
 
-  def reload(): Unit = scalaUnpickler.reload()
+  def reload(): Unit = decoder.reload()
 
   override def formatMethod(method: Method): Optional[String] = {
-    scalaUnpickler.format(method) match {
+    decoder.format(method) match {
       case None => Optional.empty()
       case Some(s) => Optional.of(s)
     }
@@ -62,11 +62,11 @@ object StackTraceProvider {
       logger: Logger,
       testMode: Boolean
   ): StackTraceProvider = {
-    val scalaUnpickler: ScalaUnpickler = ScalaUnpickler(debuggee, tools, logger, testMode)
+    val decoder: ScalaDecoder = ScalaDecoder(debuggee, tools, logger, testMode)
     val runtimeStepFilter = RuntimeStepFilter(debuggee.scalaVersion)
     new StackTraceProvider(
       runtimeStepFilter,
-      scalaUnpickler,
+      decoder,
       logger,
       testMode
     )

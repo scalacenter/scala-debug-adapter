@@ -37,7 +37,7 @@ lazy val root = project
     expressionCompiler30,
     expressionCompiler33,
     expressionCompiler34,
-    unpickler3
+    decoder3
   )
   .settings(
     publish / skip := true
@@ -93,7 +93,7 @@ lazy val core = projectMatrix
       BuildInfoKey.action("organization")(organization.value),
       BuildInfoKey.action("version")(version.value),
       BuildInfoKey.action("expressionCompilerName")((LocalProject("expressionCompiler2_12") / name).value),
-      BuildInfoKey.action("unpicklerName")((LocalProject("unpickler3") / name).value),
+      BuildInfoKey.action("decoderName")((LocalProject("decoder3") / name).value),
       BuildInfoKey.action("scala212")(Dependencies.scala212),
       BuildInfoKey.action("scala213")(Dependencies.scala213),
       BuildInfoKey.action("scala30")(Dependencies.scala30),
@@ -194,12 +194,12 @@ lazy val expressionCompiler = projectMatrix
     scalacOptionsSettings
   )
 
-lazy val unpickler3: Project = project
-  .in(file("modules/unpickler"))
+lazy val decoder3: Project = project
+  .in(file("modules/decoder"))
   .disablePlugins(SbtJdiTools)
   .dependsOn(tests3 % Test)
   .settings(
-    name := "scala-debug-unpickler",
+    name := "scala-debug-decoder",
     scalaVersion := Dependencies.scala33,
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
@@ -222,7 +222,7 @@ lazy val testOptionsSettings = Def.settings(
       LocalProject("expressionCompiler2_13") / publishLocal,
       LocalProject("expressionCompiler3_3") / publishLocal,
       LocalProject("expressionCompiler3_4") / publishLocal,
-      LocalProject("unpickler3") / publishLocal
+      LocalProject("decoder3") / publishLocal
     )
     .value
 )

@@ -8,7 +8,7 @@ import scala.reflect.io.File
 
 private[debugadapter] final class DebugTools(
     val expressionCompilers: Map[ClassEntry, ExpressionCompiler],
-    val unpickler: Option[ClassLoader],
+    val decoder: Option[ClassLoader],
     val sourceLookUp: SourceLookUpProvider
 )
 
@@ -28,12 +28,12 @@ object DebugTools {
       loadExpressionCompiler(debuggee, resolver, logger)
     }
 
-    val unpickler =
+    val decoder =
       if (debuggee.scalaVersion.isScala3) {
         TimeUtils.logTime(logger, "Loaded step filter") {
           resolver
-            .resolveUnpickler(debuggee.scalaVersion)
-            .warnFailure(logger, s"Cannot fetch unpickler of Scala ${debuggee.scalaVersion}")
+            .resolveDecoder(debuggee.scalaVersion)
+            .warnFailure(logger, s"Cannot fetch decoder of Scala ${debuggee.scalaVersion}")
         }
       } else None
 
@@ -49,7 +49,7 @@ object DebugTools {
       SourceLookUpProvider(distinctEntries, logger)
     }
 
-    new DebugTools(allCompilers, unpickler, sourceLookUp)
+    new DebugTools(allCompilers, decoder, sourceLookUp)
   }
 
   /* At most 2 expression compilers are resolved, one for Scala 2 and one for Scala 3

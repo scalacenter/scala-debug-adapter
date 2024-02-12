@@ -8,10 +8,10 @@ import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
 import ch.epfl.scala.debugadapter.testfmk.NoopLogger
 import munit.FunSuite
 
-class Scala213UnpicklerTests extends Scala2UnpicklerTests(ScalaVersion.`2.13`)
-class Scala212UnpicklerTests extends Scala2UnpicklerTests(ScalaVersion.`2.12`)
+class Scala213DecoderTests extends Scala2DecoderTests(ScalaVersion.`2.13`)
+class Scala212DecoderTests extends Scala2DecoderTests(ScalaVersion.`2.12`)
 
-abstract class Scala2UnpicklerTests(scalaVersion: ScalaVersion) extends FunSuite {
+abstract class Scala2DecoderTests(scalaVersion: ScalaVersion) extends FunSuite {
   def isScala213: Boolean = scalaVersion.isScala213
 
   test("extract result types of all kind") {
@@ -41,14 +41,14 @@ abstract class Scala2UnpicklerTests(scalaVersion: ScalaVersion) extends FunSuite
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "", scalaVersion)
-    val unpickler = new Scala2Unpickler(null, scalaVersion, NoopLogger, testMode = true)
+    val decoder = new Scala2Decoder(null, scalaVersion, NoopLogger, testMode = true)
 
     val scalaSig = decompile(debuggee, "example/Main.class")
     val methods = scalaSig.entries
       .collect { case m: MethodSymbol => m }
       .filter(m => m.isMethod)
     val returnTypes = methods
-      .map(m => unpickler.extractParametersAndReturnType(m.infoType)._2)
+      .map(m => decoder.extractParametersAndReturnType(m.infoType)._2)
 
     val returnThisType = returnTypes.find(_.isInstanceOf[ThisType])
     assert(returnThisType.nonEmpty)
@@ -83,7 +83,7 @@ abstract class Scala2UnpicklerTests(scalaVersion: ScalaVersion) extends FunSuite
          |}
          |""".stripMargin
     val debuggee = TestingDebuggee.mainClass(source, "", scalaVersion)
-    val unpickler = new Scala2Unpickler(null, scalaVersion, NoopLogger, testMode = true)
+    val decoder = new Scala2Decoder(null, scalaVersion, NoopLogger, testMode = true)
 
     val scalaSig = decompile(debuggee, "example/Main.class")
     val method = scalaSig.entries
@@ -91,16 +91,16 @@ abstract class Scala2UnpicklerTests(scalaVersion: ScalaVersion) extends FunSuite
       .filter(m => m.isMethod)
       .find(_.name == "m")
       .get
-    val returnType = unpickler.extractParametersAndReturnType(method.infoType)._2
+    val returnType = decoder.extractParametersAndReturnType(method.infoType)._2
     assert(returnType.isInstanceOf[ConstantType])
   }
 
   test("all Java types are known by the class loader") {
     val debuggee = TestingDebuggee.mainClass("", "", scalaVersion)
     val sourceLookUp = SourceLookUpProvider(debuggee.classEntries, NoopLogger)
-    val unpickler = new Scala2Unpickler(sourceLookUp, scalaVersion, NoopLogger, testMode = true)
+    val decoder = new Scala2Decoder(sourceLookUp, scalaVersion, NoopLogger, testMode = true)
 
-    unpickler.scalaAliasesToJavaTypes.values.foreach { javaClass =>
+    decoder.scalaAliasesToJavaTypes.values.foreach { javaClass =>
       assert(sourceLookUp.containsClass(javaClass))
     }
   }
