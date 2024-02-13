@@ -16,6 +16,7 @@ import scala.jdk.CollectionConverters.*
 trait BinaryDecoderSuite extends CommonFunSuite:
   protected def throwOrWarn: ThrowOrWarn = ThrowOrWarn.printAndThrow
   private def formatter(using ThrowOrWarn) = StackTraceFormatter()
+  private def debugDecoder = Scala3Decoder(formatter)
 
   given ThrowOrWarn = throwOrWarn
 
@@ -35,7 +36,6 @@ trait BinaryDecoderSuite extends CommonFunSuite:
     TestingDecoder(library, libraries)
 
   extension (decoder: TestingDecoder)
-    private def unpickler = Scala3Unpickler(decoder.decoder, formatter)
 
     def assertDecode(className: String, expected: String)(using munit.Location): Unit =
       val cls = decoder.classLoader.loadClass(className)
@@ -48,7 +48,7 @@ trait BinaryDecoderSuite extends CommonFunSuite:
       val binaryMethod = loadBinaryMethod(className, method)
       val decodedMethod = decoder.decode(binaryMethod)
       assertEquals(formatter.format(decodedMethod), expected)
-      assertEquals(unpickler.skip(decodedMethod), skip)
+      assertEquals(debugDecoder.skip(decodedMethod), skip)
 
     def assertNotFound(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val method = loadBinaryMethod(declaringType, javaSig)

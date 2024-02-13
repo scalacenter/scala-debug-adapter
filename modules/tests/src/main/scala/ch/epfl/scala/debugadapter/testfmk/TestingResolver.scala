@@ -74,8 +74,8 @@ object TestingResolver extends DebugToolsResolver {
   override def resolveExpressionCompiler(scalaVersion: ScalaVersion): Try[ClassLoader] =
     Try(get(scalaVersion).expressionCompilerClassLoader)
 
-  override def resolveUnpickler(scalaVersion: ScalaVersion): Try[ClassLoader] =
-    Try(get(scalaVersion).unpicklerClassLoader)
+  override def resolveDecoder(scalaVersion: ScalaVersion): Try[ClassLoader] =
+    Try(get(scalaVersion).decoderClassLoader)
 
   def get(scalaVersion: ScalaVersion): ScalaInstance = {
     if (!cache.contains(scalaVersion)) {
@@ -110,8 +110,8 @@ object TestingResolver extends DebugToolsResolver {
       BuildInfo.version
     )
 
-    val unpicklerDep = Dependency(
-      coursier.Module(Organization(BuildInfo.organization), ModuleName(s"${BuildInfo.unpicklerName}_3")),
+    val decoderDep = Dependency(
+      coursier.Module(Organization(BuildInfo.organization), ModuleName(s"${BuildInfo.decoderName}_3")),
       BuildInfo.version
     )
 
@@ -121,12 +121,12 @@ object TestingResolver extends DebugToolsResolver {
     )
 
     val jars = fetch(expressionCompilerDep)
-    val unpicklerJars = fetch(unpicklerDep, tastyDep)
+    val decoderJars = fetch(decoderDep, tastyDep)
     val libraryJars =
       jars.filter(jar => jar.name.startsWith("scala-library") || jar.name.startsWith("scala3-library_3"))
     val expressionCompilerJar = jars.find(jar => jar.name.startsWith(expressionCompilerArtifact)).get
     val compilerJars = jars.filter(jar => !libraryJars.contains(jar) && jar != expressionCompilerJar)
 
-    new Scala3Instance(libraryJars, compilerJars, expressionCompilerJar, unpicklerJars)
+    new Scala3Instance(libraryJars, compilerJars, expressionCompilerJar, decoderJars)
   }
 }

@@ -12,7 +12,7 @@ import com.sun.jdi.ReferenceType
 import scala.jdk.CollectionConverters.*
 import scala.util.control.NonFatal
 
-abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) extends StepFilter {
+abstract class ScalaDecoder(scalaVersion: ScalaVersion, testMode: Boolean) extends StepFilter {
   protected def skipScala(method: Method): Boolean
   protected def formatScala(method: Method): Option[String] = Some(formatJava(method))
 
@@ -145,27 +145,27 @@ abstract class ScalaUnpickler(scalaVersion: ScalaVersion, testMode: Boolean) ext
     method.name.matches(""".+\$access\$\d+""")
 }
 
-object ScalaUnpickler {
+object ScalaDecoder {
   def apply(
       debuggee: Debuggee,
       tools: DebugTools,
       logger: Logger,
       testMode: Boolean
-  ): ScalaUnpickler = {
+  ): ScalaDecoder = {
     if (debuggee.scalaVersion.isScala2)
-      new Scala2Unpickler(tools.sourceLookUp, debuggee.scalaVersion, logger, testMode)
+      new Scala2Decoder(tools.sourceLookUp, debuggee.scalaVersion, logger, testMode)
     else
-      tools.unpickler
+      tools.decoder
         .flatMap { classLoader =>
-          Scala3UnpicklerBridge
+          Scala3DecoderBridge
             .tryLoad(debuggee, classLoader, logger, testMode)
             .warnFailure(logger, s"Cannot load step filter for Scala ${debuggee.scalaVersion}")
         }
         .getOrElse(fallback(debuggee.scalaVersion, testMode))
   }
 
-  private def fallback(scalaVersion: ScalaVersion, testMode: Boolean): ScalaUnpickler =
-    new ScalaUnpickler(scalaVersion, testMode) {
+  private def fallback(scalaVersion: ScalaVersion, testMode: Boolean): ScalaDecoder =
+    new ScalaDecoder(scalaVersion, testMode) {
       override protected def skipScala(method: Method): Boolean = false
     }
 }

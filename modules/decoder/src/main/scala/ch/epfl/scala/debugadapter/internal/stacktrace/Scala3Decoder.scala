@@ -19,7 +19,7 @@ import java.util.function.Consumer
 import scala.jdk.OptionConverters.*
 import scala.util.matching.Regex
 
-class Scala3UnpicklerBridge(
+class Scala3DecoderBridge(
     classEntries: Array[Path],
     warnLogger: Consumer[String],
     testMode: Boolean
@@ -28,17 +28,18 @@ class Scala3UnpicklerBridge(
     // make it quiet, or it would be too verbose when things go wrong
     using ThrowOrWarn(_ => (), testMode)
   )
-  val formatter: StackTraceFormatter = StackTraceFormatter(using ThrowOrWarn(s => warnLogger.accept(s), testMode))
-  val unpickler: Scala3Unpickler = Scala3Unpickler(decoder, formatter)
+  private val formatter = StackTraceFormatter(using ThrowOrWarn(s => warnLogger.accept(s), testMode))
+  private val impl: Scala3Decoder = Scala3Decoder(formatter)
 
   def skipMethod(obj: Any): Boolean =
     val decodedMethod = decoder.decode(JdiMethod(obj))
-    unpickler.skip(decodedMethod)
+    impl.skip(decodedMethod)
 
   def formatMethod(obj: Any): Optional[String] =
-    unpickler.format(JdiMethod(obj)).toJava
+    val decodedMethod = decoder.decode(JdiMethod(obj))
+    impl.format(decodedMethod).toJava
 
-class Scala3Unpickler(decoder: BinaryDecoder, formatter: StackTraceFormatter):
+class Scala3Decoder(formatter: StackTraceFormatter):
   def skip(method: DecodedMethod): Boolean =
     method match
       case method: DecodedMethod.ValOrDefDef =>
@@ -65,7 +66,7 @@ class Scala3Unpickler(decoder: BinaryDecoder, formatter: StackTraceFormatter):
       case method: DecodedMethod.InlinedMethod => skip(method.underlying)
       case _ => false
 
-  def format(method: binary.Method): Option[String] =
+  def format(method: DecodedMethod): Option[String] =
     def rec(method: DecodedMethod): Option[String] =
       method match
         case method: DecodedMethod.LazyInit if method.symbol.owner.isTrait => None
@@ -80,4 +81,4 @@ class Scala3Unpickler(decoder: BinaryDecoder, formatter: StackTraceFormatter):
         case _: DecodedMethod.AdaptedFun => None
         case method: DecodedMethod.InlinedMethod => rec(method.underlying)
         case m => Some(formatter.format(m))
-    rec(decoder.decode(method))
+    rec(method)

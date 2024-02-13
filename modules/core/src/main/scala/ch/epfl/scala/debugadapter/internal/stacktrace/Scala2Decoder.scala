@@ -10,12 +10,12 @@ import com.sun.jdi
 import scala.jdk.CollectionConverters.*
 import scala.util.matching.Regex
 
-class Scala2Unpickler(
+class Scala2Decoder(
     sourceLookUp: SourceLookUpProvider,
     scalaVersion: ScalaVersion,
     logger: Logger,
     testMode: Boolean
-) extends ScalaUnpickler(scalaVersion, testMode) {
+) extends ScalaDecoder(scalaVersion, testMode) {
   override protected def skipScala(method: jdi.Method): Boolean = {
     if (isLazyInitializer(method)) {
       skipLazyInitializer(method)

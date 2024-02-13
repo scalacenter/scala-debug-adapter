@@ -10,12 +10,12 @@ sealed abstract class ScalaInstance(
     val libraryJars: Seq[Library],
     compilerJars: Seq[Library],
     expressionCompilerJar: Library,
-    unpicklerJars: Seq[Library]
+    decoderJars: Seq[Library]
 ) {
   val libraryClassLoader = new URLClassLoader(libraryJars.map(_.toURL).toArray, null)
   val compilerClassLoader = new URLClassLoader(compilerJars.map(_.toURL).toArray, libraryClassLoader)
   val expressionCompilerClassLoader = new URLClassLoader(Array(expressionCompilerJar.toURL), compilerClassLoader)
-  val unpicklerClassLoader = new URLClassLoader(unpicklerJars.map(_.toURL).toArray, null)
+  val decoderClassLoader = new URLClassLoader(decoderJars.map(_.toURL).toArray, null)
 
   def compile(
       classDir: Path,
