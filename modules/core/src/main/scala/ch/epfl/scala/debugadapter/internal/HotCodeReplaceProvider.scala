@@ -15,7 +15,6 @@ import com.microsoft.java.debug.core.adapter.IStackTraceProvider
 import com.microsoft.java.debug.core.protocol.Events
 import com.sun.jdi.*
 import io.reactivex.Observable
-import io.reactivex.disposables.Disposable
 
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicReference
@@ -27,6 +26,7 @@ import scala.util.Success
 import scala.util.Try
 import scala.util.control.NonFatal
 import io.reactivex.subjects.PublishSubject
+import java.io.Closeable
 
 class HotCodeReplaceProvider(
     debuggee: Debuggee,
@@ -35,7 +35,7 @@ class HotCodeReplaceProvider(
 ) extends IHotCodeReplaceProvider {
   private var sourceLookUp: SourceLookUpProvider = null
   private var stackTraceProvider: StackTraceProvider = null
-  private var subscription: Disposable = null
+  private var subscription: Closeable = null
   private var context: IDebugAdapterContext = null
   private var currentDebugSession: IDebugSession = null
   private val classesAccumulator: AtomicReference[Set[String]] = new AtomicReference(Set.empty)
@@ -45,14 +45,13 @@ class HotCodeReplaceProvider(
   override def initialize(context: IDebugAdapterContext, options: ju.Map[String, Object]): Unit = {
     this.context = context
     this.currentDebugSession = context.getDebugSession
-    this.subscription = debuggee.classesToUpdate.subscribe(classes => classesAccumulator.updateAndGet(_ ++ classes))
+    this.subscription = debuggee.observeClassesToUpdate(classes => classesAccumulator.updateAndGet(_ ++ classes))
     this.sourceLookUp = context.getProvider(classOf[ISourceLookUpProvider]).asInstanceOf[SourceLookUpProvider]
     this.stackTraceProvider = context.getProvider(classOf[IStackTraceProvider]).asInstanceOf[StackTraceProvider]
-
   }
 
   override def close(): Unit = {
-    if (subscription != null) subscription.dispose()
+    if (subscription != null) subscription.close()
     context = null
     currentDebugSession = null
     subscription = null

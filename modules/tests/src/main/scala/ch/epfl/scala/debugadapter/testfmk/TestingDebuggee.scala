@@ -12,8 +12,11 @@ import ch.epfl.scala.debugadapter.SourceDirectory
 import ch.epfl.scala.debugadapter.StandaloneSourceFile
 import ch.epfl.scala.debugadapter.UnmanagedEntry
 import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee._
+import io.reactivex.subjects.PublishSubject
+import io.reactivex.subjects.Subject
 
 import java.io.BufferedReader
+import java.io.Closeable
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.InetSocketAddress
@@ -25,8 +28,6 @@ import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.util.Properties
 import scala.util.control.NonFatal
-import io.reactivex.subjects.Subject
-import io.reactivex.subjects.PublishSubject
 
 case class TestingDebuggee(
     tempDir: Path,
@@ -41,7 +42,11 @@ case class TestingDebuggee(
 ) extends Debuggee
     with TestingContext {
 
-  override val classesToUpdate: Subject[Seq[String]] = PublishSubject.create()
+  val classesToUpdate: Subject[Seq[String]] = PublishSubject.create()
+  override def observeClassesToUpdate(updateClasses: Seq[String] => Unit): Closeable = {
+    val subscription = classesToUpdate.subscribe(updateClasses(_))
+    () => if (!subscription.isDisposed) subscription.dispose
+  }
   def mainSource: Path = sourceFiles.head
 
   override def name: String = mainClass
