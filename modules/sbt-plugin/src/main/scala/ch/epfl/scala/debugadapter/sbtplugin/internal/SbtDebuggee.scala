@@ -14,9 +14,16 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
 import ch.epfl.scala.debugadapter.testing.TestSuiteEvent
 import io.reactivex.Observable
+import java.io.Closeable
 
 private[debugadapter] sealed trait SbtDebuggee extends Debuggee {
   val logger: LoggerAdapter
+  val classesToUpdate: Observable[Seq[String]]
+
+  override def observeClassesToUpdate(updateClasses: Seq[String] => Unit): Closeable = {
+    val subscription = classesToUpdate.subscribe(updateClasses(_))
+    () => if (!subscription.isDisposed) subscription.dispose
+  }
 }
 
 private[debugadapter] final class MainClassDebuggee(

@@ -20,7 +20,6 @@ import sjsonnew.support.scalajson.unsafe.CompactPrinter
 import sjsonnew.support.scalajson.unsafe.Converter
 import sjsonnew.support.scalajson.unsafe.{Parser => JsonParser}
 import xsbti.FileConverter
-import xsbti.VirtualFileRef
 import xsbti.compile.CompileAnalysis
 import xsbti.compile.analysis.ReadStamps
 import xsbti.compile.analysis.Stamp
@@ -67,7 +66,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       inputKey[URI]("Start a debug session on a remote process").withRank(KeyRanks.DTask)
     val debugAdapterConfig =
       settingKey[DebugConfig]("Configure the debug session").withRank(KeyRanks.DTask)
-    val debugAdapterClassesObserver =
+    val debugAdapterClassesToUpdate =
       settingKey[PublishSubject[Seq[String]]]("Observe the classes to be reloaded by the debuggee")
         .withRank(KeyRanks.DTask)
     val stopDebugSession =
@@ -109,7 +108,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     startMainClassDebugSession := mainClassSessionTask.evaluated,
     startRemoteDebugSession := remoteSessionTask.evaluated,
     stopDebugSession := stopSessionTask.value,
-    debugAdapterClassesObserver := PublishSubject.create(),
+    debugAdapterClassesToUpdate := PublishSubject.create(),
     Keys.compile / Keys.javacOptions := {
       val jo = (Keys.compile / Keys.javacOptions).value
       if (jo.exists(_.startsWith("-g"))) jo
@@ -118,45 +117,38 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     Keys.compile := {
       val currentAnalysis: CompileAnalysis = Keys.compile.value
       val previousAnalysis = Keys.previousCompile.value.analysis
-      val observer = debugAdapterClassesObserver.value
+      val classesToUpdate = debugAdapterClassesToUpdate.value
       val fileConverter = Keys.fileConverter.value
       val classDir = Keys.classDirectory.value.toPath
       if (previousAnalysis.isPresent) {
-        val classesToReload =
-          getNewClasses(currentAnalysis.readStamps, previousAnalysis.get.readStamps, fileConverter, classDir)
-        observer.onNext(classesToReload)
+        val currentStamps = currentAnalysis.readStamps
+        val previousStamps = previousAnalysis.get.readStamps
+        val newClasses = getNewClasses(currentStamps, previousStamps, fileConverter, classDir)
+        classesToUpdate.onNext(newClasses)
       }
       currentAnalysis
     }
   )
 
-  def getNewClasses(
+  private def getNewClasses(
       currentStamps: ReadStamps,
       previousStamps: ReadStamps,
-      fileConverter: FileConverter,
+      converter: FileConverter,
       classDir: java.nio.file.Path
   ): Seq[String] = {
-    def isNewer(current: Stamp, previous: Stamp) = {
+    def isNewer(current: Stamp, previous: Stamp) =
       if (previous == null) true
       else {
         val newHash = current.getHash
         val oldHash = previous.getHash
         newHash.isPresent && (!oldHash.isPresent || newHash.get != oldHash.get)
       }
-    }
-
-    object ClassFile {
-      def unapply(vf: VirtualFileRef): Option[String] = {
-        val path = fileConverter.toPath(vf)
-        if (path.toString.endsWith(".class")) {
-          Some(classDir.relativize(path).toString.replace(File.separator, ".").stripSuffix(".class"))
-        } else None
-      }
-    }
 
     val oldStamps = previousStamps.getAllProductStamps
-    currentStamps.getAllProductStamps.asScala.collect {
-      case (file @ ClassFile(fqcn), stamp) if isNewer(stamp, oldStamps.get(file)) => fqcn
+    currentStamps.getAllProductStamps.asScala.iterator.collect {
+      case (file, stamp) if file.id.endsWith(".class") && isNewer(stamp, oldStamps.get(file)) =>
+        val path = converter.toPath(file)
+        classDir.relativize(path).toString.replace(File.separator, ".").stripSuffix(".class")
     }.toSeq
   }
 
@@ -291,7 +283,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             InternalTasks.libraries.value,
             InternalTasks.unmanagedEntries.value,
             InternalTasks.javaRuntime.value,
-            InternalTasks.classesObservable.value,
+            InternalTasks.classesToUpdate.value,
             mainClass.`class`,
             mainClass.arguments,
             new LoggerAdapter(logger)
@@ -397,7 +389,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             InternalTasks.libraries.value,
             InternalTasks.unmanagedEntries.value,
             InternalTasks.javaRuntime.value,
-            InternalTasks.classesObservable.value,
+            InternalTasks.classesToUpdate.value,
             cleanups,
             parallel,
             testRunners,
@@ -463,7 +455,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           InternalTasks.libraries.value,
           InternalTasks.unmanagedEntries.value,
           InternalTasks.javaRuntime.value,
-          InternalTasks.classesObservable.value,
+          InternalTasks.classesToUpdate.value,
           new LoggerAdapter(logger)
         )
       startServer(jobService, scope, state, target, debuggee, debugToolsResolver, debugAdapterConfig.value)

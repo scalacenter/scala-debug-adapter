@@ -17,12 +17,12 @@ private[sbtplugin] object InternalTasks {
     modules.join(_.join)
   }
 
-  lazy val classesObservable: Def.Initialize[Observable[Seq[String]]] = Def.settingDyn {
+  lazy val classesToUpdate: Def.Initialize[Observable[Seq[String]]] = Def.settingDyn {
     val internalDependencies = Keys.bspInternalDependencyConfigurations
     val observables = for {
       (proj, configs) <- Keys.bspInternalDependencyConfigurations.value
       config <- configs
-    } yield (proj / config / debugAdapterClassesObserver)
+    } yield (proj / config / debugAdapterClassesToUpdate)
     Def.setting {
       observables.join.value.fold(Observable.empty[Seq[String]])(_ mergeWith _)
     }
