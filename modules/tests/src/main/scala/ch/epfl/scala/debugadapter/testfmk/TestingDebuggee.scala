@@ -43,8 +43,8 @@ case class TestingDebuggee(
     with TestingContext {
 
   val classesToUpdate: Subject[Seq[String]] = PublishSubject.create()
-  override def observeClassesToUpdate(updateClasses: Seq[String] => Unit): Closeable = {
-    val subscription = classesToUpdate.subscribe(updateClasses(_))
+  override def observeClassUpdates(onClassUpdate: Seq[String] => Unit): Closeable = {
+    val subscription = classesToUpdate.subscribe(onClassUpdate(_))
     () => if (!subscription.isDisposed) subscription.dispose
   }
   def mainSource: Path = sourceFiles.head

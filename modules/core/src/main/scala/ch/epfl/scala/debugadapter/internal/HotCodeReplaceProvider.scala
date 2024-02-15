@@ -45,7 +45,7 @@ class HotCodeReplaceProvider(
   override def initialize(context: IDebugAdapterContext, options: ju.Map[String, Object]): Unit = {
     this.context = context
     this.currentDebugSession = context.getDebugSession
-    this.subscription = debuggee.observeClassesToUpdate(classes => classesAccumulator.updateAndGet(_ ++ classes))
+    this.subscription = debuggee.observeClassUpdates(classes => classesAccumulator.updateAndGet(_ ++ classes))
     this.sourceLookUp = context.getProvider(classOf[ISourceLookUpProvider]).asInstanceOf[SourceLookUpProvider]
     this.stackTraceProvider = context.getProvider(classOf[IStackTraceProvider]).asInstanceOf[StackTraceProvider]
   }

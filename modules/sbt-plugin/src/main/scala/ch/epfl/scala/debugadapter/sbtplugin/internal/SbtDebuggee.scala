@@ -20,8 +20,8 @@ private[debugadapter] sealed trait SbtDebuggee extends Debuggee {
   val logger: LoggerAdapter
   val classesToUpdate: Observable[Seq[String]]
 
-  override def observeClassesToUpdate(updateClasses: Seq[String] => Unit): Closeable = {
-    val subscription = classesToUpdate.subscribe(updateClasses(_))
+  override def observeClassUpdates(onClassUpdate: Seq[String] => Unit): Closeable = {
+    val subscription = classesToUpdate.subscribe(onClassUpdate(_))
     () => if (!subscription.isDisposed) subscription.dispose
   }
 }

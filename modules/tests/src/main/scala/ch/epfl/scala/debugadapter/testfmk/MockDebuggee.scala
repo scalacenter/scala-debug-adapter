@@ -34,7 +34,7 @@ class MockDebuggee extends Debuggee {
 
   override def javaRuntime: Option[JavaRuntime] = None
 
-  override def observeClassesToUpdate(updateClasses: Seq[String] => Unit): Closeable = () => ()
+  override def observeClassUpdates(onClassUpdate: Seq[String] => Unit): Closeable = () => ()
 }
 
 class MockCancelableFuture() extends CancelableFuture[Unit] {
