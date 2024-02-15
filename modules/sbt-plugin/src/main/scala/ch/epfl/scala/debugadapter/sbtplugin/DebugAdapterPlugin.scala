@@ -64,9 +64,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       inputKey[URI]("Start a debug session for running test suites").withRank(KeyRanks.DTask)
     val startRemoteDebugSession =
       inputKey[URI]("Start a debug session on a remote process").withRank(KeyRanks.DTask)
-    val debugAdapterConfig =
-      settingKey[DebugConfig]("Configure the debug session").withRank(KeyRanks.DTask)
-    val debugAdapterClassesToUpdate =
+    val debugAdapterConfig = settingKey[DebugConfig]("Configure the debug session").withRank(KeyRanks.DTask)
+    val debugAdapterClassUpdates =
       settingKey[PublishSubject[Seq[String]]]("Observe the classes to be reloaded by the debuggee")
         .withRank(KeyRanks.DTask)
     val stopDebugSession =
@@ -108,7 +107,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     startMainClassDebugSession := mainClassSessionTask.evaluated,
     startRemoteDebugSession := remoteSessionTask.evaluated,
     stopDebugSession := stopSessionTask.value,
-    debugAdapterClassesToUpdate := PublishSubject.create(),
+    debugAdapterClassUpdates := PublishSubject.create(),
     Keys.compile / Keys.javacOptions := {
       val jo = (Keys.compile / Keys.javacOptions).value
       if (jo.exists(_.startsWith("-g"))) jo
@@ -117,10 +116,10 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
     Keys.compile := {
       val currentAnalysis: CompileAnalysis = Keys.compile.value
       val previousAnalysis = Keys.previousCompile.value.analysis
-      val classesToUpdate = debugAdapterClassesToUpdate.value
+      val classesToUpdate = debugAdapterClassUpdates.value
       val fileConverter = Keys.fileConverter.value
       val classDir = Keys.classDirectory.value.toPath
-      if (previousAnalysis.isPresent) {
+      if (previousAnalysis.isPresent && classesToUpdate.hasObservers) {
         val currentStamps = currentAnalysis.readStamps
         val previousStamps = previousAnalysis.get.readStamps
         val newClasses = getNewClasses(currentStamps, previousStamps, fileConverter, classDir)
@@ -283,7 +282,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             InternalTasks.libraries.value,
             InternalTasks.unmanagedEntries.value,
             InternalTasks.javaRuntime.value,
-            InternalTasks.classesToUpdate.value,
+            InternalTasks.allClassUpdates.value,
             mainClass.`class`,
             mainClass.arguments,
             new LoggerAdapter(logger)
@@ -389,7 +388,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
             InternalTasks.libraries.value,
             InternalTasks.unmanagedEntries.value,
             InternalTasks.javaRuntime.value,
-            InternalTasks.classesToUpdate.value,
+            InternalTasks.allClassUpdates.value,
             cleanups,
             parallel,
             testRunners,
@@ -455,7 +454,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           InternalTasks.libraries.value,
           InternalTasks.unmanagedEntries.value,
           InternalTasks.javaRuntime.value,
-          InternalTasks.classesToUpdate.value,
+          InternalTasks.allClassUpdates.value,
           new LoggerAdapter(logger)
         )
       startServer(jobService, scope, state, target, debuggee, debugToolsResolver, debugAdapterConfig.value)
