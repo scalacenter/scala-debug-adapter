@@ -12,7 +12,7 @@ trait Debuggee {
   def libraries: Seq[Library]
   def unmanagedEntries: Seq[UnmanagedEntry]
   def javaRuntime: Option[JavaRuntime]
-  def observeClassesToUpdate(updateClasses: Seq[String] => Unit): Closeable
+  def observeClassUpdates(onClassUpdate: Seq[String] => Unit): Closeable
 
   def managedEntries: Seq[ManagedEntry] = modules ++ libraries
   def classPathEntries: Seq[ClassPathEntry] = managedEntries ++ unmanagedEntries
