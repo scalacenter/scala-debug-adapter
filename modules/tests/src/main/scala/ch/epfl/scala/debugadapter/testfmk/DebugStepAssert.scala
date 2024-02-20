@@ -16,12 +16,12 @@ object DebugStepAssert {
   def inParallel(steps: SingleStepAssert[Either[String, String]]*): ParallelStepsAsserts[Either[String, String]] =
     ParallelStepsAsserts(steps)
 
-  def assertOnFrame(expectedSource: Path, expectedLine: Int)(frames: Array[StackFrame])(implicit
+  def assertOnFrame(expectedSource: Path, expectedLine: Int)(callStack: Array[StackFrame])(implicit
       location: Location
   ): Unit = {
-    assert(frames != null)
-    assertEquals(frames.head.source.path, expectedSource.toString)
-    assertEquals(frames.head.line, expectedLine)
+    assert(callStack != null)
+    assertEquals(callStack.head.source.path, expectedSource.toString)
+    assertEquals(callStack.head.line, expectedLine)
   }
 
   def assertOnFrame(expectedName: String)(frames: Array[StackFrame])(implicit loc: Location): Unit = {
@@ -29,11 +29,11 @@ object DebugStepAssert {
     assertEquals(frames.head.name, expectedName)
   }
 
-  def assertOnFrame(expected: Seq[String])(frames: Array[StackFrame])(implicit
+  def assertCallStack(expected: Seq[String])(callStack: Array[StackFrame])(implicit
       location: Location
   ): Unit = {
-    assert(frames != null)
-    val obtained = frames.map(frame => frame.name).toSeq
+    assert(callStack != null)
+    val obtained = callStack.map(frame => frame.name).toSeq
     assertEquals(obtained, expected)
   }
 }
@@ -54,7 +54,20 @@ object Breakpoint {
     val breakpoint = Breakpoint(sourceFile, line, None)
     SingleStepAssert(breakpoint, assertOnFrame(sourceFile, line))
   }
-  def apply(line: Int, expectedStackTrace: Seq[String])(implicit
+
+  def apply(sourceFile: Path, line: Int, expectedTopFrame: String)(implicit
+      location: Location
+  ): SingleStepAssert[Array[StackFrame]] = {
+    val breakpoint = Breakpoint(sourceFile, line, None)
+    SingleStepAssert(
+      breakpoint,
+      { callStack =>
+        assertOnFrame(sourceFile, line)(callStack); assertOnFrame(expectedTopFrame)(callStack)
+      }
+    )
+  }
+
+  def apply(line: Int, expectedCallStack: Seq[String])(implicit
       ctx: TestingContext,
       location: Location
   ): SingleStepAssert[Array[StackFrame]] = {
@@ -62,7 +75,7 @@ object Breakpoint {
     SingleStepAssert(
       breakpoint,
       { trace =>
-        assertOnFrame(ctx.mainSource, line)(trace); assertOnFrame(expectedStackTrace)(trace)
+        assertOnFrame(ctx.mainSource, line)(trace); assertCallStack(expectedCallStack)(trace)
       }
     )
   }
@@ -249,9 +262,9 @@ object Custom {
   }
 }
 
-object RedefineClasses extends DebugStep[Nothing] {
-  def apply(): SingleStepAssert[Nothing] =
-    new SingleStepAssert[Nothing](RedefineClasses, _ => ())
+object HotCodeReplace extends DebugStep[Array[StackFrame]] {
+  def apply(expectedTopFrame: String): SingleStepAssert[Array[StackFrame]] =
+    new SingleStepAssert(this, assertOnFrame(expectedTopFrame))
 }
 
 final case class ObjectRef(clsName: String)

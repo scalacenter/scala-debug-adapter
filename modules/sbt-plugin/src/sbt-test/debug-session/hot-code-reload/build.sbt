@@ -12,18 +12,23 @@ val sourceToDebug = taskKey[Path]("The source file to be tested")
 def checkBreakpointTask = Def.inputTask {
   val uri = (Compile / startMainClassDebugSession).evaluated
   implicit val context: TestingContext = TestingContext(sourceToDebug.value, scalaV)
-  DebugState.state = DebugTest.init(uri)(Outputed("A"), Breakpoint(6))
+  DebugState.clientState = DebugTest.init(uri)(Outputed("A"), Breakpoint(6))
 }
 
 def checkHotCodeReplaceTask = Def.task {
   val _ = (Compile / compile).value
   implicit val context: TestingContext = TestingContext(sourceToDebug.value, scalaV)
-  DebugTest.runChecks(DebugState.state)(Seq(RedefineClasses(), Outputed("C"), Breakpoint(6), Outputed("D")))
+  DebugTest.runAndCheck(DebugState.client, DebugState.state, closeSession = true)(
+    HotCodeReplace("A.m(): Unit"),
+    Outputed("C"),
+    Breakpoint(6),
+    Outputed("D")
+  )
 }
 
 def checkNoHotCodeReplaceTask = Def.task {
   val _ = (Compile / compile).value
-  DebugTest.runChecks(DebugState.state)(Seq(Outputed("B")))
+  DebugTest.runAndCheck(DebugState.client, DebugState.state, closeSession = true)(Outputed("B"))
 }
 
 lazy val a: Project =

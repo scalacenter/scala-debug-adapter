@@ -1,7 +1,8 @@
 package ch.epfl.scala.debugadapter.testfmk
 
-import com.microsoft.java.debug.core.protocol.Types.StackFrame
-
 object DebugState {
-  var state = DebugCheckState(null, -1, null, false)
+  var clientState: (TestingDebugClient, DebugCheckState) = null
+
+  def state: DebugCheckState = clientState._2
+  def client: TestingDebugClient = clientState._1
 }
