@@ -192,15 +192,12 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     )
   }
 
-  def redefineClasses(): Future[Either[String, Array[String]]] = {
+  def redefineClasses(timeout: Duration = defaultTimeout(1.second)): Either[String, Array[String]] = {
     val args = new RedefineClassesArguments()
     val request = createRequest(Command.REDEFINECLASSES, args)
-    val response = sendRequest(request)
-
-    response.map(res =>
-      Option(getBody[RedefineClassesResponse](res).changedClasses)
-        .toRight(getBody[ErrorResponseBody](res).error.format)
-    )
+    val response = Await.result(sendRequest(request), timeout)
+    Option(getBody[RedefineClassesResponse](response).changedClasses)
+      .toRight(getBody[ErrorResponseBody](response).error.format)
   }
 
   def disconnect(

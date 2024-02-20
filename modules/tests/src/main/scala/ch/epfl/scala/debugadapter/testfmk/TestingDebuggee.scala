@@ -64,17 +64,17 @@ case class TestingDebuggee(
   lazy val classLoader: ClassLoader =
     new URLClassLoader(classPathEntries.map(_.absolutePath.toUri.toURL).toArray, null)
 
-  def compileScala(source: String, fileName: String): Unit = {
-    val sourceFile = {
-      val sourceFile = tempDir.resolve("src").resolve(fileName)
-      Files.write(sourceFile, source.getBytes())
+  def compileScala(sources: (String, String)*): Unit = {
+    val sourceFiles = for { (relativePath, content) <- sources } yield {
+      val sourceFile = getSourceFile(relativePath)
+      Files.write(sourceFile, content.getBytes)
       sourceFile
     }
-    scalaInstance.compile(mainModule.absolutePath, dependencies, scalacOptions, Seq(sourceFile))
+    scalaInstance.compile(mainModule.absolutePath, dependencies, scalacOptions, sourceFiles)
   }
 
-  private[debugadapter] def getPathOf(fileName: String) =
-    tempDir.resolve("src").resolve(fileName)
+  def getSourceFile(relativePath: String): Path =
+    tempDir.resolve("src").resolve(relativePath)
 }
 
 object TestingDebuggee {
