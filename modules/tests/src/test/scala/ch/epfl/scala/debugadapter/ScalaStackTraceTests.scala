@@ -30,7 +30,8 @@ class ScalaStackTraceTests extends DebugTestSuite {
           "JFunction1$mcII$sp.apply(t: Any): Any",
           "List.map[B](f: A => B): List[B]",
           "Main.A.m: Seq[Int]",
-          "Main.main(args: Array[String]): Unit"
+          "Main.main(args: Array[String]): Unit",
+          "Main.main(String[]): void"
         )
       ),
       Breakpoint(11),
@@ -62,7 +63,8 @@ class ScalaStackTraceTests extends DebugTestSuite {
         Seq(
           "A.<init>(): Unit",
           "B.<init>(): Unit",
-          "Main.main(args: Array[String]): Unit"
+          "Main.main(args: Array[String]): Unit",
+          "Main.main(String[]): void"
         )
       )
     )
@@ -94,7 +96,8 @@ class ScalaStackTraceTests extends DebugTestSuite {
         Seq(
           "example.m2(t: Int): Int",
           "example.m1.<default 3>(y: Int): Int",
-          "Main.main(args: Array[String]): Unit"
+          "Main.main(args: Array[String]): Unit",
+          "Main.main(String[]): void"
         )
       )
     )
@@ -122,7 +125,8 @@ class ScalaStackTraceTests extends DebugTestSuite {
         List(
           "Main.main.y.<lazy init>: Int",
           "Main.main.m(z: Int): Int",
-          "Main.main(args: Array[String]): Unit"
+          "Main.main(args: Array[String]): Unit",
+          "Main.main(String[]): void"
         )
       )
     )
@@ -147,7 +151,8 @@ class ScalaStackTraceTests extends DebugTestSuite {
         6,
         Seq(
           "Main.main.B.m(): Unit",
-          "Main.main(args: Array[String]): Unit"
+          "Main.main(args: Array[String]): Unit",
+          "Main.main(String[]): void"
         )
       )
     )

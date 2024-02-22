@@ -42,6 +42,7 @@ class Scala2Decoder(
       else if (method.isDefaultValue) false
       else if (method.isTraitInitializer) method.bytecodes.toSeq == Seq(ByteCode.RETURN)
       else if (method.isLazyInitializer) skipLazyInitializer(method)
+      else if (method.isStaticMain) false
       else {
         val fqcn = method.declaringType.name
         val isObject = fqcn.endsWith("$")

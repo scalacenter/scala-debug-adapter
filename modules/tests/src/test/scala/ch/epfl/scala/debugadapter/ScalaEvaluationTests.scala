@@ -2,50 +2,10 @@ package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testfmk.*
 
-class Scala212EvaluationTests extends Scala2EvaluationTests(ScalaVersion.`2.12`)
-class Scala213EvaluationTests extends Scala2EvaluationTests(ScalaVersion.`2.13`) {
-  if (ScalaVersion.`3.3`.isRelease) {
-    test("should use tasty-reader") {
-      val scala2Source =
-        """|package example
-           |
-           |trait Msg
-           |
-           |object Sender {
-           |  def send(msg: Msg): Unit = {
-           |    println(msg)
-           |  }
-           |}
-           |""".stripMargin
-
-      val scala2Debugee = TestingDebuggee.mainClass(scala2Source, "example.Sender", scalaVersion)
-      val scala3Source =
-        """|package example
-           |
-           |case class Scala3Msg(msg: String) extends Msg:
-           |  override def toString: String = msg
-           |
-           |object Main:
-           |  def main(args: Array[String]): Unit =
-           |    Sender.send(Scala3Msg("Hello"))
-           |""".stripMargin
-
-      implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(
-        scala3Source,
-        "example.Main",
-        ScalaVersion.`3.3`,
-        Seq.empty,
-        Seq(scala2Debugee.mainModule)
-      )
-      check(
-        Breakpoint(scala2Debugee.sourceFiles.head, 7),
-        Evaluation.success("msg.asInstanceOf[Scala3Msg].msg", "Hello")
-      )
-    }
-  }
-}
-class Scala33EvaluationTests extends Scala3EvaluationTests(ScalaVersion.`3.3`)
-class Scala34EvaluationTests extends Scala3EvaluationTests(ScalaVersion.`3.4`)
+class Scala212EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.12`)
+class Scala213EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.13`)
+class Scala33EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.3`)
+class Scala34EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.4`)
 
 abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTestSuite {
   protected override def defaultConfig: DebugConfig =
@@ -2158,12 +2118,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     )
   }
 
-  def noSuchFieldError(implicit ctx: TestingContext): Throwable =
-    if (isScala3) new NoSuchFieldException("$outer") else new NoSuchFieldError("$outer")
-}
-
-abstract class Scala2EvaluationTests(val scalaVersion: ScalaVersion) extends ScalaEvaluationTests(scalaVersion) {
   test("should use -Xsource:3") {
+    assume(scalaVersion.isScala2)
     val source =
       """|package example
          |
@@ -2187,10 +2143,49 @@ abstract class Scala2EvaluationTests(val scalaVersion: ScalaVersion) extends Sca
       Evaluation.success("""m(Seq("a", "b")*)""", "a, b")
     )
   }
-}
 
-abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEvaluationTests(scalaVersion) {
+  test("should use tasty-reader") {
+    assume(ScalaVersion.`3.3`.isRelease)
+    assume(scalaVersion.isScala213)
+    val scala2Source =
+      """|package example
+         |
+         |trait Msg
+         |
+         |object Sender {
+         |  def send(msg: Msg): Unit = {
+         |    println(msg)
+         |  }
+         |}
+         |""".stripMargin
+
+    val scala2Debugee = TestingDebuggee.mainClass(scala2Source, "example.Sender", scalaVersion)
+    val scala3Source =
+      """|package example
+         |
+         |case class Scala3Msg(msg: String) extends Msg:
+         |  override def toString: String = msg
+         |
+         |object Main:
+         |  def main(args: Array[String]): Unit =
+         |    Sender.send(Scala3Msg("Hello"))
+         |""".stripMargin
+
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(
+      scala3Source,
+      "example.Main",
+      ScalaVersion.`3.3`,
+      Seq.empty,
+      Seq(scala2Debugee.mainModule)
+    )
+    check(
+      Breakpoint(scala2Debugee.sourceFiles.head, 7),
+      Evaluation.success("msg.asInstanceOf[Scala3Msg].msg", "Hello")
+    )
+  }
+
   test("evaluate inline elements") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |
@@ -2221,7 +2216,9 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
       Evaluation.success("n(m())", 42)
     )
   }
+
   test("evaluate shadowed variable") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |object Main {
@@ -2240,6 +2237,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("brace-less syntax: public fields of objects") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |object A:
@@ -2257,6 +2255,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("brace-less syntax: private fields of class") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |class A:
@@ -2274,6 +2273,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("brace-less syntax: public fields of outer class") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |class A:
@@ -2299,6 +2299,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("brace-less syntax: evaluate in package") {
+    assume(scalaVersion.isScala3)
     val source =
       """package example:
         |  object Main:
@@ -2313,6 +2314,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("brace-less syntax: on method definition") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |class Foo:
@@ -2327,6 +2329,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("val def in @main") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |@main def foo(): Unit =
@@ -2337,6 +2340,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("brace-less syntax: private method call") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |class Foo:
@@ -2372,6 +2376,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("brace-less syntax: on default argument") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |object Main:
@@ -2388,6 +2393,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("brace-less syntax: nested method") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |class Foo:
@@ -2419,6 +2425,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("brace-less syntax: tail-rec function") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |object Main:
@@ -2436,6 +2443,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("inline def") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |
@@ -2463,6 +2471,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("macro def") {
+    assume(scalaVersion.isScala3)
     val mainSource =
       """|package example
          |
@@ -2515,6 +2524,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("enums") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |
@@ -2562,6 +2572,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("local class in value class") {
+    assume(scalaVersion.isScala3)
     // only Scala 3 because:
     // "implementation restriction: nested class is not allowed in value class
     // This restriction is planned to be removed in subsequent releases."
@@ -2607,6 +2618,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("support for -Yexplicit-nulls") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |
@@ -2627,6 +2639,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
   }
 
   test("support for -language:strictEquality") {
+    assume(scalaVersion.isScala3)
     val source =
       """|package example
          |
@@ -2644,4 +2657,7 @@ abstract class Scala3EvaluationTests(scalaVersion: ScalaVersion) extends ScalaEv
       )
     )
   }
+
+  private def noSuchFieldError(implicit ctx: TestingContext): Throwable =
+    if (isScala3) new NoSuchFieldException("$outer") else new NoSuchFieldError("$outer")
 }

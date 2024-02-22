@@ -27,10 +27,15 @@ class Scala3Decoder(
   override def decode(method: jdi.Method): DecodedMethod =
     try
       if (method.declaringType.isDynamicClass) JavaMethod(method, isGenerated = true)
-      else if (method.isJava) JavaMethod(method, isGenerated = method.isBridge || method.isSynthetic)
+      else if (method.isJava)
+        JavaMethod(method, isGenerated = (method.isBridge || method.isSynthetic) && !method.isConstructor)
       else if (method.isStaticMain) {
         // Scala static main methods don't contain any debug info
-        JavaMethod(method, isGenerated = true)
+        // also we pretend it is not generated to avoid empty stack traces
+        JavaMethod(method, isGenerated = false)
+      } else if (method.isStaticConstructor) {
+        // try remove and fix binary decoder
+        JavaMethod(method, isGenerated = false)
       } else bridge.decode(method)
     catch {
       case NonFatal(e) =>
