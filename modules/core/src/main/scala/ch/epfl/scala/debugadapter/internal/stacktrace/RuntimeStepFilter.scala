@@ -5,9 +5,9 @@ import com.sun.jdi.Location
 import ch.epfl.scala.debugadapter.ScalaVersion
 
 private[internal] class RuntimeStepFilter(classesToSkip: Set[String], methodsToSkip: Set[String]) extends StepFilter {
-  override def shouldSkipOver(method: Method): Boolean = shouldSkipOut(method)
-  override def shouldSkipOut(upperLocation: Location, method: Method): Boolean = shouldSkipOut(method)
-  private def shouldSkipOut(method: Method): Boolean =
+  override def skipOver(method: Method): Boolean = skip(method)
+  override def skipOut(upperLocation: Location, method: Method): Boolean = skip(method)
+  private def skip(method: Method): Boolean =
     classesToSkip.contains(method.declaringType.name) || methodsToSkip.contains(method.toString)
 }
 

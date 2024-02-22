@@ -1,8 +1,10 @@
 package ch.epfl.scala.debugadapter.internal.jdi
 
 import ch.epfl.scala.debugadapter.internal.binary.*
-import scala.jdk.CollectionConverters.*
+
 import java.util as ju
+import scala.jdk.CollectionConverters.*
+import scala.util.control.NonFatal
 
 class JdiReferenceType(obj: Any, className: String = "com.sun.jdi.ReferenceType")
     extends JdiType(obj, className)
@@ -31,7 +33,10 @@ class JdiReferenceType(obj: Any, className: String = "com.sun.jdi.ReferenceType"
   def constantPool: ConstantPool = ConstantPool(invokeMethod("constantPool"))
 
   private def allLineLocations: Seq[JdiLocation] =
-    invokeMethod[ju.List[Any]]("allLineLocations").asScala.map(JdiLocation(_)).toSeq
+    try invokeMethod[ju.List[Any]]("allLineLocations").asScala.map(JdiLocation(_)).toSeq
+    catch
+      case e: Exception if e.getClass.getName == "com.sun.jdi.AbsentInformationException" =>
+        Seq.empty
 
   private[jdi] def sourceName: String = invokeMethod("sourceName")
 

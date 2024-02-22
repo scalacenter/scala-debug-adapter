@@ -14,11 +14,10 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 
 trait BinaryDecoderSuite extends CommonFunSuite:
-  protected def throwOrWarn: ThrowOrWarn = ThrowOrWarn.printAndThrow
+  protected def defaultThrowOrWarn: ThrowOrWarn = ThrowOrWarn.printAndThrow
   private def formatter(using ThrowOrWarn) = StackTraceFormatter()
-  private def debugDecoder = Scala3Decoder(formatter)
 
-  given ThrowOrWarn = throwOrWarn
+  given ThrowOrWarn = defaultThrowOrWarn
 
   def println(x: Any): Unit = Predef.println(x)
 
@@ -42,13 +41,13 @@ trait BinaryDecoderSuite extends CommonFunSuite:
       val decodedClass = decoder.decode(cls)
       assertEquals(formatter.format(decodedClass), expected)
 
-    def assertDecode(className: String, method: String, expected: String, skip: Boolean = false)(using
+    def assertDecode(className: String, method: String, expected: String, generated: Boolean = false)(using
         munit.Location
     ): Unit =
       val binaryMethod = loadBinaryMethod(className, method)
       val decodedMethod = decoder.decode(binaryMethod)
       assertEquals(formatter.format(decodedMethod), expected)
-      assertEquals(debugDecoder.skip(decodedMethod), skip)
+      assertEquals(decodedMethod.isGenerated, generated)
 
     def assertNotFound(declaringType: String, javaSig: String)(using munit.Location): Unit =
       val method = loadBinaryMethod(declaringType, javaSig)

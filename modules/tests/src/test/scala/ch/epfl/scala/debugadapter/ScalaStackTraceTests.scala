@@ -121,7 +121,6 @@ class ScalaStackTraceTests extends DebugTestSuite {
         6,
         List(
           "Main.main.y.<lazy init>: Int",
-          "Main.main.y: Int",
           "Main.main.m(z: Int): Int",
           "Main.main(args: Array[String]): Unit"
         )

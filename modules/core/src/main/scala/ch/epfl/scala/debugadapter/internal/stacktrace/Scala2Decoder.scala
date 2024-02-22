@@ -2,63 +2,80 @@ package ch.epfl.scala.debugadapter.internal.stacktrace
 
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.ScalaVersion
+import ch.epfl.scala.debugadapter.internal.ByteCode
 import ch.epfl.scala.debugadapter.internal.SourceLookUpProvider
+import ch.epfl.scala.debugadapter.internal.ThrowOrWarn
 import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSigPrinter
-import ch.epfl.scala.debugadapter.internal.scalasig._
+import ch.epfl.scala.debugadapter.internal.scalasig.*
+import ch.epfl.scala.debugadapter.internal.stacktrace.JdiExtensions.*
+import com.microsoft.java.debug.core.adapter.stacktrace.DecodedMethod
 import com.sun.jdi
 
 import scala.jdk.CollectionConverters.*
+import scala.util.control.NonFatal
 import scala.util.matching.Regex
 
 class Scala2Decoder(
     sourceLookUp: SourceLookUpProvider,
     scalaVersion: ScalaVersion,
-    logger: Logger,
-    testMode: Boolean
-) extends ScalaDecoder(scalaVersion, testMode) {
-  override protected def skipScala(method: jdi.Method): Boolean = {
-    if (isLazyInitializer(method)) {
-      skipLazyInitializer(method)
-    } else {
-      val fqcn = method.declaringType.name
-      val isObject = fqcn.endsWith("$")
-      sourceLookUp.getScalaSig(fqcn) match {
-        case None =>
-          throwOrWarn(s"Cannot find Pickle for $fqcn")
-          false
-        case Some(sig) =>
-          val matchingMethods = sig.entries.toSeq
-            .collect { case m: MethodSymbol if m.isMethod => m }
-            .filter(_.parent.exists(_.isModule == isObject))
-            .filter(matchSymbol(method, _))
+    protected val logger: Logger,
+    protected val testMode: Boolean
+) extends ScalaDecoder
+    with ThrowOrWarn {
 
-          if (matchingMethods.size > 1) {
-            val builder = new java.lang.StringBuilder
-            builder.append(
-              s"Found ${matchingMethods.size} matching symbols for $method:\n"
-            )
-            val printer = new ScalaSigPrinter(builder)
-            matchingMethods.foreach(printer.printSymbol)
-            throwOrWarn(builder.toString)
-          }
+  override def reload(): Unit = ()
 
-          matchingMethods.forall(skip)
+  override def skipOver(method: jdi.Method): Boolean =
+    try
+      if (method.isBridge) true
+      else if (method.declaringType.isDynamicClass) true
+      else if (method.isJava) false
+      else if (method.isConstructor) false
+      else if (method.isStaticConstructor) false
+      else if (method.isAdaptedMethod) true
+      else if (method.isAnonFunction) false
+      else if (method.isPrivateAccessor) true
+      else if (method.isLiftedMethod) !method.isLazyInitializer && method.isLazyGetter
+      else if (method.declaringType.isAnonClass) false
+      else if (method.declaringType.isLocalClass) false
+      else if (method.declaringType.isNestedClass) false
+      else if (method.isDefaultValue) false
+      else if (method.isTraitInitializer) method.bytecodes.toSeq == Seq(ByteCode.RETURN)
+      else if (method.isLazyInitializer) skipLazyInitializer(method)
+      else {
+        val fqcn = method.declaringType.name
+        val isObject = fqcn.endsWith("$")
+        sourceLookUp.getScalaSig(fqcn) match {
+          case None =>
+            throwOrWarn(s"Cannot find Pickle for $fqcn")
+            false
+          case Some(sig) =>
+            val matchingMethods = sig.entries.toSeq
+              .collect { case m: MethodSymbol if m.isMethod => m }
+              .filter(_.parent.exists(_.isModule == isObject))
+              .filter(matchSymbol(method, _))
+
+            if (matchingMethods.size > 1) {
+              val builder = new java.lang.StringBuilder
+              builder.append(
+                s"Found ${matchingMethods.size} matching symbols for $method:\n"
+              )
+              val printer = new ScalaSigPrinter(builder)
+              matchingMethods.foreach(printer.printSymbol)
+              throwOrWarn(builder.toString)
+            }
+
+            matchingMethods.forall(skip)
+        }
       }
+    catch {
+      case NonFatal(e) => throwOrWarn(e); false
     }
-  }
 
-  private def throwOrWarn(msg: String): Unit = {
-    if (testMode) throw new Exception(msg)
-    else logger.warn(msg)
-  }
+  override def decode(method: jdi.Method): DecodedMethod =
+    JavaMethod(method, isGenerated = skipOver(method))
 
-  private def isLazyInitializer(method: jdi.Method): Boolean =
-    method.name.endsWith("$lzycompute")
-
-  private def containsLazyField(
-      interface: jdi.InterfaceType,
-      fieldName: String
-  ): Boolean = {
+  private def containsLazyField(interface: jdi.InterfaceType, fieldName: String): Boolean = {
     val fqcn = interface.name
     sourceLookUp.getScalaSig(fqcn).exists(containsLazyField(_, fieldName))
   }
@@ -76,10 +93,7 @@ class Scala2Decoder(
     }
   }
 
-  private def containsLazyField(
-      scalaSig: ScalaSig,
-      fieldName: String
-  ): Boolean = {
+  private def containsLazyField(scalaSig: ScalaSig, fieldName: String): Boolean = {
     scalaSig.entries.exists {
       case m: MethodSymbol => m.isLazy && m.name == fieldName
       case _ => false
@@ -129,19 +143,15 @@ class Scala2Decoder(
       }
   }
 
-  private def getOwners(sym: Symbol): Seq[Symbol] = {
+  private def getOwners(sym: Symbol): Seq[Symbol] =
     Iterator
       .iterate(Option(sym))(opt => opt.flatMap(_.parent))
       .takeWhile(_.isDefined)
       .flatten
       .filter(_.name != "<empty>") // Top level classes have <empty> packag as owner
       .toSeq
-  }
 
-  private def matchSignature(
-      javaMethod: jdi.Method,
-      methodType: Type
-  ): Boolean = {
+  private def matchSignature(javaMethod: jdi.Method, methodType: Type): Boolean = {
     val (scalaArgs, scalaReturnType) = extractParametersAndReturnType(methodType)
     def matchAllArguments: Boolean = {
       val javaArgs = javaMethod.arguments.asScala.toSeq
@@ -159,7 +169,7 @@ class Scala2Decoder(
     matchAllArguments && matchReturnType
   }
 
-  private[internal] def extractParametersAndReturnType(methodType: Type): (Seq[Symbol], Type) = {
+  private[internal] def extractParametersAndReturnType(methodType: Type): (Seq[Symbol], Type) =
     methodType match {
       case m: FunctionType =>
         val (params, returnType) = extractParametersAndReturnType(
@@ -170,13 +180,8 @@ class Scala2Decoder(
       case m: PolyType => extractParametersAndReturnType(m.typeRef.get)
       case returnType => (Seq.empty, returnType)
     }
-  }
 
-  private def matchArgument(
-      javaArg: jdi.LocalVariable,
-      scalaArg: Symbol,
-      declaringType: jdi.Type
-  ): Boolean = {
+  private def matchArgument(javaArg: jdi.LocalVariable, scalaArg: Symbol, declaringType: jdi.Type): Boolean = {
     val scalaType = scalaArg.asInstanceOf[MethodSymbol].infoType
     javaArg.name == scalaArg.name && (
       // we cannot check the type of the `this` argument in methods of value classes
@@ -313,11 +318,7 @@ class Scala2Decoder(
   private[internal] val scalaToJavaTypes =
     scalaToJavaPrimitiveTypes ++ scalaAliasesToJavaTypes
 
-  private def matchTypeSymbol(
-      javaType: jdi.Type,
-      sym: Symbol,
-      declaringType: jdi.Type
-  ): Boolean = {
+  private def matchTypeSymbol(javaType: jdi.Type, sym: Symbol, declaringType: jdi.Type): Boolean = {
     val encoded = tryEncodeType(sym)
     val path = sym.path
     sym match {
@@ -383,5 +384,4 @@ class Scala2Decoder(
     }
     encoded.filter(sourceLookUp.containsClass)
   }
-
 }

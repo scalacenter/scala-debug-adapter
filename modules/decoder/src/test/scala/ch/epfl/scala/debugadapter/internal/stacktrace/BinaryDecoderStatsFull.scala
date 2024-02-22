@@ -16,7 +16,7 @@ class BinaryDecoderStatsFull extends BinaryDecoderSuite:
   lazy val file = Paths.get(s"test-result-${Random.nextInt(Int.MaxValue)}.txt")
   lazy val pw = new PrintWriter(file.toFile)
 
-  override protected def throwOrWarn: ThrowOrWarn = ThrowOrWarn.ignore
+  override protected def defaultThrowOrWarn: ThrowOrWarn = ThrowOrWarn.ignore
   override def println(x: Any): Unit =
     Predef.println(x)
     pw.println(x)
