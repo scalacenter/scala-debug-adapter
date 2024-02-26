@@ -1,5 +1,6 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
+import com.microsoft.java.debug.core.DebugException
 import com.sun.jdi.*
 
 import scala.jdk.CollectionConverters.*
@@ -18,7 +19,7 @@ final case class JdiFrame(thread: ThreadReference, depth: Int) {
 
     Safe {
       val classLoader = getClassLoaderRecursively(depth)
-        .getOrElse(throw new Exception("Cannot find any class loader in the stack trace"))
+        .getOrElse(throw new DebugException("Cannot find any class loader in the stack trace"))
       JdiClassLoader(classLoader, thread)
     }
   }
