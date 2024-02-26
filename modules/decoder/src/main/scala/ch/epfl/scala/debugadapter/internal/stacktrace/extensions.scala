@@ -279,3 +279,30 @@ extension (self: binary.Symbol | binary.Instruction.Field | binary.Instruction.M
 extension (field: binary.Instruction.Field)
   def isPut: Boolean =
     field.opcode == 0xb5 || field.opcode == 0xb3
+
+extension (method: DecodedMethod)
+  def isGenerated: Boolean =
+    method match
+      case method: DecodedMethod.ValOrDefDef =>
+        val sym = method.symbol
+        (sym.isGetter && (!sym.owner.isTrait || !sym.isModuleOrLazyVal)) || // getter
+        (sym.isLocal && sym.isModuleOrLazyVal) || // local def
+        sym.isSetter ||
+        (sym.isSynthetic && !sym.isLocal) ||
+        sym.isExport
+      case method: DecodedMethod.LazyInit => method.symbol.owner.isTrait
+      case _: DecodedMethod.TraitStaticForwarder => true
+      case _: DecodedMethod.TraitParamAccessor => true
+      case _: DecodedMethod.MixinForwarder => true
+      case _: DecodedMethod.Bridge => true
+      case _: DecodedMethod.StaticForwarder => true
+      case _: DecodedMethod.OuterAccessor => true
+      case _: DecodedMethod.SetterAccessor => true
+      case _: DecodedMethod.GetterAccessor => true
+      case _: DecodedMethod.SuperAccessor => true
+      case _: DecodedMethod.SpecializedMethod => true
+      case _: DecodedMethod.InlineAccessor => true
+      case _: DecodedMethod.AdaptedFun => true
+      case _: DecodedMethod.SAMOrPartialFunctionConstructor => true
+      case method: DecodedMethod.InlinedMethod => method.underlying.isGenerated
+      case _ => false

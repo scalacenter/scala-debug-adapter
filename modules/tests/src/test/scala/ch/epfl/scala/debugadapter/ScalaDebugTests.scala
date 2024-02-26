@@ -5,42 +5,7 @@ import scala.concurrent.Await
 
 class Scala212DebugTest extends ScalaDebugTests(ScalaVersion.`2.12`)
 class Scala213DebugTest extends ScalaDebugTests(ScalaVersion.`2.13`)
-class Scala33DebugTest extends ScalaDebugTests(ScalaVersion.`3.3`) {
-  test("should support breakpoints in scala 3 with brace-less syntax") {
-    val source =
-      """|package example
-         |
-         |object Main:
-         |  def main(args: Array[String]): Unit =
-         |    println("Breakpoint in main method")
-         |    new Hello().greet()
-         |    println("Finished all breakpoints")
-         |
-         |  class Hello():
-         |    def greet(): Unit =
-         |      println("Breakpoint in hello class")
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(5), Breakpoint(11), Breakpoint(7))
-  }
-  test("should support breakpoints in scala 3 with @main") {
-    val source =
-      """|package example
-         |
-         |@main def app: Unit =
-         |  println("Breakpoint in main method")
-         |  new Hello().greet()
-         |  println("Finished all breakpoints")
-         |
-         |class Hello():
-         |  def greet(): Unit =
-         |    println("Breakpoint in hello class")
-         |
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.app", scalaVersion)
-    check(Breakpoint(4), Breakpoint(10), Breakpoint(6))
-  }
-}
+class Scala33DebugTest extends ScalaDebugTests(ScalaVersion.`3.3`)
 
 abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
   test("should not crash when sources aren't present") {
@@ -116,7 +81,7 @@ abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTest
     }
   }
 
-  test("should return stacktrace, scopes and variables when stopped by a breakpoint") {
+  test("stacktrace, scopes and variables when stopped by a breakpoint") {
     val debuggee = TestingDebuggee.scalaBreakpointTest(scalaVersion)
     val server = getDebugServer(debuggee)
     val client = TestingDebugClient.connect(server.uri)
@@ -151,7 +116,7 @@ abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTest
     }
   }
 
-  test("should return variables after expression evaluation") {
+  test("variables after expression evaluation") {
     val debuggee = TestingDebuggee.scalaBreakpointTest(scalaVersion)
     val server = getDebugServer(debuggee)
     val client = TestingDebugClient.connect(server.uri)
@@ -236,5 +201,43 @@ abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTest
       server.close()
       client.close()
     }
+  }
+
+  test("should support breakpoints in scala 3 with brace-less syntax") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |object Main:
+         |  def main(args: Array[String]): Unit =
+         |    println("Breakpoint in main method")
+         |    new Hello().greet()
+         |    println("Finished all breakpoints")
+         |
+         |  class Hello():
+         |    def greet(): Unit =
+         |      println("Breakpoint in hello class")
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(5), Breakpoint(11), Breakpoint(7))
+  }
+
+  test("should support breakpoints in scala 3 with @main") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |@main def app: Unit =
+         |  println("Breakpoint in main method")
+         |  new Hello().greet()
+         |  println("Finished all breakpoints")
+         |
+         |class Hello():
+         |  def greet(): Unit =
+         |    println("Breakpoint in hello class")
+         |
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.app", scalaVersion)
+    check(Breakpoint(4), Breakpoint(10), Breakpoint(6))
   }
 }

@@ -54,19 +54,19 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
     val staticTraitAccessor = "java.lang.String m$(example.A $this)"
 
     decoder.assertDecode("example.A", javaSig, "A.m(): String")
-    decoder.assertDecode("example.A", staticTraitAccessor, "A.m.<static forwarder>(): String", skip = true)
-    decoder.assertDecode("example.B", javaSig, "B.m.<mixin forwarder>(): String", skip = true)
-    decoder.assertDecode("example.C", javaSig, "C.m.<mixin forwarder>(): String", skip = true)
+    decoder.assertDecode("example.A", staticTraitAccessor, "A.m.<static forwarder>(): String", generated = true)
+    decoder.assertDecode("example.B", javaSig, "B.m.<mixin forwarder>(): String", generated = true)
+    decoder.assertDecode("example.C", javaSig, "C.m.<mixin forwarder>(): String", generated = true)
     decoder.assertDecode("example.D", javaSig, "D.m(): String")
-    decoder.assertDecode("example.F$", javaSig, "F.m.<mixin forwarder>(): String", skip = true)
-    decoder.assertDecode("example.F", javaSig, "F.m.<static forwarder>(): String", skip = true)
+    decoder.assertDecode("example.F$", javaSig, "F.m.<mixin forwarder>(): String", generated = true)
+    decoder.assertDecode("example.F", javaSig, "F.m.<static forwarder>(): String", generated = true)
     decoder.assertDecode("example.Main$G", javaSig, "Main.G.m(): String")
-    decoder.assertDecode("example.Main$H", javaSig, "Main.H.m.<mixin forwarder>(): String", skip = true)
+    decoder.assertDecode("example.Main$H", javaSig, "Main.H.m.<mixin forwarder>(): String", generated = true)
     decoder.assertDecode(
       "example.Main$$anon$1",
       javaSig,
       "Main.main.<anon class>.m.<mixin forwarder>(): String",
-      skip = true
+      generated = true
     )
     decoder.assertDecode("example.Main$$anon$2", javaSig, "Main.main.<anon class>.m(): String")
   }
@@ -89,7 +89,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.Main$",
       "example.Main$F$2$ F$1(scala.runtime.LazyRef F$lzy1$2)",
       "Main.main.F: F",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.Main$",
@@ -185,26 +185,26 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
     def getter(field: String): String = s"java.lang.String $field()"
     def setter(field: String, param: String = "x$1"): String = s"void ${field}_$$eq(java.lang.String $param)"
 
-    decoder.assertDecode("example.Main$", getter("x1"), "Main.x1: String", skip = true)
-    decoder.assertDecode("example.Main$", getter("x2"), "Main.x2: String", skip = true)
-    decoder.assertDecode("example.Main$", setter("x2"), "Main.x2_=(String): Unit", skip = true)
+    decoder.assertDecode("example.Main$", getter("x1"), "Main.x1: String", generated = true)
+    decoder.assertDecode("example.Main$", getter("x2"), "Main.x2: String", generated = true)
+    decoder.assertDecode("example.Main$", setter("x2"), "Main.x2_=(String): Unit", generated = true)
 
     // static forwarders
-    decoder.assertDecode("example.Main", getter("x1"), "Main.x1.<static forwarder>: String", skip = true)
-    decoder.assertDecode("example.Main", getter("x2"), "Main.x2.<static forwarder>: String", skip = true)
+    decoder.assertDecode("example.Main", getter("x1"), "Main.x1.<static forwarder>: String", generated = true)
+    decoder.assertDecode("example.Main", getter("x2"), "Main.x2.<static forwarder>: String", generated = true)
     decoder.assertDecode(
       "example.Main",
       setter("x2", param = "arg0"),
       "Main.x2_=.<static forwarder>(String): Unit",
-      skip = true
+      generated = true
     )
 
-    decoder.assertDecode("example.A", getter("a1"), "A.a1: String", skip = true)
+    decoder.assertDecode("example.A", getter("a1"), "A.a1: String", generated = true)
     decoder.assertDecode("example.A", getter("a2"), "A.a2: String")
-    decoder.assertDecode("example.B", getter("b1"), "B.b1: String", skip = true)
-    decoder.assertDecode("example.B", getter("b2"), "B.b2: String", skip = true)
-    decoder.assertDecode("example.C", getter("c1"), "C.c1: String", skip = true)
-    decoder.assertDecode("example.D", getter("d1"), "D.d1: String", skip = true)
+    decoder.assertDecode("example.B", getter("b1"), "B.b1: String", generated = true)
+    decoder.assertDecode("example.B", getter("b2"), "B.b2: String", generated = true)
+    decoder.assertDecode("example.C", getter("c1"), "C.c1: String", generated = true)
+    decoder.assertDecode("example.D", getter("d1"), "D.d1: String", generated = true)
   }
 
   test("bridges") {
@@ -224,7 +224,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
     def javaSig(returnType: String): String = s"java.lang.Object m()"
 
     decoder.assertDecode("example.A", "java.lang.Object m()", "A.m(): Object")
-    decoder.assertDecode("example.B", "java.lang.Object m()", "B.m.<bridge>(): String", skip = true)
+    decoder.assertDecode("example.B", "java.lang.Object m()", "B.m.<bridge>(): String", generated = true)
     decoder.assertDecode("example.B", "java.lang.String m()", "B.m(): String")
   }
 
@@ -243,7 +243,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.A$B$C",
       "example.A$B example$A$B$C$$$outer()",
       "A.B.C.<outer>: B.this.type",
-      skip = true
+      generated = true
     )
   }
 
@@ -270,19 +270,19 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.Main",
       "int m1(int arg0, int arg1)",
       "Main.m1.<static forwarder>(using x: Int, y: Int): Int",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.Main",
       "int m2(int arg0)",
       "Main.m2.<static forwarder>(implicit x: Int): Int",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.Main",
       "void m3(java.lang.String arg0, int arg1)",
       "Main.m3.<static forwarder>(using String, Int): Unit",
-      skip = true
+      generated = true
     )
 
   }
@@ -357,7 +357,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.A",
       "java.lang.String m$extension(java.lang.String arg0)",
       "A.m.<static forwarder>(): String",
-      skip = true
+      generated = true
     )
     decoder.assertDecode("example.A", "void <init>(java.lang.String x)", "A.<init>(x: String): Unit")
   }
@@ -422,23 +422,23 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
 
     val decoder = TestingDecoder(source, scalaVersion)
 
-    decoder.assertDecode("example.A$", "java.lang.String a()", "A.a: String", skip = true)
-    decoder.assertDecode("example.A$", "java.lang.String b()", "A.b: String", skip = true)
+    decoder.assertDecode("example.A$", "java.lang.String a()", "A.a: String", generated = true)
+    decoder.assertDecode("example.A$", "java.lang.String b()", "A.b: String", generated = true)
     decoder.assertDecode("example.B", "java.lang.String b()", "B.b: String")
     decoder.assertDecode(
       "example.B",
       "java.lang.String b$(example.B $this)",
       "B.b.<static forwarder>: String",
-      skip = true
+      generated = true
     )
 
     // new in Scala 3.3.0
     decoder.assertDecode("example.A$", "java.lang.Object a$lzyINIT1()", "A.a.<lazy init>: String")
-    decoder.assertDecode("example.A$", "java.lang.Object b$lzyINIT1()", "A.b.<lazy init>: String", skip = true)
+    decoder.assertDecode("example.A$", "java.lang.Object b$lzyINIT1()", "A.b.<lazy init>: String", generated = true)
 
     // static forwarders
-    decoder.assertDecode("example.A", "java.lang.String a()", "A.a.<static forwarder>: String", skip = true)
-    decoder.assertDecode("example.A", "java.lang.String b()", "A.b.<static forwarder>: String", skip = true)
+    decoder.assertDecode("example.A", "java.lang.String a()", "A.a.<static forwarder>: String", generated = true)
+    decoder.assertDecode("example.A", "java.lang.String b()", "A.b.<static forwarder>: String", generated = true)
   }
 
   test("synthetic methods of case class") {
@@ -449,27 +449,32 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
          |""".stripMargin
     val decoder = TestingDecoder(source, scalaVersion)
 
-    decoder.assertDecode("example.A", "java.lang.String toString()", "A.toString(): String", skip = true)
-    decoder.assertDecode("example.A", "example.A copy(java.lang.String a)", "A.copy(a: String): A", skip = true)
-    decoder.assertDecode("example.A", "int hashCode()", "A.hashCode(): Int", skip = true)
-    decoder.assertDecode("example.A", "boolean equals(java.lang.Object x$0)", "A.equals(Any): Boolean", skip = true)
-    decoder.assertDecode("example.A", "int productArity()", "A.productArity: Int", skip = true)
-    decoder.assertDecode("example.A", "java.lang.String productPrefix()", "A.productPrefix: String", skip = true)
+    decoder.assertDecode("example.A", "java.lang.String toString()", "A.toString(): String", generated = true)
+    decoder.assertDecode("example.A", "example.A copy(java.lang.String a)", "A.copy(a: String): A", generated = true)
+    decoder.assertDecode("example.A", "int hashCode()", "A.hashCode(): Int", generated = true)
+    decoder.assertDecode(
+      "example.A",
+      "boolean equals(java.lang.Object x$0)",
+      "A.equals(Any): Boolean",
+      generated = true
+    )
+    decoder.assertDecode("example.A", "int productArity()", "A.productArity: Int", generated = true)
+    decoder.assertDecode("example.A", "java.lang.String productPrefix()", "A.productPrefix: String", generated = true)
     decoder.assertDecode(
       "example.A",
       "java.lang.Object productElement(int n)",
       "A.productElement(n: Int): Any",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.A",
       "scala.collection.Iterator productIterator()",
       "A.productIterator.<mixin forwarder>: Iterator[Any]",
-      skip = true
+      generated = true
     )
 
-    decoder.assertDecode("example.A$", "example.A apply(java.lang.String a)", "A.apply(a: String): A", skip = true)
-    decoder.assertDecode("example.A$", "example.A unapply(example.A x$1)", "A.unapply(A): A", skip = true)
+    decoder.assertDecode("example.A$", "example.A apply(java.lang.String a)", "A.apply(a: String): A", generated = true)
+    decoder.assertDecode("example.A$", "example.A unapply(example.A x$1)", "A.unapply(A): A", generated = true)
   }
 
   test("anonymous functions") {
@@ -574,7 +579,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.Main$$anon$1",
       "int compare(java.lang.Object x, java.lang.Object y)",
       "Main.<anon Ordering>.compare.<bridge>(x: String, y: String): Int",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.Main$$anon$2",
@@ -589,7 +594,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.Main$$anon$2",
       "boolean isDefinedAt(java.lang.Object x)",
       "Main.<anon PartialFunction>.isDefinedAt.<bridge>(x: String): Boolean",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.Main$$anon$2",
@@ -600,7 +605,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.Main$$anon$2",
       "java.lang.Object applyOrElse(java.lang.Object x, scala.Function1 default)",
       "Main.<anon PartialFunction>.applyOrElse.<bridge>[A1, B1](x: A1, default: A1 => B1): B1",
-      skip = true
+      generated = true
     )
   }
 
@@ -645,7 +650,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.B",
       "int m(scala.collection.immutable.List xs)",
       "B.m.<mixin forwarder>(xs: List[Int]): Int",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.B",
@@ -935,7 +940,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.A",
       "java.lang.String y$1(scala.runtime.LazyRef y$lzy1$2, java.lang.String x$2)",
       "A.m.y: String",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.A",
@@ -1010,7 +1015,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.package",
       "java.lang.String foo()",
       "example.foo.<static forwarder>: String",
-      skip = true
+      generated = true
     )
   }
 
@@ -1026,7 +1031,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.decoder$package",
       "java.lang.String foo()",
       "example.foo.<static forwarder>: String",
-      skip = true
+      generated = true
     )
   }
 
@@ -1040,7 +1045,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
          |}
          |""".stripMargin
     val decoder = TestingDecoder(source, scalaVersion)
-    decoder.assertDecode("example.A", "java.lang.String m()", "A.m: String", skip = true)
+    decoder.assertDecode("example.A", "java.lang.String m()", "A.m: String", generated = true)
     decoder.assertDecode("example.A", "java.lang.String m(java.lang.String x)", "A.m(x: String): String")
   }
 
@@ -1057,7 +1062,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.A",
       "boolean m$$anonfun$adapted$1(java.lang.Object _$1)",
       "A.m.<anon fun>.<adapted>(Char): Boolean",
-      skip = true
+      generated = true
     )
   }
 
@@ -1172,11 +1177,11 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
          |""".stripMargin
     val decoder = TestingDecoder(source, scalaVersion)
     // todo fix: should be a BinaryTraitParamGetter
-    decoder.assertDecode("example.B", "int x()", "B.x: Int", skip = true)
-    decoder.assertDecode("example.B", "int y()", "B.y: Int", skip = true)
-    decoder.assertDecode("example.B", "void y_$eq(int x$1)", "B.y_=(Int): Unit", skip = true)
-    decoder.assertDecode("example.B", "int example$A$$z()", "B.z: Int", skip = true)
-    decoder.assertDecode("example.B", "java.lang.String example$A$$x$4()", "B.x$4: String", skip = true)
+    decoder.assertDecode("example.B", "int x()", "B.x: Int", generated = true)
+    decoder.assertDecode("example.B", "int y()", "B.y: Int", generated = true)
+    decoder.assertDecode("example.B", "void y_$eq(int x$1)", "B.y_=(Int): Unit", generated = true)
+    decoder.assertDecode("example.B", "int example$A$$z()", "B.z: Int", generated = true)
+    decoder.assertDecode("example.B", "java.lang.String example$A$$x$4()", "B.x$4: String", generated = true)
   }
 
   test("lifted try") {
@@ -1242,13 +1247,13 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
 
     val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A", "example.A$B$ B()", "A.B: B")
-    decoder.assertDecode("example.A", "example.A$B$ B$(example.A $this)", "A.B.<static forwarder>: B", skip = true)
-    decoder.assertDecode("example.C$", "example.A$B$ B()", "C.B: B", skip = true)
-    decoder.assertDecode("example.E", "example.E$F$ F()", "E.F: F", skip = true)
-    decoder.assertDecode("example.E", "example.A$B$ B()", "E.B: B", skip = true)
-    decoder.assertDecode("example.C$", "java.lang.Object B$lzyINIT1()", "C.B.<lazy init>: B", skip = true)
+    decoder.assertDecode("example.A", "example.A$B$ B$(example.A $this)", "A.B.<static forwarder>: B", generated = true)
+    decoder.assertDecode("example.C$", "example.A$B$ B()", "C.B: B", generated = true)
+    decoder.assertDecode("example.E", "example.E$F$ F()", "E.F: F", generated = true)
+    decoder.assertDecode("example.E", "example.A$B$ B()", "E.B: B", generated = true)
+    decoder.assertDecode("example.C$", "java.lang.Object B$lzyINIT1()", "C.B.<lazy init>: B", generated = true)
     decoder.assertDecode("example.E", "java.lang.Object F$lzyINIT1()", "E.F.<lazy init>: F")
-    decoder.assertDecode("example.E", "java.lang.Object B$lzyINIT2()", "E.B.<lazy init>: B", skip = true)
+    decoder.assertDecode("example.E", "java.lang.Object B$lzyINIT2()", "E.B.<lazy init>: B", generated = true)
   }
 
   test("static forwarder") {
@@ -1266,7 +1271,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.B",
       "java.lang.String foo(java.lang.Object arg0)",
       "B.foo.<static forwarder>(x: String): String",
-      skip = true
+      generated = true
     )
   }
 
@@ -1279,7 +1284,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
          |class B(foo: String) extends A(foo)
          |""".stripMargin
     val decoder = TestingDecoder(source, scalaVersion)
-    decoder.assertDecode("example.B", "java.lang.String foo$accessor()", "B.foo: String", skip = true)
+    decoder.assertDecode("example.B", "java.lang.String foo$accessor()", "B.foo: String", generated = true)
   }
 
   test("trait setters") {
@@ -1298,19 +1303,19 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.B",
       "void example$A$_setter_$example$A$$foo_$eq(java.lang.String x$0)",
       "B.foo.<setter>(String): Unit",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.C$",
       "void example$A$_setter_$example$A$$foo_$eq(java.lang.String x$0)",
       "C.foo.<setter>(String): Unit",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.C",
       "void example$A$_setter_$example$A$$foo_$eq(java.lang.String arg0)",
       "C.foo.<setter>.<static forwarder>(String): Unit",
-      skip = true
+      generated = true
     )
   }
 
@@ -1332,19 +1337,19 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.B",
       "java.lang.String example$B$$super$foo(java.lang.Object x)",
       "B.foo.<super>(x: T): String",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.C",
       "java.lang.String example$B$$super$foo(java.lang.String x)",
       "C.foo.<super>(x: String): String",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.C",
       "java.lang.String example$B$$super$foo(java.lang.Object x)",
       "C.foo.<super>.<bridge>(x: String): String",
-      skip = true
+      generated = true
     )
   }
 
@@ -1373,7 +1378,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.B",
       "java.lang.String m(java.lang.Object[] args)",
       "B.m.<bridge>(args: Any*): String",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.B",
@@ -1384,7 +1389,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.B",
       "int m(java.lang.String[] args)",
       "B.m.<bridge>(args: String*): Int",
-      skip = true
+      generated = true
     )
     decoder.assertDecode("example.B", "int m(scala.collection.immutable.Seq args)", "B.m(args: String*): Int")
   }
@@ -1404,37 +1409,37 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.A",
       "java.lang.Object apply(java.lang.Object v1)",
       "A.apply.<bridge>(x: Double): Boolean",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.A",
       "boolean apply$mcZD$sp(double x)",
       "A.apply.<specialized>(x: Double): Boolean",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.A",
       "int apply$mcII$sp(int x$0)",
       "A.apply.<specialized>(x: Double): Boolean",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.B",
       "boolean apply(double arg0)",
       "B.apply.<static forwarder>(x: Double): Boolean",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.B",
       "boolean apply$mcZD$sp(double arg0)",
       "B.apply.<specialized>.<static forwarder>(x: Double): Boolean",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.B",
       "int apply$mcII$sp(int arg0)",
       "B.apply.<specialized>.<static forwarder>(x: Double): Boolean",
-      skip = true
+      generated = true
     )
   }
 
@@ -1480,61 +1485,61 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.A",
       "java.lang.String inline$x$i2(example.A$AA x$0)",
       "A.<inline A.AA.x>: String",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.A",
       "java.lang.String inline$x$i2$(example.A $this, example.A$AA x$0)",
       "A.<inline A.AA.x>.<static forwarder>: String",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.A",
       "void inline$x_$eq$i2(example.A$AA x$0, java.lang.String x$0)",
       "A.<inline A.AA.x_=>(String): Unit",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.A",
       "void inline$x_$eq$i2$(example.A $this, example.A$AA x$0, java.lang.String x$0)",
       "A.<inline A.AA.x_=>.<static forwarder>(String): Unit",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.B",
       "java.lang.String inline$x$i2(example.A$AA x$0)",
       "B.<inline A.AA.x>.<mixin forwarder>: String",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.B",
       "void inline$x_$eq$i2(example.A$AA x$0, java.lang.String x$0)",
       "B.<inline A.AA.x_=>.<mixin forwarder>(String): Unit",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.B",
       "java.lang.String inline$y()",
       "B.<inline B.y>.<static forwarder>: String",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.B",
       "void inline$y_$eq(java.lang.String arg0)",
       "B.<inline B.y_=>.<static forwarder>(String): Unit",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.C$",
       "java.lang.String inline$x$extension(java.lang.String $this)",
       "C.<inline C.x>: String",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "example.C",
       "java.lang.String inline$x$extension(java.lang.String arg0)",
       "C.<inline C.x>.<static forwarder>: String",
-      skip = true
+      generated = true
     )
   }
 
@@ -1581,7 +1586,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
          |""".stripMargin
     val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode("example.A", "java.lang.Object $1$$lzyINIT1()", "A.<anon>.<lazy init>: (String, String)")
-    decoder.assertDecode("example.A", "scala.Tuple2 $1$()", "A.<anon>: (String, String)", skip = true)
+    decoder.assertDecode("example.A", "scala.Tuple2 $1$()", "A.<anon>: (String, String)", generated = true)
     decoder.assertDecode(
       "example.A",
       "scala.Tuple2 $2$$lzyINIT1$1(scala.runtime.LazyRef $2$$lzy1$1)",
@@ -1591,7 +1596,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.A",
       "scala.Tuple2 $2$$1(scala.runtime.LazyRef $2$$lzy1$2)",
       "A.m.<anon>: (String, String)",
-      skip = true
+      generated = true
     )
   }
 
@@ -1612,7 +1617,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "example.A",
       "java.lang.String example$A$$_$m3$1$(example.A $this)",
       "A.m1.m3.<static forwarder>: String",
-      skip = true
+      generated = true
     )
   }
 
@@ -1716,7 +1721,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "de.sciss.desktop.impl.LogPaneImpl$textPane$",
       "boolean apply$mcZD$sp(double x$0)",
       "LogPaneImpl.textPane.apply.<specialized>(str: String): Unit",
-      skip = true
+      generated = true
     )
 
   test("tasty-query#397 and tasty-query#413"):
@@ -1732,7 +1737,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "httpz.Response",
       "scalaz.Equal responseEqual(scalaz.Equal arg0)",
       "Response.responseEqual.<static forwarder>[A](implicit Equal[A]): Equal[Response[A]]",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "httpz.Core",
@@ -1831,31 +1836,31 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "scala.quoted.runtime.impl.QuotesImpl",
       "boolean scala$quoted$runtime$impl$QuotesImpl$$inline$xCheckMacro()",
       "QuotesImpl.<inline QuotesImpl.xCheckMacro>: Boolean",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "dotty.tools.dotc.printing.RefinedPrinter",
       "void dotty$tools$dotc$printing$RefinedPrinter$$inline$myCtx_$eq(dotty.tools.dotc.core.Contexts$Context x$0)",
       "RefinedPrinter.<inline RefinedPrinter.myCtx_=>(Contexts.Context): Unit",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "dotty.tools.dotc.transform.sjs.PrepJSInterop$OwnerKind",
       "int inline$baseKinds$extension(int arg0)",
       "PrepJSInterop.OwnerKind.<inline PrepJSInterop.OwnerKind.baseKinds>.<static forwarder>: Int",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "org.scalajs.ir.Trees$OptimizerHints",
       "boolean inline$extension(int arg0)",
       "Trees.OptimizerHints.inline.<static forwarder>: Boolean",
-      skip = true
+      generated = true
     )
     decoder.assertDecode(
       "dotty.tools.package",
       "java.lang.Object unreachable$default$1()",
       "tools.unreachable.<default 1>.<static forwarder>: Any",
-      skip = true
+      generated = true
     )
     // decoder.assertDecode(
     //   "dotty.tools.dotc.printing.Formatting$StringFormatter",
@@ -1866,7 +1871,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
       "dotty.tools.dotc.core.tasty.TreeUnpickler",
       "dotty.tools.dotc.ast.Trees$Tree dotty$tools$dotc$core$tasty$TreeUnpickler$TreeReader$$_$_$$anonfun$18(dotty.tools.dotc.core.Contexts$Context x$1$19, dotty.tools.dotc.core.tasty.TreeUnpickler$TreeReader $this$tailLocal1$1)",
       "TreeUnpickler.readTpt.<static forwarder>()(using Contexts.Context): tpd.Tree",
-      skip = true
+      generated = true
     )
 
   test("tasty-query#412"):

@@ -17,9 +17,7 @@ class JdiMethod(val obj: Any) extends JavaReflection(obj, "com.sun.jdi.Method") 
 
   override def returnType: Option[Type] =
     try Some(JdiType(invokeMethod("returnType")))
-    catch
-      case e: InvocationTargetException if e.getCause.getClass.getName == "com.sun.jdi.ClassNotLoadedException" =>
-        None
+    catch case e: Exception if e.getClass.getName == "com.sun.jdi.ClassNotLoadedException" => None
 
   override def returnTypeName: String = invokeMethod("returnTypeName")
 

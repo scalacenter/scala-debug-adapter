@@ -738,9 +738,9 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
     def matchSuperArg(liftedArg: LiftedTree[Nothing]): Boolean =
       val primaryConstructor = liftedArg.owner.asClass.getAllOverloadedDecls(nme.Constructor).head
       // a super arg takes the same parameters as its constructor
-      val scalaParams = prepareScalaParams(method, primaryConstructor.declaredType)
-      val javaParams = prepareJavaParams(method, scalaParams)
-      matchReturnType(liftedArg.tpe, method.returnType) && matchCapture(liftedArg.capture, javaParams.capturedParams)
+      val sourceParams = extractSourceParams(method, primaryConstructor.declaredType)
+      val binaryParams = splitBinaryParams(method, sourceParams)
+      matchReturnType(liftedArg.tpe, method.returnType) && matchCapture(liftedArg.capture, binaryParams.capturedParams)
     collectLiftedTrees(decodedClass, method) { case arg: ConstructorArg => arg }
       .collect {
         case liftedArg if matchSuperArg(liftedArg) =>
@@ -809,7 +809,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
   private def matchTargetName(method: binary.Method, symbol: TermSymbol): Boolean =
     method.unexpandedDecodedNames.map(_.stripSuffix("$")).contains(symbol.targetNameStr)
 
-  private case class ScalaParams(
+  private case class SourceParams(
       declaredParamNames: Seq[UnsignedTermName],
       declaredParamTypes: Seq[Type],
       expandedParamTypes: Seq[Type],
@@ -817,7 +817,7 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
   ):
     def regularParamTypes: Seq[Type] = declaredParamTypes ++ expandedParamTypes
 
-  private case class JavaParams(
+  private case class BinaryParams(
       capturedParams: Seq[binary.Parameter],
       declaredParams: Seq[binary.Parameter],
       expandedParams: Seq[binary.Parameter],
@@ -826,19 +826,19 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
     def regularParams = declaredParams ++ expandedParams
 
   private def matchLiftedFunSignature(method: binary.Method, tree: LiftedTree[TermSymbol]): Boolean =
-    val scalaParams = prepareScalaParams(method, tree.tpe)
-    val javaParams = prepareJavaParams(method, scalaParams)
+    val sourceParams = extractSourceParams(method, tree.tpe)
+    val binaryParams = splitBinaryParams(method, sourceParams)
 
     def matchParamNames: Boolean =
-      scalaParams.declaredParamNames
-        .corresponds(javaParams.declaredParams)((name, javaParam) => name.toString == javaParam.name)
+      sourceParams.declaredParamNames
+        .corresponds(binaryParams.declaredParams)((name, javaParam) => name.toString == javaParam.name)
 
     def matchTypeErasure: Boolean =
-      scalaParams.regularParamTypes
-        .corresponds(javaParams.regularParams)((tpe, javaParam) => matchArgType(tpe, javaParam.`type`, false)) &&
-        matchReturnType(scalaParams.returnType, javaParams.returnType)
+      sourceParams.regularParamTypes
+        .corresponds(binaryParams.regularParams)((tpe, javaParam) => matchArgType(tpe, javaParam.`type`, false)) &&
+        matchReturnType(sourceParams.returnType, binaryParams.returnType)
 
-    matchParamNames && matchTypeErasure && matchCapture(tree.capture, javaParams.capturedParams)
+    matchParamNames && matchTypeErasure && matchCapture(tree.capture, binaryParams.capturedParams)
   end matchLiftedFunSignature
 
   private def matchCapture(capture: Seq[String], capturedParams: Seq[binary.Parameter]): Boolean =
@@ -868,50 +868,50 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
       checkParamNames: Boolean = true,
       checkTypeErasure: Boolean = true
   ): Boolean =
-    val scalaParams = prepareScalaParams(method, declaredType)
-    val javaParams = prepareJavaParams(method, scalaParams)
+    val sourceParams = extractSourceParams(method, declaredType)
+    val binaryParams = splitBinaryParams(method, sourceParams)
 
     def matchParamNames: Boolean =
-      scalaParams.declaredParamNames
-        .corresponds(javaParams.declaredParams)((name, javaParam) => name.toString == javaParam.name)
+      sourceParams.declaredParamNames
+        .corresponds(binaryParams.declaredParams)((name, javaParam) => name.toString == javaParam.name)
 
     def matchTypeErasure: Boolean =
-      scalaParams.regularParamTypes
-        .corresponds(javaParams.regularParams)((tpe, javaParam) =>
+      sourceParams.regularParamTypes
+        .corresponds(binaryParams.regularParams)((tpe, javaParam) =>
           matchArgType(tpe, javaParam.`type`, asJavaVarargs)
-        ) && matchReturnType(scalaParams.returnType, javaParams.returnType)
+        ) && matchReturnType(sourceParams.returnType, binaryParams.returnType)
 
-    (captureAllowed || javaParams.capturedParams.isEmpty) &&
-    javaParams.capturedParams.forall(_.isGenerated) && // captures are generated
-    javaParams.expandedParams.forall(_.isGenerated) && // expanded params are generated
-    scalaParams.regularParamTypes.size == javaParams.regularParams.size &&
+    (captureAllowed || binaryParams.capturedParams.isEmpty) &&
+    binaryParams.capturedParams.forall(_.isGenerated) &&
+    binaryParams.expandedParams.forall(_.isGenerated) &&
+    sourceParams.regularParamTypes.size == binaryParams.regularParams.size &&
     (!checkParamNames || matchParamNames) &&
     (!checkTypeErasure || matchTypeErasure)
   end matchSignature
 
-  private def prepareScalaParams(method: binary.Method, tpe: TermType): ScalaParams =
+  private def extractSourceParams(method: binary.Method, tpe: TermType): SourceParams =
     val (expandedParamTypes, returnType) =
       if method.isConstructor && method.declaringClass.isJavaLangEnum then
         (List(defn.StringType, defn.IntType), tpe.returnType)
       else if !method.isAnonFun then expandContextFunctions(tpe.returnType, acc = Nil)
       else (List.empty, tpe.returnType)
-    ScalaParams(tpe.allParamNames, tpe.allParamTypes, expandedParamTypes, returnType)
+    SourceParams(tpe.allParamNames, tpe.allParamTypes, expandedParamTypes, returnType)
 
   /* After code generation, a method ends up with more than its declared parameters.
    *
    * It has, in order:
-   * - capture params,
+   * - captured params,
    * - declared params,
    * - "expanded" params (from java.lang.Enum constructors and uncurried context function types).
    *
    * We can only check the names of declared params.
-   * We can check the (erased) type of declared and expand params; together we call them "regular" params.
+   * We can check the (erased) type of declared and expanded params; together we call them "regular" params.
    */
-  private def prepareJavaParams(method: binary.Method, scalaParams: ScalaParams): JavaParams =
+  private def splitBinaryParams(method: binary.Method, sourceParams: SourceParams): BinaryParams =
     val (capturedParams, regularParams) =
-      method.allParameters.splitAt(method.allParameters.size - scalaParams.regularParamTypes.size)
-    val (declaredParams, expandedParams) = regularParams.splitAt(scalaParams.declaredParamTypes.size)
-    JavaParams(capturedParams, declaredParams, expandedParams, method.returnType)
+      method.allParameters.splitAt(method.allParameters.size - sourceParams.regularParamTypes.size)
+    val (declaredParams, expandedParams) = regularParams.splitAt(sourceParams.declaredParamTypes.size)
+    BinaryParams(capturedParams, declaredParams, expandedParams, method.returnType)
 
   private def expandContextFunctions(tpe: Type, acc: List[Type]): (List[Type], Type) =
     tpe.safeDealias match

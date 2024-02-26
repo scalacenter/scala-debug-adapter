@@ -12,7 +12,7 @@ private[internal] object ClassLoadingFilter extends StepFilter {
     ByteCode.INSTANCEOF,
     ByteCode.CHECKCAST
   )
-  override def shouldSkipOut(upperLocation: Location, method: Method): Boolean = {
+  override def skipOut(upperLocation: Location, method: Method): Boolean = {
     val previousByteCode = upperLocation.method.bytecodes.apply(upperLocation.codeIndex.toInt)
     classLoadingCodes.contains(previousByteCode) && method.name != "<init>"
   }

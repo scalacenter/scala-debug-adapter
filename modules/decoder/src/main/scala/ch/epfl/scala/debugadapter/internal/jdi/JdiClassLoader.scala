@@ -13,4 +13,4 @@ class JdiClassLoader(obj: Any)
     visibleClasses.find(_.name == name).get
 
   private def visibleClasses: Seq[JdiReferenceType] =
-    invokeMethod[ju.List[Any]]("visbileClasses").asScala.map(JdiReferenceType.apply(_)).toSeq
+    invokeMethod[ju.List[Any]]("visibleClasses").asScala.map(JdiReferenceType.apply(_)).toSeq
