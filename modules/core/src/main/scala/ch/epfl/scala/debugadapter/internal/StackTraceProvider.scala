@@ -12,9 +12,10 @@ import com.microsoft.java.debug.core.adapter.stacktrace.DecodedMethod
 class StackTraceProvider(
     runtimeFilter: RuntimeStepFilter,
     decoder: ScalaDecoder,
-    logger: Logger,
-    testMode: Boolean
-) extends JavaStackTraceProvider() {
+    protected val logger: Logger,
+    protected val testMode: Boolean
+) extends JavaStackTraceProvider
+    with ThrowOrWarn {
 
   private val stepFilters: Seq[StepFilter] = Seq(ClassLoadingFilter, runtimeFilter, decoder)
 
@@ -30,8 +31,7 @@ class StackTraceProvider(
       skipOver
     } catch {
       case cause: Throwable =>
-        if (testMode) throw cause
-        logger.warn(s"Failed to determine if $method should be skipped over: ${cause.getMessage}")
+        throwOrWarn(s"Failed to determine if $method should be skipped over: ${cause.getMessage}")
         false
     }
   }
@@ -45,8 +45,7 @@ class StackTraceProvider(
       skipOut
     } catch {
       case cause: Throwable =>
-        if (testMode) throw cause
-        logger.warn(s"Failed to determine if $method should be skipped out: ${cause.getMessage}")
+        throwOrWarn(s"Failed to determine if $method should be skipped out: ${cause.getMessage}")
         false
     }
   }

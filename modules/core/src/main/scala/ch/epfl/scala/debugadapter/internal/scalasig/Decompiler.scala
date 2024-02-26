@@ -127,9 +127,6 @@ private[internal] object Decompiler {
 
       Some(printer.result)
     } catch {
-      case e: ScalaDecompilerException =>
-        // Log.warn(s"Error decompiling class $className, ${e.getMessage}")
-        None
       case cause: Exception =>
         // Log.error(s"Error decompiling class $className", cause)
         None

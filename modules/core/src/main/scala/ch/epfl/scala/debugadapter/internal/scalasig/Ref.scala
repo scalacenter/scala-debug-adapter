@@ -1,5 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.scalasig
 
+import ch.epfl.scala.debugadapter.internal.Errors
+
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
 
@@ -18,14 +20,14 @@ class Ref[T <: Entry: ClassTag](val index: Int)(implicit
     val entry = scalaSig.get(index)
 
     if (!scalaSig.isInitialized)
-      throw new ScalaDecompilerException("usage of scalaSig entry before initialization")
+      throw Errors.frameDecodingFailure("usage of scalaSig entry before initialization")
 
     val expectedClass = implicitly[ClassTag[T]].runtimeClass
     if (!expectedClass.isInstance(entry)) {
       val expName = expectedClass.getCanonicalName
       val actName = entry.getClass.getCanonicalName
       val message = s"wrong type of reference at index $index, expected: $expName, actual: $actName"
-      throw new ScalaDecompilerException(message)
+      throw Errors.frameDecodingFailure(message)
     }
 
     entry.asInstanceOf[T]
@@ -73,5 +75,3 @@ object Ref {
       new MappedRef[T, S](ref, fun)
   }
 }
-
-class ScalaDecompilerException(message: String) extends Exception(message)

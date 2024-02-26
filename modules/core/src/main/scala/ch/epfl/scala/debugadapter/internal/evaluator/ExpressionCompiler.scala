@@ -1,7 +1,7 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
-import ch.epfl.scala.debugadapter.CompilationFailed
 import ch.epfl.scala.debugadapter.ScalaVersion
+import ch.epfl.scala.debugadapter.internal.Errors
 
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
@@ -48,7 +48,7 @@ private[debugadapter] class ExpressionCompiler(
           testMode: java.lang.Boolean
         )
         .asInstanceOf[Boolean]
-      if (res) Success(()) else Failure(new CompilationFailed(errors.toSeq))
+      if (res) Success(()) else Failure(Errors.compilationFailure(errors.toSeq))
     } catch {
       case cause: InvocationTargetException => Failure(cause.getCause())
     }

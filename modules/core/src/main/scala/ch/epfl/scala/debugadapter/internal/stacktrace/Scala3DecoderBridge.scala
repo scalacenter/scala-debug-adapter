@@ -4,6 +4,8 @@ import ch.epfl.scala.debugadapter.Debuggee
 import ch.epfl.scala.debugadapter.Java8
 import ch.epfl.scala.debugadapter.Java9OrAbove
 import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.internal.Errors
+import com.microsoft.java.debug.core.adapter.stacktrace.DecodedMethod
 import com.sun.jdi
 
 import java.lang.reflect.InvocationTargetException
@@ -12,7 +14,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.function.Consumer
 import scala.jdk.CollectionConverters.*
-import com.microsoft.java.debug.core.adapter.stacktrace.DecodedMethod
 
 private class Scala3DecoderBridge(
     instance: Any,
@@ -21,7 +22,7 @@ private class Scala3DecoderBridge(
   def decode(method: jdi.Method): DecodedMethod =
     try new DecodedMethodBridge(decodeMethod.invoke(instance, method))
     catch {
-      case e: InvocationTargetException => throw e.getCause
+      case e: InvocationTargetException => throw Errors.frameDecodingFailure(e.getCause)
     }
 }
 

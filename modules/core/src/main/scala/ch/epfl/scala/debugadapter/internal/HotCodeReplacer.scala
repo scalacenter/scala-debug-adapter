@@ -2,7 +2,6 @@ package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
-import com.microsoft.java.debug.core.DebugException
 import com.microsoft.java.debug.core.DebugUtility
 import com.microsoft.java.debug.core.StackFrameUtility
 import com.microsoft.java.debug.core.adapter.IDebugAdapterContext
@@ -18,14 +17,12 @@ import scala.util.control.NonFatal
 private[internal] class HotCodeReplacer(
     sourceLookUp: SourceLookUpProvider,
     context: IDebugAdapterContext,
-    logger: Logger,
-    testMode: Boolean
-) {
+    protected val logger: Logger,
+    protected val testMode: Boolean
+) extends ThrowOrWarn {
   def canRedefineClassesAndPopFrames: Try[Unit] = {
-    if (!vm.canRedefineClasses)
-      Failure(new DebugException("JVM does not support hot reload classes"))
-    else if (!vm.canPopFrames)
-      Failure(new DebugException("JVM does not support popping frames"))
+    if (!vm.canRedefineClasses) fail("not supported by JVM")
+    else if (!vm.canPopFrames) fail("JVM does not support popping frames")
     else Success(())
   }
 
@@ -47,15 +44,7 @@ private[internal] class HotCodeReplacer(
   private def vm: VirtualMachine = context.getDebugSession.getVM
 
   private def fail(message: String): Failure[Nothing] =
-    Failure(new DebugException(s"Failed to perform hot code replace: $message"))
-
-  private def warnOrThrow(message: String) =
-    if (testMode) throw new DebugException(message)
-    else logger.warn(message)
-
-  private def warnOrThrow(message: String, e: Throwable) =
-    if (testMode) throw e
-    else logger.warn(s"$message because of ${e.getClass.getSimpleName}: ${e.getMessage}")
+    Failure(Errors.hotCodeReplaceFailure(message))
 
   private def attemptPopFrames(
       threads: Seq[ThreadReference],
@@ -87,7 +76,7 @@ private[internal] class HotCodeReplacer(
     try Some(thread.frames.asScala.toSeq)
     catch {
       case e: IncompatibleThreadStateException =>
-        warnOrThrow(s"Failed to get stack frames of ${thread.name}: ${e.getMessage}")
+        throwOrWarn(s"Failed to get stack frames of ${thread.name}", e)
         None
     }
   }
@@ -107,7 +96,7 @@ private[internal] class HotCodeReplacer(
     try vm.classesByName(className).asScala.toSeq
     catch {
       case NonFatal(e) =>
-        warnOrThrow(s"Cannot get JDI class of $className", e)
+        throwOrWarn(s"Cannot get JDI class of $className", e)
         Seq.empty
     }
   }

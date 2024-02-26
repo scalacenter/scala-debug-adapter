@@ -28,14 +28,14 @@ private[evaluator] class JdiObject(
   def invoke(method: Method, args: Seq[JdiValue]): Safe[JdiValue] =
     Safe(reference.invokeMethod(thread, method, args.map(_.value).asJava, ObjectReference.INVOKE_SINGLE_THREADED))
       .map(JdiValue(_, thread))
-      .recoverWith(wrapInvocationException)
+      .recoverWith(extractMessage)
 
-  protected val wrapInvocationException: PartialFunction[Throwable, Safe[Nothing]] = {
+  protected val extractMessage: PartialFunction[Throwable, Safe[Nothing]] = {
     case invocationException: InvocationException =>
       for {
         exception <- Safe(invocationException.exception).map(JdiObject(_, thread))
         message <- exception.invoke("toString", List()).map(_.asString.stringValue).recover { case _ => "" }
-      } yield throw new RuntimeException(message, Some(exception))
+      } yield throw new DebuggeeInvocationException(message, Some(exception))
   }
 
   // we use a Seq instead of a Map because the ScalaEvaluator rely on the order of the fields

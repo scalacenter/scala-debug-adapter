@@ -4,7 +4,6 @@ import ch.epfl.scala.debugadapter.BuildInfo
 import ch.epfl.scala.debugadapter.ClassEntry
 import ch.epfl.scala.debugadapter.DebugConfig
 import ch.epfl.scala.debugadapter.Debuggee
-import ch.epfl.scala.debugadapter.EvaluationFailed
 import ch.epfl.scala.debugadapter.JavaRuntime
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.ManagedEntry
@@ -94,7 +93,7 @@ private[internal] class EvaluationProvider(
         .invoke(methodName, methodSignature, wrappedArgs)
         .recover {
           // if invocation throws an exception, we return that exception as the result
-          case RuntimeException(msg, Some(exception)) => exception
+          case DebuggeeInvocationException(msg, Some(exception)) => exception
         }
         .map(_.value)
     }
@@ -108,7 +107,7 @@ private[internal] class EvaluationProvider(
       val tripleQuote = "\"\"\""
       val expression = s"""println(s$tripleQuote$message$tripleQuote)"""
       getScalaEvaluator(frame).flatMap(_.compile(expression))
-    } else Failure(new EvaluationFailed(s"Cannot evaluate logpoint '$message' with $evaluationMode mode"))
+    } else Failure(Errors.evaluationFailure(s"Cannot evaluate logpoint '$message' with $evaluationMode mode"))
   }
 
   private def prepare(expression: String, frame: JdiFrame, preEvaluation: Boolean): Try[PreparedExpression] = {
@@ -124,7 +123,7 @@ private[internal] class EvaluationProvider(
           else failure
       }
     } else if (evaluationMode.allowScalaEvaluation) compiledExpression
-    else Failure(new EvaluationFailed(s"Evaluation is disabled"))
+    else Failure(Errors.evaluationFailure(s"Evaluation is disabled"))
   }
 
   private def getScalaEvaluator(frame: JdiFrame): Try[ScalaEvaluator] =
@@ -180,7 +179,7 @@ private[internal] class EvaluationProvider(
         } yield compiledExpression
     }
     // if evaluation throws an exception, we return that exception as the result
-    result.recover { case RuntimeException(_, Some(exception)) => exception.value }
+    result.recover { case DebuggeeInvocationException(_, Some(exception)) => exception.value }
   }
 
   private def completeFuture[T](result: Try[T], thread: ThreadReference): CompletableFuture[T] = {

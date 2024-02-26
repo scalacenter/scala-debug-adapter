@@ -1,5 +1,6 @@
 package ch.epfl.scala.debugadapter.internal.evaluator
 
+import ch.epfl.scala.debugadapter.internal.Errors
 import com.sun.jdi.*
 
 object RuntimePrimitiveOps {
@@ -15,7 +16,8 @@ object RuntimePrimitiveOps {
 
   sealed trait NumericUnaryOp extends UnaryOp {
     override def typeCheck(lhs: Type): Type =
-      if (isNumeric(lhs)) lhs else throw new IllegalArgumentException(s"Unexpected type $lhs")
+      if (isNumeric(lhs)) lhs
+      else throw Errors.runtimeValidationFailure(s"$lhs is not a numeric type")
   }
 
   case object UnaryPlus extends NumericUnaryOp {
@@ -40,7 +42,7 @@ object RuntimePrimitiveOps {
   }
   case object UnaryBitwiseNot extends UnaryOp {
     override def typeCheck(lhs: Type): Type =
-      if (isIntegral(lhs)) lhs else throw new IllegalArgumentException(s"Unexpected type $lhs")
+      if (isIntegral(lhs)) lhs else throw Errors.runtimeValidationFailure(s"$lhs is not an integral type")
 
     override def evaluate(rhs: JdiValue, loader: JdiClassLoader): Safe[JdiValue] =
       for {
@@ -125,7 +127,7 @@ object RuntimePrimitiveOps {
     override def typeCheck(lhs: Type, rhs: Type): Type =
       primitiveTypeCheck(lhs, rhs).orElse(referenceTypeCheck(lhs, rhs)) match {
         case Some(t) => t
-        case None => throw new IllegalArgumentException(s"Unexpected types $lhs and $rhs")
+        case None => throw Errors.runtimeValidationFailure(s"Unexpected types $lhs and $rhs")
       }
 
     private def computeFractional[T <: AnyVal](x: T, y: T, clsLoader: JdiClassLoader)(implicit
@@ -149,7 +151,7 @@ object RuntimePrimitiveOps {
           case GreaterOrEqual => fractional.gteq(x, y)
         }
         .map(clsLoader.mirrorOfAnyVal)
-        .recoverWith { case e: ArithmeticException => Safe.failed(RuntimeException(e.getMessage, None)) }
+        .recoverWith { case e: ArithmeticException => Safe.failed(DebuggeeInvocationException(e.getMessage, None)) }
     }
 
     private def computeIntegral[T <: AnyVal](x: T, y: T, clsLoader: JdiClassLoader)(implicit
@@ -169,7 +171,7 @@ object RuntimePrimitiveOps {
           case GreaterOrEqual => integral.gteq(x, y)
         }
         .map(clsLoader.mirrorOfAnyVal)
-        .recoverWith { case e: ArithmeticException => Safe.failed(RuntimeException(e.getMessage, None)) }
+        .recoverWith { case e: ArithmeticException => Safe.failed(DebuggeeInvocationException(e.getMessage, None)) }
     }
 
     def evaluate(lhs: JdiValue, rhs: JdiValue, loader: JdiClassLoader) = {

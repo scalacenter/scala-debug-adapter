@@ -1,15 +1,14 @@
 package ch.epfl.scala.debugadapter.internal.scalasig
 
-import java.io.IOException
-import java.lang.Double.longBitsToDouble
-import java.lang.Float.intBitsToFloat
-
+import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.internal.Errors
 import ch.epfl.scala.debugadapter.internal.scalasig.TagGroups._
 
+import java.lang.Double
+import java.lang.Float
 import scala.annotation.switch
 import scala.reflect.ClassTag
 import scala.reflect.internal.pickling.PickleFormat._
-import ch.epfl.scala.debugadapter.Logger
 
 /**
  * Originally copied from https://github.com/JetBrains/intellij-scala
@@ -22,22 +21,8 @@ import ch.epfl.scala.debugadapter.Logger
 //Some parts of scala.reflect.internal.pickling.UnPickler used
 object Parser {
 
-  def parseScalaSig(
-      bytes: Array[Byte],
-      className: String,
-      logger: Logger
-  ): ScalaSig = {
-    try
-      new Builder(bytes).readAll()
-    catch {
-      case ex: IOException =>
-        throw ex
-      case ex: Throwable =>
-        logger.error(s"Error parsing scala signature of $className")
-        logger.trace(ex)
-        throw ex
-    }
-  }
+  def parseScalaSig(bytes: Array[Byte], className: String, logger: Logger): ScalaSig =
+    new Builder(bytes).readAll()
 
   private class Builder(bytes: Array[Byte]) extends ScalaSigReader(bytes) {
     val index: Array[Int] = createIndex()
@@ -236,8 +221,8 @@ object Parser {
         case LITERALchar => Constant(readLong(len).toChar)
         case LITERALint => Constant(readLong(len).toInt)
         case LITERALlong => Constant(readLong(len))
-        case LITERALfloat => Constant(intBitsToFloat(readLong(len).toInt))
-        case LITERALdouble => Constant(longBitsToDouble(readLong(len)))
+        case LITERALfloat => Constant(Float.intBitsToFloat(readLong(len).toInt))
+        case LITERALdouble => Constant(Double.longBitsToDouble(readLong(len)))
         case LITERALstring => Constant(readNameRef())
         case LITERALnull => Constant(null)
         case LITERALclass => Constant(readTypeRef())
@@ -283,7 +268,6 @@ object Parser {
     private def readEnd() = readNat() + readIndex
 
     protected def errorBadSignature(msg: String) =
-      throw new RuntimeException(s"malformed Scala signature " + " at " + readIndex + "; " + msg)
-
+      throw Errors.frameDecodingFailure(s"malformed Scala signature at $readIndex; $msg")
   }
 }

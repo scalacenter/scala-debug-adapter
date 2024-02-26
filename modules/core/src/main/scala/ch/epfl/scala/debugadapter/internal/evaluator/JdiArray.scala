@@ -16,7 +16,7 @@ class JdiArray(arrayRef: ArrayReference, thread: ThreadReference) extends JdiObj
 
   def getValue(i: Int): Safe[JdiValue] =
     Safe(JdiValue(arrayRef.getValue(i), thread)).recoverWith { case e: IndexOutOfBoundsException =>
-      Safe.failed(RuntimeException(e.getMessage, None))
+      Safe.failed(DebuggeeInvocationException(e.getMessage, None))
     }
 }
 

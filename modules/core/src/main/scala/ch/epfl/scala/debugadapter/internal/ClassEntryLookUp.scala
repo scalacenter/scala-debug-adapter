@@ -152,8 +152,7 @@ private class ClassEntryLookUp(
           if fqcn.startsWith(classFile.fullyQualifiedName + "$")
           scalaSig <- Decompiler.decompile(classFile, logger)
         } yield scalaSig
-      if (scalaSigs.size > 1)
-        throw new Exception(s"More than one ScalaSig found for $fqcn")
+      if (scalaSigs.size > 1) throw Errors.frameDecodingFailure(s"more than one ScalaSig found for $fqcn")
       else scalaSigs.headOption
     }
 

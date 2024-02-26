@@ -22,7 +22,6 @@ import scala.concurrent.Promise
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-import scala.util.control.NonFatal
 
 /**
  * This debug adapter maintains the lifecycle of the debuggee in separation from JDI.
@@ -301,15 +300,9 @@ private[debugadapter] object DebugSession {
       logger: Logger,
       config: DebugConfig
   )(implicit executionContext: ExecutionContext): DebugSession = {
-    try {
-      val loggingHandler = new LoggingAdapter(logger)
-      val context = ScalaProviderContext(debuggee, logger, config)
-      new DebugSession(socket, debuggee, context, resolver, logger, loggingHandler, config)
-    } catch {
-      case NonFatal(cause) =>
-        logger.trace(cause)
-        throw cause
-    }
+    val loggingHandler = new LoggingAdapter(logger)
+    val context = ScalaProviderContext(debuggee, logger, config)
+    new DebugSession(socket, debuggee, context, resolver, logger, loggingHandler, config)
   }
 
   private def fork(f: () => Unit): Unit = {
