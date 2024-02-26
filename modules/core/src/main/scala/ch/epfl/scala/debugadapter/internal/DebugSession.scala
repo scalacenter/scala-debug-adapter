@@ -22,7 +22,6 @@ import scala.concurrent.Promise
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-import scala.util.control.NonFatal
 import ch.epfl.scala.debugadapter.internal.stacktrace.StepFilter
 import ch.epfl.scala.debugadapter.internal.stacktrace.ClassLoadingFilter
 import ch.epfl.scala.debugadapter.internal.stacktrace.RuntimeStepFilter
@@ -147,19 +146,23 @@ private[debugadapter] final class DebugSession private (
     exitStatusPromise.trySuccess(DebugSession.Terminated)
   }
 
-  private def stepFiltersProvider(filters: Map[String, Boolean], tools: DebugTools): Seq[StepFilter] =
-    filters.collect {
-      case (`classLoadingFilterName`, true) => ClassLoadingFilter
-      case (`runtimeFilterName`, true) => RuntimeStepFilter(debuggee.scalaVersion)
-      case (`decoderFilterName`, true) => ScalaDecoder(debuggee, tools, logger, config.testMode)
-    }.toSeq
+  private def stepFiltersProvider(
+      filters: PartialLaunchArguments.UsedStepFilters,
+      tools: DebugTools
+  ): Seq[StepFilter] = {
+    var list = List.empty[StepFilter]
+    if (filters.classLoading) list = ClassLoadingFilter +: list
+    if (filters.runtime) list = RuntimeStepFilter(debuggee.scalaVersion) +: list
+    if (filters.decoder) list = ScalaDecoder(debuggee, tools, logger, config.testMode) +: list
+    list
+  }
 
   protected override def dispatchRequest(request: Request): Unit = {
     val requestId = request.seq
     request.command match {
       case "attach" =>
         val tools = DebugTools(debuggee, resolver, logger)
-        context.configure(tools, stepFiltersProvider(defaultFilters, tools))
+        context.configure(tools, stepFiltersProvider(PartialLaunchArguments.UsedStepFilters(), tools))
         super.dispatchRequest(request)
       case "launch" =>
         val command = Command.parse(request.command)
@@ -169,8 +172,7 @@ private[debugadapter] final class DebugSession private (
         val tools =
           if (launchArgs.noDebug) DebugTools.none(logger)
           else DebugTools(debuggee, resolver, logger)
-        val scalaStepFilters = PartialLaunchArguments.extractStepFilers(request.arguments)
-        context.configure(tools, stepFiltersProvider(scalaStepFilters, tools))
+        context.configure(tools, stepFiltersProvider(launchArgs.scalaStepFilters, tools))
         // launch request is implemented by spinning up a JVM
         // and sending an attach request to the java DapServer
         launchedRequests.add(requestId)
