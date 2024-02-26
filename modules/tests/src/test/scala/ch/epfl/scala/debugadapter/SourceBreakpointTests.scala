@@ -50,7 +50,7 @@ class Scala3SourceBreakpointTests extends SourceBreakpointTests(ScalaVersion.`3.
 }
 
 abstract class SourceBreakpointTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
-  test("evaluate simple breakpoint") {
+  test("simple conditional breakpoint") {
     val source =
       """|package example
          |object Main {
@@ -64,7 +64,7 @@ abstract class SourceBreakpointTests(val scalaVersion: ScalaVersion) extends Deb
     check(Breakpoint(5, "x == 42"), Evaluation.success("x", 42))
   }
 
-  test("evaluate breakpoint in lambda") {
+  test("conditional breakpoint in lambda") {
     val source =
       """|package example
          |object Main {

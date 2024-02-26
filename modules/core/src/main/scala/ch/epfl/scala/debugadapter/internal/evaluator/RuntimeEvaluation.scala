@@ -11,6 +11,7 @@ class RuntimeEvaluation(frame: JdiFrame, logger: Logger) {
   private def eval(stat: RuntimeEvaluationTree): Safe[JdiValue] =
     stat match {
       case Value(value, _) => value
+      case Literal(value, _) => frame.classLoader().flatMap(_.mirrorOfLiteral(value))
       case LocalVar(varName, _) => Safe.successful(frame.variableByName(varName).map(frame.variableValue).get)
       case primitive: CallBinaryOp => invokePrimitive(primitive)
       case primitive: CallUnaryOp => invokePrimitive(primitive)
