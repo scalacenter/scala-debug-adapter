@@ -1943,7 +1943,7 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
     decoder.assertDecode("lucuma.itc.ItcImpl", "ItcImpl")
 
   test("specialized class"):
-    val decoder = initDecoder("org.scala-lang", "scala-library", "2.13.12")
+    val decoder = initDecoder("org.scala-lang", "scala-library", "2.13.13")
     decoder.assertDecode("scala.runtime.java8.JFunction1$mcII$sp", "JFunction1$mcII$sp")
 
   test("local class in value class"):
