@@ -5,6 +5,7 @@ import ch.epfl.scala.debugadapter.DebugServer
 import ch.epfl.scala.debugadapter.Debuggee
 import ch.epfl.scala.debugadapter.GithubUtils
 import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.internal.PartialLaunchArguments.UsedStepFilters
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
 import com.microsoft.java.debug.core.protocol.Types.SourceBreakpoint
 import com.microsoft.java.debug.core.protocol.Types.StackFrame
@@ -17,7 +18,6 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.*
 import scala.util.Properties
-import ch.epfl.scala.debugadapter.internal.defaultFilters
 
 case class DebugCheckState(
     threadId: Long,
@@ -71,12 +71,12 @@ trait DebugTest extends CommonUtils {
     (client, state)
   }
 
-  def check(stepFilters: Array[String])(steps: DebugStepAssert*)(implicit debuggee: TestingDebuggee): Unit = {
+  def check(stepFilters: UsedStepFilters)(steps: DebugStepAssert*)(implicit debuggee: TestingDebuggee): Unit = {
     val server = getDebugServer(debuggee)
     val client = TestingDebugClient.connect(server.uri)
     try {
       server.connect()
-      runAndCheck(client, attach = None, closeSession = true, stepFilters.map(x => x -> true).toMap)(steps*)
+      runAndCheck(client, attach = None, closeSession = true, stepFilters)(steps*)
     } finally {
       client.close()
       server.close()
@@ -111,7 +111,7 @@ trait DebugTest extends CommonUtils {
       client: TestingDebugClient,
       attach: Option[Int],
       closeSession: Boolean,
-      stepFilters: Map[String, Boolean] = defaultFilters
+      stepFilters: UsedStepFilters = UsedStepFilters.default
   )(
       steps: DebugStepAssert*
   ): DebugCheckState = {

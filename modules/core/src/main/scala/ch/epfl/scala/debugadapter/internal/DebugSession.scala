@@ -22,6 +22,7 @@ import scala.concurrent.Promise
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
+import ch.epfl.scala.debugadapter.internal.PartialLaunchArguments.UsedStepFilters
 import ch.epfl.scala.debugadapter.internal.stacktrace.StepFilter
 import ch.epfl.scala.debugadapter.internal.stacktrace.ClassLoadingFilter
 import ch.epfl.scala.debugadapter.internal.stacktrace.RuntimeStepFilter
@@ -162,7 +163,7 @@ private[debugadapter] final class DebugSession private (
     request.command match {
       case "attach" =>
         val tools = DebugTools(debuggee, resolver, logger)
-        context.configure(tools, stepFiltersProvider(PartialLaunchArguments.UsedStepFilters(), tools))
+        context.configure(tools, stepFiltersProvider(UsedStepFilters.default, tools))
         super.dispatchRequest(request)
       case "launch" =>
         val command = Command.parse(request.command)
