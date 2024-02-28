@@ -8,6 +8,7 @@ import com.microsoft.java.debug.core.protocol.Requests.StepFilters
 import com.sun.jdi.Location
 import com.sun.jdi.Method
 import com.microsoft.java.debug.core.adapter.stacktrace.DecodedMethod
+import ch.epfl.scala.debugadapter.DebugConfig
 
 class StackTraceProvider(
     stepFilters: Seq[StepFilter],
@@ -49,17 +50,31 @@ class StackTraceProvider(
 }
 
 object StackTraceProvider {
+  private def stepFiltersProvider(
+      debuggee: Debuggee,
+      tools: DebugTools,
+      logger: Logger,
+      config: DebugConfig
+  ): Seq[StepFilter] = {
+    var list = List.empty[StepFilter]
+    if (config.stepFilters.skipClassLoading) list = ClassLoadingFilter +: list
+    if (config.stepFilters.skipRuntimeClasses) list = RuntimeStepFilter(debuggee.scalaVersion) +: list
+    if (config.stepFilters.skipForwardersAndAccessors)
+      list = ScalaDecoder(debuggee, tools, logger, config.testMode) +: list
+    println(list)
+    list
+  }
+
   def apply(
       debuggee: Debuggee,
       tools: DebugTools,
       logger: Logger,
-      testMode: Boolean,
-      stepFilters: Seq[StepFilter]
+      config: DebugConfig
   ): StackTraceProvider = {
     new StackTraceProvider(
-      stepFilters,
+      stepFiltersProvider(debuggee, tools, logger, config),
       logger,
-      testMode
+      config.testMode
     )
   }
 }

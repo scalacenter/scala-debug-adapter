@@ -17,7 +17,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.*
 import scala.util.Properties
-import ch.epfl.scala.debugadapter.UsedStepFilters
+import ch.epfl.scala.debugadapter.StepFiltersConfig
 
 case class DebugCheckState(
     threadId: Long,
@@ -59,7 +59,7 @@ trait DebugTest extends CommonUtils {
   ): DebugServer.Handler =
     DebugServer.start(debuggee, TestingResolver, logger, gracePeriod = gracePeriod)
 
-  def check(uri: URI, attach: Option[Int] = None, stepFilters: UsedStepFilters = null)(
+  def check(uri: URI, attach: Option[Int] = None, stepFilters: StepFiltersConfig = null)(
       steps: DebugStepAssert*
   ): Unit = {
     val client = TestingDebugClient.connect(uri)
@@ -78,9 +78,7 @@ trait DebugTest extends CommonUtils {
     val client = TestingDebugClient.connect(server.uri)
     try {
       server.connect()
-      runAndCheck(client, attach = None, closeSession = true, stepFilters = config.stepFilters)(
-        steps*
-      ) // ! That's a bit ugly because we need to pass it to LaunchArguments as well as DebugConfig but LaunchArguments' filters 'overrides' DebugConfig's filters.
+      runAndCheck(client, attach = None, closeSession = true)(steps*)
     } finally {
       client.close()
       server.close()
@@ -103,7 +101,7 @@ trait DebugTest extends CommonUtils {
       client: TestingDebugClient,
       attach: Option[Int],
       closeSession: Boolean,
-      stepFilters: UsedStepFilters = UsedStepFilters.default
+      stepFilters: StepFiltersConfig = null
   )(
       steps: DebugStepAssert*
   ): DebugCheckState = {

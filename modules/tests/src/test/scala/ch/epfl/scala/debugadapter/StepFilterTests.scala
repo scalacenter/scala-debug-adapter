@@ -2,95 +2,45 @@ package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testfmk.*
 
-class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.3`) {
-  test("Should not skip runtime classes when runtime step filter is not used") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def m1(xs: String*) = println(xs.mkString)
-         |  def m2(xs: Int*) = println(xs.mkString)
-         |  def m3(xs: Unit*) = println(xs.mkString)
-         | 
-         |  def main(args: Array[String]): Unit = {
-         |    m1("a", "b")
-         |    m2(1, 2)
-         |    m3((), ())
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
-      DebugConfig.default.copy(
-        stepFilters = UsedStepFilters(decoder = true, runtime = false, classLoading = true)
-      )
-    )(
-      Breakpoint(9),
-      StepIn.method("ScalaRunTime.wrapRefArray[T](xs: Array[T]): ArraySeq[T]")
-    )
-  }
-
-}
-class Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`) {
-  test("Should not skip runtime classes when runtime step filter is not used") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def m1(xs: String*) = println(xs.mkString)
-         |  def m2(xs: Int*) = println(xs.mkString)
-         |  def m3(xs: Unit*) = println(xs.mkString)
-         | 
-         |  def main(args: Array[String]): Unit = {
-         |    m1("a", "b")
-         |    m2(1, 2)
-         |    m3((), ())
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
-      DebugConfig.default.copy(
-        stepFilters = UsedStepFilters(decoder = true, runtime = false, classLoading = true)
-      )
-    )(
-      Breakpoint(9),
-      StepIn.method("LowPriorityImplicits.wrapRefArray(Object[]): WrappedArray")
-    )
-  }
-}
-class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`) {
-  test("Should not skip runtime classes when runtime step filter is not used") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def m1(xs: String*) = println(xs.mkString)
-         |  def m2(xs: Int*) = println(xs.mkString)
-         |  def m3(xs: Unit*) = println(xs.mkString)
-         | 
-         |  def main(args: Array[String]): Unit = {
-         |    m1("a", "b")
-         |    m2(1, 2)
-         |    m3((), ())
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
-      DebugConfig.default.copy(
-        stepFilters = UsedStepFilters(decoder = true, runtime = false, classLoading = true)
-      )
-    )(
-      Breakpoint(9),
-      StepIn.method("ScalaRunTime$.wrapRefArray(Object[]): ArraySeq")
-    )
-  }
-}
+class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.3`)
+class Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
+class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`)
 
 abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends DebugTestSuite {
   private val printlnMethod =
     if (scalaVersion.isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void"
+
+  test("Should not skip runtime classes when runtime step filter is not used") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def m1(xs: String*) = println(xs.mkString)
+         |  def m2(xs: Int*) = println(xs.mkString)
+         |  def m3(xs: Unit*) = println(xs.mkString)
+         | 
+         |  def main(args: Array[String]): Unit = {
+         |    m1("a", "b")
+         |    m2(1, 2)
+         |    m3((), ())
+         |  }
+         |}
+         |""".stripMargin
+    val expectedFrame =
+      if (scalaVersion.isScala3) "ScalaRunTime.wrapRefArray[T](xs: Array[T]): ArraySeq[T]"
+      else if (scalaVersion.isScala213) "ScalaRunTime$.wrapRefArray(Object[]): ArraySeq"
+      else "LowPriorityImplicits.wrapRefArray(Object[]): WrappedArray"
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      DebugConfig.default.copy(
+        stepFilters =
+          StepFiltersConfig(skipForwardersAndAccessors = true, skipRuntimeClasses = false, skipClassLoading = true)
+      )
+    )(
+      Breakpoint(9),
+      StepIn.method(expectedFrame)
+    )
+  }
 
   test("Should not skip compiler-generated code when decoder filter is not used") {
     val source =
@@ -112,7 +62,8 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       DebugConfig.default.copy(
-        stepFilters = UsedStepFilters(decoder = false, runtime = true, classLoading = true)
+        stepFilters =
+          StepFiltersConfig(skipForwardersAndAccessors = false, skipRuntimeClasses = true, skipClassLoading = true)
       )
     )(
       Breakpoint(12),
@@ -143,7 +94,8 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       DebugConfig.default.copy(
-        stepFilters = UsedStepFilters(decoder = true, runtime = true, classLoading = false)
+        stepFilters =
+          StepFiltersConfig(skipForwardersAndAccessors = true, skipRuntimeClasses = true, skipClassLoading = false)
       )
     )(
       Breakpoint(11),

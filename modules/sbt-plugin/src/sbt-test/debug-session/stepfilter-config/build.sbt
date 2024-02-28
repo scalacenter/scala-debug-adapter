@@ -1,5 +1,5 @@
 import ch.epfl.scala.debugadapter.testfmk._
-import ch.epfl.scala.debugadapter.UsedStepFilters
+import ch.epfl.scala.debugadapter.StepFiltersConfig
 
 val checkStepFilterOverriding =
   inputKey[Unit]("Check that step filter configuration is overridden with LaunchArguments")
@@ -8,7 +8,11 @@ scalaVersion := "3.3.2"
 checkStepFilterOverriding := {
   val uri = (Compile / startMainClassDebugSession).evaluated
   val source = (Compile / sources).value.head.toPath
-  DebugTest.check(uri, stepFilters = UsedStepFilters(decoder = true, runtime = true, classLoading = false))(
+  DebugTest.check(
+    uri,
+    stepFilters =
+      StepFiltersConfig(skipForwardersAndAccessors = true, skipRuntimeClasses = true, skipClassLoading = false)
+  )(
     Breakpoint(source, 7),
     StepIn.method("ClassLoader.loadClass(String): Class")
   )

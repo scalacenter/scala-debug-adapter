@@ -24,7 +24,7 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
 import scala.concurrent.Await
 import ch.epfl.scala.debugadapter.internal.PartialLaunchArguments
-import ch.epfl.scala.debugadapter.UsedStepFilters
+import ch.epfl.scala.debugadapter.StepFiltersConfig
 
 class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     ec: ExecutionContext
@@ -51,7 +51,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
 
   def launch(
       timeout: Duration = defaultTimeout(16.seconds),
-      stepFilters: UsedStepFilters = UsedStepFilters.default
+      stepFilters: StepFiltersConfig = null
   ): Messages.Response = {
     val request = createRequest(Command.LAUNCH, new PartialLaunchArguments(stepFilters))
 
