@@ -209,10 +209,10 @@ lazy val decoder3: Project = project
   .dependsOn(tests3 % Test)
   .settings(
     name := "scala-debug-decoder",
-    scalaVersion := Dependencies.scala33,
+    scalaVersion := Dependencies.scala34,
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
-      "ch.epfl.scala" %% "tasty-query" % "1.2.1",
+      "ch.epfl.scala" %% "tasty-query" % "1.3.0",
       Dependencies.asm,
       Dependencies.asmUtil,
       Dependencies.munit % Test
