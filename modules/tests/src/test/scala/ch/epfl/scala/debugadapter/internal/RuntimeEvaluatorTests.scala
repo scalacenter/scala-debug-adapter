@@ -5,33 +5,8 @@ import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.DebugConfig
 import java.{util => ju}
 
-class Scala212RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`2.12`) {
-  test("Should access to wrapping 'object' methods") {
-    implicit val debuggee = nested
-    check(
-      Breakpoint(21),
-      Evaluation.success("upperMain1", "upper main 1"),
-      Breakpoint(25),
-      Evaluation.success("upperMain2", "upper main 2"),
-      Breakpoint(31),
-      Evaluation.success("upperMain3", "upper main 3")
-    )
-  }
-}
-class Scala213RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`2.13`) {
-  test("Should access to wrapping 'object' methods") {
-    implicit val debuggee = nested
-    check(
-      Breakpoint(21),
-      Evaluation.success("upperMain1", "upper main 1"),
-      Breakpoint(25),
-      Evaluation.success("upperMain2", "upper main 2"),
-      Breakpoint(31),
-      Evaluation.success("upperMain3", "upper main 3")
-    )
-  }
-}
-
+class Scala212RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`2.12`)
+class Scala213RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`2.13`)
 class Scala33RuntimeEvaluatorTests extends Scala3RuntimeEvaluatorTests(ScalaVersion.`3.3`)
 class Scala34RuntimeEvaluatorTests extends Scala3RuntimeEvaluatorTests(ScalaVersion.`3.4`)
 
@@ -665,29 +640,6 @@ object RuntimeEvaluatorEnvironments {
        |  }
        |}
        |""".stripMargin
-  val flowControl =
-    """|package example
-       |
-       |class A {
-       |  val x: String = "a"
-       |}
-       |
-       |class B extends A
-       |class C extends A
-       |
-       |object Main {
-       |  def main(args: Array[String]): Unit = {
-       |    val x = 1
-       |    val t = Test(-1)
-       |    println("ok")
-       |  }
-       |
-       |  def test(x: Int): String = s"int $x"
-       |  def test(t: Test): String = s"test ${t.i}"
-       |  def isTrue = true
-       |
-       |  case class Test(i: Int)
-       |}""".stripMargin
 
   val staticAccess =
     """|package example
@@ -719,8 +671,6 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.innerInstantiation, "example.Main", scalaVersion)
   lazy val outerPreEval =
     TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.outerPreEval, "example.Main", scalaVersion)
-  lazy val controlFlow =
-    TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.flowControl, "example.Main", scalaVersion)
   lazy val staticAccess =
     TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.staticAccess, "example.Main", scalaVersion)
 
@@ -1149,7 +1099,30 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
   }
 
   test("Should evaluate if control flows") {
-    implicit val debuggee = controlFlow
+    val source =
+      """|package example
+         |
+         |class A {
+         |  val x: String = "a"
+         |}
+         |
+         |class B extends A
+         |class C extends A
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val x = 1
+         |    val t = Test(-1)
+         |    println("ok")
+         |  }
+         |
+         |  def test(x: Int): String = s"int $x"
+         |  def test(t: Test): String = s"test ${t.i}"
+         |  def isTrue = true
+         |
+         |  case class Test(i: Int)
+         |}""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(14),
       DebugStepAssert.inParallel(
@@ -1401,5 +1374,18 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(5), Evaluation.success("m(null)", null))
+  }
+
+  test("Should access to wrapping 'object' methods") {
+    assume(scalaVersion.isScala2)
+    implicit val debuggee = nested
+    check(
+      Breakpoint(21),
+      Evaluation.success("upperMain1", "upper main 1"),
+      Breakpoint(25),
+      Evaluation.success("upperMain2", "upper main 2"),
+      Breakpoint(31),
+      Evaluation.success("upperMain3", "upper main 3")
+    )
   }
 }

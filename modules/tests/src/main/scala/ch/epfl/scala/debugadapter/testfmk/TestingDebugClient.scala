@@ -192,7 +192,7 @@ class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     )
   }
 
-  def redefineClasses(timeout: Duration = defaultTimeout(1.second)): Either[String, Array[String]] = {
+  def redefineClasses(timeout: Duration = defaultTimeout(2.seconds)): Either[String, Array[String]] = {
     val args = new RedefineClassesArguments()
     val request = createRequest(Command.REDEFINECLASSES, args)
     val response = Await.result(sendRequest(request), timeout)

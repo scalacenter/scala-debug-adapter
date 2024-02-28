@@ -11,9 +11,9 @@ import ch.epfl.scala.debugadapter.internal.evaluator.*
 import com.microsoft.java.debug.core.IEvaluatableBreakpoint
 import com.microsoft.java.debug.core.adapter.IDebugAdapterContext
 import com.microsoft.java.debug.core.adapter.IEvaluationProvider
+import com.sun.jdi
 import com.sun.jdi.ObjectReference
 import com.sun.jdi.ThreadReference
-import com.sun.jdi.Value
 
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
@@ -40,7 +40,7 @@ private[internal] class EvaluationProvider(
 
   override def isInEvaluation(thread: ThreadReference) = isEvaluating.get
 
-  override def evaluate(expression: String, thread: ThreadReference, depth: Int): CompletableFuture[Value] = {
+  override def evaluate(expression: String, thread: ThreadReference, depth: Int): CompletableFuture[jdi.Value] = {
     val frame = JdiFrame(thread, depth)
     val evaluation = for {
       preparedExpression <- prepare(expression, frame, preEvaluation = true)
@@ -53,12 +53,12 @@ private[internal] class EvaluationProvider(
       expression: String,
       thisContext: ObjectReference,
       thread: ThreadReference
-  ): CompletableFuture[Value] = ???
+  ): CompletableFuture[jdi.Value] = ???
 
   override def evaluateForBreakpoint(
       breakpoint: IEvaluatableBreakpoint,
       thread: ThreadReference
-  ): CompletableFuture[Value] = {
+  ): CompletableFuture[jdi.Value] = {
     val frame = JdiFrame(thread, 0)
     val location = frame.current().location
     val locationCode = (location.method.name, location.codeIndex).hashCode
@@ -82,10 +82,10 @@ private[internal] class EvaluationProvider(
       thisContext: ObjectReference,
       methodName: String,
       methodSignature: String,
-      args: Array[Value],
+      args: Array[jdi.Value],
       thread: ThreadReference,
       invokeSuper: Boolean
-  ): CompletableFuture[Value] = {
+  ): CompletableFuture[jdi.Value] = {
     val obj = JdiObject(thisContext, thread)
     val wrappedArgs = if (args == null) Seq.empty else args.toSeq.map(JdiValue(_, thread))
     val invocation = evaluationBlock {
@@ -162,13 +162,13 @@ private[internal] class EvaluationProvider(
       case If(p, t, f, _) => containsMethodCall(p) || containsMethodCall(t) || containsMethodCall(f)
       case Assign(lhs, rhs, _) => containsMethodCall(lhs) || containsMethodCall(rhs)
       case _: CallMethod | _: NewInstance => true
-      case _: LocalVar | _: RuntimeEvaluationTree.Value | _: This => false
+      case _: LocalVar | _: Value | _: This | _: Literal => false
       case _: StaticField | _: StaticModule => false
       case _: CallBinaryOp | _: CallUnaryOp | _: ArrayElem => false
     }
   }
 
-  private def evaluate(expression: PreparedExpression, frame: JdiFrame): Try[Value] = evaluationBlock {
+  private def evaluate(expression: PreparedExpression, frame: JdiFrame): Try[jdi.Value] = evaluationBlock {
     val result = expression match {
       case logMessage: PlainLogMessage => MessageLogger.log(logMessage, frame)
       case expr: RuntimeExpression => runtimeEvaluator.evaluate(expr, frame)

@@ -113,6 +113,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
         case NestedModule(_, CallInstanceMethod(_, _, _: Value)) => eval
         case _: StaticModule => eval
         case _: This => eval
+        case _: Literal => eval
         case _ => tree
       }
     } else tree
@@ -128,9 +129,10 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
 
   private def validateLiteral(lit: Lit): Validation[RuntimeEvaluationTree] =
     classLoader.map { loader =>
-      val value = loader.mirrorOfLiteral(lit.value)
-      val tpe = if (lit.value == null) null else value.map(_.value.`type`).extract.get
-      Value(value, tpe)
+      val tpe =
+        if (lit.value == null) null
+        else loader.mirrorOfLiteral(lit.value).map(_.value.`type`).getResult.get
+      preEvaluate(Literal(lit.value, tpe))
     }
 
   private def findField(
@@ -411,11 +413,6 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       case tpe: jdi.ReferenceType => Valid(tpe)
       case _ => Recoverable(s"$tpe is not a reference type")
     }
-
-  private def fromLitToValue(literal: Lit, classLoader: JdiClassLoader): (Safe[Any], jdi.Type) = {
-    val tpe = classLoader.mirrorOfLiteral(literal.value).map(_.value.`type`).getResult.get
-    (Safe(literal.value), tpe)
-  }
 
   private def moreSpecificThan(m1: jdi.Method, m2: jdi.Method): Boolean = {
     m1.argumentTypes()

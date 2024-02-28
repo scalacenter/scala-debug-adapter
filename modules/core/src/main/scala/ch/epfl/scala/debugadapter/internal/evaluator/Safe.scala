@@ -71,10 +71,8 @@ class Safe[+A] private (
 }
 
 object Safe {
-  def apply[A](f: => A): Safe[A] = {
-    val result = Try(f)
-    apply(result)
-  }
+  def apply[A](f: => A): Safe[A] =
+    apply(Try(f))
 
   def apply[A](a: Try[A]): Safe[A] = {
     a match {
