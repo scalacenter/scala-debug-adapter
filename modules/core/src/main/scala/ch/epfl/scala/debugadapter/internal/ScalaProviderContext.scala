@@ -13,17 +13,26 @@ import com.microsoft.java.debug.core.adapter.IVirtualMachineManagerProvider
 import com.microsoft.java.debug.core.adapter.ProviderContext
 import com.microsoft.java.debug.core.adapter.variables.IVariableProvider
 
-private[debugadapter] class ScalaProviderContext private (debuggee: Debuggee, logger: Logger, config: DebugConfig)
-    extends ProviderContext {
-  def configure(tools: DebugTools): Unit = {
+private[debugadapter] class ScalaProviderContext private (
+    debuggee: Debuggee,
+    logger: Logger
+) extends ProviderContext {
+  def configure(tools: DebugTools, config: DebugConfig): Unit = {
     registerProvider(classOf[ISourceLookUpProvider], tools.sourceLookUp)
     registerProvider(classOf[IEvaluationProvider], EvaluationProvider(debuggee, tools, logger, config))
-    registerProvider(classOf[IStackTraceProvider], StackTraceProvider(debuggee, tools, logger, config.testMode))
+    registerProvider(
+      classOf[IStackTraceProvider],
+      StackTraceProvider(debuggee, tools, logger, config)
+    )
   }
 }
 
 private[debugadapter] object ScalaProviderContext {
-  def apply(debuggee: Debuggee, logger: Logger, config: DebugConfig): ScalaProviderContext = {
+  def apply(
+      debuggee: Debuggee,
+      logger: Logger,
+      config: DebugConfig
+  ): ScalaProviderContext = {
 
     /**
      * Since Scala 2.13, object fields are represented by static fields in JVM byte code.
@@ -31,7 +40,7 @@ private[debugadapter] object ScalaProviderContext {
      */
     DebugSettings.getCurrent.showStaticVariables = true
 
-    val context = new ScalaProviderContext(debuggee, logger, config)
+    val context = new ScalaProviderContext(debuggee, logger)
     val hotCodeReplaceProvider = HotCodeReplaceProvider(debuggee, logger, config.testMode)
     // The BreakpointRequestHandler resolves the IHotCodeReplaceProvider in its constructor
     context.registerProvider(classOf[IHotCodeReplaceProvider], hotCodeReplaceProvider)

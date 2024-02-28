@@ -3,13 +3,106 @@ package ch.epfl.scala.debugadapter
 import ch.epfl.scala.debugadapter.testfmk.*
 
 class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.3`)
-
 class Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
 class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`)
 
 abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends DebugTestSuite {
   private val printlnMethod =
     if (scalaVersion.isScala3) "Predef.println(x: Any): Unit" else "Predef$.println(Object): void"
+
+  test("Should not skip runtime classes when runtime step filter is not used") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def m1(xs: String*) = println(xs.mkString)
+         |  def m2(xs: Int*) = println(xs.mkString)
+         |  def m3(xs: Unit*) = println(xs.mkString)
+         | 
+         |  def main(args: Array[String]): Unit = {
+         |    m1("a", "b")
+         |    m2(1, 2)
+         |    m3((), ())
+         |  }
+         |}
+         |""".stripMargin
+    val expectedFrame =
+      if (scalaVersion.isScala3) "ScalaRunTime.wrapRefArray[T](xs: Array[T]): ArraySeq[T]"
+      else if (scalaVersion.isScala213) "ScalaRunTime$.wrapRefArray(Object[]): ArraySeq"
+      else "LowPriorityImplicits.wrapRefArray(Object[]): WrappedArray"
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      DebugConfig.default.copy(
+        stepFilters =
+          StepFiltersConfig(skipForwardersAndAccessors = true, skipRuntimeClasses = false, skipClassLoading = true)
+      )
+    )(
+      Breakpoint(9),
+      StepIn.method(expectedFrame)
+    )
+  }
+
+  test("Should not skip compiler-generated code when decoder filter is not used") {
+    val source =
+      """|package example
+         |
+         |trait Foo {
+         |  def foo = println("Foo")
+         |}
+         |
+         |class Fooo() extends Foo
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val fooo = new Fooo
+         |    fooo.foo
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      DebugConfig.default.copy(
+        stepFilters =
+          StepFiltersConfig(skipForwardersAndAccessors = false, skipRuntimeClasses = true, skipClassLoading = true)
+      )
+    )(
+      Breakpoint(12),
+      StepIn.method("Fooo.foo(): void"),
+      StepIn.method("Foo.foo$(Foo): void"),
+      StepIn.method("Foo.foo(): void"),
+      StepIn.method("Predef$.println(Object): void")
+    )
+  }
+
+  test("Should not skip class loading when class loader filter is not used") {
+    val source =
+      """|package example
+         |
+         |trait Foo {
+         |  val x: Int
+         |  def m: Int = x
+         |}
+         |
+         |case class Fooo(x: Int) extends Foo
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val fooo = Fooo(42)
+         |    fooo.m
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      DebugConfig.default.copy(
+        stepFilters =
+          StepFiltersConfig(skipForwardersAndAccessors = true, skipRuntimeClasses = true, skipClassLoading = false)
+      )
+    )(
+      Breakpoint(11),
+      StepIn.method("ClassLoader.loadClass(String): Class")
+    )
+  }
+
   test("should not step into mixin forwarder") {
     val source =
       """|package example

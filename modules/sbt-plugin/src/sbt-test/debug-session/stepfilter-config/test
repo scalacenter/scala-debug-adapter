@@ -1,0 +1,3 @@
+> 'checkStepFilterOverriding {"class":"example.Main","arguments":[],"jvmOptions":[]}'
+> 'checkNoStepFilterOverridingWhenNoLaunchArgs {"class":"example.Main","arguments":[],"jvmOptions":[]}'
+> stopDebugSession

@@ -8,21 +8,19 @@ import com.microsoft.java.debug.core.protocol.Requests.StepFilters
 import com.sun.jdi.Location
 import com.sun.jdi.Method
 import com.microsoft.java.debug.core.adapter.stacktrace.DecodedMethod
+import ch.epfl.scala.debugadapter.DebugConfig
 
 class StackTraceProvider(
-    runtimeFilter: RuntimeStepFilter,
-    decoder: ScalaDecoder,
+    stepFilters: Seq[StepFilter],
     protected val logger: Logger,
     protected val testMode: Boolean
 ) extends JavaStackTraceProvider
     with ThrowOrWarn {
-
-  private val stepFilters: Seq[StepFilter] = Seq(ClassLoadingFilter, runtimeFilter, decoder)
-
-  def reload(): Unit = decoder.reload()
+  val decoder = stepFilters.collectFirst { case u: ScalaDecoder => u }
+  def reload(): Unit = decoder.foreach(_.reload())
 
   override def decode(method: Method): DecodedMethod =
-    decoder.decode(method)
+    decoder.map(_.decode(method)).getOrElse(JavaMethod(method, isGenerated = false))
 
   override def skipOver(method: Method, filters: StepFilters): Boolean = {
     try {
@@ -52,19 +50,31 @@ class StackTraceProvider(
 }
 
 object StackTraceProvider {
+  private def stepFiltersProvider(
+      debuggee: Debuggee,
+      tools: DebugTools,
+      logger: Logger,
+      config: DebugConfig
+  ): Seq[StepFilter] = {
+    var list = List.empty[StepFilter]
+    if (config.stepFilters.skipClassLoading) list = ClassLoadingFilter +: list
+    if (config.stepFilters.skipRuntimeClasses) list = RuntimeStepFilter(debuggee.scalaVersion) +: list
+    if (config.stepFilters.skipForwardersAndAccessors)
+      list = ScalaDecoder(debuggee, tools, logger, config.testMode) +: list
+    println(list)
+    list
+  }
+
   def apply(
       debuggee: Debuggee,
       tools: DebugTools,
       logger: Logger,
-      testMode: Boolean
+      config: DebugConfig
   ): StackTraceProvider = {
-    val decoder: ScalaDecoder = ScalaDecoder(debuggee, tools, logger, testMode)
-    val runtimeStepFilter = RuntimeStepFilter(debuggee.scalaVersion)
     new StackTraceProvider(
-      runtimeStepFilter,
-      decoder,
+      stepFiltersProvider(debuggee, tools, logger, config),
       logger,
-      testMode
+      config.testMode
     )
   }
 }

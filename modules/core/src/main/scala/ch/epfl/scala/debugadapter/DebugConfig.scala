@@ -2,11 +2,22 @@ package ch.epfl.scala.debugadapter
 
 import scala.concurrent.duration.*
 
+case class StepFiltersConfig(
+    skipForwardersAndAccessors: Boolean,
+    skipRuntimeClasses: Boolean,
+    skipClassLoading: Boolean
+)
+
+object StepFiltersConfig {
+  val default = StepFiltersConfig(skipForwardersAndAccessors = true, skipRuntimeClasses = true, skipClassLoading = true)
+}
+
 final case class DebugConfig(
     gracePeriod: Duration,
     autoCloseSession: Boolean,
     testMode: Boolean,
-    evaluationMode: DebugConfig.EvaluationMode
+    evaluationMode: DebugConfig.EvaluationMode,
+    stepFilters: StepFiltersConfig
 )
 
 object DebugConfig {
@@ -14,7 +25,8 @@ object DebugConfig {
     5.seconds,
     autoCloseSession = true,
     testMode = false,
-    evaluationMode = DebugConfig.MixedEvaluation
+    evaluationMode = DebugConfig.MixedEvaluation,
+    stepFilters = StepFiltersConfig.default
   )
 
   sealed trait EvaluationMode {

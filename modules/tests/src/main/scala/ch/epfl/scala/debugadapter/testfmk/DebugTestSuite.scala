@@ -17,6 +17,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.*
 import scala.util.Properties
+import ch.epfl.scala.debugadapter.StepFiltersConfig
 
 case class DebugCheckState(
     threadId: Long,
@@ -58,9 +59,11 @@ trait DebugTest extends CommonUtils {
   ): DebugServer.Handler =
     DebugServer.start(debuggee, TestingResolver, logger, gracePeriod = gracePeriod)
 
-  def check(uri: URI, attach: Option[Int] = None)(steps: DebugStepAssert*): Unit = {
+  def check(uri: URI, attach: Option[Int] = None, stepFilters: StepFiltersConfig = null)(
+      steps: DebugStepAssert*
+  ): Unit = {
     val client = TestingDebugClient.connect(uri)
-    try runAndCheck(client, attach, closeSession = true)(steps*)
+    try runAndCheck(client, attach, closeSession = true, stepFilters = stepFilters)(steps*)
     finally client.close()
   }
 
@@ -94,13 +97,18 @@ trait DebugTest extends CommonUtils {
     }
   }
 
-  private def runAndCheck(client: TestingDebugClient, attach: Option[Int], closeSession: Boolean)(
+  private def runAndCheck(
+      client: TestingDebugClient,
+      attach: Option[Int],
+      closeSession: Boolean,
+      stepFilters: StepFiltersConfig = null
+  )(
       steps: DebugStepAssert*
   ): DebugCheckState = {
     client.initialize()
     attach match {
       case Some(port) => client.attach("localhost", port)
-      case None => client.launch()
+      case None => client.launch(stepFilters = stepFilters)
     }
 
     val sourceBreakpoints = steps

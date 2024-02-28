@@ -64,7 +64,7 @@ private[debugadapter] final class DebugSession private (
 
   private[debugadapter] def currentState: DebugSession.State = debugState.value
 
-  private[debugadapter] def getDebugeeAddress: Future[InetSocketAddress] =
+  private[debugadapter] def getDebuggeeAddress: Future[InetSocketAddress] =
     debuggeeAddress.future
 
   /**
@@ -147,7 +147,7 @@ private[debugadapter] final class DebugSession private (
     request.command match {
       case "attach" =>
         val tools = DebugTools(debuggee, resolver, logger)
-        context.configure(tools)
+        context.configure(tools, config)
         super.dispatchRequest(request)
       case "launch" =>
         val command = Command.parse(request.command)
@@ -157,7 +157,9 @@ private[debugadapter] final class DebugSession private (
         val tools =
           if (launchArgs.noDebug) DebugTools.none(logger)
           else DebugTools(debuggee, resolver, logger)
-        context.configure(tools)
+        val debugConfig =
+          if (launchArgs.scalaStepFilters == null) config else config.copy(stepFilters = launchArgs.scalaStepFilters)
+        context.configure(tools, debugConfig)
         // launch request is implemented by spinning up a JVM
         // and sending an attach request to the java DapServer
         launchedRequests.add(requestId)
