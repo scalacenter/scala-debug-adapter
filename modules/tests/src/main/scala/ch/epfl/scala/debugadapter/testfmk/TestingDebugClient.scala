@@ -23,8 +23,8 @@ import ch.epfl.scala.debugadapter.Logger
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
 import scala.concurrent.Await
-import ch.epfl.scala.debugadapter.internal.PartialLaunchArguments.UsedStepFilters
 import ch.epfl.scala.debugadapter.internal.PartialLaunchArguments
+import ch.epfl.scala.debugadapter.UsedStepFilters
 
 class TestingDebugClient(socket: Socket, logger: Logger)(implicit
     ec: ExecutionContext

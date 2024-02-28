@@ -1,7 +1,6 @@
 package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testfmk.*
-import ch.epfl.scala.debugadapter.internal.PartialLaunchArguments.UsedStepFilters
 
 class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.3`) {
   test("Should not skip runtime classes when runtime step filter is not used") {
@@ -22,7 +21,9 @@ class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.3`) {
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
-      UsedStepFilters(decoder = true, runtime = false, classLoading = true)
+      DebugConfig.default.copy(
+        stepFilters = UsedStepFilters(decoder = true, runtime = false, classLoading = true)
+      )
     )(
       Breakpoint(9),
       StepIn.method("ScalaRunTime.wrapRefArray[T](xs: Array[T]): ArraySeq[T]")
@@ -49,7 +50,9 @@ class Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`) {
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
-      UsedStepFilters(decoder = true, runtime = false, classLoading = true)
+      DebugConfig.default.copy(
+        stepFilters = UsedStepFilters(decoder = true, runtime = false, classLoading = true)
+      )
     )(
       Breakpoint(9),
       StepIn.method("LowPriorityImplicits.wrapRefArray(Object[]): WrappedArray")
@@ -75,7 +78,9 @@ class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`) {
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
-      UsedStepFilters(decoder = true, runtime = false, classLoading = true)
+      DebugConfig.default.copy(
+        stepFilters = UsedStepFilters(decoder = true, runtime = false, classLoading = true)
+      )
     )(
       Breakpoint(9),
       StepIn.method("ScalaRunTime$.wrapRefArray(Object[]): ArraySeq")
@@ -106,7 +111,9 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
-      UsedStepFilters(decoder = false, runtime = true, classLoading = true)
+      DebugConfig.default.copy(
+        stepFilters = UsedStepFilters(decoder = false, runtime = true, classLoading = true)
+      )
     )(
       Breakpoint(12),
       StepIn.method("Fooo.foo(): void"),
@@ -135,7 +142,9 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
-      UsedStepFilters(decoder = true, runtime = true, classLoading = false)
+      DebugConfig.default.copy(
+        stepFilters = UsedStepFilters(decoder = true, runtime = true, classLoading = false)
+      )
     )(
       Breakpoint(11),
       StepIn.method("ClassLoader.loadClass(String): Class")

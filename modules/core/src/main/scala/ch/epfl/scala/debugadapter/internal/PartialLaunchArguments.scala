@@ -1,15 +1,8 @@
 package ch.epfl.scala.debugadapter.internal;
 
 import com.microsoft.java.debug.core.protocol.Requests.LaunchArguments
+import ch.epfl.scala.debugadapter.UsedStepFilters
 
 case class PartialLaunchArguments(
-    scalaStepFilters: PartialLaunchArguments.UsedStepFilters = PartialLaunchArguments.UsedStepFilters.default
+    scalaStepFilters: UsedStepFilters
 ) extends LaunchArguments
-
-object PartialLaunchArguments {
-  case class UsedStepFilters(decoder: Boolean, runtime: Boolean, classLoading: Boolean)
-
-  object UsedStepFilters {
-    val default = UsedStepFilters(decoder = true, runtime = true, classLoading = true)
-  }
-}

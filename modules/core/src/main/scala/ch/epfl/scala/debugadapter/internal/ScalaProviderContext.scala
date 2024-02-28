@@ -1,6 +1,9 @@
 package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter.DebugConfig
+import ch.epfl.scala.debugadapter.internal.stacktrace.ClassLoadingFilter
+import ch.epfl.scala.debugadapter.internal.stacktrace.RuntimeStepFilter
+import ch.epfl.scala.debugadapter.internal.stacktrace.ScalaDecoder
 import ch.epfl.scala.debugadapter.Debuggee
 import ch.epfl.scala.debugadapter.Logger
 import com.microsoft.java.debug.core.DebugSettings
@@ -16,15 +19,26 @@ import ch.epfl.scala.debugadapter.internal.stacktrace.StepFilter
 
 private[debugadapter] class ScalaProviderContext private (
     debuggee: Debuggee,
-    logger: Logger,
-    config: DebugConfig
+    logger: Logger
 ) extends ProviderContext {
-  def configure(tools: DebugTools, stepFilters: Seq[StepFilter]): Unit = {
+  private def stepFiltersProvider(
+      tools: DebugTools,
+      config: DebugConfig
+  ): Seq[StepFilter] = {
+    var list = List.empty[StepFilter]
+    if (config.stepFilters.classLoading) list = ClassLoadingFilter +: list
+    if (config.stepFilters.runtime) list = RuntimeStepFilter(debuggee.scalaVersion) +: list
+    if (config.stepFilters.decoder) list = ScalaDecoder(debuggee, tools, logger, config.testMode) +: list
+    println(list)
+    list
+  }
+
+  def configure(tools: DebugTools, config: DebugConfig): Unit = {
     registerProvider(classOf[ISourceLookUpProvider], tools.sourceLookUp)
     registerProvider(classOf[IEvaluationProvider], EvaluationProvider(debuggee, tools, logger, config))
     registerProvider(
       classOf[IStackTraceProvider],
-      StackTraceProvider(debuggee, tools, logger, config.testMode, stepFilters)
+      StackTraceProvider(debuggee, tools, logger, config.testMode, stepFiltersProvider(tools, config))
     )
   }
 }
@@ -42,7 +56,7 @@ private[debugadapter] object ScalaProviderContext {
      */
     DebugSettings.getCurrent.showStaticVariables = true
 
-    val context = new ScalaProviderContext(debuggee, logger, config)
+    val context = new ScalaProviderContext(debuggee, logger)
     val hotCodeReplaceProvider = HotCodeReplaceProvider(debuggee, logger, config.testMode)
     // The BreakpointRequestHandler resolves the IHotCodeReplaceProvider in its constructor
     context.registerProvider(classOf[IHotCodeReplaceProvider], hotCodeReplaceProvider)

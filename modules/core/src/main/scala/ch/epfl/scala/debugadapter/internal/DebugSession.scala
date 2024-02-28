@@ -22,11 +22,6 @@ import scala.concurrent.Promise
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-import ch.epfl.scala.debugadapter.internal.PartialLaunchArguments.UsedStepFilters
-import ch.epfl.scala.debugadapter.internal.stacktrace.StepFilter
-import ch.epfl.scala.debugadapter.internal.stacktrace.ClassLoadingFilter
-import ch.epfl.scala.debugadapter.internal.stacktrace.RuntimeStepFilter
-import ch.epfl.scala.debugadapter.internal.stacktrace.ScalaDecoder
 
 /**
  * This debug adapter maintains the lifecycle of the debuggee in separation from JDI.
@@ -147,23 +142,12 @@ private[debugadapter] final class DebugSession private (
     exitStatusPromise.trySuccess(DebugSession.Terminated)
   }
 
-  private def stepFiltersProvider(
-      filters: PartialLaunchArguments.UsedStepFilters,
-      tools: DebugTools
-  ): Seq[StepFilter] = {
-    var list = List.empty[StepFilter]
-    if (filters.classLoading) list = ClassLoadingFilter +: list
-    if (filters.runtime) list = RuntimeStepFilter(debuggee.scalaVersion) +: list
-    if (filters.decoder) list = ScalaDecoder(debuggee, tools, logger, config.testMode) +: list
-    list
-  }
-
   protected override def dispatchRequest(request: Request): Unit = {
     val requestId = request.seq
     request.command match {
       case "attach" =>
         val tools = DebugTools(debuggee, resolver, logger)
-        context.configure(tools, stepFiltersProvider(UsedStepFilters.default, tools))
+        context.configure(tools, config)
         super.dispatchRequest(request)
       case "launch" =>
         val command = Command.parse(request.command)
@@ -173,7 +157,9 @@ private[debugadapter] final class DebugSession private (
         val tools =
           if (launchArgs.noDebug) DebugTools.none(logger)
           else DebugTools(debuggee, resolver, logger)
-        context.configure(tools, stepFiltersProvider(launchArgs.scalaStepFilters, tools))
+        val debugConfig =
+          if (launchArgs.scalaStepFilters == null) config else config.copy(stepFilters = launchArgs.scalaStepFilters)
+        context.configure(tools, debugConfig)
         // launch request is implemented by spinning up a JVM
         // and sending an attach request to the java DapServer
         launchedRequests.add(requestId)

@@ -5,7 +5,6 @@ import ch.epfl.scala.debugadapter.DebugServer
 import ch.epfl.scala.debugadapter.Debuggee
 import ch.epfl.scala.debugadapter.GithubUtils
 import ch.epfl.scala.debugadapter.Logger
-import ch.epfl.scala.debugadapter.internal.PartialLaunchArguments.UsedStepFilters
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
 import com.microsoft.java.debug.core.protocol.Types.SourceBreakpoint
 import com.microsoft.java.debug.core.protocol.Types.StackFrame
@@ -18,6 +17,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.*
 import scala.util.Properties
+import ch.epfl.scala.debugadapter.UsedStepFilters
 
 case class DebugCheckState(
     threadId: Long,
