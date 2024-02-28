@@ -78,7 +78,9 @@ trait DebugTest extends CommonUtils {
     val client = TestingDebugClient.connect(server.uri)
     try {
       server.connect()
-      runAndCheck(client, attach = None, closeSession = true)(steps*)
+      runAndCheck(client, attach = None, closeSession = true, stepFilters = config.stepFilters)(
+        steps*
+      ) // ! That's a bit ugly because we need to pass it to LaunchArguments as well as DebugConfig but LaunchArguments' filters 'overrides' DebugConfig's filters.
     } finally {
       client.close()
       server.close()
