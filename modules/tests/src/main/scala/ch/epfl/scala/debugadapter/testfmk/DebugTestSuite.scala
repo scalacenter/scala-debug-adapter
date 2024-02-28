@@ -59,9 +59,11 @@ trait DebugTest extends CommonUtils {
   ): DebugServer.Handler =
     DebugServer.start(debuggee, TestingResolver, logger, gracePeriod = gracePeriod)
 
-  def check(uri: URI, attach: Option[Int] = None)(steps: DebugStepAssert*): Unit = {
+  def check(uri: URI, attach: Option[Int] = None, stepFilters: UsedStepFilters = null)(
+      steps: DebugStepAssert*
+  ): Unit = {
     val client = TestingDebugClient.connect(uri)
-    try runAndCheck(client, attach, closeSession = true)(steps*)
+    try runAndCheck(client, attach, closeSession = true, stepFilters = stepFilters)(steps*)
     finally client.close()
   }
 
@@ -69,18 +71,6 @@ trait DebugTest extends CommonUtils {
     val client = TestingDebugClient.connect(uri)
     val state = runAndCheck(client, attach = None, closeSession = false)(steps*)
     (client, state)
-  }
-
-  def check(stepFilters: UsedStepFilters)(steps: DebugStepAssert*)(implicit debuggee: TestingDebuggee): Unit = {
-    val server = getDebugServer(debuggee)
-    val client = TestingDebugClient.connect(server.uri)
-    try {
-      server.connect()
-      runAndCheck(client, attach = None, closeSession = true, stepFilters)(steps*)
-    } finally {
-      client.close()
-      server.close()
-    }
   }
 
   def check(config: DebugConfig)(steps: DebugStepAssert*)(implicit debuggee: TestingDebuggee): Unit = {
