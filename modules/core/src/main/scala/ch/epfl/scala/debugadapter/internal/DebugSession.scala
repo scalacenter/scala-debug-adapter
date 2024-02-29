@@ -175,8 +175,7 @@ private[debugadapter] final class DebugSession private (
               val cause =
                 s"Could not start debuggee $name due to: ${exception.getMessage}"
               this.sendResponse(DebugSession.failed(request, cause))
-              attached.tryFailure(new IllegalStateException(cause))
-              ()
+              attached.tryFailure(new IllegalStateException(cause))()
           }
 
       case "configurationDone" =>

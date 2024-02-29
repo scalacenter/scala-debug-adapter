@@ -175,8 +175,7 @@ class Scala2Decoder(
       case m: FunctionType =>
         val (params, returnType) = extractParametersAndReturnType(
           m.resultType.get
-        )
-        (m.paramSymbols ++ params, returnType)
+        )(m.paramSymbols ++ params, returnType)
       case m: NullaryMethodType => (Seq.empty, m.resultType.get)
       case m: PolyType => extractParametersAndReturnType(m.typeRef.get)
       case returnType => (Seq.empty, returnType)
