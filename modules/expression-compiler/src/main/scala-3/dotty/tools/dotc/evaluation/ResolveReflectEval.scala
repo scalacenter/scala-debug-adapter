@@ -5,16 +5,16 @@ import dotty.tools.dotc.ast.tpd.*
 import dotty.tools.dotc.core.Constants.Constant
 import dotty.tools.dotc.core.Contexts.*
 import dotty.tools.dotc.core.Flags.*
-import dotty.tools.dotc.core.Names.*
-import dotty.tools.dotc.core.Symbols.*
-import dotty.tools.dotc.core.Types.*
-import dotty.tools.dotc.transform.MegaPhase.MiniPhase
-import dotty.tools.dotc.core.StdNames.*
 import dotty.tools.dotc.core.NameKinds.QualifiedInfo
+import dotty.tools.dotc.core.Names.*
+import dotty.tools.dotc.core.Phases
+import dotty.tools.dotc.core.StdNames.*
+import dotty.tools.dotc.core.Symbols.*
+import dotty.tools.dotc.core.TypeErasure.ErasedValueType
+import dotty.tools.dotc.core.Types.*
 import dotty.tools.dotc.evaluation.SymUtils.*
 import dotty.tools.dotc.report
-import dotty.tools.dotc.core.Phases
-import dotty.tools.dotc.core.TypeErasure.ErasedValueType
+import dotty.tools.dotc.transform.MegaPhase.MiniPhase
 import dotty.tools.dotc.transform.ValueClasses
 
 class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
@@ -47,9 +47,6 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
                 // if cls is a value class then the local $this is the erased value,
                 // but we expect an instance of the value class instead
                 gen.boxValueClass(cls, gen.getLocalValue("$this"))
-              else if cls.is(ModuleClass) && !exprCtx.localVariables.contains("$this") then
-                // in Scala 3.4: an anonfun in an object is static
-                gen.getStaticObject(cls)
               else gen.getLocalValue("$this")
             case EvaluationStrategy.LocalOuter(cls) =>
               gen.getLocalValue("$outer")

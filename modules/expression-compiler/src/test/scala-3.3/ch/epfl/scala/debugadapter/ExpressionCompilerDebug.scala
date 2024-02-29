@@ -1,13 +1,13 @@
 package ch.epfl.scala.debugadapter
 
-import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 import ch.epfl.scala.debugadapter.ScalaVersion
+import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 import dotty.tools.dotc.ExpressionCompilerBridge
+
 import java.nio.file.Files
 import scala.collection.mutable.Buffer
-import java.{util => ju}
-import scala.jdk.CollectionConverters.*
 import scala.concurrent.duration.*
+import scala.jdk.CollectionConverters.*
 
 /**
  * This class is used to enter the expression compiler with a debugger
@@ -19,22 +19,46 @@ class ExpressionCompilerDebug extends munit.FunSuite:
 
   override def munitTimeout: Duration = 1.hour
 
-  test("tuple extractor") {
+  test("by-name argument capture") {
     val source =
       """|package example
+         |
+         |object Main:
+         |  def main(args: Array[String]): Unit = foo("hello")
+         |  def foo(msg: String): String = bar {
+         |    msg
+         |  }
+         |  def bar(msg: => String): String = msg
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    evaluate(6, "msg", localVariables = Set("msg$1"))
+  }
+
+  test("local method in value class".only) {
+    val source =
+      """|package example
+         |
+         |class A(val self: String) extends AnyVal {
+         |  def m(size: Int): String = {
+         |    def m(mul: Int): String = {
+         |      self.take(size) * mul
+         |    }
+         |    m(2)
+         |  }
+         |}
+         |
          |object Main {
          |  def main(args: Array[String]): Unit = {
-         |    val tuple = (1, 2)
-         |    val (x, y) = tuple
-         |    println("ok")
+         |    val a = new A("foo")
+         |    println(a.m(2))
          |  }
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    evaluate(5, "tuple._1", localVariables = Set("tuple"))
+    evaluate(8, "this.m(2)", localVariables = Set("$this"))
   }
 
-  def evaluate(line: Int, expression: String, localVariables: Set[String] = Set.empty)(using
+  private def evaluate(line: Int, expression: String, localVariables: Set[String] = Set.empty)(using
       debuggee: TestingDebuggee
   ): Unit =
     val out = debuggee.tempDir.resolve("expr-classes")

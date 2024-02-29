@@ -22,8 +22,7 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
   override def phaseName: String = ExtractExpression.name
 
   /**
-   * Change the return type of the `evaluate` method
-   * and update the owner and types of the symDenotations inserted into `evaluate`.
+   * update the owner of the symbols inserted into `evaluate`.
    */
   override def transform(ref: SingleDenotation)(using
       Context
@@ -74,11 +73,11 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
           cpy.Literal(tree)(tpe.value)
 
         // static object
-        case tree: (Ident | Select) if isStaticObject(tree.symbol) =>
+        case tree: (Ident | Select | This) if isStaticObject(tree.symbol) =>
           getStaticObject(tree)(tree.symbol.moduleClass)
 
         // non-static object
-        case tree: (Ident | Select) if isInaccessibleNonStaticObject(tree.symbol) =>
+        case tree: (Ident | Select | This) if isInaccessibleNonStaticObject(tree.symbol) =>
           val qualifier = getTransformedQualifier(tree)
           callMethod(tree)(qualifier, tree.symbol.asTerm, List.empty)
 
@@ -220,13 +219,18 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
         case TypeApply(fun, _) => getTransformedQualifierOfNew(fun)
 
     private def getTransformedPrefix(typeTree: Tree)(using Context): Tree =
-      typeTree match
-        case Ident(_) =>
-          thisOrOuterValue(typeTree)(
-            typeTree.symbol.owner.enclosingClass.asClass
-          )
-        case Select(qualifier, _) => transform(qualifier)
-        case AppliedTypeTree(tpt, _) => getTransformedPrefix(tpt)
+      def transformPrefix(prefix: Type): Tree =
+        prefix match
+          case NoPrefix =>
+            thisOrOuterValue(typeTree)(typeTree.symbol.owner.enclosingClass.asClass)
+          case prefix: ThisType =>
+            thisOrOuterValue(typeTree)(prefix.cls)
+          case ref: TermRef => transform(Ident(ref).withSpan(typeTree.span))
+      def rec(tpe: Type): Tree =
+        tpe match
+          case TypeRef(prefix, _) => transformPrefix(prefix)
+          case AppliedType(tycon, _) => rec(tycon)
+      rec(typeTree.tpe)
 
   end ExpressionTransformer
 

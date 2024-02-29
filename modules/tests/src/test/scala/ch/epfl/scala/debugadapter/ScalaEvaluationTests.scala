@@ -701,7 +701,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     )
   }
 
-  test("evaluate expression with breakpoint on method definition") {
+  test("breakpoint on method definition") {
     val source =
       """|package example
          |class Foo {
@@ -1359,14 +1359,14 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Breakpoint(8),
       DebugStepAssert.inParallel(
         Evaluation.successOrIgnore("this.m(2)", "fofo", isScala2),
-        Evaluation.failedOrIgnore("m(3)", "not supported", isScala2)
+        Evaluation.successOrIgnore("m(3)", "fofofo", isScala2)
       ),
       Breakpoint(6),
       DebugStepAssert.inParallel(
-        if (isScala3) Evaluation.failed("self", "not supported") else Evaluation.success("self", "foo"),
-        if (isScala3) Evaluation.failed("size", "not supported") else Evaluation.success("size", 2),
-        if (isScala3) Evaluation.failed("m(1)", "not supported") else Evaluation.success("m(1)", "fo"),
-        if (isScala3) Evaluation.failed("this.m(1)", "not supported") else Evaluation.success("this.m(1)", "ff")
+        Evaluation.success("self", "foo"),
+        Evaluation.success("size", 2),
+        // Evaluation.success("m(1)", "fo"),
+        Evaluation.success("this.m(1)", "ff")
       )
     )
   }
@@ -2603,16 +2603,16 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       DebugStepAssert.inParallel(
         Evaluation.success("self", "foo"),
         Evaluation.success("m(2)", "fo"),
-        Evaluation.failed("b.m()", "not supported"),
-        Evaluation.failed("new B", "not supported")
+        Evaluation.success("b.m()", "fo")
+        // Evaluation.failed("new B", "not supported")
       ),
       Breakpoint(7),
       DebugStepAssert.inParallel(
         Evaluation.success("1 + 1", 2),
-        Evaluation.failed("self.take(size)", "not supported"),
-        Evaluation.failed("m()", "not supported"),
-        Evaluation.failed("new B", "not supported"),
-        Evaluation.failed("A.this", "not supported")
+        Evaluation.success("self.take(size)", "fo"),
+        Evaluation.success("m()", "fo"),
+        Evaluation.success("new B", ObjectRef("A$B$1")),
+        Evaluation.success("A.this", "foo")
       )
     )
   }
