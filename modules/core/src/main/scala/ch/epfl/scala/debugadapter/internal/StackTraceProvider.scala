@@ -61,7 +61,6 @@ object StackTraceProvider {
     if (config.stepFilters.skipRuntimeClasses) list = RuntimeStepFilter(debuggee.scalaVersion) +: list
     if (config.stepFilters.skipForwardersAndAccessors)
       list = ScalaDecoder(debuggee, tools, logger, config.testMode) +: list
-    println(list)
     list
   }
 

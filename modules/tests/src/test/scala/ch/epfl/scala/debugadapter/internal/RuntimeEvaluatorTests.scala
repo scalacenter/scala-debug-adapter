@@ -970,6 +970,66 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     )
   }
 
+  test("Should evaluate parent's class class members") {
+    val source =
+      """|package example
+         |
+         |class A1 {
+         |  class B1
+         |}
+         |trait A2 {
+         |  class B2
+         |}
+         |
+         |class C extends A1 with A2
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val c = new C
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(15),
+      Evaluation.success("new c.B1", ObjectRef("A1$B1"))
+      // Evaluation.success("new c.B2", ObjectRef("C$B2"))
+    )
+  }
+
+  test("Should find class member with respect to linearization (only in Scala 2)") {
+    assume(scalaVersion.isScala2)
+    val source =
+      """|package example
+         |
+         |trait A {
+         |  class InnerA {
+         |    def foo = 42
+         |  }
+         |}
+         |
+         |trait B {
+         |  class InnerA {
+         |    def foo = 43
+         |  }
+         |}
+         |
+         |object C extends A with B
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    println("ok")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(19),
+      Evaluation.success("new C.InnerA().foo", 43)
+    )
+  }
+
   test("Should get the value of a field in a nested type") {
     implicit val debuggee = nested
     check(

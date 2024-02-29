@@ -14,6 +14,7 @@ import scala.meta.{Type => _, *}
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
+import scala.collection.mutable.Buffer
 
 private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: SourceLookUpProvider, preEvaluation: Boolean)(
     implicit logger: Logger
@@ -80,7 +81,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
             case Left(qualifier) => findMemberClass(name, qualifier).map(_.`type`)
             case Right(qualifier) => findStaticClass(name, qualifier).map(_.`type`)
           }
-          .orElse(findQualifiedClass(name, qualifier.toString))
+          .orElse(findQualifiedClass(name)(qualifier.toString))
       case _ => Recoverable("not a class")
     }
 
@@ -189,21 +190,54 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       .orElse(findTopLevelClass(name), resetError = true)
 
   private def findStaticClass(name: String, qualifier: jdi.ReferenceType): Validation[RuntimeClass] =
-    findQualifiedClass(name, qualifier.name)
+    findQualifiedClass(name)(qualifier.name)
       .filter(_.isStatic, cls => s"${cls.name} is not a static class")
       .map(StaticOrTopLevelClass.apply)
 
-  private def findMemberClass(name: String, qualifier: RuntimeEvaluationTree): Validation[RuntimeClass] =
-    findQualifiedClass(name, qualifier.`type`.name)
+  private def findClassInParent(name: String, startingPoint: RuntimeEvaluationTree): Validation[RuntimeClass] = {
+    var typesTraversed = List[jdi.ReferenceType]()
+    var ok: Validation[jdi.ClassType] = Recoverable(
+      s"No class named $name found in parent types of ${startingPoint.`type`}"
+    )
+    val possibleClasses = findQualifiedClass(name)
+    def loop(currentCls: jdi.ReferenceType): Validation[jdi.ClassType] = {
+      val parentTypes = currentCls match {
+        case cls: jdi.ClassType => cls.superclass() +: cls.interfaces().asScala
+        case cls: jdi.InterfaceType => cls.superinterfaces().asScala
+        case _ => Buffer()
+      }
+      // Reverse iterator to respect linearization
+      parentTypes.reverseIterator.withFilter(!typesTraversed.contains((_))).find { cls =>
+        typesTraversed = cls +: typesTraversed
+        ok = possibleClasses(cls.name)
+        ok.orElse(loop(cls)).isValid
+      }
+      ok
+    }
+
+    startingPoint.`type` match {
+      case ref: jdi.ReferenceType => loop(ref).map(MemberClass(_, startingPoint))
+      case _ => Recoverable(s"Cannot find class $name in a non-reference type: ${startingPoint.`type`.name}")
+    }
+  }
+
+  private def findMemberClass(name: String, qualifier: RuntimeEvaluationTree): Validation[RuntimeClass] = {
+    findQualifiedClass(name)(qualifier.`type`.name)
       .map(MemberClass(_, qualifier))
       .orElse(findOuter(qualifier).flatMap(outer => findMemberClass(name, outer)))
+      .orElse(findClassInParent(name, qualifier))
+  }
 
-  private def findQualifiedClass(name: String, qualifier: String): Validation[jdi.ClassType] = {
-    val encodedQualifier = qualifier.split('.').map(NameTransformer.encode).mkString(".")
-    getAllFullyQualifiedClassNames(name)
-      .filter(fqcn => fqcn.contains(encodedQualifier))
-      .validateSingle(s"Cannot find class $name in qualifier $qualifier")
-      .flatMap(loadClass)
+  private def findQualifiedClass(name: String): String => Validation[jdi.ClassType] = {
+    val classes = getAllFullyQualifiedClassNames(name)
+
+    qualifier => {
+      val encodedQualifier = qualifier.split('.').map(NameTransformer.encode).mkString(".")
+      classes
+        .filter(_.startsWith(encodedQualifier))
+        .validateSingle(s"Cannot find single class $name in qualifier $qualifier")
+        .flatMap(loadClass)
+    }
   }
 
   private def findTopLevelClass(name: String): Validation[RuntimeClass] = {
@@ -254,7 +288,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
     findTopLevelClass(name.stripSuffix("$") + "$").flatMap(cls => asStaticModule(cls.`type`))
 
   private def findTopLevelModule(pkg: String, name: String): Validation[RuntimeEvaluationTree] =
-    findQualifiedClass(name.stripSuffix("$") + "$", pkg).flatMap(asStaticModule)
+    findQualifiedClass(name.stripSuffix("$") + "$")(pkg).flatMap(asStaticModule)
 
   private def findStaticMember(name: String, qualifier: jdi.ReferenceType): Validation[RuntimeEvaluationTree] =
     findStaticField(qualifier, name).orElse(findZeroArgStaticMethod(qualifier, name))
@@ -667,7 +701,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
             case Left(qualifier) => findMemberClass(name, qualifier)
             case Right(qualifier) => findStaticClass(name, qualifier)
           }
-          .orElse(findQualifiedClass(name, qualifier.toString).map(StaticOrTopLevelClass.apply))
+          .orElse(findQualifiedClass(name)(qualifier.toString).map(StaticOrTopLevelClass.apply))
       case tpe => Recoverable(s"Cannot create instance of $tpe")
     }
 
