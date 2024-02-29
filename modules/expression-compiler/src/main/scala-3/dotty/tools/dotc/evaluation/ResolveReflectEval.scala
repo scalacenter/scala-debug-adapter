@@ -43,11 +43,7 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
           val gen = new Gen(reflectEval)
           tree.attachment(EvaluationStrategy) match
             case EvaluationStrategy.This(cls) =>
-              if cls.isValueClass then
-                // if cls is a value class then the local $this is the erased value,
-                // but we expect an instance of the value class instead
-                gen.boxValueClass(cls, gen.getLocalValue("$this"))
-              else gen.getLocalValue("$this")
+              gen.getLocalValue("$this")
             case EvaluationStrategy.LocalOuter(cls) =>
               gen.getLocalValue("$outer")
             case EvaluationStrategy.Outer(outerCls) =>
@@ -194,11 +190,7 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
         List(qualifier, Literal(Constant(JavaEncoding.encode(outerCls))))
       )
 
-    def getClassCapture(
-        qualifier: Tree,
-        originalName: Name,
-        cls: ClassSymbol
-    ): Option[Tree] =
+    def getClassCapture(qualifier: Tree, originalName: Name, cls: ClassSymbol): Option[Tree] =
       cls.info.decls.iterator
         .filter(term => term.isField)
         .find { field =>
@@ -211,26 +203,16 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
         }
         .map(field => getField(qualifier, field.asTerm))
 
-    def getMethodCapture(
-        method: TermSymbol,
-        originalName: TermName
-    ): Option[Tree] =
+    def getMethodCapture(method: TermSymbol, originalName: TermName): Option[Tree] =
       val methodType = method.info.asInstanceOf[MethodType]
       methodType.paramNames
-        .find {
-          case DerivedName(n, _) => n == originalName
-          case _ => false
-        }
-        .map { param =>
-          val paramName = JavaEncoding.encode(param)
-          getLocalValue(paramName)
-        }
+        .collectFirst { case name @ DerivedName(n, _) if n == originalName => name }
+        .map(param => getLocalValue(JavaEncoding.encode(param)))
 
     def getStaticObject(obj: ClassSymbol): Tree =
-      val className = JavaEncoding.encode(obj)
       Apply(
         Select(expressionThis, termName("getStaticObject")),
-        List(Literal(Constant(className)))
+        List(Literal(Constant(JavaEncoding.encode(obj))))
       )
 
     def getField(qualifier: Tree, field: TermSymbol): Tree =
@@ -258,42 +240,27 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
       val castFunction = function.cast(defn.Function0.typeRef.appliedTo(defn.AnyType))
       Apply(Select(castFunction, termName("apply")), List())
 
-    def callMethod(
-        qualifier: Tree,
-        method: TermSymbol,
-        args: List[Tree]
-    ): Tree =
+    def callMethod(qualifier: Tree, method: TermSymbol, args: List[Tree]): Tree =
       val methodType = method.info.asInstanceOf[MethodType]
       val paramTypesNames = methodType.paramInfos.map(JavaEncoding.encode)
       val paramTypesArray = JavaSeqLiteral(
         paramTypesNames.map(t => Literal(Constant(t))),
         TypeTree(ctx.definitions.StringType)
       )
-      val capturedArgs =
-        methodType.paramNames.dropRight(args.size).map {
-          case name @ DerivedName(underlying, _) =>
-            capturedValue(method, underlying)
-              .getOrElse {
-                report.error(s"Unknown captured variable $name in $method", reflectEval.srcPos)
-                ref(defn.Predef_undefined)
-              }
-          case name =>
-            report
-              .error(
-                s"Unknown captured variable $name in $method",
-                reflectEval.srcPos
-              )
-            ref(defn.Predef_undefined)
-        }
 
-      val erasedMethodInfo =
-        atPhase(Phases.elimErasedValueTypePhase)(method.info)
-          .asInstanceOf[MethodType]
-      val unboxedArgs =
-        erasedMethodInfo.paramInfos.takeRight(args.size).zip(args).map {
-          case (tpe: ErasedValueType, arg) => unboxValueClass(arg, tpe)
-          case (_, arg) => arg
-        }
+      def unknownCapture(name: Name): Tree =
+        report.error(s"Unknown captured variable $name in $method", reflectEval.srcPos)
+        ref(defn.Predef_undefined)
+      val capturedArgs = methodType.paramNames.dropRight(args.size).map {
+        case name @ DerivedName(underlying, _) => capturedValue(method, underlying).getOrElse(unknownCapture(name))
+        case name => unknownCapture(name)
+      }
+
+      val erasedMethodInfo = atPhase(Phases.elimErasedValueTypePhase)(method.info).asInstanceOf[MethodType]
+      val unboxedArgs = erasedMethodInfo.paramInfos.takeRight(args.size).zip(args).map {
+        case (tpe: ErasedValueType, arg) => unboxValueClass(arg, tpe)
+        case (_, arg) => arg
+      }
 
       val returnTypeName = JavaEncoding.encode(methodType.resType)
       val methodName = JavaEncoding.encode(method.name)
@@ -305,22 +272,15 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
           Literal(Constant(methodName)),
           paramTypesArray,
           Literal(Constant(returnTypeName)),
-          JavaSeqLiteral(
-            capturedArgs ++ unboxedArgs,
-            TypeTree(ctx.definitions.ObjectType)
-          )
+          JavaSeqLiteral(capturedArgs ++ unboxedArgs, TypeTree(ctx.definitions.ObjectType))
         )
       )
       erasedMethodInfo.resType match
-        case tpe: ErasedValueType =>
-          boxValueClass(tpe.tycon.typeSymbol.asClass, result)
+        case tpe: ErasedValueType => boxValueClass(tpe.tycon.typeSymbol.asClass, result)
         case _ => result
+    end callMethod
 
-    def callConstructor(
-        qualifier: Tree,
-        ctr: TermSymbol,
-        args: List[Tree]
-    ): Tree =
+    def callConstructor(qualifier: Tree, ctr: TermSymbol, args: List[Tree]): Tree =
       val methodType = ctr.info.asInstanceOf[MethodType]
       val paramTypesNames = methodType.paramInfos.map(JavaEncoding.encode)
       val clsName = JavaEncoding.encode(methodType.resType)
@@ -342,11 +302,10 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
 
       val erasedCtrInfo = atPhase(Phases.elimErasedValueTypePhase)(ctr.info)
         .asInstanceOf[MethodType]
-      val unboxedArgs =
-        erasedCtrInfo.paramInfos.takeRight(args.size).zip(args).map {
-          case (tpe: ErasedValueType, arg) => unboxValueClass(arg, tpe)
-          case (_, arg) => arg
-        }
+      val unboxedArgs = erasedCtrInfo.paramInfos.takeRight(args.size).zip(args).map {
+        case (tpe: ErasedValueType, arg) => unboxValueClass(arg, tpe)
+        case (_, arg) => arg
+      }
 
       val paramTypesArray = JavaSeqLiteral(
         paramTypesNames.map(t => Literal(Constant(t))),
@@ -357,17 +316,12 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
         List(
           Literal(Constant(clsName)),
           paramTypesArray,
-          JavaSeqLiteral(
-            capturedArgs ++ unboxedArgs,
-            TypeTree(ctx.definitions.ObjectType)
-          )
+          JavaSeqLiteral(capturedArgs ++ unboxedArgs, TypeTree(ctx.definitions.ObjectType))
         )
       )
+    end callConstructor
 
-    private def capturedValue(
-        sym: Symbol,
-        originalName: TermName
-    ): Option[Tree] =
+    private def capturedValue(sym: Symbol, originalName: TermName): Option[Tree] =
       val encodedName = JavaEncoding.encode(originalName)
       if exprCtx.classOwners.contains(sym)
       then capturedByClass(sym.asClass, originalName)
@@ -378,10 +332,7 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
       then Some(getLocalValue(encodedName))
       else exprCtx.capturingMethod.flatMap(getMethodCapture(_, originalName))
 
-    private def capturedByClass(
-        cls: ClassSymbol,
-        originalName: TermName
-    ): Option[Tree] =
+    private def capturedByClass(cls: ClassSymbol, originalName: TermName): Option[Tree] =
       val target = exprCtx.classOwners.indexOf(cls)
       val qualifier = exprCtx.classOwners
         .drop(1)
