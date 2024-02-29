@@ -2658,6 +2658,22 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     )
   }
 
+  test("by-name argument capture") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = foo("hello")
+         |  def foo(msg: String): String = bar {
+         |    msg
+         |  }
+         |  def bar(msg: => String): String = msg
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(6), if (isScala2) Breakpoint(6) else NoStep(), Evaluation.success("msg", "hello"))
+  }
+
   private def noSuchFieldError(implicit ctx: TestingContext): Throwable =
     if (isScala3) new NoSuchFieldException("$outer") else new NoSuchFieldError("$outer")
 }
