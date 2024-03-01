@@ -202,7 +202,11 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
     val possibleClasses = findQualifiedClass(name)
     def loop(currentCls: jdi.ReferenceType): Validation[jdi.ClassType] = {
       val parentTypes = currentCls match {
-        case cls: jdi.ClassType => cls.superclass() +: cls.interfaces().asScala
+        case cls: jdi.ClassType =>
+          if (cls.superclass() != null)
+            cls.superclass() +: cls.interfaces().asScala
+          else
+            cls.interfaces().asScala
         case cls: jdi.InterfaceType => cls.superinterfaces().asScala
         case _ => Buffer()
       }
