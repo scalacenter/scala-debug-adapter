@@ -194,8 +194,8 @@ lazy val expressionCompiler = projectMatrix
     },
     Test / unmanagedSourceDirectories ++= {
       val sourceDir = (Test / sourceDirectory).value
-      CrossVersion.partialVersion(scalaVersion.value).collect {
-        case (3, x) if x >= 3 => sourceDir / "scala-3.3+"
+      CrossVersion.partialVersion(scalaVersion.value).collect { case (3, 3) =>
+        sourceDir / "scala-3.3"
       }
     },
     Compile / doc / sources := Seq.empty,

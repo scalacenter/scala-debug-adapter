@@ -551,7 +551,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Breakpoint(11),
       DebugStepAssert.inParallel(
         // B captures the local value x1
-        Evaluation.successOrIgnore("new B", isScala2)(result => assert(result.startsWith("A$B$1@"))),
+        Evaluation.successOrIgnore("new B", ObjectRef("A$B$1"), isScala2),
         // x1 is captured by B
         Evaluation.successOrIgnore("x1", "x1", isScala2),
         Evaluation.success("x2", "x2"),
@@ -701,7 +701,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     )
   }
 
-  test("evaluate expression with breakpoint on method definition") {
+  test("breakpoint on method definition") {
     val source =
       """|package example
          |class Foo {
@@ -1359,14 +1359,14 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Breakpoint(8),
       DebugStepAssert.inParallel(
         Evaluation.successOrIgnore("this.m(2)", "fofo", isScala2),
-        Evaluation.failedOrIgnore("m(3)", "not supported", isScala2)
+        Evaluation.successOrIgnore("m(3)", "fofofo", isScala2)
       ),
       Breakpoint(6),
       DebugStepAssert.inParallel(
-        if (isScala3) Evaluation.failed("self", "not supported") else Evaluation.success("self", "foo"),
-        if (isScala3) Evaluation.failed("size", "not supported") else Evaluation.success("size", 2),
-        if (isScala3) Evaluation.failed("m(1)", "not supported") else Evaluation.success("m(1)", "fo"),
-        if (isScala3) Evaluation.failed("this.m(1)", "not supported") else Evaluation.success("this.m(1)", "ff")
+        Evaluation.successOrIgnore("self", "foo", isScala2),
+        Evaluation.successOrIgnore("size", 2, isScala2),
+        Evaluation.successOrIgnore("m(1)", "fo", isScala2),
+        Evaluation.successOrIgnore("this.m(1)", "ff", isScala2)
       )
     )
   }
@@ -2603,16 +2603,16 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       DebugStepAssert.inParallel(
         Evaluation.success("self", "foo"),
         Evaluation.success("m(2)", "fo"),
-        Evaluation.failed("b.m()", "not supported"),
-        Evaluation.failed("new B", "not supported")
+        Evaluation.success("b.m()", "fo")
+        // Evaluation.failed("new B", "not supported")
       ),
       Breakpoint(7),
       DebugStepAssert.inParallel(
         Evaluation.success("1 + 1", 2),
-        Evaluation.failed("self.take(size)", "not supported"),
-        Evaluation.failed("m()", "not supported"),
-        Evaluation.failed("new B", "not supported"),
-        Evaluation.failed("A.this", "not supported")
+        Evaluation.success("self.take(size)", "fo"),
+        Evaluation.success("m()", "fo"),
+        Evaluation.success("new B", ObjectRef("A$B$1")),
+        Evaluation.success("A.this", "foo")
       )
     )
   }
@@ -2656,6 +2656,22 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.failed("msg == 5", "cannot be compared")
       )
     )
+  }
+
+  test("by-name argument capture") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = foo("hello")
+         |  def foo(msg: String): String = bar {
+         |    msg
+         |  }
+         |  def bar(msg: => String): String = msg
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(6), if (isScala2) Breakpoint(6) else NoStep(), Evaluation.success("msg", "hello"))
   }
 
   private def noSuchFieldError(implicit ctx: TestingContext): Throwable =

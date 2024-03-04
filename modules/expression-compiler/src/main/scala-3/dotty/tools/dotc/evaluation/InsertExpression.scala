@@ -2,18 +2,21 @@ package dotty.tools.dotc.evaluation
 
 import dotty.tools.dotc.ExpressionContext
 import dotty.tools.dotc.ast.untpd.*
+import dotty.tools.dotc.core.Constants.Constant
 import dotty.tools.dotc.core.Contexts.*
+import dotty.tools.dotc.core.Names.*
 import dotty.tools.dotc.core.Phases.Phase
 import dotty.tools.dotc.parsing.Parsers
+import dotty.tools.dotc.report
 import dotty.tools.dotc.transform.MegaPhase.MiniPhase
+import dotty.tools.dotc.util.NoSourcePosition
 import dotty.tools.dotc.util.SourceFile
-import java.nio.charset.StandardCharsets
-import dotty.tools.io.VirtualFile
 import dotty.tools.dotc.util.SourcePosition
 import dotty.tools.dotc.util.Spans.Span
-import dotty.tools.dotc.util.NoSourcePosition
-import dotty.tools.dotc.report
 import dotty.tools.dotc.util.SrcPos
+import dotty.tools.io.VirtualFile
+
+import java.nio.charset.StandardCharsets
 
 /**
  * This phase:
@@ -27,12 +30,14 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
   override def isCheckable: Boolean = false
 
   private val evaluationClassSource =
-    s"""|class ${exprCtx.expressionClassName}(names: Array[String], values: Array[Any]):
+    s"""|class ${exprCtx.expressionClassName}(thisObject: Any, names: Array[String], values: Array[Any]):
         |  import java.lang.reflect.InvocationTargetException
         |  val classLoader = getClass.getClassLoader.nn
         |
         |  def evaluate(): Any =
         |    ()
+        |
+        |  def getThisObject(): Any = thisObject
         |
         |  def getLocalValue(name: String): Any =
         |    val idx = names.indexOf(name)
@@ -209,7 +214,12 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
     else
       expressionInserted = true
       val valDef = ValDef(exprCtx.expressionTermName, TypeTree(), expr)
-      Block(List(valDef), tree)
+      // we insert a fake effectful tree to avoid the constant-folding of the block during the firstTransform phase
+      val effect = Apply(
+        Select(Select(Ident(termName("scala")), termName("Predef")), termName("print")),
+        List(Literal(Constant("")))
+      )
+      Block(List(valDef, effect), tree)
 
   // only fails in test mode
   private def warnOrError(msg: String, srcPos: SrcPos)(using Context): Unit =

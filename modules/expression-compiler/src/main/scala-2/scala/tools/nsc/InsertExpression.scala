@@ -23,7 +23,7 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
    */
   private class Inserter extends Transformer {
     private val expressionClassSource =
-      s"""class $expressionClassName(names: Array[String], values: Array[Object]) {
+      s"""class $expressionClassName(thisObject: Any, names: Array[String], values: Array[Object]) {
          |  val valuesByName = names.reverse.map(_.asInstanceOf[String]).zip(values.reverse).toMap
          |
          |  def evaluate() = {

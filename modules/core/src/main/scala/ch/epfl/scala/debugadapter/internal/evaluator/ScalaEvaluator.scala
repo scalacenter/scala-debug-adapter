@@ -53,7 +53,8 @@ private[internal] class ScalaEvaluator(
       (names, values) <- extractValuesAndNames(classLoader)
       namesArray <- classLoader.createArray("java.lang.String", names)
       valuesArray <- classLoader.createArray("java.lang.Object", values)
-      args = List(namesArray, valuesArray)
+      thisObject = frame.thisObject.getOrElse(JdiNull)
+      args = List(thisObject, namesArray, valuesArray)
       expressionInstance <- createExpressionInstance(classLoader, classDir, className, args)
       evaluatedValue <- evaluateExpression(expressionInstance)
       _ <- updateVariables(valuesArray)
@@ -94,10 +95,7 @@ private[internal] class ScalaEvaluator(
   private def extractValuesAndNames(classLoader: JdiClassLoader): Safe[(Seq[JdiString], Seq[JdiValue])] = {
     def extractVariablesFromFrame(): Safe[(Seq[JdiString], Seq[JdiValue])] = {
       val localVariables = frame.variablesAndValues().map { case (variable, value) => (variable.name, value) }
-      // Exclude the this object if there already is a local $this variable
-      // The Scala compiler uses `$this` in the extension methods of AnyVal classes
-      val thisObject = frame.thisObject.filter(_ => !localVariables.contains("$this")).map("$this".->)
-      (localVariables ++ thisObject)
+      localVariables
         .map { case (name, value) =>
           for {
             name <- classLoader.mirrorOf(name)
@@ -109,26 +107,22 @@ private[internal] class ScalaEvaluator(
         .map(xs => (xs.map(_._1), xs.map(_._2)))
     }
     // Only useful in Scala 2
-    def extractFields(thisObject: JdiObject): Safe[(Seq[JdiString], Seq[JdiValue])] = {
-      val fields = thisObject.fields
-      val names = fields.map(_._1).map(classLoader.mirrorOf).traverse
-      val values = fields.map(_._2).map(value => classLoader.boxIfPrimitive(value)).traverse
+    def extractThisAndFields(thisObject: JdiObject): Safe[(Seq[JdiString], Seq[JdiValue])] = {
+      val thisAndFieds = ("$this", thisObject) +: thisObject.fields
+      val names = thisAndFieds.map(_._1).map(classLoader.mirrorOf).traverse
+      val values = thisAndFieds.map(_._2).map(value => classLoader.boxIfPrimitive(value)).traverse
       Safe.join(names, values)
     }
 
     for {
       (variableNames, variableValues) <- extractVariablesFromFrame()
-      // Currently we only need to load the fields for the Scala 2
-      // expression evaluator.
-      // It is dangerous because local values can shadow fields
-      // TODO: adapt Scala 2 expression compiler
+      // Currently we need to load the this object and the fields for the Scala 2 expression evaluator.
+      // It is dangerous because local values can shadow them
+      // TODO: rewrite Scala 2 expression compiler based on Scala 3
       (fieldNames, fieldValues) <- frame.thisObject
         .filter(_ => compiler.scalaVersion.isScala2)
-        .map(extractFields)
+        .map(extractThisAndFields)
         .getOrElse(Safe((Nil, Nil)))
-      // If `this` is a value class then the breakpoint must be in
-      // a generated method of its companion object which takes
-      // the erased value`$this` as argument.
     } yield {
       val names = variableNames ++ fieldNames
       val values = variableValues ++ fieldValues

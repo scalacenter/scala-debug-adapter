@@ -3,6 +3,7 @@ package dotty.tools.dotc
 import dotty.tools.dotc.core.Contexts.Context
 import dotty.tools.dotc.core.Phases.Phase
 import dotty.tools.dotc.evaluation.*
+import dotty.tools.dotc.transform.ElimByName
 
 class ExpressionCompiler(using ExpressionContext)(using Context) extends Compiler:
 
@@ -10,8 +11,10 @@ class ExpressionCompiler(using ExpressionContext)(using Context) extends Compile
     val parser :: others = super.frontendPhases: @unchecked
     parser :: List(InsertExpression()) :: others
 
-  override protected def picklerPhases: List[List[Phase]] =
-    super.picklerPhases :+ List(ExtractExpression())
-
   override protected def transformPhases: List[List[Phase]] =
-    super.transformPhases :+ List(ResolveReflectEval())
+    // the ExtractExpression phase should be after ElimByName and ExtensionMethods,
+    // and before LambdaLift
+    val transformPhases = super.transformPhases
+    val index = transformPhases.indexWhere(_.exists(_.phaseName == ElimByName.name))
+    val (before, after) = transformPhases.splitAt(index + 1)
+    (before :+ List(ExtractExpression())) ++ (after :+ List(ResolveReflectEval()))

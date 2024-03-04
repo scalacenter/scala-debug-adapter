@@ -22,8 +22,7 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
   override def phaseName: String = ExtractExpression.name
 
   /**
-   * Change the return type of the `evaluate` method
-   * and update the owner and types of the symDenotations inserted into `evaluate`.
+   * update the owner of the symbols inserted into `evaluate`.
    */
   override def transform(ref: SingleDenotation)(using
       Context
@@ -74,11 +73,11 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
           cpy.Literal(tree)(tpe.value)
 
         // static object
-        case tree: (Ident | Select) if isStaticObject(tree.symbol) =>
+        case tree: (Ident | Select | This) if isStaticObject(tree.symbol) =>
           getStaticObject(tree)(tree.symbol.moduleClass)
 
         // non-static object
-        case tree: (Ident | Select) if isInaccessibleNonStaticObject(tree.symbol) =>
+        case tree: (Ident | Select | This) if isInaccessibleNonStaticObject(tree.symbol) =>
           val qualifier = getTransformedQualifier(tree)
           callMethod(tree)(qualifier, tree.symbol.asTerm, List.empty)
 
@@ -165,17 +164,13 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
      * The symbol is a constructor and the expression class cannot access it
      * either because it is an inaccessible method or it belong to a nested type (not static)
      */
-    private def isInaccessibleConstructor(tree: Tree)(using
-        Context
-    ): Boolean =
+    private def isInaccessibleConstructor(tree: Tree)(using Context): Boolean =
       val symbol = tree.symbol
       !isOwnedByExpression(symbol) &&
       symbol.isConstructor &&
       (isInaccessibleMethod(tree) || !symbol.owner.isStatic)
 
-    private def getCapturer(variable: TermSymbol)(using
-        Context
-    ): Option[Symbol] =
+    private def getCapturer(variable: TermSymbol)(using Context): Option[Symbol] =
       // a local variable can be captured by a class or method
       val candidates = exprCtx.expressionSymbol.ownersIterator
         .takeWhile(_ != variable.owner)
@@ -220,27 +215,25 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
         case TypeApply(fun, _) => getTransformedQualifierOfNew(fun)
 
     private def getTransformedPrefix(typeTree: Tree)(using Context): Tree =
-      typeTree match
-        case Ident(_) =>
-          thisOrOuterValue(typeTree)(
-            typeTree.symbol.owner.enclosingClass.asClass
-          )
-        case Select(qualifier, _) => transform(qualifier)
-        case AppliedTypeTree(tpt, _) => getTransformedPrefix(tpt)
-
+      def transformPrefix(prefix: Type): Tree =
+        prefix match
+          case NoPrefix =>
+            thisOrOuterValue(typeTree)(typeTree.symbol.owner.enclosingClass.asClass)
+          case prefix: ThisType =>
+            thisOrOuterValue(typeTree)(prefix.cls)
+          case ref: TermRef => transform(Ident(ref).withSpan(typeTree.span))
+      def rec(tpe: Type): Tree =
+        tpe match
+          case TypeRef(prefix, _) => transformPrefix(prefix)
+          case AppliedType(tycon, _) => rec(tycon)
+      rec(typeTree.tpe)
   end ExpressionTransformer
 
   private def isExpressionVal(sym: Symbol)(using Context): Boolean =
     sym.name == exprCtx.expressionTermName
 
   // symbol can be a class or a method
-  private def thisOrOuterValue(tree: Tree)(cls: ClassSymbol)(using
-      Context
-  ): Tree =
-    reportErrorIfLocalInsideValueClass(
-      exprCtx.expressionSymbol.owner,
-      tree.srcPos
-    )
+  private def thisOrOuterValue(tree: Tree)(cls: ClassSymbol)(using Context): Tree =
     val ths = getThis(tree)(exprCtx.classOwners.head)
     val target = exprCtx.classOwners.indexOf(cls)
     if target >= 0 then
@@ -265,11 +258,7 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
     val strategy = EvaluationStrategy.LocalOuter(outerCls)
     reflectEval(tree)(nullLiteral, strategy, List.empty, outerCls.typeRef)
 
-  private def getOuter(
-      tree: Tree
-  )(qualifier: Tree, outerCls: ClassSymbol)(using
-      Context
-  ): Tree =
+  private def getOuter(tree: Tree)(qualifier: Tree, outerCls: ClassSymbol)(using Context): Tree =
     val strategy = EvaluationStrategy.Outer(outerCls)
     reflectEval(tree)(qualifier, strategy, List.empty, outerCls.typeRef)
 
@@ -284,87 +273,50 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
       case ref: TermRef => isByNameParam(ref.symbol.info)
       case _ => false
 
-  private def setLocalValue(tree: Tree)(
-      variable: Symbol,
-      rhs: Tree
-  )(using Context): Tree =
+  private def setLocalValue(tree: Tree)(variable: Symbol, rhs: Tree)(using Context): Tree =
     val strategy = EvaluationStrategy.LocalValueAssign(variable.asTerm)
     reflectEval(tree)(nullLiteral, strategy, List(rhs), tree.tpe)
 
-  private def getClassCapture(tree: Tree)(variable: Symbol, cls: ClassSymbol)(using
-      Context
-  ): Tree =
-    reportErrorIfLocalInsideValueClass(cls, tree.srcPos)
+  private def getClassCapture(tree: Tree)(variable: Symbol, cls: ClassSymbol)(using Context): Tree =
     val byName = isByNameParam(variable.info)
     val strategy = EvaluationStrategy.ClassCapture(variable.asTerm, cls, byName)
     val qualifier = thisOrOuterValue(tree)(cls)
     reflectEval(tree)(qualifier, strategy, List.empty, tree.tpe)
 
-  private def setClassCapture(
-      tree: Tree
-  )(variable: Symbol, cls: ClassSymbol, value: Tree)(using Context) =
-    reportErrorIfLocalInsideValueClass(cls, tree.srcPos)
+  private def setClassCapture(tree: Tree)(variable: Symbol, cls: ClassSymbol, value: Tree)(using Context) =
     val strategy = EvaluationStrategy.ClassCaptureAssign(variable.asTerm, cls)
     val qualifier = thisOrOuterValue(tree)(cls)
     reflectEval(tree)(qualifier, strategy, List(value), tree.tpe)
 
-  private def getMethodCapture(
-      tree: Tree
-  )(variable: Symbol, method: TermSymbol)(using
-      Context
-  ): Tree =
-    reportErrorIfLocalInsideValueClass(method, tree.srcPos)
+  private def getMethodCapture(tree: Tree)(variable: Symbol, method: TermSymbol)(using Context): Tree =
     val isByName = isByNameParam(variable.info)
     val strategy =
       EvaluationStrategy.MethodCapture(variable.asTerm, method.asTerm, isByName)
     reflectEval(tree)(nullLiteral, strategy, List.empty, tree.tpe)
 
-  private def setMethodCapture(
-      tree: Tree
-  )(variable: Symbol, method: Symbol, value: Tree)(using Context) =
-    reportErrorIfLocalInsideValueClass(method, tree.srcPos)
+  private def setMethodCapture(tree: Tree)(variable: Symbol, method: Symbol, value: Tree)(using Context) =
     val strategy =
       EvaluationStrategy.MethodCaptureAssign(variable.asTerm, method.asTerm)
     reflectEval(tree)(nullLiteral, strategy, List(value), tree.tpe)
 
-  private def getStaticObject(
-      tree: Tree
-  )(obj: Symbol)(using ctx: Context): Tree =
+  private def getStaticObject(tree: Tree)(obj: Symbol)(using ctx: Context): Tree =
     val strategy = EvaluationStrategy.StaticObject(obj.asClass)
     reflectEval(tree)(nullLiteral, strategy, List.empty, obj.typeRef)
 
   private def getField(tree: Tree)(qualifier: Tree, field: TermSymbol)(using Context): Tree =
-    reportErrorIfLocalInsideValueClass(field, tree.srcPos)
     val byName = isByNameParam(field.info)
     val strategy = EvaluationStrategy.Field(field, byName)
     reflectEval(tree)(qualifier, strategy, List.empty, tree.tpe)
 
-  private def setField(tree: Tree)(
-      qualifier: Tree,
-      field: TermSymbol,
-      rhs: Tree
-  )(using
-      Context
-  ): Tree =
-    reportErrorIfLocalInsideValueClass(field, tree.srcPos)
+  private def setField(tree: Tree)(qualifier: Tree, field: TermSymbol, rhs: Tree)(using Context): Tree =
     val strategy = EvaluationStrategy.FieldAssign(field)
     reflectEval(tree)(qualifier, strategy, List(rhs), tree.tpe)
 
-  private def callMethod(tree: Tree)(
-      qualifier: Tree,
-      method: TermSymbol,
-      args: List[Tree]
-  )(using Context): Tree =
-    reportErrorIfLocalInsideValueClass(method, tree.srcPos)
+  private def callMethod(tree: Tree)(qualifier: Tree, method: TermSymbol, args: List[Tree])(using Context): Tree =
     val strategy = EvaluationStrategy.MethodCall(method)
     reflectEval(tree)(qualifier, strategy, args, tree.tpe)
 
-  private def callConstructor(tree: Tree)(
-      qualifier: Tree,
-      ctr: TermSymbol,
-      args: List[Tree]
-  )(using Context): Tree =
-    reportErrorIfLocalInsideValueClass(ctr, tree.srcPos)
+  private def callConstructor(tree: Tree)(qualifier: Tree, ctr: TermSymbol, args: List[Tree])(using Context): Tree =
     val strategy = EvaluationStrategy.ConstructorCall(ctr, ctr.owner.asClass)
     reflectEval(tree)(qualifier, strategy, args, tree.tpe)
 
@@ -391,36 +343,13 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
     then reflectEval.cast(widenDealiasTpe)
     else reflectEval
 
-  /**
-   * In the [[ResolveReflectEval]] phase we cannot find the symbol of a local method
-   * or local class inside a value class. So we report an error early.
-   */
-  private def reportErrorIfLocalInsideValueClass(
-      symbol: Symbol,
-      srcPos: SrcPos
-  )(using Context): Unit =
-    for
-      localClassOrMethod <- symbol.ownersIterator
-        .find { sym =>
-          (sym.isClass || sym.is(Method)) && sym.enclosure.is(Method)
-        }
-      valueClass <- localClassOrMethod.ownersIterator.find(_.isValueClass)
-    do
-      report.error(
-        s"""|Evaluation involving a local method or local class in a value class not supported:
-            |$symbol belongs to $localClassOrMethod which is local inside value $valueClass""".stripMargin,
-        srcPos
-      )
-
   private def isStaticObject(symbol: Symbol)(using Context): Boolean =
     symbol.is(Module) &&
       symbol.isStatic &&
       !symbol.is(JavaDefined) &&
       !symbol.isRoot
 
-  private def isInaccessibleNonStaticObject(symbol: Symbol)(using
-      Context
-  ): Boolean =
+  private def isInaccessibleNonStaticObject(symbol: Symbol)(using Context): Boolean =
     symbol.is(Module) &&
       !symbol.isStatic &&
       !symbol.isRoot &&
