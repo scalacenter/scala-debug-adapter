@@ -1143,17 +1143,20 @@ abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDeco
     val decoder = TestingDecoder(source, scalaVersion)
     decoder.assertDecode(
       "example.A",
-      "java.lang.String m(int x, java.lang.String contextual$1)",
+      if isScala33 then "java.lang.String m(int x, java.lang.String evidence$1)"
+      else "java.lang.String m(int x, java.lang.String contextual$1)",
       "A.m(x: Int): String ?=> String"
     )
     decoder.assertDecode(
       "example.A",
-      "int m(int contextual$2, java.lang.String contextual$3)",
+      if isScala33 then "int m(int evidence$2, java.lang.String evidence$3)"
+      else "int m(int contextual$2, java.lang.String contextual$3)",
       "A.m(): (Int, String) ?=> Int"
     )
     decoder.assertDecode(
       "example.A",
-      "java.lang.String m(java.lang.String x, int contextual$4, java.lang.String contextual$5)",
+      if isScala33 then "java.lang.String m(java.lang.String x, int evidence$4, java.lang.String evidence$5)"
+      else "java.lang.String m(java.lang.String x, int contextual$4, java.lang.String contextual$5)",
       "A.m(x: String): Int ?=> String ?=> String"
     )
     if isScala34 then
