@@ -42,12 +42,9 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
           val args = argsTree.asInstanceOf[JavaSeqLiteral].elems
           val gen = new Gen(reflectEval)
           tree.attachment(EvaluationStrategy) match
-            case EvaluationStrategy.This(cls) =>
-              gen.getLocalValue("$this")
-            case EvaluationStrategy.LocalOuter(cls) =>
-              gen.getLocalValue("$outer")
-            case EvaluationStrategy.Outer(outerCls) =>
-              gen.getOuter(qualifier, outerCls)
+            case EvaluationStrategy.This(cls) => gen.getThisObject
+            case EvaluationStrategy.LocalOuter(cls) => gen.getLocalValue("$outer")
+            case EvaluationStrategy.Outer(outerCls) => gen.getOuter(qualifier, outerCls)
             case EvaluationStrategy.LocalValue(variable, isByName) =>
               val variableName = JavaEncoding.encode(variable.name)
               val rawLocalValue = gen.getLocalValue(variableName)
@@ -109,8 +106,7 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
               val typeSymbol = variable.info.typeSymbol
               val elemField = typeSymbol.info.decl(termName("elem")).symbol
               gen.setField(capture, elemField.asTerm, value)
-            case EvaluationStrategy.StaticObject(obj) =>
-              gen.getStaticObject(obj)
+            case EvaluationStrategy.StaticObject(obj) => gen.getStaticObject(obj)
             case EvaluationStrategy.Field(field, isByName) =>
               // if the field is lazy, if it is private in a value class or a trait
               // then we must call the getter method
@@ -125,15 +121,12 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
               val arg = gen.unboxIfValueClass(field, args.head)
               if field.owner.is(Trait) then gen.callMethod(qualifier, field.setter.asTerm, List(arg))
               else gen.setField(qualifier, field, arg)
-            case EvaluationStrategy.MethodCall(method) =>
-              gen.callMethod(qualifier, method, args)
-            case EvaluationStrategy.ConstructorCall(ctr, cls) =>
-              gen.callConstructor(qualifier, ctr, args)
+            case EvaluationStrategy.MethodCall(method) => gen.callMethod(qualifier, method, args)
+            case EvaluationStrategy.ConstructorCall(ctr, cls) => gen.callConstructor(qualifier, ctr, args)
         case _ => super.transform(tree)
 
   private def isReflectEval(symbol: Symbol)(using Context): Boolean =
-    symbol.name == termName("reflectEval") &&
-      symbol.owner == exprCtx.expressionClass
+    symbol.name == termName("reflectEval") && symbol.owner == exprCtx.expressionClass
 
   class Gen(reflectEval: Apply)(using Context):
     private val expressionThis = reflectEval.fun.asInstanceOf[Select].qualifier
@@ -171,6 +164,9 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
       val cls = tpe.tycon.typeSymbol.asClass
       val unboxMethod = ValueClasses.valueClassUnbox(cls).asTerm
       callMethod(tree, unboxMethod, Nil)
+
+    def getThisObject: Tree =
+      Apply(Select(expressionThis, termName("getThisObject")), List.empty)
 
     def getLocalValue(name: String): Tree =
       Apply(
@@ -323,21 +319,19 @@ class ResolveReflectEval(using exprCtx: ExpressionContext) extends MiniPhase:
 
     private def capturedValue(sym: Symbol, originalName: TermName): Option[Tree] =
       val encodedName = JavaEncoding.encode(originalName)
-      if exprCtx.classOwners.contains(sym)
-      then capturedByClass(sym.asClass, originalName)
+      if exprCtx.classOwners.contains(sym) then capturedByClass(sym.asClass, originalName)
+      else if exprCtx.localVariables.contains(encodedName) then Some(getLocalValue(encodedName))
       else
-      // if the captured value is not a local variables
-      // then it must have been captured by the outer method
-      if exprCtx.localVariables.contains(encodedName)
-      then Some(getLocalValue(encodedName))
-      else exprCtx.capturingMethod.flatMap(getMethodCapture(_, originalName))
+        // if the captured value is not a local variables
+        // then it must have been captured by the outer method
+        exprCtx.capturingMethod.flatMap(getMethodCapture(_, originalName))
 
     private def capturedByClass(cls: ClassSymbol, originalName: TermName): Option[Tree] =
       val target = exprCtx.classOwners.indexOf(cls)
       val qualifier = exprCtx.classOwners
         .drop(1)
         .take(target)
-        .foldLeft(getLocalValue("$this"))((q, cls) => getOuter(q, cls))
+        .foldLeft(getThisObject)((q, cls) => getOuter(q, cls))
       getClassCapture(qualifier, originalName, cls)
 
 object ResolveReflectEval:

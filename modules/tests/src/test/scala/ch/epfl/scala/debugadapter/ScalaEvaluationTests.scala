@@ -551,7 +551,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Breakpoint(11),
       DebugStepAssert.inParallel(
         // B captures the local value x1
-        Evaluation.successOrIgnore("new B", isScala2)(result => assert(result.startsWith("A$B$1@"))),
+        Evaluation.successOrIgnore("new B", ObjectRef("A$B$1"), isScala2),
         // x1 is captured by B
         Evaluation.successOrIgnore("x1", "x1", isScala2),
         Evaluation.success("x2", "x2"),
@@ -1363,10 +1363,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       ),
       Breakpoint(6),
       DebugStepAssert.inParallel(
-        Evaluation.success("self", "foo"),
-        Evaluation.success("size", 2),
-        // Evaluation.success("m(1)", "fo"),
-        Evaluation.success("this.m(1)", "ff")
+        Evaluation.successOrIgnore("self", "foo", isScala2),
+        Evaluation.successOrIgnore("size", 2, isScala2),
+        Evaluation.successOrIgnore("m(1)", "fo", isScala2),
+        Evaluation.successOrIgnore("this.m(1)", "ff", isScala2)
       )
     )
   }

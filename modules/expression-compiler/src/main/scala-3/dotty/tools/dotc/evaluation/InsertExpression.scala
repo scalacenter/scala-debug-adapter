@@ -30,12 +30,14 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
   override def isCheckable: Boolean = false
 
   private val evaluationClassSource =
-    s"""|class ${exprCtx.expressionClassName}(names: Array[String], values: Array[Any]):
+    s"""|class ${exprCtx.expressionClassName}(thisObject: Any, names: Array[String], values: Array[Any]):
         |  import java.lang.reflect.InvocationTargetException
         |  val classLoader = getClass.getClassLoader.nn
         |
         |  def evaluate(): Any =
         |    ()
+        |
+        |  def getThisObject(): Any = thisObject
         |
         |  def getLocalValue(name: String): Any =
         |    val idx = names.indexOf(name)

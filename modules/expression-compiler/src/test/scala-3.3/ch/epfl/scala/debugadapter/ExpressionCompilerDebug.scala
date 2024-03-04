@@ -34,30 +34,6 @@ class ExpressionCompilerDebug extends munit.FunSuite:
     evaluate(6, "msg", localVariables = Set("msg$1"))
   }
 
-  test("local method in value class".only) {
-    val source =
-      """|package example
-         |
-         |class A(val self: String) extends AnyVal {
-         |  def m(size: Int): String = {
-         |    def m(mul: Int): String = {
-         |      self.take(size) * mul
-         |    }
-         |    m(2)
-         |  }
-         |}
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val a = new A("foo")
-         |    println(a.m(2))
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    evaluate(8, "this.m(2)", localVariables = Set("$this"))
-  }
-
   private def evaluate(line: Int, expression: String, localVariables: Set[String] = Set.empty)(using
       debuggee: TestingDebuggee
   ): Unit =
