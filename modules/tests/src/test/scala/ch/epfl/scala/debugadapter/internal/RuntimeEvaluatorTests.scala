@@ -993,8 +993,8 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(15),
-      Evaluation.success("new c.B1", ObjectRef("A1$B1"))
-      // Evaluation.success("new c.B2", ObjectRef("C$B2"))
+      Evaluation.success("new c.B1", ObjectRef("A1$B1")),
+      Evaluation.success("new c.B2", ObjectRef("A2$B2"))
     )
   }
 
