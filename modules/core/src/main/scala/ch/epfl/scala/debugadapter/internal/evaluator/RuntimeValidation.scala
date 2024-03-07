@@ -238,7 +238,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
     qualifier => {
       val encodedQualifier = qualifier.split('.').map(NameTransformer.encode).mkString(".")
       classes
-        .filter(_.startsWith(encodedQualifier))
+        .filter(_.contains(encodedQualifier))
         .validateSingle(s"Cannot find single class $name in qualifier $qualifier")
         .flatMap(loadClass)
     }
