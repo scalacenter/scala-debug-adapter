@@ -3,332 +3,11 @@ package ch.epfl.scala.debugadapter.internal
 import ch.epfl.scala.debugadapter.testfmk.*
 import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.DebugConfig
-import java.{util => ju}
 
-class Scala212RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`2.12`)
-class Scala213RuntimeEvaluatorTests extends RuntimeEvaluatorTests(ScalaVersion.`2.13`)
-class Scala33RuntimeEvaluatorTests extends Scala3RuntimeEvaluatorTests(ScalaVersion.`3.3`)
-class Scala34RuntimeEvaluatorTests extends Scala3RuntimeEvaluatorTests(ScalaVersion.`3.4`)
-
-abstract class Scala3RuntimeEvaluatorTests(scalaVersion: ScalaVersion) extends RuntimeEvaluatorTests(scalaVersion) {
-  test("Should access to wrapping 'object' methods") {
-    implicit val debuggee = nested
-    check(config = defaultConfig.copy(testMode = false))(
-      Breakpoint(21),
-      Evaluation.success("upperMain1", "upper main 1"),
-      Breakpoint(31),
-      Evaluation.success("upperMain2", "upper main 2"),
-      Breakpoint(25),
-      Evaluation.success("upperMain3", "upper main 3")
-    )
-  }
-
-  test("Should evaluate a local variable of a lambda") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    List(1).foreach { n =>
-         |      println(n)
-         |    }
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(6), Breakpoint(6), Evaluation.success("n", 1))
-  }
-  test("evaluate captured local variable shadowing captured variable") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val x = "x1"
-         |    def m1(): String = {
-         |      println(x) // captures x = "x1"
-         |      val y = {
-         |        val x = "x2"
-         |        val z = {
-         |          val x = "x3"
-         |          def m2(): String = {
-         |            x // captures x = "x3"
-         |          }
-         |          m2()
-         |        }
-         |        z
-         |      }
-         |      y
-         |    }
-         |    println(m1())
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(15), Evaluation.success("x", "x3"))
-  }
-
-  test("read and write mutable variables whose type is a value class") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    m()
-         |  }
-         |
-         |  def m(): Int = {
-         |    var y = 1
-         |    var u = 1
-         |    def yy(): Int = {
-         |      y += 1
-         |      y
-         |    }
-         |    yy() + u
-         |  }
-         |}
-         |""".stripMargin
-
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
-      Breakpoint(15),
-      Evaluation.success("y", 1),
-      Evaluation.success("u", 1),
-      Breakpoint(13),
-      // captured by method m
-      Evaluation.success("y$1", 2)
-    )
-  }
-
-  test("evaluate on for loops, generators and guards") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val list = List(1)
-         |    for {
-         |      x <- list
-         |      y <- list
-         |      z = x + y
-         |    } yield x
-         |    for {
-         |      x <- list
-         |      if x == 1
-         |    } yield x
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(config = defaultConfig.copy(testMode = false))(
-      Breakpoint(8),
-      Evaluation.success("x", 1),
-      Breakpoint(9), // calling map
-      Breakpoint(9),
-      Evaluation.success("y", 1), // finally we are into the lifted lambda x + y
-      Breakpoint(8), // still in the same lifted lambda (the line position does not make any sense)
-      Breakpoint(9), // again in the lifted lambda
-      Breakpoint(8), // going out of the lifted lambda
-      Breakpoint(8), // regression in Scala 3.2.2
-      Breakpoint(9), // regression in Scala 3.2.2
-      Breakpoint(13), // calling withFilter
-      Breakpoint(13),
-      Evaluation.success("x", 1)
-    )
-  }
-
-  test("evaluate inside local method") {
-    val source =
-      """|package example
-         |
-         |object A {
-         |  def main(args: Array[String]): Unit = {
-         |    val x1 = 1
-         |    var x2 = 2
-         |    def m: String = {
-         |      s"$x1 $x2"
-         |    }
-         |    println(m)
-         |  }
-         |}""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
-    check(Breakpoint(8), Evaluation.success("x1$1", 1), Evaluation.success("x2$1", 2))
-  }
-
-  test("evaluate instance of value class") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val b = new B("foo")
-         |    println(m(b))
-         |  }
-         |
-         |  def m(a: A): String = {
-         |    val c = new C(5)
-         |    a.m(c)
-         |  }
-         |}
-         |
-         |trait A extends Any {
-         |  def m(c: C): String
-         |}
-         |
-         |class B(val self: String) extends AnyVal with A {
-         |  def m(c: C): String = {
-         |    self.take(c.size)
-         |  }
-         |}
-         |
-         |class C(val size: Int) extends AnyVal
-         |""".stripMargin
-
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
-      Breakpoint(6),
-      Evaluation.success("b", "foo"),
-      Breakpoint(11),
-      Evaluation.success("a", ObjectRef("B")),
-      Evaluation.success("c", 5),
-      Breakpoint(21),
-      Evaluation.success("c", 5),
-      Evaluation.success("$this", "foo")
-    )
-  }
-
-  test("evaluate captured instance of value class") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val size = new Size(2)
-         |    def m: Int = {
-         |      size.value
-         |    }
-         |    println(m)
-         |  }
-         |}
-         |
-         |class Size(val value: Int) extends AnyVal
-         |""".stripMargin
-
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(7), Evaluation.success("size$1", 2))
-  }
-
-  test("read and write mutable variables of value class type") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    var x: A = new A(1)
-         |    var z: A = new A(1)
-         |    z += new A(1)
-         |    def xx(): A = {
-         |      x += new A(1)
-         |      x
-         |    }
-         |    xx()
-         |  }
-         |}
-         |
-         |class A(val value: Int) extends AnyVal {
-         |  def +(x: A): A = new A(value + x.value)
-         |}
-         |""".stripMargin
-
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
-      Breakpoint(7),
-      Evaluation.success("x", 1),
-      Evaluation.success("z", 1),
-      Breakpoint(12),
-      Evaluation.success("z", 2),
-      Breakpoint(10),
-      Evaluation.success("x$1", 2)
-    )
-  }
-
-  test("evaluate tail-rec function") {
-    val source =
-      """|package example
-         |object Main {
-         |  @scala.annotation.tailrec
-         |  def f(x: Int): Int = {
-         |    if (x <= 42) {
-         |      x
-         |    } else f(x/2)
-         |  }
-         |  def main(args: Array[String]): Unit = {
-         |    val result = f(2)
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(6), Evaluation.success("x", 2))
-  }
-
-  test("encode operator symbols") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val ! = "!"
-         |    println(!)
-         |  }
-         |}
-         |""".stripMargin
-
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(6), Evaluation.success("!", "!"))
-  }
-
-  test("evaluate on match case") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def m(list: List[String]): Unit = {
-         |    list match {
-         |      case a :: b :: tail =>
-         |        println(a + b)
-         |      case _ => ()
-         |    }
-         |  }
-         |
-         |  def main(args: Array[String]): Unit = {
-         |    m(List("a", "b", "c"))
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(7), Evaluation.success("b", "b"))
-  }
-
-  test("evaluate capture of pattern") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val n = 1
-         |    n match {
-         |      case m =>
-         |        println(m)
-         |        println(m)
-         |    }
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    // a pure expression does nothing in statement position
-    check(Breakpoint(8), Evaluation.success("m", 1))
-  }
-}
+class Scala212RuntimeEvaluatorTests extends ScalaRuntimeEvaluatorTests(ScalaVersion.`2.12`)
+class Scala213RuntimeEvaluatorTests extends ScalaRuntimeEvaluatorTests(ScalaVersion.`2.13`)
+class Scala33RuntimeEvaluatorTests extends ScalaRuntimeEvaluatorTests(ScalaVersion.`3.3`)
+class Scala34RuntimeEvaluatorTests extends ScalaRuntimeEvaluatorTests(ScalaVersion.`3.4`)
 
 object RuntimeEvaluatorEnvironments {
   val byNameFunction0 =
@@ -656,7 +335,7 @@ object RuntimeEvaluatorEnvironments {
        |}""".stripMargin
 }
 
-abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
+abstract class ScalaRuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
   lazy val field = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.fieldSource, "example.Main", scalaVersion)
   lazy val method = TestingDebuggee.mainClass(RuntimeEvaluatorEnvironments.methodSource, "example.Main", scalaVersion)
   lazy val overloads =
@@ -895,7 +574,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
         Evaluation.success("map(2)", "two"),
         Evaluation.success("map(new Integer(2))", "two"),
         Evaluation.successOrIgnore("map(new Character('\u0000'))", "one", true),
-        Evaluation.success("map(3)", new ju.NoSuchElementException("key not found: 3")),
+        Evaluation.success("map(3)", new NoSuchElementException("key not found: 3")),
         Evaluation.success("set(1)", true),
         Evaluation.success("set(2)", true),
         Evaluation.success("set(new Integer(2))", true),
@@ -1447,5 +1126,337 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
       Breakpoint(31),
       Evaluation.success("upperMain3", "upper main 3")
     )
+  }
+
+  test("Should access to wrapping 'object' methods") {
+    assume(scalaVersion.isScala3)
+    implicit val debuggee = nested
+    check(config = defaultConfig.copy(testMode = false))(
+      Breakpoint(21),
+      Evaluation.success("upperMain1", "upper main 1"),
+      Breakpoint(31),
+      Evaluation.success("upperMain2", "upper main 2"),
+      Breakpoint(25),
+      Evaluation.success("upperMain3", "upper main 3")
+    )
+  }
+
+  test("Should evaluate a local variable of a lambda") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    List(1).foreach { n =>
+         |      println(n)
+         |    }
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(6), Breakpoint(6), Evaluation.success("n", 1))
+  }
+
+  test("evaluate captured local variable shadowing captured variable") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val x = "x1"
+         |    def m1(): String = {
+         |      println(x) // captures x = "x1"
+         |      val y = {
+         |        val x = "x2"
+         |        val z = {
+         |          val x = "x3"
+         |          def m2(): String = {
+         |            x // captures x = "x3"
+         |          }
+         |          m2()
+         |        }
+         |        z
+         |      }
+         |      y
+         |    }
+         |    println(m1())
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(15), Evaluation.success("x", "x3"))
+  }
+
+  test("read and write mutable variables whose type is a value class") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    m()
+         |  }
+         |
+         |  def m(): Int = {
+         |    var y = 1
+         |    var u = 1
+         |    def yy(): Int = {
+         |      y += 1
+         |      y
+         |    }
+         |    yy() + u
+         |  }
+         |}
+         |""".stripMargin
+
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(15),
+      Evaluation.success("y", 1),
+      Evaluation.success("u", 1),
+      Breakpoint(13),
+      // captured by method m
+      Evaluation.success("y$1", 2)
+    )
+  }
+
+  test("evaluate on for loops, generators and guards") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val list = List(1)
+         |    for {
+         |      x <- list
+         |      y <- list
+         |      z = x + y
+         |    } yield x
+         |    for {
+         |      x <- list
+         |      if x == 1
+         |    } yield x
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(config = defaultConfig.copy(testMode = false))(
+      Breakpoint(8),
+      Evaluation.success("x", 1),
+      Breakpoint(9), // calling map
+      Breakpoint(9),
+      Evaluation.success("y", 1), // finally we are into the lifted lambda x + y
+      Breakpoint(8), // still in the same lifted lambda (the line position does not make any sense)
+      Breakpoint(9), // again in the lifted lambda
+      Breakpoint(8), // going out of the lifted lambda
+      Breakpoint(8), // regression in Scala 3.2.2
+      Breakpoint(9), // regression in Scala 3.2.2
+      Breakpoint(13), // calling withFilter
+      Breakpoint(13),
+      Evaluation.success("x", 1)
+    )
+  }
+
+  test("evaluate inside local method") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |object A {
+         |  def main(args: Array[String]): Unit = {
+         |    val x1 = 1
+         |    var x2 = 2
+         |    def m: String = {
+         |      s"$x1 $x2"
+         |    }
+         |    println(m)
+         |  }
+         |}""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+    check(Breakpoint(8), Evaluation.success("x1$1", 1), Evaluation.success("x2$1", 2))
+  }
+
+  test("evaluate instance of value class") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val b = new B("foo")
+         |    println(m(b))
+         |  }
+         |
+         |  def m(a: A): String = {
+         |    val c = new C(5)
+         |    a.m(c)
+         |  }
+         |}
+         |
+         |trait A extends Any {
+         |  def m(c: C): String
+         |}
+         |
+         |class B(val self: String) extends AnyVal with A {
+         |  def m(c: C): String = {
+         |    self.take(c.size)
+         |  }
+         |}
+         |
+         |class C(val size: Int) extends AnyVal
+         |""".stripMargin
+
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(6),
+      Evaluation.success("b", "foo"),
+      Breakpoint(11),
+      Evaluation.success("a", ObjectRef("B")),
+      Evaluation.success("c", 5),
+      Breakpoint(21),
+      Evaluation.success("c", 5),
+      Evaluation.success("$this", "foo")
+    )
+  }
+
+  test("evaluate captured instance of value class") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val size = new Size(2)
+         |    def m: Int = {
+         |      size.value
+         |    }
+         |    println(m)
+         |  }
+         |}
+         |
+         |class Size(val value: Int) extends AnyVal
+         |""".stripMargin
+
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(7), Evaluation.success("size$1", 2))
+  }
+
+  test("read and write mutable variables of value class type") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    var x: A = new A(1)
+         |    var z: A = new A(1)
+         |    z += new A(1)
+         |    def xx(): A = {
+         |      x += new A(1)
+         |      x
+         |    }
+         |    xx()
+         |  }
+         |}
+         |
+         |class A(val value: Int) extends AnyVal {
+         |  def +(x: A): A = new A(value + x.value)
+         |}
+         |""".stripMargin
+
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(7),
+      Evaluation.success("x", 1),
+      Evaluation.success("z", 1),
+      Breakpoint(12),
+      Evaluation.success("z", 2),
+      Breakpoint(10),
+      Evaluation.success("x$1", 2)
+    )
+  }
+
+  test("evaluate tail-rec function") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |object Main {
+         |  @scala.annotation.tailrec
+         |  def f(x: Int): Int = {
+         |    if (x <= 42) {
+         |      x
+         |    } else f(x/2)
+         |  }
+         |  def main(args: Array[String]): Unit = {
+         |    val result = f(2)
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(6), Evaluation.success("x", 2))
+  }
+
+  test("encode operator symbols") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val ! = "!"
+         |    println(!)
+         |  }
+         |}
+         |""".stripMargin
+
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(6), Evaluation.success("!", "!"))
+  }
+
+  test("evaluate on match case") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def m(list: List[String]): Unit = {
+         |    list match {
+         |      case a :: b :: tail =>
+         |        println(a + b)
+         |      case _ => ()
+         |    }
+         |  }
+         |
+         |  def main(args: Array[String]): Unit = {
+         |    m(List("a", "b", "c"))
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(Breakpoint(7), Evaluation.success("b", "b"))
+  }
+
+  test("evaluate capture of pattern") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val n = 1
+         |    n match {
+         |      case m =>
+         |        println(m)
+         |        println(m)
+         |    }
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    // a pure expression does nothing in statement position
+    check(Breakpoint(8), Evaluation.success("m", 1))
   }
 }
