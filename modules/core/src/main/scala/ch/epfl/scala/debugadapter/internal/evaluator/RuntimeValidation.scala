@@ -10,7 +10,7 @@ import com.sun.jdi
 import scala.jdk.CollectionConverters.*
 import scala.meta.parsers.*
 import scala.meta.trees.*
-import scala.meta.{Type => _, *}
+import scala.meta.*
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
@@ -189,20 +189,43 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       .orElse(findTopLevelClass(name), resetError = true)
 
   private def findStaticClass(name: String, qualifier: jdi.ReferenceType): Validation[RuntimeClass] =
-    findQualifiedClass(name, qualifier.name)
+    findInnerClass(name, qualifier)
       .filter(_.isStatic, cls => s"${cls.name} is not a static class")
       .map(StaticOrTopLevelClass.apply)
 
   private def findMemberClass(name: String, qualifier: RuntimeEvaluationTree): Validation[RuntimeClass] =
-    findQualifiedClass(name, qualifier.`type`.name)
+    findInnerClass(name, qualifier.`type`)
       .map(MemberClass(_, qualifier))
       .orElse(findOuter(qualifier).flatMap(outer => findMemberClass(name, outer)))
 
-  private def findQualifiedClass(name: String, qualifier: String): Validation[jdi.ClassType] = {
-    val encodedQualifier = qualifier.split('.').map(NameTransformer.encode).mkString(".")
-    getAllFullyQualifiedClassNames(name)
-      .filter(fqcn => fqcn.contains(encodedQualifier))
-      .validateSingle(s"Cannot find class $name in qualifier $qualifier")
+  private def findInnerClass(name: String, tpe: jdi.Type): Validation[jdi.ClassType] = {
+    val classes = getAllFullyQualifiedClassNames(name)
+    linearize(tpe).iterator
+      .map { tpe =>
+        val encodedQualifier = tpe.name.split('.').map(NameTransformer.encode).mkString(".")
+        classes.filter(_.contains(encodedQualifier))
+      }
+      .find(_.nonEmpty)
+      .toSeq
+      .flatten
+      .validateSingle(s"Cannot find class $name in linearization of ${tpe.name}")
+      .flatMap(loadClass)
+  }
+
+  private def linearize(tpe: jdi.Type): Seq[jdi.ReferenceType] = {
+    tpe match {
+      case cls: jdi.ClassType =>
+        cls +: (linearize(cls.superclass()) ++ cls.allInterfaces().asScala.reverseIterator).distinct
+      case _ => Seq.empty
+    }
+  }
+
+  private def findQualifiedClass(name: String, packageName: String): Validation[jdi.ClassType] = {
+    val classes = getAllFullyQualifiedClassNames(name)
+    val encodedPackage = packageName.split('.').map(NameTransformer.encode).mkString(".")
+    classes
+      .filter(_.contains(encodedPackage))
+      .validateSingle(s"Cannot find single class $name in package $packageName")
       .flatMap(loadClass)
   }
 
