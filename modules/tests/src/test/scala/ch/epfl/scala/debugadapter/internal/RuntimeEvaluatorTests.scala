@@ -643,7 +643,7 @@ abstract class ScalaRuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extend
       DebugStepAssert.inParallel(
         Evaluation.success("foo_v2(\"hello \").bar(42)", "hello 42"),
         Evaluation.success("x", 3),
-        Evaluation.successOrIgnore("(new InnerFooClass).hello", "hello inner foo class", true),
+        Evaluation.success("(new InnerFooClass).hello", "hello inner foo class"),
         Evaluation.success("InnerFooObject.hello", "hello inner foo object")
       )
     )
@@ -939,7 +939,7 @@ abstract class ScalaRuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extend
       Evaluation.success("b.x", "x"),
       Breakpoint(17),
       Evaluation.success("x", "x"),
-      Evaluation.ignore("y", "y"), // jdi does not access correct outer
+      Evaluation.successOrIgnore("y", "y", isScala2), // jdi does not access correct outer
       Evaluation.success("ai", "ai"),
       Evaluation.success("a", "a"),
       Breakpoint(28),
@@ -1116,29 +1116,25 @@ abstract class ScalaRuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extend
   }
 
   test("Should access to wrapping 'object' methods") {
-    assume(scalaVersion.isScala2)
-    implicit val debuggee = nested
-    check(
-      Breakpoint(21),
-      Evaluation.success("upperMain1", "upper main 1"),
-      Breakpoint(25),
-      Evaluation.success("upperMain2", "upper main 2"),
-      Breakpoint(31),
-      Evaluation.success("upperMain3", "upper main 3")
-    )
-  }
-
-  test("Should access to wrapping 'object' methods") {
-    assume(scalaVersion.isScala3)
-    implicit val debuggee = nested
-    check(config = defaultConfig.copy(testMode = false))(
-      Breakpoint(21),
-      Evaluation.success("upperMain1", "upper main 1"),
-      Breakpoint(31),
-      Evaluation.success("upperMain2", "upper main 2"),
-      Breakpoint(25),
-      Evaluation.success("upperMain3", "upper main 3")
-    )
+    implicit val debuggee: TestingDebuggee = nested
+    if (isScala2)
+      check(
+        Breakpoint(21),
+        Evaluation.success("upperMain1", "upper main 1"),
+        Breakpoint(25),
+        Evaluation.success("upperMain2", "upper main 2"),
+        Breakpoint(31),
+        Evaluation.success("upperMain3", "upper main 3")
+      )
+    else
+      check(config = defaultConfig.copy(testMode = false))(
+        Breakpoint(21),
+        Evaluation.success("upperMain1", "upper main 1"),
+        Breakpoint(31),
+        Evaluation.success("upperMain3", "upper main 3"),
+        Breakpoint(25),
+        Evaluation.success("upperMain2", "upper main 2")
+      )
   }
 
   test("Should evaluate a local variable of a lambda") {
