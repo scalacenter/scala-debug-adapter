@@ -153,7 +153,7 @@ private[debugadapter] final class DebugSession private (
         val command = Command.parse(request.command)
         // the launch args sent by Metals do not conform to the LaunchArgument of java-debug
         // here we parse to PartialLaunchArguments which only contains noDebug
-        val launchArgs = JsonUtils.fromJson(request.arguments, classOf[PartialLaunchArguments])
+        val launchArgs = JsonUtils.fromJson(request.arguments, classOf[ScalaLaunchArguments])
         val tools =
           if (launchArgs.noDebug) DebugTools.none(logger)
           else DebugTools(debuggee, resolver, logger)
