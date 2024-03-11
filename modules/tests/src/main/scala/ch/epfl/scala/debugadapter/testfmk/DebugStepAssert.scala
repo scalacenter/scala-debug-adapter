@@ -33,7 +33,7 @@ object DebugStepAssert {
       location: Location
   ): Unit = {
     assert(callStack != null)
-    val obtained = callStack.map(frame => frame.name).toSeq
+    val obtained = callStack.collect { case frame if frame.presentationHint != "subtle" => frame.name }.toSeq
     assertEquals(obtained, expected)
   }
 }
