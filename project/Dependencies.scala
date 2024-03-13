@@ -37,7 +37,7 @@ object Dependencies {
   val scalaParallelCollection = "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4"
   val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.11.0"
   val sbtTestAgent = "org.scala-sbt" % "test-agent" % "1.9.9"
-  val scalaMeta = ("org.scalameta" %% "parsers" % "4.9.1").cross(CrossVersion.for3Use2_13)
+  val scalaMeta = ("org.scalameta" %% "parsers" % "4.9.2").cross(CrossVersion.for3Use2_13)
 
   // test dependencies
   val munit = "org.scalameta" %% "munit" % "1.0.0-M11"
