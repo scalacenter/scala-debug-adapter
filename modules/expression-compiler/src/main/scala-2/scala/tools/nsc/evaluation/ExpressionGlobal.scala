@@ -1,6 +1,8 @@
-package scala.tools.nsc
+package scala.tools.nsc.evaluation
 
+import scala.tools.nsc.Global
 import scala.tools.nsc.reporters.Reporter
+import scala.tools.nsc.Settings
 
 private[nsc] class ExpressionGlobal(
     settings: Settings,

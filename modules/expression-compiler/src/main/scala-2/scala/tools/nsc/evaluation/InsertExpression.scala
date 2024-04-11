@@ -1,4 +1,4 @@
-package scala.tools.nsc
+package scala.tools.nsc.evaluation
 
 import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
