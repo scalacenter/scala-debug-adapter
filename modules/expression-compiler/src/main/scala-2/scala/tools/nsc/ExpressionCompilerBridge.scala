@@ -36,10 +36,10 @@ final class ExpressionCompilerBridge {
     val global = new ExpressionGlobal(
       command.settings,
       reporter,
+      expressionClassName,
       line,
       expression,
-      localVariables.asScala.toSet,
-      expressionClassName
+      localVariables.asScala.toSet
     )
 
     try {

@@ -27,9 +27,7 @@ class ExpressionContext(
 
   def store(exprSym: Symbol)(using Context): Unit =
     expressionSymbol = exprSym.asTerm
-    classOwners = exprSym.ownersIterator.collect { case cls: ClassSymbol =>
-      cls
-    }.toSeq
+    classOwners = exprSym.ownersIterator.collect { case cls: ClassSymbol => cls }.toSeq
     capturingMethod = exprSym.ownersIterator
       .find(sym => (sym.isClass || sym.is(Method)) && sym.enclosure.is(Method)) // the first local class or method
       .collect { case sym if sym.is(Method) => sym.asTerm } // if it is a method

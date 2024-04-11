@@ -128,7 +128,7 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
     }
 
     override def transform(tree: Tree): Tree = tree match {
-      case tree: DefDef if tree.pos.line == line =>
+      case tree: DefDef if tree.pos.line == breakpointLine =>
         insertAt(tree.pos)(
           filterOutTailRec(
             treeCopy.DefDef(
@@ -144,7 +144,7 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
         )
       case tree: DefDef =>
         super.transform(filterOutTailRec(tree))
-      case vd: ValDef if vd.pos.line == line =>
+      case vd: ValDef if vd.pos.line == breakpointLine =>
         insertAt(vd.pos)(
           treeCopy.ValDef(
             vd,
@@ -154,7 +154,7 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
             mkExprBlock(vd.rhs)
           )
         )
-      case tree if tree.pos.line == line =>
+      case tree if tree.pos.line == breakpointLine =>
         insertAt(tree.pos)(mkExprBlock(tree))
       case tree: PackageDef =>
         val transformed = super.transform(tree).asInstanceOf[PackageDef]
