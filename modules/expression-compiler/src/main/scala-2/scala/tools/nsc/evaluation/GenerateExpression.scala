@@ -11,7 +11,11 @@ import scala.tools.nsc.transform.{Transform, TypingTransformers}
  * - modifies the return type of `evaluate` method.
  */
 class GenerateExpression(override val global: ExpressionGlobal) extends Transform with TypingTransformers {
+  private val encoding: JavaEncoding[global.type] = new JavaEncoding(global)
   import global._
+  import encoding.encode
+  
+
   val valOrDefDefs: mutable.Map[Name, ValOrDefDef] = mutable.Map()
   val lambdas: mutable.ListBuffer[DefDef] = mutable.ListBuffer()
 
@@ -55,7 +59,7 @@ class GenerateExpression(override val global: ExpressionGlobal) extends Transfor
 
     override def traverse(tree: Tree): Unit = tree match {
       // Don't extract expression from the Expression class
-      case tree: ClassDef if tree.name.decode == expressionClassName =>
+      case tree: ClassDef if tree.name == expressionClassName =>
       // ignore
       case tree: DefDef if shouldExtract(tree) =>
         expressionOwners = ownerChain(tree)
@@ -103,7 +107,7 @@ class GenerateExpression(override val global: ExpressionGlobal) extends Transfor
     }
 
     override def traverse(tree: Tree): Unit = tree match {
-      case tree: ClassDef if tree.name.decode == expressionClassName =>
+      case tree: ClassDef if tree.name == expressionClassName =>
         thisSym = tree.symbol
       case tree: ValDef
           if isCorrectOwner(tree) &&
@@ -133,13 +137,12 @@ class GenerateExpression(override val global: ExpressionGlobal) extends Transfor
    * - modifies return type of the `evaluate` method.
    */
   class GenExprTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
-    private var valuesByNameIdent: Ident = _
 
     override def transform(tree: Tree): Tree = tree match {
       // Discard classes different than Expression
-      case tree: ClassDef if tree.name.decode != expressionClassName =>
+      case tree: ClassDef if tree.name != expressionClassName =>
         EmptyTree
-      case tree: ClassDef if tree.name.decode == expressionClassName =>
+      case tree: ClassDef if tree.name == expressionClassName =>
         thisSym = tree.symbol
 
         val typer = localTyper.atOwner(tree, tree.symbol)
@@ -156,11 +159,6 @@ class GenerateExpression(override val global: ExpressionGlobal) extends Transfor
           Template(template.symbol, template.body ++ transformedLambdas)
         }
         super.transform(derivedClass)
-      case tree: Ident
-          if tree.name == TermName("valuesByName") &&
-            valuesByNameIdent == null =>
-        valuesByNameIdent = tree
-        EmptyTree
       case tree: DefDef if tree.name == TermName("evaluate") =>
         // firstly, transform the body of the method
         val transformed = super.transform(tree).asInstanceOf[DefDef]
@@ -232,13 +230,7 @@ class GenerateExpression(override val global: ExpressionGlobal) extends Transfor
 
     private def ident(name: Name) = {
       val app = Apply(
-        Select(
-          Apply(
-            Select(This(thisSym), TermName("valuesByName")),
-            List()
-          ),
-          TermName("apply")
-        ),
+        Select(This(thisSym), TermName("getLocalValue")),
         List(Literal(Constant(name.decode)))
       )
       val symbol = symbolsByName(name)
@@ -269,25 +261,20 @@ class GenerateExpression(override val global: ExpressionGlobal) extends Transfor
 
   private def mkCallPrivate(tree: Apply)(typer: analyzer.Typer) = {
     val fun = tree.fun.asInstanceOf[Select]
-    val paramTypeNames = tree.args
-      .map { arg =>
-        val tpeSymbol = arg.tpe.typeSymbol
-        val paramTypeName = if (tpeSymbol.isPrimitiveValueClass) {
-          tpeSymbol.fullName.stripPrefix("scala.").toLowerCase()
-        } else {
-          tpeSymbol.fullName
-        }
-        Literal(Constant(paramTypeName))
-      }
-    val paramTypeNamesArray =
-      ArrayValue(TypeTree(definitions.StringTpe), paramTypeNames)
+    val paramTypeNames = ArrayValue(
+      TypeTree(definitions.StringTpe),
+      tree.args.map(arg => Literal(Constant(encode(arg.tpe))))
+    )
+    val returnTypeName = Literal(Constant(encode(tree.fun.tpe.asInstanceOf[MethodType].resultType)))
     val argsArray = ArrayValue(TypeTree(definitions.ObjectTpe), tree.args)
     val app = Apply(
-      Select(Ident(expressionClassName), TermName("callPrivateMethod")),
+      Select(Ident(expressionClassName), TermName("callMethod")),
       List(
         fun.qualifier,
-        Literal(Constant(tree.fun.asInstanceOf[Select].name.decode)),
-        paramTypeNamesArray,
+        Literal(Constant(encode(fun.qualifier.symbol.owner.asType))),
+        Literal(Constant(fun.name.decode)),
+        paramTypeNames,
+        returnTypeName,
         argsArray
       )
     )

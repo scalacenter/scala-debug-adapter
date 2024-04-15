@@ -1,7 +1,10 @@
 package scala.tools.nsc.evaluation
 
 import scala.reflect.internal.util.BatchSourceFile
-import scala.tools.nsc.transform.{Transform, TypingTransformers}
+import scala.reflect.internal.util.SourceFile
+import scala.reflect.io.VirtualFile
+import scala.tools.nsc.transform.Transform
+import scala.tools.nsc.transform.TypingTransformers
 
 class InsertExpression(override val global: ExpressionGlobal) extends Transform with TypingTransformers {
   import global._
@@ -10,9 +13,97 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
   override val runsAfter: List[String] = List("parser")
   override val runsRightAfter: Option[String] = None
 
-  override protected def newTransformer(
-      unit: CompilationUnit
-  ): Transformer = new Inserter()
+  private val evaluationClassSource =
+    s"""|class $expressionClassName(thisObject: Any, names: Array[String], values: Array[Any]) {
+        |  import java.lang.reflect.InvocationTargetException
+        |  val classLoader = getClass.getClassLoader
+        |
+        |  def evaluate(): Any =
+        |    ()
+        |
+        |  def getThisObject(): Any = thisObject
+        |
+        |  def getLocalValue(name: String): Any = {
+        |    val idx = names.indexOf(name)
+        |    if (idx == -1) throw new NoSuchElementException(name)
+        |    else values(idx)
+        |  }
+        |
+        |  def setLocalValue(name: String, value: Any): Any = {
+        |    val idx = names.indexOf(name)
+        |    if (idx == -1) throw new NoSuchElementException(name)
+        |    else values(idx) = value
+        |  }
+        |
+        |  def callMethod(obj: Any, className: String, methodName: String, paramTypesNames: Array[String], returnTypeName: String, args: Array[Object]): Any = {
+        |    val clazz = classLoader.loadClass(className)
+        |    val method = clazz.getDeclaredMethods
+        |      .find { m =>
+        |        m.getName == methodName &&
+        |          m.getReturnType.getName == returnTypeName &&
+        |          m.getParameterTypes.map(_.getName).toSeq == paramTypesNames.toSeq
+        |      }
+        |      .getOrElse(throw new NoSuchMethodException(methodName))
+        |    method.setAccessible(true)
+        |    unwrapException(method.invoke(obj, args: _*))
+        |  }
+        |
+        |  def callConstructor(className: String, paramTypesNames: Array[String], args: Array[Object]): Any = {
+        |    val clazz = classLoader.loadClass(className)
+        |    val constructor = clazz.getConstructors
+        |      .find { c => c.getParameterTypes.map(_.getName).toSeq == paramTypesNames.toSeq }
+        |      .getOrElse(throw new NoSuchMethodException(s"new $$className"))
+        |    constructor.setAccessible(true)
+        |    unwrapException(constructor.newInstance(args: _*))
+        |  }
+        |
+        |  def getField(obj: Any, className: String, fieldName: String): Any = {
+        |    val clazz = classLoader.loadClass(className)
+        |    val field = clazz.getDeclaredField(fieldName)
+        |    field.setAccessible(true)
+        |    field.get(obj)
+        |  }
+        |
+        |  def setField(obj: Any, className: String, fieldName: String, value: Any): Unit = {
+        |    val clazz = classLoader.loadClass(className)
+        |    val field = clazz.getDeclaredField(fieldName)
+        |    field.setAccessible(true)
+        |    field.set(obj, value)
+        |  }
+        |
+        |  def getOuter(obj: Any, outerTypeName: String): Any = {
+        |    val clazz = obj.getClass
+        |    val field = getSuperclassIterator(clazz)
+        |      .flatMap(_.getDeclaredFields.toSeq)
+        |      .find { field => field.getName == "$$outer" && field.getType.getName == outerTypeName }
+        |      .getOrElse(throw new NoSuchFieldException("$$outer"))
+        |    field.setAccessible(true)
+        |    field.get(obj)
+        |  }
+        |
+        |  def getStaticObject(className: String): Any = {
+        |    val clazz = classLoader.loadClass(className)
+        |    val field = clazz.getDeclaredField("MODULE$$")
+        |    field.setAccessible(true)
+        |    field.get(null)
+        |  }
+        |
+        |  def getSuperclassIterator(clazz: Class[_]): Iterator[Class[_]] =
+        |    Iterator.iterate[Class[_]](clazz)(_.getSuperclass)
+        |
+        |  // A fake method that is used as a placeholder in the extract-expression phase.
+        |  // The resolve-reflect-eval phase resolves it to a call of one of the other methods in this class.
+        |  def reflectEval(qualifier: Any, term: String, args: Array[Any]): Any = ???
+        |
+        |  private def unwrapException(f: => Any): Any =
+        |    try f catch {
+        |      case e: InvocationTargetException => throw e.getCause
+        |    }
+        |}
+        |""".stripMargin
+
+  override protected def newTransformer(unit: CompilationUnit): Transformer =
+    new Inserter(parseExpression, parseEvaluationClass)
 
   /**
    * This transformer:
@@ -21,84 +112,8 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
    * normal code would behave.
    * - inserts the expression class in the same package as the expression. This allows us to call package private methods without any trouble.
    */
-  private class Inserter extends Transformer {
-    private val expressionClassSource =
-      s"""class $expressionClassName(thisObject: Any, names: Array[String], values: Array[Object]) {
-         |  val valuesByName = names.reverse.map(_.asInstanceOf[String]).zip(values.reverse).toMap
-         |
-         |  def evaluate() = {
-         |    ()
-         |  }
-         |}
-         |
-         |object $expressionClassName {
-         |  def callPrivateMethod(obj: Any, methodName: String, paramTypeNames: Array[String], args: Array[Object]) = {
-         |    val methods = obj.getClass.getDeclaredMethods
-         |    val method = methods
-         |      .find { m =>
-         |        m.getName == methodName && m.getParameterTypes.map(_.getName).toSeq == paramTypeNames.toSeq
-         |      }
-         |      .get
-         |    method.setAccessible(true)
-         |    method.invoke(obj, args: _*)
-         |  }
-         |}
-         |""".stripMargin
-
-    private val parsedExpression = parseExpression(expression)
-    private val parsedExpressionClassAndObject =
-      parseExpressionClassAndObject(
-        expressionClassSource
-      )
-
+  private class Inserter(expression: Tree, expressionClass: Seq[Tree]) extends Transformer {
     private var expressionInserted = false
-
-    private def parseExpression(expression: String): Tree = {
-      // It needs to be wrapped because it's not possible to parse single expression.
-      // `$expression` is wrapped in a block to support multiline expressions.
-      val wrappedExpressionSource =
-        s"""object Expression {
-           |  {
-           |    $expression
-           |  }
-           |}
-           |""".stripMargin
-      val parsedWrappedExpression =
-        parse("<wrapped-expression>", wrappedExpressionSource)
-          .asInstanceOf[PackageDef]
-      val parsed = parsedWrappedExpression.stats.head
-        .asInstanceOf[ModuleDef]
-        .impl
-        .body
-        .last
-        .setPos(NoPosition)
-      parsed match {
-        case df: ValOrDefDef =>
-          Block(df, Literal(Constant(())))
-        case expr => expr
-      }
-    }
-
-    private def parseExpressionClassAndObject(source: String): Seq[Tree] = {
-      val parsedExpressionClass =
-        parse("<expression>", source).asInstanceOf[PackageDef]
-      parsedExpressionClass.stats match {
-        case cls :: obj :: _ =>
-          cls.setPos(NoPosition)
-          obj.setPos(NoPosition)
-          Seq(cls, obj)
-        case stats =>
-          throw new IllegalArgumentException(
-            s"Expected at least two statements but got ${stats.size}"
-          )
-      }
-    }
-
-    private def parse(sourceName: String, source: String): Tree = {
-      newUnitParser(
-        new CompilationUnit(new BatchSourceFile(sourceName, source))
-      ).parse()
-    }
 
     private def filterOutTailRec(defdef: DefDef): DefDef = {
       val copiedMods = defdef.mods.copy(
@@ -164,7 +179,7 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
             treeCopy.PackageDef(
               transformed,
               transformed.pid,
-              transformed.stats ++ parsedExpressionClassAndObject
+              transformed.stats ++ expressionClass
             )
           )
         } else {
@@ -182,9 +197,9 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
     private def mkExprBlock(tree: Tree): Tree = {
       val block =
         if (tree.isDef)
-          Block(List(parsedExpression, tree), Literal(Constant(())))
+          Block(List(expression, tree), Literal(Constant(())))
         else
-          Block(List(parsedExpression), tree)
+          Block(List(expression), tree)
       addExpressionAttachment(block)
     }
 
@@ -194,4 +209,39 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
       tree.setAttachments(attachments)
     }
   }
+
+  private def parseExpression: Tree = {
+    val expressionFile = new BatchSourceFile(new VirtualFile("<expression>"), expression.toCharArray)
+    val prefix =
+      s"""|object Expression {
+          |  {
+          |    """.stripMargin
+    // don't use stripMargin on wrappedExpression because expression can contain a line starting with `|`
+    val wrappedExpression = prefix + expression + "\n}}\n"
+    
+    val wrappedExpressionFile =
+      new BatchSourceFile(expressionFile.file, wrappedExpression.toCharArray) {
+        override def positionInUltimateSource(pos: Position) =
+          if (!pos.isDefined) super.positionInUltimateSource(pos)
+          else pos.withSource(expressionFile).withShift(-prefix.size)
+      }
+
+    parse(wrappedExpressionFile)
+      .asInstanceOf[PackageDef]
+      .stats
+      .head
+      .asInstanceOf[ModuleDef]
+      .impl
+      .body
+      .tail
+      .head
+  }
+
+  private def parseEvaluationClass: Seq[Tree] = {
+    val sourceFile = new BatchSourceFile("<evaluation class>", evaluationClassSource.toCharArray.toSeq)
+    parse(sourceFile).asInstanceOf[PackageDef].stats
+  }
+
+  private def parse(sourceFile: SourceFile): Tree =
+    newUnitParser(new CompilationUnit(sourceFile)).parse()
 }

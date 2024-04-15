@@ -1,6 +1,5 @@
 package ch.epfl.scala.debugadapter
 
-import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 import dotty.tools.dotc.ExpressionCompilerBridge
 

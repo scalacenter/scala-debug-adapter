@@ -24,11 +24,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(5),
-      Evaluation.failedOrIgnore("\"foo\" + bar", isScala2) { error =>
-        assert(error.contains("<expression>:1:8"))
+      Evaluation.failed("\"foo\" + bar") { error =>
+        assert(error.contains("<expression>:1:"))
         assert(error.contains("\"foo\" + bar"))
       },
-      Evaluation.failedOrIgnore("bar", isScala2)(error => assert(!error.contains('\u001b')))
+      Evaluation.failed("bar")(error => assert(!error.contains('\u001b')))
     )
   }
 
