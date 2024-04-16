@@ -9,6 +9,8 @@ import scala.tools.nsc.transform.TypingTransformers
 class InsertExpression(override val global: ExpressionGlobal) extends Transform with TypingTransformers {
   import global._
 
+  private var expressionInserted = false
+
   override val phaseName: String = "insert-expression"
   override val runsAfter: List[String] = List("parser")
   override val runsRightAfter: Option[String] = None
@@ -113,100 +115,28 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
    * - inserts the expression class in the same package as the expression. This allows us to call package private methods without any trouble.
    */
   private class Inserter(expression: Tree, expressionClass: Seq[Tree]) extends Transformer {
-    private var expressionInserted = false
-
-    private def filterOutTailRec(defdef: DefDef): DefDef = {
-      val copiedMods = defdef.mods.copy(
-        annotations = defdef.mods.annotations.filterNot {
-          case Apply(
-                Select(
-                  New(Select(Select(Ident(scala), annotation), tailrec)),
-                  _
-                ),
-                List()
-              ) =>
-            scala.toString == "scala" &&
-            annotation.toString() == "annotation" &&
-            tailrec.toString() == "tailrec"
-          case _ => false
-        }
-      )
-      treeCopy.DefDef(
-        defdef,
-        copiedMods,
-        defdef.name,
-        defdef.tparams,
-        defdef.vparamss,
-        defdef.tpt,
-        defdef.rhs
-      )
-    }
-
     override def transform(tree: Tree): Tree = tree match {
-      case tree: DefDef if tree.pos.line == breakpointLine =>
-        insertAt(tree.pos)(
-          filterOutTailRec(
-            treeCopy.DefDef(
-              tree,
-              tree.mods,
-              tree.name,
-              tree.tparams,
-              tree.vparamss,
-              tree.tpt,
-              mkExprBlock(tree.rhs)
-            )
-          )
-        )
-      case tree: DefDef =>
-        super.transform(filterOutTailRec(tree))
-      case vd: ValDef if vd.pos.line == breakpointLine =>
-        insertAt(vd.pos)(
-          treeCopy.ValDef(
-            vd,
-            vd.mods,
-            vd.name,
-            vd.tpt,
-            mkExprBlock(vd.rhs)
-          )
-        )
-      case tree if tree.pos.line == breakpointLine =>
-        insertAt(tree.pos)(mkExprBlock(tree))
       case tree: PackageDef =>
         val transformed = super.transform(tree).asInstanceOf[PackageDef]
         if (expressionInserted) {
+          // set to `false` to prevent inserting `Expression` class in other `PackageDef`s
           expressionInserted = false
-          atPos(tree.pos)(
-            treeCopy.PackageDef(
-              transformed,
-              transformed.pid,
-              transformed.stats ++ expressionClass
-            )
-          )
-        } else {
-          transformed
-        }
-      case _ =>
-        super.transform(tree)
-    }
+          transformed.copy(stats = transformed.stats ++ expressionClass.map(_.setPos(tree.pos)))
+        } else transformed
+      case tree: DefDef if tree.rhs != EmptyTree && isOnBreakpoint(tree) =>
+        tree.copy(rhs = mkExprBlock(expression, tree.rhs))
+      case tree: Match if isOnBreakpoint(tree) || tree.cases.exists(isOnBreakpoint) =>
+        // the expression is on the match or a case of the match
+        // if it is on the case of the match the program could pause on the pattern, the guard or the body
+        // we assume it pauses on the pattern because that is the first instruction
+        // in that case we cannot compile the expression val in the pattern, but we can compile it in the selector
+        tree.copy(selector = mkExprBlock(expression, tree.selector))
+      case tree: ValDef if isOnBreakpoint(tree) =>
+        tree.copy(rhs = mkExprBlock(expression, tree.rhs))
+      case tree @ (_: Ident | _: Select | _: GenericApply | _: Literal | _: This | _: New | _: Assign | _: Block) if isOnBreakpoint(tree) =>
+        mkExprBlock(expression, tree)
 
-    private def insertAt(pos: Position)(tree: Tree): Tree = {
-      expressionInserted = true
-      atPos(pos)(tree)
-    }
-
-    private def mkExprBlock(tree: Tree): Tree = {
-      val block =
-        if (tree.isDef)
-          Block(List(expression, tree), Literal(Constant(())))
-        else
-          Block(List(expression), tree)
-      addExpressionAttachment(block)
-    }
-
-    // `ExpressionAttachment` allows to find the inserted expression later on
-    private def addExpressionAttachment(tree: Tree): Tree = {
-      val attachments = tree.attachments.update(ExpressionAttachment)
-      tree.setAttachments(attachments)
+      case tree => super.transform(tree)
     }
   }
 
@@ -244,4 +174,28 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
 
   private def parse(sourceFile: SourceFile): Tree =
     newUnitParser(new CompilationUnit(sourceFile)).parse()
+
+  private def isOnBreakpoint(tree: Tree): Boolean =
+    tree.pos.isDefined && tree.pos.line + 1 == breakpointLine
+
+  private def mkExprBlock(expr: Tree, tree: Tree): Tree = {
+    if (expressionInserted) {
+      warnOrError("expression already inserted", tree.pos)
+      tree
+    } else {
+      expressionInserted = true
+      val valDef = ValDef(Modifiers(), expressionTermName, TypeTree(), expr)
+      // TODO: try remove 
+      // we insert a fake effect to avoid the constant-folding of the block during the firstTransform phase
+      val effect = Apply(
+        Select(Select(Ident(TermName("scala")), TermName("Predef")), TermName("print")),
+        List(Literal(Constant("")))
+      )
+      Block(List(valDef, effect), tree)
+    }
+  }
+
+  // only fails in test mode
+  private def warnOrError(msg: String, pos: Position): Unit =
+    if (testMode) reporter.error(pos, msg) else reporter.warning(pos, msg)
 }

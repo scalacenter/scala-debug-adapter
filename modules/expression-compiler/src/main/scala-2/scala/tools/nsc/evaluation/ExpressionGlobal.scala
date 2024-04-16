@@ -10,7 +10,8 @@ private[nsc] class ExpressionGlobal(
     uniqueName: String,
     val breakpointLine: Int,
     val expression: String,
-    val localVariables: Set[String]
+    val localVariables: Set[String],
+    val testMode: Boolean
 ) extends Global(settings, reporter) {
   override protected def computeInternalPhases(): Unit = {
     super.computeInternalPhases()

@@ -13,10 +13,37 @@ import scala.jdk.CollectionConverters.*
  *  It is not meant to be run in the CI
  */
 class ExpressionCompilerDebug extends munit.FunSuite {
-  val scalaVersion = ScalaVersion.`2.12`
+  val scalaVersion = ScalaVersion.`2.13`
   val compiler = new ExpressionCompilerBridge
 
   override def munitTimeout: Duration = 1.hour
+
+  test("report source and position in error, and no colors") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    println("Hello, World!")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+    evaluate(5, "\"foo\" + bar", localVariables = Set())
+  }
+
+  test("evaluate primitive values") {
+    val source =
+      """|package example
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    println("Hello, World!")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
+    evaluate(4, "true", localVariables = Set())
+  }
 
   test("evaluate public and private methods in static object") {
     val source =

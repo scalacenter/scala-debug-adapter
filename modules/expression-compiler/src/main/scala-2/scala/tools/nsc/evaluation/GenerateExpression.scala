@@ -59,40 +59,15 @@ class GenerateExpression(override val global: ExpressionGlobal) extends Transfor
 
     override def traverse(tree: Tree): Unit = tree match {
       // Don't extract expression from the Expression class
-      case tree: ClassDef if tree.name == expressionClassName =>
-      // ignore
-      case tree: DefDef if shouldExtract(tree) =>
-        expressionOwners = ownerChain(tree)
-        extractedExpression = extractExpression(tree.rhs)
-      // default arguments will have an additional method generated, which we need to skip
-      case tree: ValDef if tree.rhs.isEmpty =>
-      case tree: ValDef if shouldExtract(tree) =>
-        expressionOwners = ownerChain(tree)
-        extractedExpression = extractExpression(tree.rhs)
-      case _ if shouldExtract(tree) =>
-        expressionOwners = ownerChain(tree)
-        extractedExpression = extractExpression(tree)
-      case _ =>
-        super.traverse(tree)
+      case tree: ClassDef if tree.name == expressionClassName => // ignore
+      case tree: ValDef if isExpressionVal(tree.symbol) =>
+        extractedExpression = tree.rhs
+        expressionOwners = tree.symbol.ownerChain
+      case _ => super.traverse(tree)
     }
 
-    private def shouldExtract(tree: Tree): Boolean =
-      !expressionExtracted && tree.attachments
-        .get[ExpressionAttachment.type]
-        .isDefined
-
-    private def ownerChain(tree: Tree): List[Symbol] =
-      if (tree.symbol == null)
-        currentOwner.ownerChain
-      else
-        tree.symbol.ownerChain
-
-    private def extractExpression(tree: Tree): Tree = tree match {
-      case tree: Block =>
-        tree.stats.head
-      case _ =>
-        tree
-    }
+    private def isExpressionVal(sym: Symbol): Boolean =
+      sym.name == expressionTermName
   }
 
   /**

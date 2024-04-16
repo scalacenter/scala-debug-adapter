@@ -38,7 +38,8 @@ final class ExpressionCompilerBridge {
       expressionClassName,
       line,
       expression,
-      localVariables.asScala.toSet
+      localVariables.asScala.toSet,
+      testMode
     )
 
     try {
