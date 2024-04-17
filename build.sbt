@@ -177,11 +177,8 @@ lazy val expressionCompiler = projectMatrix
       .toSeq
       .flatten,
     crossScalaVersions := crossScalaVersions.value.distinct,
-    libraryDependencies ++= Seq(Dependencies.munit % Test) ++ onScalaVersion(
-      scala212 = Some(Dependencies.scalaCollectionCompat),
-      scala213 = None,
-      scala3 = None
-    ).value,
+    libraryDependencies ++= Seq(Dependencies.munit % Test) ++
+      onScalaVersion(scala212 = Some(Dependencies.scalaCollectionCompat), scala213 = None, scala3 = None).value,
     crossTarget := target.value / s"scala-${scalaVersion.value}",
     crossVersion := CrossVersion.full,
     Compile / unmanagedSourceDirectories ++= {

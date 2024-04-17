@@ -18,11 +18,11 @@ private[nsc] class ExpressionGlobal(
 
     addToPhasesSet(
       new InsertExpression(this),
-      "Insert expression which is going to be evaluated"
+      "Insert expression in the debugged source file"
     )
     addToPhasesSet(
-      new GenerateExpression(this),
-      "Generate the final form of the expression"
+      new ExtractExpression(this),
+      "Extract the expression from the debugged source file to the Expression class"
     )
   }
 
@@ -36,12 +36,14 @@ private[nsc] class ExpressionGlobal(
   var classOwners: Seq[ClassSymbol] = null
   var capturingMethod: Option[TermSymbol] = None
 
-  def store(exprSym: Symbol): Unit = {
+  def storeExpression(exprSym: Symbol): Unit = {
     expressionSymbol = exprSym.asTerm
     classOwners = exprSym.ownersIterator.collect { case cls: ClassSymbol => cls }.toSeq
     // TODO: Add test from logicallyEnclosingMember scaladoc
     capturingMethod = exprSym.ownersIterator
-      .find(sym => (sym.isClass || sym.isMethod) && sym.logicallyEnclosingMember.isMethod) // the first local class or method
+      .find(sym =>
+        (sym.isClass || sym.isMethod) && sym.logicallyEnclosingMember.isMethod
+      ) // the first local class or method
       .collect { case sym if sym.isMethod => sym.asTerm } // if it is a method
   }
 
@@ -52,7 +54,8 @@ private[nsc] class ExpressionGlobal(
   def evaluateMethod: Symbol =
     expressionClass.info.decl(TermName("evaluate"))
 
-  case object ExpressionAttachment extends PlainAttachment
+  def unitLiteral: Tree = Literal(Constant(())).setType(definitions.UnitTpe)
+  def nullLiteral: Tree = Literal(Constant(null)).setType(definitions.AnyTpe)
 
   /**
    * The [[ExtractExpression]] phase attaches an [[EvaluationStrategy]] to each `reflectEval` node
@@ -64,7 +67,7 @@ private[nsc] class ExpressionGlobal(
 
   object EvaluationStrategy extends PlainAttachment {
     case class This(cls: ClassSymbol) extends EvaluationStrategy
-    case class Outer(outerCls: ClassSymbol)  extends EvaluationStrategy
+    case class Outer(outerCls: ClassSymbol) extends EvaluationStrategy
     // the $outer param in a constructor
     case class LocalOuter(outerCls: ClassSymbol) extends EvaluationStrategy
     case class LocalValue(variable: TermSymbol, isByName: Boolean) extends EvaluationStrategy

@@ -11,7 +11,7 @@ class ExpressionReporter(reportError: String => Unit, val settings: Settings) ex
     severity match {
       case Reporter.ERROR =>
         val newPos = pos.source.positionInUltimateSource(pos)
-        val formatted = Position.formatMessage(newPos, s"${clabel(severity)}${msg}", shortenFile = false)
+        val formatted = Position.formatMessage(newPos, s"${clabel(severity)}$msg", shortenFile = false)
         reportError(formatted)
       case _ =>
         // TODO report the warnings
@@ -19,9 +19,9 @@ class ExpressionReporter(reportError: String => Unit, val settings: Settings) ex
     }
   }
 
-    private def clabel(severity: Severity): String = severity match {
-      case Reporter.ERROR   => "error: "
-      case Reporter.WARNING => "warning: "
-      case _ => ""
-    }
+  private def clabel(severity: Severity): String = severity match {
+    case Reporter.ERROR => "error: "
+    case Reporter.WARNING => "warning: "
+    case _ => ""
+  }
 }

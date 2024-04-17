@@ -1,9 +1,9 @@
 package scala.tools.nsc.evaluation
 
-import scala.tools.nsc.Global
+import scala.tools.nsc.SubComponent
 
 /** Encoding of symbol names for the IR. */
-class JavaEncoding[G <: Global](val global: G) {
+trait JavaEncoding { self: SubComponent =>
   import global._
 
   def encode(tpe: Type): String =

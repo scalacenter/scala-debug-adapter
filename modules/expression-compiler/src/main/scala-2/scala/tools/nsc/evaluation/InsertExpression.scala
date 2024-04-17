@@ -116,7 +116,7 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
    */
   private class Inserter(expression: Tree, expressionClass: Seq[Tree]) extends Transformer {
     override def transform(tree: Tree): Tree = tree match {
-      case tree: PackageDef =>
+      case _: PackageDef =>
         val transformed = super.transform(tree).asInstanceOf[PackageDef]
         if (expressionInserted) {
           // set to `false` to prevent inserting `Expression` class in other `PackageDef`s
@@ -133,7 +133,8 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
         tree.copy(selector = mkExprBlock(expression, tree.selector))
       case tree: ValDef if isOnBreakpoint(tree) =>
         tree.copy(rhs = mkExprBlock(expression, tree.rhs))
-      case tree @ (_: Ident | _: Select | _: GenericApply | _: Literal | _: This | _: New | _: Assign | _: Block) if isOnBreakpoint(tree) =>
+      case _: Ident | _: Select | _: GenericApply | _: Literal | _: This | _: New | _: Assign | _: Block
+          if isOnBreakpoint(tree) =>
         mkExprBlock(expression, tree)
 
       case tree => super.transform(tree)
@@ -148,7 +149,6 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
           |    """.stripMargin
     // don't use stripMargin on wrappedExpression because expression can contain a line starting with `|`
     val wrappedExpression = prefix + expression + "\n}}\n"
-    
     val wrappedExpressionFile =
       new BatchSourceFile(expressionFile.file, wrappedExpression.toCharArray) {
         override def positionInUltimateSource(pos: Position) =
@@ -185,7 +185,7 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
     } else {
       expressionInserted = true
       val valDef = ValDef(Modifiers(), expressionTermName, TypeTree(), expr)
-      // TODO: try remove 
+      // TODO: try remove in Scala 2
       // we insert a fake effect to avoid the constant-folding of the block during the firstTransform phase
       val effect = Apply(
         Select(Select(Ident(TermName("scala")), TermName("Predef")), TermName("print")),
