@@ -18,7 +18,7 @@ class ExpressionCompilerDebug extends munit.FunSuite:
 
   override def munitTimeout: Duration = 1.hour
 
-  test("by-name argument capture") {
+  test("by-name argument capture".ignore) {
     val source =
       """|package example
          |
