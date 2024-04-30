@@ -13,6 +13,7 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
 
   override val phaseName: String = "insert-expression"
   override val runsAfter: List[String] = List("parser")
+  override val runsBefore: List[String] = List("namer")
   override val runsRightAfter: Option[String] = None
 
   private val evaluationClassSource =
@@ -75,12 +76,14 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
         |
         |  def getOuter(obj: Any, outerTypeName: String): Any = {
         |    val clazz = obj.getClass
-        |    val field = getSuperclassIterator(clazz)
+        |    getSuperclassIterator(clazz)
         |      .flatMap(_.getDeclaredFields.toSeq)
-        |      .find { field => field.getName == "$$outer" && field.getType.getName == outerTypeName }
-        |      .getOrElse(throw new NoSuchFieldException("$$outer"))
-        |    field.setAccessible(true)
-        |    field.get(obj)
+        |      .collectFirst {
+        |        case field if field.getName == "$$outer" && field.getType.getName == outerTypeName =>
+        |          field.setAccessible(true)
+        |          field.get(obj)
+        |      }
+        |      .getOrElse(null)
         |  }
         |
         |  def getStaticObject(className: String): Any = {
@@ -91,11 +94,11 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
         |  }
         |
         |  def getSuperclassIterator(clazz: Class[_]): Iterator[Class[_]] =
-        |    Iterator.iterate[Class[_]](clazz)(_.getSuperclass)
+        |    Iterator.iterate[Class[_]](clazz)(_.getSuperclass).takeWhile(_ != null)
         |
         |  // A fake method that is used as a placeholder in the extract-expression phase.
         |  // The resolve-reflect-eval phase resolves it to a call of one of the other methods in this class.
-        |  def reflectEval(qualifier: Any, term: String, args: Array[Any]): Any = ???
+        |  def reflectEval(qualifier: Any, term: String, args: Array[Object]): Any = ???
         |
         |  private def unwrapException(f: => Any): Any =
         |    try f catch {
@@ -121,18 +124,24 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
         if (expressionInserted) {
           // set to `false` to prevent inserting `Expression` class in other `PackageDef`s
           expressionInserted = false
-          transformed.copy(stats = transformed.stats ++ expressionClass.map(_.setPos(tree.pos)))
+          transformed.copy(stats = transformed.stats ++ expressionClass).copyAttrs(tree)
         } else transformed
+
+      // should never insert an expression in a PatVarDef or a Bind
+      case _: ValDef if tree.hasAttachment[PatVarDefAttachment.type] => tree
+      case _: Bind => tree
+
+      // insert expression
       case tree: DefDef if tree.rhs != EmptyTree && isOnBreakpoint(tree) =>
-        tree.copy(rhs = mkExprBlock(expression, tree.rhs))
+        tree.copy(rhs = mkExprBlock(expression, tree.rhs)).copyAttrs(tree)
       case tree: Match if isOnBreakpoint(tree) || tree.cases.exists(isOnBreakpoint) =>
         // the expression is on the match or a case of the match
         // if it is on the case of the match the program could pause on the pattern, the guard or the body
         // we assume it pauses on the pattern because that is the first instruction
         // in that case we cannot compile the expression val in the pattern, but we can compile it in the selector
-        tree.copy(selector = mkExprBlock(expression, tree.selector))
+        tree.copy(selector = mkExprBlock(expression, tree.selector)).copyAttrs(tree)
       case tree: ValDef if isOnBreakpoint(tree) =>
-        tree.copy(rhs = mkExprBlock(expression, tree.rhs))
+        tree.copy(rhs = mkExprBlock(expression, tree.rhs)).copyAttrs(tree)
       case _: Ident | _: Select | _: GenericApply | _: Literal | _: This | _: New | _: Assign | _: Block
           if isOnBreakpoint(tree) =>
         mkExprBlock(expression, tree)
@@ -150,10 +159,12 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
     // don't use stripMargin on wrappedExpression because expression can contain a line starting with `|`
     val wrappedExpression = prefix + expression + "\n}}\n"
     val wrappedExpressionFile =
-      new BatchSourceFile(expressionFile.file, wrappedExpression.toCharArray) {
-        override def positionInUltimateSource(pos: Position) =
-          if (!pos.isDefined) super.positionInUltimateSource(pos)
+      new BatchSourceFile(new VirtualFile("<wrapped-expression>"), wrappedExpression.toCharArray) {
+        override def positionInUltimateSource(pos: Position) = {
+          if (!pos.isDefined || pos.start < prefix.size || pos.end > prefix.size + expression.size)
+            super.positionInUltimateSource(pos)
           else pos.withSource(expressionFile).withShift(-prefix.size)
+        }
       }
 
     parse(wrappedExpressionFile)
@@ -176,7 +187,7 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
     newUnitParser(new CompilationUnit(sourceFile)).parse()
 
   private def isOnBreakpoint(tree: Tree): Boolean =
-    tree.pos.isDefined && tree.pos.line + 1 == breakpointLine
+    tree.pos.isDefined && tree.pos.line == breakpointLine
 
   private def mkExprBlock(expr: Tree, tree: Tree): Tree = {
     if (expressionInserted) {
@@ -184,14 +195,14 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
       tree
     } else {
       expressionInserted = true
-      val valDef = ValDef(Modifiers(), expressionTermName, TypeTree(), expr)
+      val valDef = ValDef(Modifiers(), expressionTermName, TypeTree(), expr).setPos(tree.pos)
       // TODO: try remove in Scala 2
       // we insert a fake effect to avoid the constant-folding of the block during the firstTransform phase
       val effect = Apply(
         Select(Select(Ident(TermName("scala")), TermName("Predef")), TermName("print")),
         List(Literal(Constant("")))
-      )
-      Block(List(valDef, effect), tree)
+      ).setPos(tree.pos)
+      Block(List(valDef, effect), tree).setPos(tree.pos)
     }
   }
 

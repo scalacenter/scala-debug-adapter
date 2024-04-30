@@ -1,68 +1,60 @@
 package scala.tools.nsc.evaluation
 
 import scala.tools.nsc.transform.TypingTransformers
-import scala.tools.nsc.transform.InfoTransform
+import scala.tools.nsc.transform.Transform
+import scala.collection.mutable.Buffer
 
 class ExtractExpression(override val global: ExpressionGlobal)
-    extends InfoTransform
+    extends Transform
     with TypingTransformers
     with JavaEncoding {
   import global._
 
   override val phaseName: String = "extract-expression"
-  override val runsAfter: List[String] = List("refchecks")
+  override val runsAfter: List[String] = List("uncurry")
+  override val runsBefore: List[String] = List("fields")
   override val runsRightAfter: Option[String] = None
-
-  override def transformInfo(sym: Symbol, tpe: Type): Type = {
-    // TODO what if the type is private
-    if (isExpressionVal(sym.owner)) sym.owner = evaluateMethod
-    tpe
-  }
 
   override protected def newTransformer(unit: CompilationUnit): Transformer = new Transformer {
     var expressionTree: Tree = null
     override def transform(tree: Tree): Tree = tree match {
-      case PackageDef(pid, stats) =>
-        val evaluationClassDef =
-          stats.find(_.symbol == expressionClass)
+      case packageDef @ PackageDef(_, stats) =>
+        val evaluationClassDef = stats.find(_.symbol == expressionClass)
         val others = stats.filter(_.symbol != expressionClass)
         val transformedStats = (others ++ evaluationClassDef).map(transform)
-        PackageDef(pid, transformedStats)
+        packageDef.copy(stats = transformedStats).copyAttrs(packageDef)
       case tree: ValDef if isExpressionVal(tree.symbol) =>
         expressionTree = tree.rhs
         storeExpression(tree.symbol)
-        unitLiteral
-      case tree: DefDef if tree.symbol == evaluateMethod =>
-        val transformedExpr = new ExpressionTransformer(unit).transform(expressionTree)
-        tree.copy(rhs = transformedExpr)
+        gen.mkLiteralUnit.setType(definitions.UnitTpe)
+      case tree: DefDef if tree.symbol == evaluate =>
+        val transformer = new ExpressionTransformer(unit)
+        val transformedExpr = transformer.transform(expressionTree)
+        transformer.localDefs.foreach(_.owner = evaluate)
+        tree.copy(rhs = transformedExpr).copyAttrs(tree)
       case tree =>
         super.transform(tree)
     }
   }
 
   private class ExpressionTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+    val localDefs = Buffer.empty[Symbol]
     override def transform(tree: Tree): Tree = tree match {
       case tree: Import => tree
 
       case _: Ident | _: Select | _: This if isStaticObject(tree.symbol) =>
-        getStaticObject(tree)(tree.symbol.moduleClass)
+        getStaticObject(tree)(tree.symbol)
 
-      case _: Ident | _: Select | _: This if isInaccessibleNonStaticObject(tree.symbol) =>
+      case _: This | _: Apply if isInaccessibleNonStaticObject(tree.symbol) =>
         val qualifier = getTransformedQualifier(tree)
         callMethod(tree)(qualifier, tree.symbol.asTerm, List.empty)
 
       case tree: Ident if isLocalVariable(tree.symbol) =>
-        if (tree.symbol.isLazy) {
-          // TODO try fix in Scala 2
-          reporter.error(tree.pos, "Evaluation of local lazy val not supported")
-          tree
-        } else {
-          getCapturer(tree.symbol.asTerm) match {
-            case Some(capturer) =>
-              if (capturer.isClass) getClassCapture(tree)(tree.symbol, capturer.asClass)
-              else getMethodCapture(tree)(tree.symbol, capturer.asTerm)
-            case None => getLocalValue(tree)(tree.symbol)
-          }
+        getCapturer(tree.symbol.asTerm) match {
+          case Some(capturer) =>
+            if (capturer.isClass) getClassCapture(tree)(tree.symbol, capturer.asClass)
+            else getMethodCapture(tree)(tree.symbol, capturer.asTerm)
+          case None => getLocalValue(tree)(tree.symbol)
         }
 
       case tree @ Assign(lhs, _) if isLocalVariable(lhs.symbol) =>
@@ -76,18 +68,14 @@ class ExtractExpression(override val global: ExpressionGlobal)
         }
 
       case tree: Select if isInaccessibleField(tree) =>
-        if (isJavaStatic(tree.symbol)) getField(tree)(nullLiteral, tree.symbol.asTerm)
+        if (isJavaStatic(tree.symbol)) getField(tree)(mkNullLiteral, tree.symbol.asTerm)
         else {
           val qualifier = getTransformedQualifier(tree)
           getField(tree)(qualifier, tree.symbol.asTerm)
         }
 
-      case tree @ Assign(lhs, rhs) if isInaccessibleField(lhs) =>
-        if (isJavaStatic(tree.symbol)) setField(tree)(nullLiteral, lhs.symbol.asTerm, transform(rhs))
-        else {
-          val qualifier = getTransformedQualifier(lhs)
-          setField(tree)(qualifier, lhs.symbol.asTerm, transform(rhs))
-        }
+      case tree @ Assign(lhs, rhs) if isInaccessibleField(lhs) && isJavaStatic(lhs.symbol) =>
+        setField(tree)(mkNullLiteral, lhs.symbol.asTerm, transform(rhs))
 
       case This(name) if !tree.symbol.hasPackageFlag && !isOwnedByExpression(tree.symbol) =>
         thisOrOuterValue(tree)(tree.symbol.enclClass.asClass)
@@ -99,7 +87,7 @@ class ExtractExpression(override val global: ExpressionGlobal)
 
       case _: Ident | _: Select | _: Apply | _: TypeApply if isInaccessibleMethod(tree) =>
         val args = getTransformedArgs(tree)
-        if (isJavaStatic(tree.symbol)) callMethod(tree)(nullLiteral, tree.symbol.asTerm, args)
+        if (isJavaStatic(tree.symbol)) callMethod(tree)(mkNullLiteral, tree.symbol.asTerm, args)
         else {
           val qualifier = getTransformedQualifier(tree)
           callMethod(tree)(qualifier, tree.symbol.asTerm, args)
@@ -107,6 +95,12 @@ class ExtractExpression(override val global: ExpressionGlobal)
 
       case Typed(tree, tpt) if tpt.symbol.isType && !isTypeAccessible(tpt.symbol.asType) =>
         transform(tree)
+
+      case tree @ (_: DefTree | _: Function) if tree.symbol.owner == expressionVal =>
+        localDefs += tree.symbol
+        if (tree.symbol.isModule) localDefs += tree.symbol.moduleClass
+        super.transform(tree)
+
       case tree =>
         super.transform(tree)
     }
@@ -134,7 +128,7 @@ class ExtractExpression(override val global: ExpressionGlobal)
     }
 
     private def isRealMethod(symbol: Symbol): Boolean =
-      symbol.isMethod && !symbol.isAccessor && !symbol.isAnonymousFunction
+      symbol.isMethod && !symbol.isAnonymousFunction
 
     /**
      * The symbol is a constructor and the expression class cannot access it
@@ -149,14 +143,13 @@ class ExtractExpression(override val global: ExpressionGlobal)
 
     private def getCapturer(variable: TermSymbol): Option[Symbol] = {
       // a local variable can be captured by a class or method
-      val candidates = expressionSymbol.ownersIterator
+      val candidates = expressionVal.ownersIterator
         .takeWhile(_ != variable.owner)
         .filter(s => s.isClass || s.isMethod)
         .toSeq
-      candidates
-        .reverseIterator
+      candidates.reverseIterator
         .find(_.isClass)
-        .orElse(candidates.find(_.isMethod))
+        .orElse(candidates.find(s => s.isMethod))
     }
 
     private def getTransformedArgs(tree: Tree): List[Tree] = tree match {
@@ -197,7 +190,12 @@ class ExtractExpression(override val global: ExpressionGlobal)
           thisOrOuterValue(typeTree)(typeTree.symbol.owner.enclClass.asClass)
         case prefix: ThisType =>
           thisOrOuterValue(typeTree)(prefix.sym.asClass)
-        case SingleType(pre, sym) => transform(Select(transformPrefix(pre), sym))
+        case SingleType(ThisType(pre), sym) if pre.isPackageClass =>
+          transform(gen.mkAttributedIdent(sym))
+        case SingleType(NoPrefix, sym) =>
+          transform(gen.mkAttributedIdent(sym))
+        case SingleType(pre, sym) =>
+          transform(gen.mkAttributedSelect(transformPrefix(pre), sym))
       }
       typeTree.tpe match {
         case TypeRef(prefix, _, _) => transformPrefix(prefix)
@@ -216,105 +214,103 @@ class ExtractExpression(override val global: ExpressionGlobal)
             if (innerObj == ths && localVariables.contains("$outer")) getLocalOuter(tree)(outerSym)
             else getOuter(tree)(innerObj, outerSym)
           }
-      else nullLiteral
+      else mkNullLiteral
     }
 
     private def getThis(tree: Tree)(cls: ClassSymbol): Tree =
-      reflectEval(tree)(nullLiteral, EvaluationStrategy.This(cls), List.empty, classOwners.head.toType)
+      callReflectEval(tree)(mkNullLiteral, EvaluationStrategy.This(cls), List.empty, classOwners.head.toType)
 
     private def getLocalOuter(tree: Tree)(outerCls: ClassSymbol): Tree = {
       val strategy = EvaluationStrategy.LocalOuter(outerCls)
-      reflectEval(tree)(nullLiteral, strategy, List.empty, outerCls.tpe)
+      callReflectEval(tree)(mkNullLiteral, strategy, List.empty, outerCls.tpe)
     }
 
     private def getOuter(tree: Tree)(qualifier: Tree, outerCls: ClassSymbol): Tree = {
       val strategy = EvaluationStrategy.Outer(outerCls)
-      reflectEval(tree)(qualifier, strategy, List.empty, outerCls.tpe)
+      callReflectEval(tree)(qualifier, strategy, List.empty, outerCls.tpe)
     }
 
     private def getLocalValue(tree: Tree)(variable: Symbol): Tree = {
       val isByName = isByNameParam(variable.info)
       val strategy = EvaluationStrategy.LocalValue(variable.asTerm, isByName)
-      reflectEval(tree)(nullLiteral, strategy, List.empty, tree.tpe)
+      callReflectEval(tree)(mkNullLiteral, strategy, List.empty, tree.tpe)
     }
 
     private def isByNameParam(tpe: Type): Boolean = tpe.typeSymbol == definitions.ByNameParamClass
 
     private def setLocalValue(tree: Tree)(variable: Symbol, rhs: Tree): Tree = {
       val strategy = EvaluationStrategy.LocalValueAssign(variable.asTerm)
-      reflectEval(tree)(nullLiteral, strategy, List(rhs), tree.tpe)
+      callReflectEval(tree)(mkNullLiteral, strategy, List(rhs), tree.tpe)
     }
 
     private def getClassCapture(tree: Tree)(variable: Symbol, cls: ClassSymbol): Tree = {
       val byName = isByNameParam(variable.info)
       val strategy = EvaluationStrategy.ClassCapture(variable.asTerm, cls, byName)
       val qualifier = thisOrOuterValue(tree)(cls)
-      reflectEval(tree)(qualifier, strategy, List.empty, tree.tpe)
+      callReflectEval(tree)(qualifier, strategy, List.empty, tree.tpe)
     }
 
     private def setClassCapture(tree: Tree)(variable: Symbol, cls: ClassSymbol, value: Tree) = {
       val strategy = EvaluationStrategy.ClassCaptureAssign(variable.asTerm, cls)
       val qualifier = thisOrOuterValue(tree)(cls)
-      reflectEval(tree)(qualifier, strategy, List(value), tree.tpe)
+      callReflectEval(tree)(qualifier, strategy, List(value), tree.tpe)
     }
 
     private def getMethodCapture(tree: Tree)(variable: Symbol, method: TermSymbol): Tree = {
       val isByName = isByNameParam(variable.info)
       val strategy =
         EvaluationStrategy.MethodCapture(variable.asTerm, method.asTerm, isByName)
-      reflectEval(tree)(nullLiteral, strategy, List.empty, tree.tpe)
+      callReflectEval(tree)(mkNullLiteral, strategy, List.empty, tree.tpe)
     }
 
     private def setMethodCapture(tree: Tree)(variable: Symbol, method: Symbol, value: Tree) = {
-      val strategy =
-        EvaluationStrategy.MethodCaptureAssign(variable.asTerm, method.asTerm)
-      reflectEval(tree)(nullLiteral, strategy, List(value), tree.tpe)
+      val strategy = EvaluationStrategy.MethodCaptureAssign(variable.asTerm, method.asTerm)
+      callReflectEval(tree)(mkNullLiteral, strategy, List(value), tree.tpe)
     }
 
     private def getStaticObject(tree: Tree)(obj: Symbol): Tree = {
-      val strategy = EvaluationStrategy.StaticObject(obj.asClass)
-      reflectEval(tree)(nullLiteral, strategy, List.empty, obj.tpe)
+      val cls = if (obj.isClass) obj.asClass else obj.moduleClass.asClass
+      val strategy = EvaluationStrategy.StaticObject(cls)
+      callReflectEval(tree)(mkNullLiteral, strategy, List.empty, obj.tpe)
     }
 
     private def getField(tree: Tree)(qualifier: Tree, field: TermSymbol): Tree = {
       val byName = isByNameParam(field.info)
       val strategy = EvaluationStrategy.Field(field, byName)
-      reflectEval(tree)(qualifier, strategy, List.empty, tree.tpe)
+      callReflectEval(tree)(qualifier, strategy, List.empty, tree.tpe.resultType)
     }
 
     private def setField(tree: Tree)(qualifier: Tree, field: TermSymbol, rhs: Tree): Tree = {
       val strategy = EvaluationStrategy.FieldAssign(field)
-      reflectEval(tree)(qualifier, strategy, List(rhs), tree.tpe)
+      callReflectEval(tree)(qualifier, strategy, List(rhs), tree.tpe)
     }
 
     private def callMethod(tree: Tree)(qualifier: Tree, method: TermSymbol, args: List[Tree]): Tree = {
       val strategy = EvaluationStrategy.MethodCall(method)
-      reflectEval(tree)(qualifier, strategy, args, tree.tpe)
+      callReflectEval(tree)(qualifier, strategy, args, tree.tpe)
     }
 
     private def callConstructor(tree: Tree)(qualifier: Tree, ctr: TermSymbol, args: List[Tree]): Tree = {
       val strategy = EvaluationStrategy.ConstructorCall(ctr, ctr.owner.asClass)
-      reflectEval(tree)(qualifier, strategy, args, tree.tpe)
+      callReflectEval(tree)(qualifier, strategy, args, tree.tpe)
     }
 
-    private def reflectEval(
+    private def callReflectEval(
         tree: Tree
     )(qualifier: Tree, strategy: EvaluationStrategy, args: List[Tree], tpe: Type): Tree = {
       val attachments = tree.attachments.addElement(strategy)
-      val reflectEval = treeCopy
-        .Apply(
-          tree,
-          fun = Select(This(expressionClass), TermName("reflectEval")),
-          args = List(
-            qualifier,
-            Literal(Constant(strategy.toString)),
-            ArrayValue(TypeTree(definitions.ObjectTpe), args)
-          )
+      val methodCall = gen
+        .mkMethodCall(
+          reflectEval,
+          List(qualifier, mkStringLiteral(strategy.toString), mkObjectArray(args))
         )
+        .setType(definitions.AnyTpe)
+        .setPos(tree.pos)
         .setAttachments(attachments)
       val widenDealiasTpe = tpe.dealiasWiden
-      if (isTypeAccessible(widenDealiasTpe.typeSymbol.asType)) gen.mkAsInstanceOf(reflectEval, widenDealiasTpe)
-      else reflectEval
+      if (isTypeAccessible(widenDealiasTpe.typeSymbol.asType)) {
+        gen.mkCast(methodCall, widenDealiasTpe).setType(widenDealiasTpe)
+      } else methodCall
     }
   }
 
@@ -323,10 +319,10 @@ class ExtractExpression(override val global: ExpressionGlobal)
   private def isJavaStatic(sym: Symbol): Boolean = sym.isJava && sym.isStatic
 
   private def isStaticObject(symbol: Symbol): Boolean =
-    symbol.isModule && symbol.isStatic && !symbol.isJava && !symbol.isRoot
+    symbol.isModuleOrModuleClass && symbol.isStatic && !symbol.isJava && !symbol.isRoot
 
   private def isInaccessibleNonStaticObject(symbol: Symbol): Boolean =
-    symbol.isModule && !symbol.isStatic && !symbol.isRoot && !isOwnedByExpression(symbol)
+    symbol.isModuleOrModuleClass && !symbol.isStatic && !symbol.isRoot && !isOwnedByExpression(symbol)
 
   private def isLocalVariable(symbol: Symbol): Boolean =
     !symbol.isMethod && symbol.isLocalToBlock && !isOwnedByExpression(symbol)
@@ -344,5 +340,5 @@ class ExtractExpression(override val global: ExpressionGlobal)
     )
 
   private def isOwnedByExpression(symbol: Symbol): Boolean =
-    symbol.ownersIterator.exists(_ == evaluateMethod)
+    symbol.ownersIterator.exists(_ == expressionVal)
 }

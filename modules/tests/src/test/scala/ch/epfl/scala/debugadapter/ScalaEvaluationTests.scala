@@ -121,7 +121,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.success("this.a1", "a1"),
         Evaluation.success("A.this.a1", "a1"),
         Evaluation.success("a2", "a2"),
-        Evaluation.successOrIgnore("a3", "a3", ignore = isScala2),
+        Evaluation.success("a3", "a3"),
         Evaluation.success("a4", "a4"),
         Evaluation.success("B.b1", "b1"),
         Evaluation.success("this.B.b1", "b1"),
@@ -212,8 +212,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       DebugStepAssert.inParallel(
         Evaluation.success("b1", "b1"),
         Evaluation.success("b2(\"foo\")", "b2: foo"),
-        Evaluation.successOrIgnore("a1", "a1", ignore = isScala2),
-        Evaluation.successOrIgnore("a2(\"foo\")", "a2: foo", ignore = isScala2)
+        Evaluation.success("a1", "a1"),
+        Evaluation.success("a2(\"foo\")", "a2: foo")
       )
     )
   }
@@ -262,7 +262,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.success("this.name", "a"),
         Evaluation.success("a1", "a.a1"),
         Evaluation.success("a2", "a.a2"),
-        Evaluation.successOrIgnore("new A(\"aa\", 2).a2", "aa.a2", isScala2),
+        Evaluation.success("new A(\"aa\", 2).a2", "aa.a2"),
         Evaluation.success("B.b1", "a.B.b1"),
         Evaluation.success("this.B.b1", "a.B.b1"),
         Evaluation.success("C.c1", "a.C.c1"),
@@ -339,14 +339,14 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.success("m(5)", "m(5: Int)"),
         Evaluation.success("m(true)", "m(true: Boolean)"),
         Evaluation.success("m(\"foo\")", "m(foo: String)"),
-        Evaluation.successOrIgnore("m(new B)", "m(b: B)", isScala2),
-        Evaluation.successOrIgnore("m(new B: A)", "m(a: A)", isScala2),
-        Evaluation.successOrIgnore("m(Array(1, 2))", "m(xs: Array[Int])", isScala2),
-        Evaluation.successOrIgnore("m(Array[A](new B))", "m(xs: Array[A])", isScala2),
-        Evaluation.successOrIgnore("m(Array(Array(1), Array(2)))", "m(xs: Array[Array[Int]])", isScala2),
-        Evaluation.successOrIgnore("m1(Seq(1, 2, 3))", "List(1, 2, 3)", isScala2),
-        Evaluation.successOrIgnore("m1(Vector(1, 2, 3))", "Vector(1, 2, 3)", isScala2),
-        Evaluation.successOrIgnore("m1(Seq(true, false, true))", 2, isScala2)
+        Evaluation.success("m(new B)", "m(b: B)"),
+        Evaluation.success("m(new B: A)", "m(a: A)"),
+        Evaluation.success("m(Array(1, 2))", "m(xs: Array[Int])"),
+        Evaluation.success("m(Array[A](new B))", "m(xs: Array[A])"),
+        Evaluation.success("m(Array(Array(1), Array(2)))", "m(xs: Array[Array[Int]])"),
+        Evaluation.success("m1(Seq(1, 2, 3))", "List(1, 2, 3)"),
+        Evaluation.success("m1(Vector(1, 2, 3))", "Vector(1, 2, 3)"),
+        Evaluation.success("m1(Seq(true, false, true))", 2)
       )
     )
   }
@@ -387,14 +387,14 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(
       Breakpoint(5),
       DebugStepAssert.inParallel(
-        Evaluation.success("a1()")(result => assert(result.startsWith("A$B@"))),
+        Evaluation.success("a1()", ObjectRef("A$B")),
         Evaluation.success("(new B).b1", "b1"),
         Evaluation.success("(new A.B).b2()", "b2"),
         Evaluation.success("a2(new B)", "a2")
       ),
       Breakpoint(20),
       DebugStepAssert.inParallel(
-        Evaluation.success("c2()")(result => assert(result.startsWith("C$D@"))),
+        Evaluation.success("c2()", ObjectRef("C$D")),
         Evaluation.success("(new D).d1", "d1"),
         Evaluation.success("(new this.D).d2()", "d2"),
         Evaluation.success("c3(new D)", "c3")
@@ -423,9 +423,9 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
     check(
       Breakpoint(6),
-      Evaluation.success("new b.C")(result => assert(result.startsWith("B$C@"))),
+      Evaluation.success("new b.C", ObjectRef("B$C")),
       Breakpoint(13),
-      Evaluation.success("new C")(result => assert(result.startsWith("B$C@")))
+      Evaluation.success("new C", ObjectRef("B$C"))
     )
   }
 
@@ -458,7 +458,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(
       Breakpoint(11),
       Evaluation.success("x1 + x2 + x3", "ax1bx2x3"),
-      Evaluation.successOrIgnore("x1 + A.this.x2 + this.x3", "ax1ax2bx3", isScala2)
+      Evaluation.success("x1 + A.this.x2 + this.x3", "ax1ax2bx3")
     )
   }
 
@@ -516,7 +516,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(7), Evaluation.success("a1", noSuchFieldError))
+    check(
+      Breakpoint(7),
+      Evaluation.success("a1", if (isScala3) new NoSuchFieldException("$outer") else ObjectRef("NullPointerException"))
+    )
   }
 
   test("evaluate from an local class") {
@@ -551,12 +554,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Breakpoint(11),
       DebugStepAssert.inParallel(
         // B captures the local value x1
-        Evaluation.successOrIgnore("new B", ObjectRef("A$B$1"), isScala2),
+        Evaluation.success("new B", ObjectRef("A$B$1")),
         // x1 is captured by B
-        Evaluation.successOrIgnore("x1", "x1", isScala2),
+        Evaluation.success("x1", "x1"),
         Evaluation.success("x2", "x2"),
-        Evaluation.successOrIgnore("A.this.x1", "ax1", isScala2),
-        Evaluation.successOrIgnore("this.x2", "bx2", isScala2)
+        Evaluation.success("A.this.x1", "ax1"),
+        Evaluation.success("this.x2", "bx2")
       )
     )
   }
@@ -610,13 +613,13 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Breakpoint(18),
       DebugStepAssert.inParallel(
         Evaluation.success("m1(\"x\")", "m1(x)"),
-        Evaluation.success("m3()")(result => assert(result.startsWith("A$B@"))),
+        Evaluation.success("m3()", ObjectRef("A$B")),
         Evaluation.success("m2(new B)", "m2(b)")
       ),
       Breakpoint(39),
       DebugStepAssert.inParallel(
         Evaluation.success("m1(\"x\")", "m1(x)"),
-        Evaluation.success("m3()")(result => assert(result.startsWith("C$D@"))),
+        Evaluation.success("m3()", ObjectRef("C$D")),
         Evaluation.success("m2(new D)", "m2(d)")
       )
     )
@@ -843,7 +846,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(config = defaultConfig.copy(testMode = false))(
       Breakpoint(30), // in A#m
       DebugStepAssert.inParallel(
-        Evaluation.success("new B")(result => assert(result.startsWith("A$B$1@"))), // captures x1
+        Evaluation.success("new B", ObjectRef("A$B$1")), // captures x1
         Evaluation.success("(new B).m()", "x1")
       ),
       Breakpoint(25), // in B#m
@@ -851,8 +854,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.success("x1", "x1"), // captured by B
         Evaluation.success("m()", "x1x2"), // captures x2
         Evaluation.success("this.m()", "x1"),
-        Evaluation.success("A.this.m()", noSuchFieldError),
-        Evaluation.successOrIgnore("new B", isScala2)(result => assert(result.startsWith("A$B$1@")))
+        Evaluation.success(
+          "A.this.m()",
+          if (isScala3) new NoSuchFieldException("$outer") else ObjectRef("NullPointerException")
+        ),
+        Evaluation.success("new B", ObjectRef("A$B$1"))
       ), // captures x1
       Breakpoint(22), // in B#m#m
       DebugStepAssert.inParallel(
@@ -860,37 +866,35 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.success("x2", "x2"), // captured by m
         Evaluation.success("m()", "x1x2"), // captures x2
         Evaluation.success("this.m()", "x1"), // captures x2
-        Evaluation.successOrIgnore("new B", isScala2)(result => assert(result.startsWith("A$B$1@"))), // captures x1
-        Evaluation.success("new C")(result => assert(result.startsWith("A$B$1$C$1@"))), // captures x2 and x3
+        Evaluation.success("new B", ObjectRef("A$B$1")), // captures x1
+        Evaluation.success("new C", ObjectRef("A$B$1$C$1")), // captures x2 and x3
         Evaluation.success("(new C).m()", "x1x2x3")
       ), // captures x2 and x3
       Breakpoint(17), // in C#m
       DebugStepAssert.inParallel(
-        Evaluation.successOrIgnore("x1", "x1", ignore = isScala2), // captured by B => $this.$outer.x1$1
-        Evaluation.successOrIgnore("x2", "x2", ignore = isScala2), // captured by C => $this.x2$1
-        Evaluation.successOrIgnore("x3", "x3", ignore = isScala2), // captured by C => $this.x3$1
+        Evaluation.success("x1", "x1"), // captured by B => $this.$outer.x1$1
+        Evaluation.success("x2", "x2"), // captured by C => $this.x2$1
+        Evaluation.success("x3", "x3"), // captured by C => $this.x3$1
         Evaluation.success("m()", "x1x2x3x4"), // captures x4
         Evaluation.success("this.m()", "x1x2x3"),
-        Evaluation.successOrIgnore("B.this.m()", "x1", isScala2),
+        Evaluation.success("B.this.m()", "x1"),
         // captures x2 and x3
-        Evaluation.successOrIgnore("new C", isScala2)(result => assert(result.startsWith("A$B$1$C$1@"))),
-        Evaluation.successOrIgnore("new B", isScala2)(result => assert(result.startsWith("A$B$1@"))), // captures x1
-        Evaluation.success("new A")(result => assert(result.startsWith("A@")))
+        Evaluation.success("new C", ObjectRef("A$B$1$C$1")),
+        Evaluation.success("new B", ObjectRef("A$B$1")), // captures x1
+        Evaluation.success("new A", ObjectRef("A"))
       ),
       Breakpoint(15), // in C#m#m
       DebugStepAssert.inParallel(
-        Evaluation.successOrIgnore("x1", "x1", ignore = isScala2), // captured by B => $this.$outer.x1$1
-        Evaluation.successOrIgnore("x2", "x2", ignore = isScala2), // captured by C => $this.x2$1
-        Evaluation.successOrIgnore("x3", "x3", ignore = isScala2), // captured by C => $this.x3$1
+        Evaluation.success("x1", "x1"), // captured by B => $this.$outer.x1$1
+        Evaluation.success("x2", "x2"), // captured by C => $this.x2$1
+        Evaluation.success("x3", "x3"), // captured by C => $this.x3$1
         Evaluation.success("x4", "x4"), // captured by D => local x4$1
         Evaluation.success("m()", "x1x2x3x4"), // captures x4
         Evaluation.success("this.m()", "x1x2x3"),
-        Evaluation.successOrIgnore("B.this.m()", "x1", isScala2),
-        Evaluation.successOrIgnore("new C", isScala2)(result =>
-          assert(result.startsWith("A$B$1$C$1@"))
-        ), // captures x2 and x3
-        Evaluation.successOrIgnore("new B", isScala2)(result => assert(result.startsWith("A$B$1@"))), // captures x1
-        Evaluation.success("new A")(result => assert(result.startsWith("A@")))
+        Evaluation.success("B.this.m()", "x1"),
+        Evaluation.success("new C", ObjectRef("A$B$1$C$1")), // captures x2 and x3
+        Evaluation.success("new B", ObjectRef("A$B$1")), // captures x1
+        Evaluation.success("new A", ObjectRef("A"))
       )
     )
   }
@@ -966,16 +970,16 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.success("x", 1),
         Evaluation.success("u", 1),
         Evaluation.success("y", 1),
-        Evaluation.successOrIgnore("x = 2", (), isScala2),
-        Evaluation.successOrIgnore("x", 2, isScala2),
-        Evaluation.successOrIgnore("x = x - 1", (), isScala2),
-        Evaluation.successOrIgnore("x", 1, isScala2),
-        Evaluation.successOrIgnore("x *= 2", (), isScala2),
-        Evaluation.successOrIgnore("x", 2, isScala2),
-        Evaluation.successOrIgnore("u = 2; u", 2, isScala2),
-        Evaluation.successOrIgnore("u", 2, isScala2),
+        Evaluation.success("x = 2", ()),
+        Evaluation.success("x", 2),
+        Evaluation.success("x = x - 1", ()),
+        Evaluation.success("x", 1),
+        Evaluation.success("x *= 2", ()),
+        Evaluation.success("x", 2),
+        Evaluation.success("u = 2; u", 2),
+        Evaluation.success("u", 2),
         Evaluation.success("y += 1", ()),
-        Evaluation.success("new B")(result => assert(result.startsWith("A$B$1@"))),
+        Evaluation.success("new B", ObjectRef("A$B$1")),
         Evaluation.success("yy()", 3)
       ),
       Breakpoint(11),
@@ -986,8 +990,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Breakpoint(16),
       // captured by class B
       DebugStepAssert.inParallel(
-        Evaluation.successOrIgnore("z", 1, isScala2),
-        Evaluation.successOrIgnore("z += 1; z", 2, isScala2)
+        Evaluation.success("z", 1),
+        Evaluation.success("z += 1; z", 2)
       )
     )
   }
@@ -1014,15 +1018,9 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(7),
-      Evaluation.successOrIgnore("x", 1, isScala2),
-      if (isScala3) Evaluation.failed("y", "local lazy val not supported")
-      else Evaluation.success("y", 2),
-      Evaluation.successOrIgnore(
-        """|lazy val z = 2
-           |z""".stripMargin,
-        2,
-        isScala2
-      )
+      Evaluation.success("x", 1),
+      if (isScala3) Evaluation.failed("y", "local lazy val not supported") else Evaluation.success("y", 2),
+      Evaluation.success("lazy val z = 2\nz", 2)
     )
   }
 
@@ -1062,13 +1060,13 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(
       Breakpoint(9),
       DebugStepAssert.inParallel(
-        Evaluation.successOrIgnore("x", "x", isScala2),
-        Evaluation.successOrIgnore("this.x", "x", isScala2),
-        Evaluation.successOrIgnore("y", "y", isScala2),
-        Evaluation.successOrIgnore("this.y = \"yy\"", (), isScala2),
-        Evaluation.successOrIgnore("y", "yy", isScala2),
-        Evaluation.successOrIgnore("z", "z", isScala2),
-        Evaluation.successOrIgnore("m2", "yyz", isScala2)
+        Evaluation.success("x", "x"),
+        Evaluation.success("this.x", "x"),
+        Evaluation.success("y", "y"),
+        Evaluation.success("this.y = \"yy\"", ()),
+        Evaluation.success("y", "yy"),
+        Evaluation.success("z", "z"),
+        Evaluation.success("m2", "yyz")
       ),
       Breakpoint(16),
       Evaluation.success("x", "x")
@@ -1113,10 +1111,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.success("m1[A[Int]]", "m1[X]"),
         Evaluation.success("m2[String]", "m2[X]"),
         Evaluation.success("m3(1)(\"x\")", "m3(1)(x)"),
-        Evaluation.successOrIgnore("m4[Int, String](1)(\"x\")", "m4(1)(x)", isScala2),
-        Evaluation.success("new A[String]")(result => assert(result.startsWith("Main$A@"))),
-        Evaluation.success("new B(2)(\"x\")")(result => assert(result.startsWith("Main$B@"))),
-        Evaluation.success("new C[Int, String](2)(\"x\")")(result => assert(result.startsWith("Main$C@")))
+        Evaluation.success("m4[Int, String](1)(\"x\")", "m4(1)(x)"),
+        Evaluation.success("new A[String]", ObjectRef("Main$A")),
+        Evaluation.success("new B(2)(\"x\")", ObjectRef("Main$B")),
+        Evaluation.success("new C[Int, String](2)(\"x\")", ObjectRef("Main$C"))
       )
     )
   }
@@ -1170,19 +1168,19 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       ),
       Breakpoint(24),
       DebugStepAssert.inParallel(
-        Evaluation.successOrIgnore("self", "foo", isScala2),
-        Evaluation.successOrIgnore("m(c)", "fo", isScala2)
+        Evaluation.success("self", "foo"),
+        Evaluation.success("m(c)", "fo")
       ),
       Breakpoint(9),
       DebugStepAssert.inParallel(
-        Evaluation.successOrIgnore("b1 = new B(\"fizz\")", (), isScala2),
-        Evaluation.successOrIgnore("c1 = new C(3)", (), isScala2)
+        Evaluation.success("b1 = new B(\"fizz\")", ()),
+        Evaluation.success("c1 = new C(3)", ())
       ),
       if (isScala2) Breakpoint(24) else NoStep(),
       Breakpoint(24),
       DebugStepAssert.inParallel(
-        Evaluation.successOrIgnore("self", "fizzbar", isScala2),
-        Evaluation.successOrIgnore("m(c)", "fizzb", isScala2)
+        Evaluation.success("self", "fizzbar"),
+        Evaluation.success("m(c)", "fizzb")
       )
     )
   }
@@ -1216,11 +1214,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Breakpoint(10),
       DebugStepAssert.inParallel(
         Evaluation.success("size", 1),
-        Evaluation.successOrIgnore(
+        Evaluation.success(
           """|def size2: Size = new Size(2)
              |getMsg(size2).value""".stripMargin,
-          "He",
-          isScala2
+          "He"
         ),
         Evaluation.success("new Msg(new Size(3)).value", "Hel")
       )
@@ -1254,14 +1251,14 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(
       Breakpoint(14),
       DebugStepAssert.inParallel(
-        Evaluation.success("new A(\"foo\")")(result => assert(result.startsWith("Main$A$1@"))),
+        Evaluation.success("new A(\"foo\")", ObjectRef("Main$A$1")),
         Evaluation.success("m(\"bar\")", "ba")
       ),
       Breakpoint(8),
       DebugStepAssert.inParallel(
-        Evaluation.successOrIgnore("size", 2, isScala2),
-        Evaluation.successOrIgnore("size.value", 2, isScala2),
-        Evaluation.successOrIgnore("new A(\"foo\")", isScala2)(result => assert(result.startsWith("Main$A$1@")))
+        Evaluation.success("size", 2),
+        Evaluation.success("size.value", 2),
+        Evaluation.success("new A(\"foo\")", ObjectRef("Main$A$1"))
       ),
       Breakpoint(12),
       DebugStepAssert.inParallel(
@@ -1314,9 +1311,9 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.success("x", 2),
         Evaluation.success("y = x + new A(1)", ()),
         Evaluation.success("y", 3),
-        Evaluation.successOrIgnore("z += new A(2); z", 3, isScala2),
-        Evaluation.successOrIgnore("z", 3, isScala2),
-        Evaluation.success("new B")(result => assert(result.startsWith("Main$B$1@"))),
+        Evaluation.success("z += new A(2); z", 3),
+        Evaluation.success("z", 3),
+        Evaluation.success("new B", ObjectRef("Main$B$1")),
         Evaluation.success("xx()", 3)
       ),
       Breakpoint(10),
@@ -1327,8 +1324,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Breakpoint(15),
       // captured by class B
       DebugStepAssert.inParallel(
-        Evaluation.successOrIgnore("y", 3, isScala2),
-        Evaluation.successOrIgnore("y += new A(1); y", 4, isScala2)
+        Evaluation.success("y", 3),
+        Evaluation.success("y += new A(1); y", 4)
       )
     )
   }
@@ -1358,15 +1355,15 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(
       Breakpoint(8),
       DebugStepAssert.inParallel(
-        Evaluation.successOrIgnore("this.m(2)", "fofo", isScala2),
-        Evaluation.successOrIgnore("m(3)", "fofofo", isScala2)
+        Evaluation.success("this.m(2)", "fofo"),
+        Evaluation.success("m(3)", "fofofo")
       ),
       Breakpoint(6),
       DebugStepAssert.inParallel(
-        Evaluation.successOrIgnore("self", "foo", isScala2),
-        Evaluation.successOrIgnore("size", 2, isScala2),
-        Evaluation.successOrIgnore("m(1)", "fo", isScala2),
-        Evaluation.successOrIgnore("this.m(1)", "ff", isScala2)
+        Evaluation.success("self", "foo"),
+        Evaluation.success("size", 2),
+        Evaluation.success("m(1)", "fo"),
+        Evaluation.success("this.m(1)", "ff")
       )
     )
   }
@@ -1567,17 +1564,8 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(5),
-      Evaluation.successOrIgnore(
-        """|def m(x: Int) = println(x)
-           |m(1)""".stripMargin,
-        (),
-        isScala2
-      ),
-      Evaluation.successOrIgnore(
-        "def m(x: Int) = println(x); m(1)",
-        (),
-        isScala2
-      )
+      Evaluation.success("def m(x: Int) = println(x)\nm(1)", ()),
+      Evaluation.success("def m(x: Int) = println(x); m(1)", ())
     )
   }
 
@@ -1651,10 +1639,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
-        Evaluation.successOrIgnore("!", "!", isScala2),
-        Evaluation.successOrIgnore("|", "|", isScala2),
+        Evaluation.success("!", "!"),
+        Evaluation.success("|", "|"),
         Evaluation.success("(new <>).toString", "<>"),
-        Evaluation.successOrIgnore("&(\":\")", "&(:)", isScala2)
+        Evaluation.success("&(\":\")", "&(:)")
       )
     )
   }
@@ -1703,7 +1691,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Breakpoint(7),
         Evaluation.success("b", "b"),
         Breakpoint(9),
-        Evaluation.successOrIgnore("list.size", 0, isScala2)
+        Evaluation.success("list.size", 0)
       )
     }
   }
@@ -1739,29 +1727,26 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(
-        Evaluation.successOrIgnore(
+        Evaluation.success(
           """|class A(a: Int) {
              |  override def toString(): String = s"A($a)"
              |}
              |new A(1).toString""".stripMargin,
-          "A(1)",
-          isScala2
+          "A(1)"
         ),
-        Evaluation.successOrIgnore(
+        Evaluation.success(
           """|case class A() {
              |  override def toString(): String = "A"
              |}
              |A().toString""".stripMargin,
-          "A",
-          isScala2
+          "A"
         ),
-        Evaluation.successOrIgnore(
+        Evaluation.success(
           """|class A() {
              |  def getMsg: String = msg
              |}
-             |A().getMsg""".stripMargin,
-          "Hello, World!",
-          isScala2
+             |new A().getMsg""".stripMargin,
+          "Hello, World!"
         )
       )
     )
@@ -1783,10 +1768,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
-      Breakpoint(5),
-      Evaluation.successOrIgnore("foo(1)", isScala2)(result => assert(result.contains("AssertionError@")))
-    )
+    check(Breakpoint(5), Evaluation.success("foo(1)", ObjectRef("AssertionError")))
   }
 
   test("evaluate on block") {
@@ -1842,13 +1824,13 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(11),
-      Evaluation.successOrIgnore("x", true, isScala2),
+      Evaluation.success("x", true),
       Breakpoint(13),
-      Evaluation.successOrIgnore("x", true, isScala2),
+      Evaluation.success("x", true),
       Breakpoint(17),
-      Evaluation.successOrIgnore("x", true, isScala2),
+      Evaluation.success("x", true),
       Breakpoint(27),
-      Evaluation.successOrIgnore("x", "foo", isScala2)
+      Evaluation.success("x", "foo")
     )
   }
 
@@ -1918,11 +1900,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     else
       check(
         Breakpoint(7),
-        Evaluation.ignore("list(0)", 1),
+        Evaluation.success("list(0)", 1),
         Breakpoint(8),
         DebugStepAssert.inParallel(Evaluation.success("list(0)", 1), Evaluation.success("x", 1)),
         Breakpoint(9),
-        Evaluation.ignore("x + y", 2),
+        Evaluation.success("x + y", 2),
         Breakpoint(8),
         Breakpoint(9),
         Breakpoint(8),
@@ -1930,7 +1912,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Evaluation.successOrIgnore("x", 1, isScala212),
         if (isScala212) Breakpoint(13) else NoStep(),
         Breakpoint(15),
-        Evaluation.ignore("x", 1),
+        Evaluation.success("list(0)", 1),
         Breakpoint(15),
         Breakpoint(16),
         Evaluation.success("list(0)", 1),
@@ -1955,7 +1937,12 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     // a pure expression does nothing in statement position
-    check(Breakpoint(8), Evaluation.successOrIgnore("m", 1, ignore = isScala2))
+    check(
+      Breakpoint(8),
+      // TODO fix in Scala 2, declare x1 as local variable
+      Evaluation.successOrIgnore("m", 1, isScala2),
+      Evaluation.success("n", 1)
+    )
   }
 
   test("i425") {
@@ -2018,7 +2005,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     )
   }
 
-  test("i485: $outer from contstructor") {
+  test("i485: $outer from constructor") {
     val source =
       """|package example
          |
@@ -2087,10 +2074,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       TestingDebuggee.mainClass(scalaSource, "example.Main", scalaVersion, Seq.empty, Seq(javaModule.mainModule))
     check(
       Breakpoint(5),
-      Evaluation.successOrIgnore("A.x", "x", isScala2),
-      Evaluation.successOrIgnore("A.x = \"y\"", (), isScala2),
-      Evaluation.successOrIgnore("A.x", "y", isScala2),
-      Evaluation.successOrIgnore("A.m()", "m", isScala2)
+      Evaluation.success("A.x", "x"),
+      Evaluation.success("A.x = \"y\"", ()),
+      Evaluation.success("A.x", "y"),
+      Evaluation.success("A.m()", "m")
     )
   }
 
@@ -2159,7 +2146,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
 
-    val scala2Debugee = TestingDebuggee.mainClass(scala2Source, "example.Sender", scalaVersion)
+    val scala2Debuggee = TestingDebuggee.mainClass(scala2Source, "example.Sender", scalaVersion)
     val scala3Source =
       """|package example
          |
@@ -2176,10 +2163,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       "example.Main",
       ScalaVersion.`3.3`,
       Seq.empty,
-      Seq(scala2Debugee.mainModule)
+      Seq(scala2Debuggee.mainModule)
     )
     check(
-      Breakpoint(scala2Debugee.sourceFiles.head, 7),
+      Breakpoint(scala2Debuggee.sourceFiles.head, 7),
       Evaluation.success("msg.asInstanceOf[Scala3Msg].msg", "Hello")
     )
   }
@@ -2673,7 +2660,4 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(6), if (isScala2) Breakpoint(6) else NoStep(), Evaluation.success("msg", "hello"))
   }
-
-  private def noSuchFieldError(implicit ctx: TestingContext): Throwable =
-    if (isScala3) new NoSuchFieldException("$outer") else new NoSuchFieldError("$outer")
 }

@@ -93,7 +93,7 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
                 else getMethodCapture(tree)(tree.symbol, capturer.asTerm)
               case None => getLocalValue(tree)(tree.symbol)
 
-        // assignement to local variable
+        // assignment to local variable
         case tree @ Assign(lhs, _) if isLocalVariable(lhs.symbol) =>
           val variable = lhs.symbol.asTerm
           val rhs = transform(tree.rhs)

@@ -11,6 +11,7 @@ private[nsc] class ExpressionGlobal(
     val breakpointLine: Int,
     val expression: String,
     val localVariables: Set[String],
+    val pckg: String,
     val testMode: Boolean
 ) extends Global(settings, reporter) {
   override protected def computeInternalPhases(): Unit = {
@@ -18,26 +19,29 @@ private[nsc] class ExpressionGlobal(
 
     addToPhasesSet(
       new InsertExpression(this),
-      "Insert expression in the debugged source file"
+      "Inserts expression in the debugged source file"
     )
     addToPhasesSet(
       new ExtractExpression(this),
-      "Extract the expression from the debugged source file to the Expression class"
+      "Extracts the expression from the debugged source file to the Expression class"
+    )
+    addToPhasesSet(
+      new ResolveReflectEval(this),
+      "Transforms all reflectEval to an actual reflective call"
     )
   }
 
   val expressionTermName: TermName = TermName(uniqueName.toLowerCase.toString)
   val expressionClassName: TypeName = TypeName(uniqueName)
 
-  var pckg: String = null
-  var expressionSymbol: TermSymbol = null
+  var expressionVal: TermSymbol = null
   // all classes and def in the chain of owners of the expression from local to global
   // we store them to resolve the captured variables
   var classOwners: Seq[ClassSymbol] = null
   var capturingMethod: Option[TermSymbol] = None
 
   def storeExpression(exprSym: Symbol): Unit = {
-    expressionSymbol = exprSym.asTerm
+    expressionVal = exprSym.asTerm
     classOwners = exprSym.ownersIterator.collect { case cls: ClassSymbol => cls }.toSeq
     // TODO: Add test from logicallyEnclosingMember scaladoc
     capturingMethod = exprSym.ownersIterator
@@ -47,15 +51,34 @@ private[nsc] class ExpressionGlobal(
       .collect { case sym if sym.isMethod => sym.asTerm } // if it is a method
   }
 
-  def expressionClass: ClassSymbol =
+  // definitions
+  lazy val expressionClass: ClassSymbol =
     if (pckg.isEmpty) rootMirror.getRequiredClass(expressionClassName.toString)
     else rootMirror.getRequiredClass(s"$pckg.$expressionClassName")
+  lazy val evaluate: TermSymbol = expressionDecl("evaluate")
+  lazy val reflectEval: TermSymbol = expressionDecl("reflectEval")
+  lazy val getThisObject: TermSymbol = expressionDecl("getThisObject")
+  lazy val getLocalValue: TermSymbol = expressionDecl("getLocalValue")
+  lazy val setLocalValue: TermSymbol = expressionDecl("setLocalValue")
+  lazy val getOuter: TermSymbol = expressionDecl("getOuter")
+  lazy val getStaticObject: TermSymbol = expressionDecl("getStaticObject")
+  lazy val getField: TermSymbol = expressionDecl("getField")
+  lazy val setField: TermSymbol = expressionDecl("setField")
+  lazy val callMethod: TermSymbol = expressionDecl("callMethod")
+  lazy val callConstructor: TermSymbol = expressionDecl("callConstructor")
 
-  def evaluateMethod: Symbol =
-    expressionClass.info.decl(TermName("evaluate"))
+  private def expressionDecl(name: String) = expressionClass.info.decl(TermName(name)).asTerm
 
-  def unitLiteral: Tree = Literal(Constant(())).setType(definitions.UnitTpe)
-  def nullLiteral: Tree = Literal(Constant(null)).setType(definitions.AnyTpe)
+  // gen
+  def mkUndefined = gen.mkAttributedRef(definitions.Predef_???)
+  def mkNullLiteral: Tree = Literal(Constant(null)).setType(definitions.AnyTpe)
+  def mkStringLiteral(value: String): Tree = Literal(Constant(value)).setType(definitions.StringTpe)
+  def mkObjectArray(elems: List[Tree]): Tree =
+    ArrayValue(TypeTree(definitions.ObjectTpe), elems).setType(definitions.arrayType(definitions.ObjectTpe))
+  def mkStringLiteralArray(elems: List[String]): Tree = {
+    val elemTrees = elems.map(mkStringLiteral)
+    ArrayValue(TypeTree(definitions.StringTpe), elemTrees).setType(definitions.arrayType(definitions.ObjectTpe))
+  }
 
   /**
    * The [[ExtractExpression]] phase attaches an [[EvaluationStrategy]] to each `reflectEval` node

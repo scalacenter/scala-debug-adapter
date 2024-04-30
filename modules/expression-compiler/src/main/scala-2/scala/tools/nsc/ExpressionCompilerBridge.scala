@@ -27,7 +27,8 @@ final class ExpressionCompilerBridge {
       "-classpath",
       classPath
       // Debugging: Print the tree after phases of the debugger
-      // "-Xprint:typer,generate-expression",
+      // "-Xprint:insert-expression,extract-expression,resolve-reflect-eval",
+      // "-Vdebug"
     ) ++ options :+ sourceFile.toString
 
     val command = new CompilerCommand(args, errorConsumer.accept(_))
@@ -39,6 +40,7 @@ final class ExpressionCompilerBridge {
       line,
       expression,
       localVariables.asScala.toSet,
+      pckg,
       testMode
     )
 

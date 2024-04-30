@@ -13,63 +13,34 @@ import scala.jdk.CollectionConverters.*
  *  It is not meant to be run in the CI
  */
 class ExpressionCompilerDebug extends munit.FunSuite {
-  val scalaVersion = ScalaVersion.`2.13`
+  val scalaVersion = ScalaVersion.`2.12`
   val compiler = new ExpressionCompilerBridge
 
   override def munitTimeout: Duration = 1.hour
 
-  test("report source and position in error, and no colors") {
+  test("debug test") {
     val source =
       """|package example
          |
          |object Main {
          |  def main(args: Array[String]): Unit = {
-         |    println("Hello, World!")
+         |    val list = List(1)
+         |    for {
+         |      x <- list
+         |      y <- list
+         |      z = x + y
+         |    } yield x
+         |    for {
+         |      x <- list
+         |      if x == 1
+         |    } yield x
+         |    for (x <- list) yield x
+         |    for (x <- list) println(x)
          |  }
          |}
          |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
-    evaluate(5, "\"foo\" + bar", localVariables = Set())
-  }
-
-  test("evaluate primitive values") {
-    val source =
-      """|package example
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    println("Hello, World!")
-         |  }
-         |}
-         |""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
-    evaluate(4, "true", localVariables = Set())
-  }
-
-  test("evaluate public and private methods in static object") {
-    val source =
-      """|package example
-         |
-         |object A {
-         |  def main(args: Array[String]): Unit = {
-         |    println("Hello, World!")
-         |  }
-         |
-         |  def a1(str: String) = s"a1: $str"
-         |  private def a2(str: String) = s"a2: $str"
-         |
-         |  private object B {
-         |    def b1(str: String) = s"b1: $str"
-         |    private[A] def b2(str: String) = s"b2: $str"
-         |  }
-         |}
-         |
-         |object C {
-         |  def c1(str: String) = s"c1: $str"
-         |  private def c2(str: String) = s"c2: $str"
-         |}
-      """.stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.A", scalaVersion)
-    evaluate(5, "a2(\"foo\")", localVariables = Set())
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    evaluate(13, "x", Set("x"))
   }
 
   private def evaluate(line: Int, expression: String, localVariables: Set[String] = Set.empty)(implicit
