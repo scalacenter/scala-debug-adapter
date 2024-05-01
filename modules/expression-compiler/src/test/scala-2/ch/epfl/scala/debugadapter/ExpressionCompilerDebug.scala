@@ -5,8 +5,8 @@ import scala.tools.nsc.ExpressionCompilerBridge
 
 import java.nio.file.Files
 import scala.collection.mutable.Buffer
-import scala.concurrent.duration.*
-import scala.jdk.CollectionConverters.*
+import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 
 /**
  * This class is used to enter the expression compiler with a debugger
