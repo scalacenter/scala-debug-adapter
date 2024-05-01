@@ -3,7 +3,7 @@ import sbt._
 object Dependencies {
   val scalaEnvVersion = Option(System.getenv("SCALA_VERSION"))
   val scala212 = scalaEnvVersion.filter(isScala212).getOrElse("2.12.19")
-  val scala213 = scalaEnvVersion.filter(isScala213).getOrElse("2.13.13")
+  val scala213 = scalaEnvVersion.filter(isScala213).getOrElse("2.13.14")
   val scala30 = scalaEnvVersion.filter(isScala30).getOrElse("3.0.2")
   val scala33 = scalaEnvVersion.filter(isScala33).getOrElse("3.3.3")
   val scala34 = scalaEnvVersion.filter(isScala34).getOrElse("3.4.1")
