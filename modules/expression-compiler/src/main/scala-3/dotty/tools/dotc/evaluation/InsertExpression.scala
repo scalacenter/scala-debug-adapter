@@ -102,8 +102,8 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
         |  def getSuperclassIterator(clazz: Class[?] | Null): Iterator[Class[?]] =
         |    Iterator.iterate(clazz)(_.nn.getSuperclass).takeWhile(_ != null).map(_.nn)
         |
-        |  // a fake method that is used between the extract-expression and the resolve-reflect-eval phases, 
-        |  // which transforms them to calls of one of the methods defined above.
+        |  // A fake method that is used as a placeholder in the extract-expression phase.
+        |  // The resolve-reflect-eval phase resolves it to a call of one of the other methods in this class.
         |  def reflectEval(qualifier: Object, term: String, args: Array[Object]): Any = ???
         |
         |  private def unwrapException(f: => Any): Any =

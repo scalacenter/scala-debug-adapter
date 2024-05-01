@@ -75,7 +75,7 @@ trait DebugTest extends CommonUtils {
 
   def check(config: DebugConfig)(steps: DebugStepAssert*)(implicit debuggee: TestingDebuggee): Unit = {
     val server = getDebugServer(debuggee, config = config)
-    val client = TestingDebugClient.connect(server.uri)
+    val client = TestingDebugClient.connect(server.uri) // , logger = PrintLogger)
     try {
       server.connect()
       runAndCheck(client, attach = None, closeSession = true)(steps*)
@@ -152,8 +152,8 @@ trait DebugTest extends CommonUtils {
     var state = initialState
 
     def evaluate(expr: String, assertion: Either[String, String] => Unit): Future[Unit] = {
-      println(s"$$ $expr")
       client.evaluate(expr, state.topFrame.id).map { resp =>
+        println(s"$$ $expr")
         resp.foreach(res => println(s"> $res"))
         resp.left.foreach(err => println(s"> $err"))
         assertion(resp)

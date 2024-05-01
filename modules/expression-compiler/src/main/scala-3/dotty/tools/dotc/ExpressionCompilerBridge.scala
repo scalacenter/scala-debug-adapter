@@ -29,7 +29,7 @@ class ExpressionCompilerBridge:
       classPath,
       "-Yskip:pureStats"
       // Debugging: Print the tree after phases of the debugger
-      // "-Vprint:elimByName,extract-expression,resolve-reflect-eval",
+      // "-Vprint:insert-expression,resolve-reflect-eval",
     ) ++ options :+ sourceFile.toString
     val exprCtx =
       ExpressionContext(expressionClassName, line, expression, localVariables.asScala.toSet, pckg, testMode)

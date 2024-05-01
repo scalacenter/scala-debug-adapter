@@ -141,6 +141,11 @@ object Evaluation {
     )
   }
 
+  def failed(expression: String)(
+      assertion: String => Unit
+  )(implicit ctx: TestingContext, location: Location) =
+    SingleStepAssert(Evaluation(expression), assertFailed(assertion))
+
   def failedOrIgnore(expression: String, ignore: Boolean)(
       assertion: String => Unit
   )(implicit ctx: TestingContext, location: Location) = {

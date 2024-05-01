@@ -1,43 +1,53 @@
 package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
-import dotty.tools.dotc.ExpressionCompilerBridge
+import scala.tools.nsc.ExpressionCompilerBridge
 
 import java.nio.file.Files
 import scala.collection.mutable.Buffer
-import scala.concurrent.duration.*
-import scala.jdk.CollectionConverters.*
+import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 
 /**
  * This class is used to enter the expression compiler with a debugger
  *  It is not meant to be run in the CI
  */
-class ExpressionCompilerDebug extends munit.FunSuite:
-  val scalaVersion = ScalaVersion.`3.3`
+class ExpressionCompilerDebug extends munit.FunSuite {
+  val scalaVersion = ScalaVersion.`2.12`
   val compiler = new ExpressionCompilerBridge
 
   override def munitTimeout: Duration = 1.hour
 
-  test("by-name argument capture".ignore) {
+  test("debug test".ignore) {
     val source =
       """|package example
          |
-         |object Main:
-         |  def main(args: Array[String]): Unit = foo("hello")
-         |  def foo(msg: String): String = bar {
-         |    msg
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val list = List(1)
+         |    for {
+         |      x <- list
+         |      y <- list
+         |      z = x + y
+         |    } yield x
+         |    for {
+         |      x <- list
+         |      if x == 1
+         |    } yield x
+         |    for (x <- list) yield x
+         |    for (x <- list) println(x)
          |  }
-         |  def bar(msg: => String): String = msg
+         |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    evaluate(6, "msg", localVariables = Set("msg$1"))
+    evaluate(13, "x", Set("x"))
   }
 
-  private def evaluate(line: Int, expression: String, localVariables: Set[String] = Set.empty)(using
+  private def evaluate(line: Int, expression: String, localVariables: Set[String] = Set.empty)(implicit
       debuggee: TestingDebuggee
-  ): Unit =
+  ): Unit = {
     val out = debuggee.tempDir.resolve("expr-classes")
-    if Files.notExists(out) then Files.createDirectory(out)
+    if (Files.notExists(out)) Files.createDirectory(out)
     val errors = Buffer.empty[String]
     compiler.run(
       out,
@@ -55,4 +65,6 @@ class ExpressionCompilerDebug extends munit.FunSuite:
       },
       testMode = true
     )
-    if errors.nonEmpty then throw new Exception("Evaluation failed")
+    if (errors.nonEmpty) throw new Exception("Evaluation failed:\n" + errors.mkString("\n"))
+  }
+}
