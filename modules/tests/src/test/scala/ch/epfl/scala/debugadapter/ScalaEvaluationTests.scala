@@ -522,7 +522,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     )
   }
 
-  test("evaluate from an local class") {
+  test("evaluate from a local class") {
     val source =
       """|package example
          |
