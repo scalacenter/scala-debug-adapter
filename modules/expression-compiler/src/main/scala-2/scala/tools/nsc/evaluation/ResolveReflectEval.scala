@@ -137,8 +137,6 @@ class ResolveReflectEval(override val global: ExpressionGlobal)
       }
 
     def boxValueClass(valueClass: ClassSymbol, tree: Tree): Tree = {
-      // TODO check this in Scala 2:
-      // qualifier is null: a value class cannot be nested into a class
       val ctor = valueClass.primaryConstructor.asTerm
       mkCallConstructor(mkNullLiteral, ctor, List(tree))
     }

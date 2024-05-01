@@ -43,7 +43,6 @@ private[nsc] class ExpressionGlobal(
   def storeExpression(exprSym: Symbol): Unit = {
     expressionVal = exprSym.asTerm
     classOwners = exprSym.ownersIterator.collect { case cls: ClassSymbol => cls }.toSeq
-    // TODO: Add test from logicallyEnclosingMember scaladoc
     capturingMethod = exprSym.ownersIterator
       .find(sym =>
         (sym.isClass || sym.isMethod) && sym.logicallyEnclosingMember.isMethod

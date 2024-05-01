@@ -196,13 +196,7 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
     } else {
       expressionInserted = true
       val valDef = ValDef(Modifiers(), expressionTermName, TypeTree(), expr).setPos(tree.pos)
-      // TODO: try remove in Scala 2
-      // we insert a fake effect to avoid the constant-folding of the block during the firstTransform phase
-      val effect = Apply(
-        Select(Select(Ident(TermName("scala")), TermName("Predef")), TermName("print")),
-        List(Literal(Constant("")))
-      ).setPos(tree.pos)
-      Block(List(valDef, effect), tree).setPos(tree.pos)
+      Block(List(valDef), tree).setPos(tree.pos)
     }
   }
 
