@@ -1451,7 +1451,11 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.munitTestSuite(source, "example.MySuite", scalaVersion)
-    check(Breakpoint(6), Evaluation.success("1 + 1", 2))
+    check(
+      Breakpoint(6),
+      Evaluation.success("1 + 1", 2),
+      if (isScala2) Breakpoint(6) else NoStep()
+    )
   }
 
   test("evaluate lambdas") {
