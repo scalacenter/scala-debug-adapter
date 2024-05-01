@@ -229,8 +229,8 @@ trait DebugTest extends CommonUtils {
       continueIfPaused()
       // This is flaky, terminated can happen before exited
       if (!GithubUtils.isCI()) {
-        client.exited()
-        client.terminated()
+        client.exited(timeout = 4.seconds)
+        client.terminated(timeout = 4.seconds)
       }
     }
 

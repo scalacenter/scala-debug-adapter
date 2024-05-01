@@ -120,7 +120,7 @@ object DebugTools {
     debuggee.managedEntries.flatMap(loadExpressionCompiler).toMap
   }
 
-  private val optionsToRemove = Set("-Xfatal-warnings", "-Werror")
+  private val optionsToRemove = Set("-Xfatal-warnings", "-Werror", "-indent", "-rewrite")
 
   private def prepareOptions(options: Seq[String], toAdd: Seq[String]) = {
     val withoutRemoved = options.filter(o => !optionsToRemove.contains(o))

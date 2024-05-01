@@ -2692,4 +2692,27 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(Breakpoint(6), if (isScala2) Breakpoint(6) else NoStep(), Evaluation.success("msg", "hello"))
   }
+
+  test("i628: rewrite indent options") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |object Main:
+         |  def main(args: Array[String]): Unit =
+         |    last(List(1))
+         |
+         |  def last[A](l: List[A]): A = l match
+         |    case lst :: Nil => lst
+         |    case _ :: tail => last(tail)
+         |    case Nil => throw new NoSuchElementException("last of empty list")
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClass(source, "example.Main", scalaVersion, Seq("-rewrite", "-indent"))
+    check(
+      Breakpoint(8),
+      Evaluation.success("l.size", 1),
+      Breakpoint(8)
+    )
+  }
 }
