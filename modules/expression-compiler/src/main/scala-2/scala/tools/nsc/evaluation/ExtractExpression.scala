@@ -74,8 +74,12 @@ class ExtractExpression(override val global: ExpressionGlobal)
           getField(tree)(qualifier, tree.symbol.asTerm)
         }
 
-      case tree @ Assign(lhs, rhs) if isInaccessibleField(lhs) && isJavaStatic(lhs.symbol) =>
-        setField(tree)(mkNullLiteral, lhs.symbol.asTerm, transform(rhs))
+      case tree @ Assign(lhs, rhs) if isInaccessibleField(lhs) =>
+        if (isJavaStatic(lhs.symbol)) setField(tree)(mkNullLiteral, lhs.symbol.asTerm, transform(rhs))
+        else {
+          val qualifier = getTransformedQualifier(lhs)
+          setField(tree)(qualifier, lhs.symbol.asTerm, transform(rhs))
+        }
 
       case This(name) if !tree.symbol.hasPackageFlag && !isOwnedByExpression(tree.symbol) =>
         thisOrOuterValue(tree)(tree.symbol.enclClass.asClass)
@@ -167,39 +171,30 @@ class ExtractExpression(override val global: ExpressionGlobal)
 
     private def getTransformedQualifier(tree: Tree): Tree = tree match {
       case Ident(_) =>
-        val classOwner = tree.symbol.enclClass.asClass
-        if (isStaticObject(classOwner)) getStaticObject(tree)(classOwner)
-        else thisOrOuterValue(tree)(classOwner)
-      case Select(qualifier, _) =>
-        val classOwner = tree.symbol.enclClass.asClass
-        if (isStaticObject(classOwner)) getStaticObject(tree)(classOwner)
-        else transform(qualifier)
+        // it is a local method, it captures its outer value
+        thisOrOuterValue(tree)(tree.symbol.enclClass.asClass)
+      case Select(qualifier, _) => transform(qualifier)
       case Apply(fun, _) => getTransformedQualifier(fun)
       case TypeApply(fun, _) => getTransformedQualifier(fun)
     }
 
     private def getTransformedQualifierOfNew(tree: Tree): Tree = tree match {
-      case Select(New(tpt), _) => getTransformedPrefix(tpt)
+      case Select(New(tpt), _) =>
+        tpt.tpe.prefix match {
+          case NoPrefix =>
+            // it's a local class, it captures its outer value
+            thisOrOuterValue(tree)(tpt.symbol.owner.enclClass.asClass)
+          case prefix => transform(reifyPrefix(prefix))
+        }
       case Apply(fun, _) => getTransformedQualifierOfNew(fun)
       case TypeApply(fun, _) => getTransformedQualifierOfNew(fun)
     }
 
-    private def getTransformedPrefix(typeTree: Tree): Tree = {
-      def transformPrefix(prefix: Type): Tree = prefix match {
-        case NoPrefix =>
-          thisOrOuterValue(typeTree)(typeTree.symbol.owner.enclClass.asClass)
-        case prefix: ThisType =>
-          thisOrOuterValue(typeTree)(prefix.sym.asClass)
-        case SingleType(ThisType(pre), sym) if pre.isPackageClass =>
-          transform(gen.mkAttributedIdent(sym))
-        case SingleType(NoPrefix, sym) =>
-          transform(gen.mkAttributedIdent(sym))
-        case SingleType(pre, sym) =>
-          transform(gen.mkAttributedSelect(transformPrefix(pre), sym))
-      }
-      typeTree.tpe match {
-        case TypeRef(prefix, _, _) => transformPrefix(prefix)
-      }
+    private def reifyPrefix(prefix: Type): Tree = prefix match {
+      case prefix: ThisType => gen.mkAttributedThis(prefix.sym)
+      case SingleType(ThisType(pre), sym) if pre.isPackageClass => gen.mkAttributedIdent(sym)
+      case SingleType(NoPrefix, sym) => gen.mkAttributedIdent(sym)
+      case SingleType(pre, sym) => gen.mkAttributedSelect(reifyPrefix(pre), sym)
     }
 
     // symbol can be a class or a method

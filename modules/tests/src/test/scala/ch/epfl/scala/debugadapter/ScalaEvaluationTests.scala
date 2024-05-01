@@ -2081,6 +2081,38 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     )
   }
 
+  test("java protected members") {
+    val javaSource =
+      """|package example;
+         |
+         |class A {
+         |  protected String x = "x";
+         |  protected String m() {
+         |    return "m";
+         |  }
+         |}
+         |""".stripMargin
+    val javaModule = TestingDebuggee.fromJavaSource(javaSource, "example.A", scalaVersion)
+    val scalaSource =
+      """|package example
+         |
+         |object Main extends A {
+         |  def main(args: Array[String]): Unit = {
+         |    println("Hello, World!")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClass(scalaSource, "example.Main", scalaVersion, Seq.empty, Seq(javaModule.mainModule))
+    check(
+      Breakpoint(5),
+      Evaluation.success("x", "x"),
+      Evaluation.success("x = \"y\"", ()),
+      Evaluation.success("x", "y"),
+      Evaluation.success("m()", "m")
+    )
+  }
+
   test("tuple extractor") {
     val source =
       """|package example

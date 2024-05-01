@@ -196,15 +196,13 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
     private def getTransformedQualifier(tree: Tree)(using Context): Tree =
       tree match
         case Ident(_) =>
-          val classOwner = tree.symbol.enclosingClass.asClass
-          if isStaticObject(classOwner)
-          then getStaticObject(tree)(classOwner)
-          else thisOrOuterValue(tree)(classOwner)
-        case Select(qualifier, _) =>
-          val classOwner = tree.symbol.enclosingClass.asClass
-          if isStaticObject(classOwner)
-          then getStaticObject(tree)(classOwner)
-          else transform(qualifier)
+          tree.tpe match
+            case TermRef(NoPrefix, _) =>
+              // it's a local method, it can capture its outer value
+              thisOrOuterValue(tree)(tree.symbol.enclosingClass.asClass)
+            case TermRef(prefix: NamedType, _) => transform(ref(prefix))
+            case TermRef(prefix: ThisType, _) => transform(This(prefix.cls))
+        case Select(qualifier, _) => transform(qualifier)
         case Apply(fun, _) => getTransformedQualifier(fun)
         case TypeApply(fun, _) => getTransformedQualifier(fun)
 
@@ -218,9 +216,9 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
       def transformPrefix(prefix: Type): Tree =
         prefix match
           case NoPrefix =>
+            // it's a local class, it can capture its outer value
             thisOrOuterValue(typeTree)(typeTree.symbol.owner.enclosingClass.asClass)
-          case prefix: ThisType =>
-            thisOrOuterValue(typeTree)(prefix.cls)
+          case prefix: ThisType => thisOrOuterValue(typeTree)(prefix.cls)
           case ref: TermRef => transform(Ident(ref).withSpan(typeTree.span))
       def rec(tpe: Type): Tree =
         tpe match
