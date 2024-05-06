@@ -748,10 +748,10 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(
       Breakpoint(5),
       Evaluation.success(
-        """val b = 2
-          |val c = 3
-          |a + b + c
-          |""".stripMargin,
+        """|val b = 2
+           |val c = 3
+           |a + b + c
+           |""".stripMargin,
         6
       )
     )
@@ -2717,6 +2717,29 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Breakpoint(8),
       Evaluation.success("l.size", 1),
       Breakpoint(8)
+    )
+  }
+
+  test("compound types values") {
+    val source =
+      """|package example
+         |
+         |class A
+         |trait B {
+         |  def x: String = "x"
+         |}
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    val c: A with B = new A with B {}
+         |    println(c.x)
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    check(
+      Breakpoint(11),
+      Evaluation.success("c.x", "x")
     )
   }
 }

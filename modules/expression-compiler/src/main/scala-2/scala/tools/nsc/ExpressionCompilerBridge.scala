@@ -27,7 +27,7 @@ final class ExpressionCompilerBridge {
       "-classpath",
       classPath
       // Debugging: Print the tree after phases of the debugger
-      // "-Xprint:insert-expression,extract-expression,resolve-reflect-eval",
+      // "-Xprint:extract-expression,resolve-reflect-eval",
       // "-Vdebug"
     ) ++ options :+ sourceFile.toString
 

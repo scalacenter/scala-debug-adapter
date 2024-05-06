@@ -60,7 +60,8 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
         |      }
         |      .getOrElse(throw new NoSuchMethodException(methodName))
         |    method.setAccessible(true)
-        |    unwrapException(method.invoke(obj, args*))
+        |    val res = unwrapException(method.invoke(obj, args*))
+        |    if returnTypeName == "void" then () else res
         |
         |  def callConstructor(className: String, paramTypesNames: Array[String], args: Array[Object]): Any =
         |    val clazz = classLoader.loadClass(className).nn
@@ -77,7 +78,7 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
         |    field.setAccessible(true)
         |    field.get(obj)
         |
-        |  def setField(obj: Any, className: String, fieldName: String, value: Any): Unit =
+        |  def setField(obj: Any, className: String, fieldName: String, value: Any): Any =
         |    val clazz = classLoader.loadClass(className).nn
         |    val field = clazz.getDeclaredField(fieldName).nn
         |    field.setAccessible(true)

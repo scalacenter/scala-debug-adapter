@@ -48,7 +48,8 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
         |      }
         |      .getOrElse(throw new NoSuchMethodException(methodName))
         |    method.setAccessible(true)
-        |    unwrapException(method.invoke(obj, args: _*))
+        |    val res = unwrapException(method.invoke(obj, args: _*))
+        |    if (returnTypeName == "void") () else res
         |  }
         |
         |  def callConstructor(className: String, paramTypesNames: Array[String], args: Array[Object]): Any = {
@@ -67,7 +68,7 @@ class InsertExpression(override val global: ExpressionGlobal) extends Transform 
         |    field.get(obj)
         |  }
         |
-        |  def setField(obj: Any, className: String, fieldName: String, value: Any): Unit = {
+        |  def setField(obj: Any, className: String, fieldName: String, value: Any): Any = {
         |    val clazz = classLoader.loadClass(className)
         |    val field = clazz.getDeclaredField(fieldName)
         |    field.setAccessible(true)
