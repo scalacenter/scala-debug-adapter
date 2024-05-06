@@ -61,12 +61,9 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
 
   private object ExpressionTransformer extends TreeMap:
     override def transform(tree: Tree)(using Context): Tree =
-      val desugaredIdent = tree match
-        case tree: Ident => desugarIdent(tree)
-        case _ => tree
-
-      desugaredIdent match
+      tree match
         case tree: ImportOrExport => tree
+        case tree if isLocalToExpression(tree.symbol) => super.transform(tree)
 
         case tree if tree.symbol.is(Inline) =>
           val tpe = tree.symbol.info.asInstanceOf[ConstantType]
@@ -76,10 +73,13 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
         case tree: (Ident | Select | This) if isStaticObject(tree.symbol) =>
           getStaticObject(tree)(tree.symbol.moduleClass)
 
+        // non static this or outer this
+        case tree: This if !tree.symbol.is(Package) =>
+          thisOrOuterValue(tree)(tree.symbol.enclosingClass.asClass)
+
         // non-static object
-        case tree: (Ident | Select | This) if isInaccessibleNonStaticObject(tree.symbol) =>
-          val qualifier = getTransformedQualifier(tree)
-          callMethod(tree)(qualifier, tree.symbol.asTerm, List.empty)
+        case tree: (Ident | Select) if isNonStaticObject(tree.symbol) =>
+          callMethod(tree)(getTransformedQualifier(tree), tree.symbol.asTerm, List.empty)
 
         // local variable
         case tree: Ident if isLocalVariable(tree.symbol) =>
@@ -104,71 +104,35 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
             case None => setLocalValue(tree)(variable, rhs)
 
         // inaccessible fields
-        case tree: Select if isInaccessibleField(tree) =>
+        case tree: (Ident | Select) if tree.symbol.isField && !isAccessibleMember(tree) =>
           if tree.symbol.is(JavaStatic) then getField(tree)(nullLiteral, tree.symbol.asTerm)
-          else
-            val qualifier = getTransformedQualifier(tree)
-            getField(tree)(qualifier, tree.symbol.asTerm)
+          else getField(tree)(getTransformedQualifier(tree), tree.symbol.asTerm)
 
         // assignment to inaccessible fields
-        case tree @ Assign(lhs, rhs) if isInaccessibleField(lhs) =>
+        case tree @ Assign(lhs, rhs) if lhs.symbol.isField && !isAccessibleMember(lhs) =>
           if lhs.symbol.is(JavaStatic) then setField(tree)(nullLiteral, lhs.symbol.asTerm, transform(rhs))
-          else
-            val qualifier = getTransformedQualifier(lhs)
-            setField(tree)(qualifier, lhs.symbol.asTerm, transform(rhs))
-
-        // this or outer this
-        case tree @ This(Ident(name)) if !tree.symbol.is(Package) && !isOwnedByExpression(tree.symbol) =>
-          thisOrOuterValue(tree)(tree.symbol.enclosingClass.asClass)
+          else setField(tree)(getTransformedQualifier(lhs), lhs.symbol.asTerm, transform(rhs))
 
         // inaccessible constructors
-        case tree: (Select | Apply | TypeApply) if isInaccessibleConstructor(tree) =>
-          val args = getTransformedArgs(tree)
-          val qualifier = getTransformedQualifierOfNew(tree)
-          callConstructor(tree)(qualifier, tree.symbol.asTerm, args)
+        case tree: (Select | Apply | TypeApply)
+            if tree.symbol.isConstructor && (!tree.symbol.owner.isStatic || !isAccessibleMember(tree)) =>
+          callConstructor(tree)(getTransformedQualifierOfNew(tree), tree.symbol.asTerm, getTransformedArgs(tree))
 
         // inaccessible methods
-        case tree: (Ident | Select | Apply | TypeApply) if isInaccessibleMethod(tree) =>
+        case tree: (Ident | Select | Apply | TypeApply) if tree.symbol.isRealMethod && !isAccessibleMember(tree) =>
           val args = getTransformedArgs(tree)
           if tree.symbol.is(JavaStatic) then callMethod(tree)(nullLiteral, tree.symbol.asTerm, args)
-          else
-            val qualifier = getTransformedQualifier(tree)
-            callMethod(tree)(qualifier, tree.symbol.asTerm, args)
+          else callMethod(tree)(getTransformedQualifier(tree), tree.symbol.asTerm, args)
 
-        case Typed(tree, tpt) if tpt.symbol.isType && !isTypeAccessible(tpt.symbol.asType) =>
-          transform(tree)
-        case tree =>
-          super.transform(tree)
+        // accessible members
+        case tree: (Ident | Select) if !tree.symbol.isStatic =>
+          val qualifier = getTransformedQualifier(tree)
+          val qualifierType = widenDealiasQualifierType(tree)
+          val castQualifier = if qualifier.tpe <:< qualifierType then qualifier else qualifier.cast(qualifierType)
+          cpy.Select(tree)(castQualifier, tree.name)
 
-    /**
-     * The symbol is a field and the expression class cannot access it
-     * either because it is private or it belongs to an inacessible type
-     */
-    private def isInaccessibleField(tree: Tree)(using Context): Boolean =
-      val symbol = tree.symbol
-      symbol.isField
-      && symbol.owner.isType
-      && !isTermAccessible(symbol.asTerm, getQualifierTypeSymbol(tree))
-
-    /**
-     * The symbol is a real method and the expression class cannot access it
-     * either because it is private or it belongs to an inaccessible type
-     */
-    private def isInaccessibleMethod(tree: Tree)(using Context): Boolean =
-      val symbol = tree.symbol
-      !isOwnedByExpression(symbol)
-      && symbol.isRealMethod
-      && (!symbol.owner.isType || !isTermAccessible(symbol.asTerm, getQualifierTypeSymbol(tree)))
-
-    /**
-     * The symbol is a constructor and the expression class cannot access it
-     * either because it is an inaccessible method or it belong to a nested type (not static)
-     */
-    private def isInaccessibleConstructor(tree: Tree)(using Context): Boolean =
-      val symbol = tree.symbol
-      !isOwnedByExpression(symbol) &&
-      symbol.isConstructor &&
-      (isInaccessibleMethod(tree) || !symbol.owner.isStatic)
+        case Typed(tree, tpt) if tpt.symbol.isType && !isTypeAccessible(tpt.tpe) => transform(tree)
+        case tree => super.transform(tree)
 
     private def getCapturer(variable: TermSymbol)(using Context): Option[Symbol] =
       // a local variable can be captured by a class or method
@@ -185,13 +149,6 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
         case _: (Ident | Select) => List.empty
         case Apply(fun, args) => getTransformedArgs(fun) ++ args.map(transform)
         case TypeApply(fun, _) => getTransformedArgs(fun)
-
-    private def getQualifierTypeSymbol(tree: Tree)(using Context): TypeSymbol =
-      tree match
-        case Ident(_) => tree.symbol.enclosingClass.asClass
-        case Select(qualifier, _) => qualifier.tpe.widenDealias.typeSymbol.asType
-        case Apply(fun, _) => getQualifierTypeSymbol(fun)
-        case TypeApply(fun, _) => getQualifierTypeSymbol(fun)
 
     private def getTransformedQualifier(tree: Tree)(using Context): Tree =
       tree match
@@ -245,12 +202,7 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
     else nullLiteral
 
   private def getThis(tree: Tree)(cls: ClassSymbol)(using Context): Tree =
-    reflectEval(tree)(
-      nullLiteral,
-      EvaluationStrategy.This(cls),
-      List.empty,
-      exprCtx.classOwners.head.typeRef
-    )
+    reflectEval(tree)(nullLiteral, EvaluationStrategy.This(cls), List.empty, exprCtx.classOwners.head.typeRef)
 
   private def getLocalOuter(tree: Tree)(outerCls: ClassSymbol)(using Context): Tree =
     val strategy = EvaluationStrategy.LocalOuter(outerCls)
@@ -323,54 +275,51 @@ class ExtractExpression(using exprCtx: ExpressionContext) extends MacroTransform
       strategy: EvaluationStrategy,
       args: List[Tree],
       tpe: Type
-  )(using
-      Context
-  ): Tree =
-    val reflectEval =
-      cpy.Apply(tree)(
-        Select(This(exprCtx.expressionClass), termName("reflectEval")),
-        List(
-          qualifier,
-          Literal(Constant(strategy.toString)),
-          JavaSeqLiteral(args, TypeTree(ctx.definitions.ObjectType))
-        )
-      )
-    reflectEval.putAttachment(EvaluationStrategy, strategy)
-    val widenDealiasTpe = tpe.widenDealias
-    if isTypeAccessible(widenDealiasTpe.typeSymbol.asType)
-    then reflectEval.cast(widenDealiasTpe)
-    else reflectEval
+  )(using Context): Tree =
+    val evalArgs = List(
+      qualifier,
+      Literal(Constant(strategy.toString)),
+      JavaSeqLiteral(args, TypeTree(ctx.definitions.ObjectType))
+    )
+    cpy
+      .Apply(tree)(Select(This(exprCtx.expressionClass), termName("reflectEval")), evalArgs)
+      .withAttachment(EvaluationStrategy, strategy)
 
   private def isStaticObject(symbol: Symbol)(using Context): Boolean =
-    symbol.is(Module) &&
-      symbol.isStatic &&
-      !symbol.is(JavaDefined) &&
-      !symbol.isRoot
+    symbol.is(Module) && symbol.isStatic && !symbol.is(JavaDefined) && !symbol.isRoot
 
-  private def isInaccessibleNonStaticObject(symbol: Symbol)(using Context): Boolean =
-    symbol.is(Module) &&
-      !symbol.isStatic &&
-      !symbol.isRoot &&
-      !isOwnedByExpression(symbol)
+  private def isNonStaticObject(symbol: Symbol)(using Context): Boolean =
+    symbol.is(Module) && !symbol.isStatic && !symbol.isRoot
 
   private def isLocalVariable(symbol: Symbol)(using Context): Boolean =
-    !symbol.is(Method) && symbol.isLocalToBlock && !isOwnedByExpression(symbol)
+    !symbol.is(Method) && symbol.isLocalToBlock
 
   // Check if a term is accessible from the expression class
-  private def isTermAccessible(symbol: TermSymbol, owner: TypeSymbol)(using
-      Context
-  ): Boolean =
-    isOwnedByExpression(symbol)
-      || (!symbol.isPrivate && !symbol.is(Protected) && isTypeAccessible(owner))
+  private def isAccessibleMember(tree: Tree)(using Context): Boolean =
+    val symbol = tree.symbol
+    symbol.owner.isType &&
+    !symbol.isPrivate &&
+    !symbol.is(Protected) &&
+    isTypeAccessible(widenDealiasQualifierType(tree))
 
-    // Check if a type is accessible from the expression class
-  private def isTypeAccessible(symbol: TypeSymbol)(using Context): Boolean =
-    isOwnedByExpression(symbol) || (
-      !symbol.isLocal &&
-        symbol.ownersIterator.forall(s => s.isPublic || s.privateWithin.is(PackageClass))
-    )
+  private def widenDealiasQualifierType(tree: Tree)(using Context): Type =
+    tree match
+      case Ident(_) => tree.symbol.enclosingClass.thisType.widenDealias
+      case Select(qualifier, _) => qualifier.tpe.widenDealias
+      case Apply(fun, _) => widenDealiasQualifierType(fun)
+      case TypeApply(fun, _) => widenDealiasQualifierType(fun)
 
-  private def isOwnedByExpression(symbol: Symbol)(using Context): Boolean =
+  // Check if a type is accessible from the expression class
+  private def isTypeAccessible(tpe: Type)(using Context): Boolean =
+    def isPublic(sym: Symbol): Boolean =
+      !sym.isLocal && (sym.isPublic || sym.privateWithin.is(PackageClass))
+    tpe.forallParts {
+      case tpe: NamedType if tpe.symbol != NoSymbol =>
+        isLocalToExpression(tpe.symbol) || isPublic(tpe.symbol)
+      case _ => true
+    }
+
+  private def isLocalToExpression(symbol: Symbol)(using Context): Boolean =
     val evaluateMethod = exprCtx.evaluateMethod
     symbol.ownersIterator.exists(_ == evaluateMethod)
 

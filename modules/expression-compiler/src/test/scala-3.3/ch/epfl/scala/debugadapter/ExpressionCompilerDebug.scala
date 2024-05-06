@@ -18,19 +18,45 @@ class ExpressionCompilerDebug extends munit.FunSuite:
 
   override def munitTimeout: Duration = 1.hour
 
-  test("by-name argument capture".ignore) {
+  test("debug test".ignore) {
     val source =
       """|package example
          |
-         |object Main:
-         |  def main(args: Array[String]): Unit = foo("hello")
-         |  def foo(msg: String): String = bar {
-         |    msg
+         |object A {
+         |  def main(args: Array[String]): Unit = {
+         |    println("Hello, World!")
          |  }
-         |  def bar(msg: => String): String = msg
+         |
+         |  val a1 = "a1"
+         |  private val a2 = "a2"
+         |  private[this] val a3 = "a3"
+         |  private[example] val a4 = "a4"
+         |
+         |  override def toString: String =
+         |    a2 + a3
+         |
+         |  object B {
+         |    val b1 = "b1"
+         |    private val b2 = "b2"
+         |    private[A] val b3 = "b3"
+         |    private[example] val b4 = "b4"
+         |  }
+         |
+         |  private object C
+         |  private[this] object D
+         |  private[example] object E
+         |}
+         |
+         |object F {
+         |  val f1 = "f1"
+         |  private[example] val f2 = "f2"
+         |
+         |  object G
+         |  private[example] object H
+         |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    evaluate(6, "msg", localVariables = Set("msg$1"))
+    evaluate(5, "a2")
   }
 
   private def evaluate(line: Int, expression: String, localVariables: Set[String] = Set.empty)(using
@@ -43,7 +69,7 @@ class ExpressionCompilerDebug extends munit.FunSuite:
       out,
       "Expression",
       debuggee.classPathString,
-      debuggee.mainModule.scalacOptions.toArray,
+      debuggee.mainModule.scalacOptions.toArray ++ Array("-Xprint:resolve-reflect-eval"),
       debuggee.mainSource,
       line,
       expression,
