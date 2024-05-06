@@ -287,7 +287,7 @@ class DebugServerTests extends DebugTestSuite {
 
   test("should accept a second connection when the session disconnects with restart = true") {
     val debuggee = new MockDebuggee()
-    val handler = startDebugServer(debuggee, gracePeriod = Duration.Zero)
+    val handler = runDebugServer(debuggee, gracePeriod = Duration.Zero)
     val client1 = TestingDebugClient.connect(handler.uri)
 
     try {
@@ -305,7 +305,7 @@ class DebugServerTests extends DebugTestSuite {
 
   test("should not accept a second connection when the session disconnects with restart = false") {
     val debuggee = new MockDebuggee()
-    val handler = startDebugServer(debuggee, gracePeriod = Duration.Zero)
+    val handler = runDebugServer(debuggee, gracePeriod = Duration.Zero)
     val client1 = TestingDebugClient.connect(handler.uri)
 
     try {

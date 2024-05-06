@@ -29,9 +29,6 @@ import scala.util.Try
  *
  * This approach makes it necessary to handle the "launch" requests as the "attach" ones.
  * The JDI address of the debuggee is obtained through the [[DebuggeeListener]]
- *
- * If autoCloseSession then the session is closed automatically after the debuggee has terminated
- * Otherwise a disconnect request should be received or the close method should be called manually
  */
 private[debugadapter] final class DebugSession private (
     socket: Socket,
@@ -85,10 +82,7 @@ private[debugadapter] final class DebugSession private (
             result.failed.foreach(cancelPromises)
             // wait for the terminated event then close the session
             terminatedEvent.future.map { _ =>
-              if (config.autoCloseSession) {
-                exitStatusPromise.trySuccess(DebugSession.Terminated)
-                close()
-              }
+              exitStatusPromise.trySuccess(DebugSession.Terminated)
             }
           }
 
@@ -130,13 +124,11 @@ private[debugadapter] final class DebugSession private (
               s"Communication with debuggee $name is frozen: missing terminated event."
             )
         }
-
-        context.getProviders.forEach(_.close())
-
         DebugSession.Stopped
 
       case _ => DebugSession.Stopped
     }
+    context.getProviders.forEach(_.close())
     logger.debug(s"Closing connection with debugger $name")
     socket.close()
     exitStatusPromise.trySuccess(DebugSession.Terminated)
@@ -231,10 +223,15 @@ private[debugadapter] final class DebugSession private (
   }
 
   override def sendEvent(event: Events.DebugEvent): Unit = {
-    try
+    // delay terminated and exited events to fix the ordering of events
+    try {
+      event.`type` match {
+        case "terminated" => Thread.sleep(200)
+        case "exited" => Thread.sleep(100)
+        case _ => ()
+      }
       super.sendEvent(event)
-    finally
-      if (event.`type` == "terminated") terminatedEvent.trySuccess(())
+    } finally if (event.`type` == "terminated") terminatedEvent.trySuccess(())
   }
 
   private def name = debuggee.name

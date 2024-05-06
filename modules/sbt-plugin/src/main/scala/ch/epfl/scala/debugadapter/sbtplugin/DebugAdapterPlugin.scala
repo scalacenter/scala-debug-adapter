@@ -478,7 +478,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         debugServers.get(target).foreach(_.close())
         val server = DebugServer(debuggee, resolver, new LoggerAdapter(logger), address, config)
         debugServers.update(target, server)
-        Await.result(server.start(), Duration.Inf)
+        Await.result(server.run(), Duration.Inf)
       } catch {
         case NonFatal(cause) =>
           logger.error("Failed to start server")

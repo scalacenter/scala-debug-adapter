@@ -14,7 +14,6 @@ object StepFiltersConfig {
 
 final case class DebugConfig(
     gracePeriod: Duration,
-    autoCloseSession: Boolean,
     testMode: Boolean,
     evaluationMode: DebugConfig.EvaluationMode,
     stepFilters: StepFiltersConfig
@@ -23,7 +22,6 @@ final case class DebugConfig(
 object DebugConfig {
   def default: DebugConfig = DebugConfig(
     5.seconds,
-    autoCloseSession = true,
     testMode = false,
     evaluationMode = DebugConfig.MixedEvaluation,
     stepFilters = StepFiltersConfig.default

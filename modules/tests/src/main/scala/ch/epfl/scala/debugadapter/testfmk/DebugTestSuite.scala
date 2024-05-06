@@ -5,6 +5,7 @@ import ch.epfl.scala.debugadapter.DebugServer
 import ch.epfl.scala.debugadapter.Debuggee
 import ch.epfl.scala.debugadapter.GithubUtils
 import ch.epfl.scala.debugadapter.Logger
+import ch.epfl.scala.debugadapter.StepFiltersConfig
 import com.microsoft.java.debug.core.protocol.Events.OutputEvent.Category
 import com.microsoft.java.debug.core.protocol.Types.SourceBreakpoint
 import com.microsoft.java.debug.core.protocol.Types.StackFrame
@@ -17,7 +18,6 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.*
 import scala.util.Properties
-import ch.epfl.scala.debugadapter.StepFiltersConfig
 
 case class DebugCheckState(
     threadId: Long,
@@ -35,7 +35,7 @@ trait DebugTest extends CommonUtils {
   val executorService = Executors.newFixedThreadPool(5)
   implicit val ec: ExecutionContext = ExecutionContext.fromExecutorService(executorService)
 
-  protected def defaultConfig: DebugConfig = DebugConfig.default.copy(autoCloseSession = false, testMode = true)
+  protected def defaultConfig: DebugConfig = DebugConfig.default.copy(testMode = true)
 
   def javaVersion: String = Properties.javaVersion
 
@@ -52,12 +52,12 @@ trait DebugTest extends CommonUtils {
   ): DebugServer =
     DebugServer(debuggee, TestingResolver, logger, config = config)
 
-  def startDebugServer(
+  def runDebugServer(
       debuggee: Debuggee,
       gracePeriod: Duration = 2.seconds,
       logger: Logger = NoopLogger
   ): DebugServer.Handler =
-    DebugServer.start(debuggee, TestingResolver, logger, gracePeriod = gracePeriod)
+    DebugServer.run(debuggee, TestingResolver, logger, gracePeriod = gracePeriod)
 
   def check(uri: URI, attach: Option[Int] = None, stepFilters: StepFiltersConfig = null)(
       steps: DebugStepAssert*
@@ -227,7 +227,6 @@ trait DebugTest extends CommonUtils {
 
     if (closeSession) {
       continueIfPaused()
-      // This is flaky, terminated can happen before exited
       if (!GithubUtils.isCI()) {
         client.exited(timeout = 4.seconds)
         client.terminated(timeout = 4.seconds)
