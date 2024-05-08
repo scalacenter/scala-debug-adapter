@@ -11,15 +11,22 @@ import scala.util.Failure
 import scala.util.Success
 
 private[debugadapter] object IO {
+  type CloseFileSystem = Boolean
+
   def withinJarFile[T](absolutePath: Path)(f: FileSystem => T): Try[T] =
-    getJarFileSystem(absolutePath).map { fs =>
+    getJarFileSystem(absolutePath).map { case (fs, shouldClose) =>
       try f(fs)
-      finally fs.close()
+      finally if (shouldClose) fs.close()
     }
 
-  def getJarFileSystem(absolutePath: Path): Try[FileSystem] = try {
+  def getJarFileSystem(absolutePath: Path): Try[(FileSystem, CloseFileSystem)] = try {
     val uri = URI.create(s"jar:${absolutePath.toUri}")
-    val fileSystem = FileSystems.newFileSystem(uri, new util.HashMap[String, Any])
+    val fileSystem =
+      try ((FileSystems.getFileSystem(uri), false))
+      catch {
+        case NonFatal(_) =>
+          (FileSystems.newFileSystem(uri, new util.HashMap[String, Any]), true)
+      }
     Success(fileSystem)
   } catch {
     case NonFatal(exception) => Failure(exception)

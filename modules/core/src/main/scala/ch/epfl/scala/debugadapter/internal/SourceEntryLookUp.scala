@@ -27,14 +27,13 @@ private case class SourceEntryLookUp(
     entry: SourceEntry,
     sourceFiles: Seq[SourceFile],
     fileSystem: FileSystem,
-    root: Path
+    root: Path,
+    shouldCloseFileSystem: Boolean = false
 ) {
   def close(): Unit =
     try
-      entry match {
-        case SourceJar(jar) => fileSystem.close()
-        case SourceDirectory(directory) => ()
-        case StandaloneSourceFile(absolutePath, relativePath) => ()
+      if (shouldCloseFileSystem) {
+        fileSystem.close()
       }
     catch {
       case NonFatal(_) => ()
@@ -46,10 +45,10 @@ private object SourceEntryLookUp {
     entry match {
       case SourceJar(jar) =>
         IO.getJarFileSystem(jar)
-          .map { fs =>
+          .map { case (fs, shouldClose) =>
             val root = fs.getPath("/")
             val sourceFiles = getAllSourceFiles(entry, fs, root).toVector
-            SourceEntryLookUp(entry, sourceFiles, fs, root)
+            SourceEntryLookUp(entry, sourceFiles, fs, root, shouldClose)
           }
           .warnFailure(logger, s"Cannot list the source files in ${entry.name}")
       case SourceDirectory(directory) =>
