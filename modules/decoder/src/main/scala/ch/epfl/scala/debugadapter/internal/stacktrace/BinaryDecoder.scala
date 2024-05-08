@@ -21,7 +21,12 @@ object BinaryDecoder:
     val ctx = Context.initialize(classpath)
     new BinaryDecoder(using ctx)
 
-final class BinaryDecoder(using Context, ThrowOrWarn):
+  def cached(classEntries: Seq[Path])(using ThrowOrWarn): BinaryDecoder =
+    val classpath = CustomClasspath(ClasspathLoaders.read(classEntries.toList))
+    val ctx = Context.initialize(classpath)
+    new CachedBinaryDecoder(using ctx)
+
+class BinaryDecoder(using Context, ThrowOrWarn):
   private given defn: Definitions = Definitions()
 
   def decode(cls: binary.ClassType): DecodedClass =
@@ -799,7 +804,16 @@ final class BinaryDecoder(using Context, ThrowOrWarn):
   private def collectLiftedTrees[S](owner: Symbol, sourceLines: Option[binary.SourceLines])(
       matcher: PartialFunction[LiftedTree[?], LiftedTree[S]]
   ): Seq[LiftedTree[S]] =
-    LiftedTreeCollector.collect(owner)(matcher).filter(tree => sourceLines.forall(matchLines(tree, _)))
+    val recursiveMatcher = new PartialFunction[LiftedTree[?], LiftedTree[S]]:
+      override def apply(tree: LiftedTree[?]): LiftedTree[S] = tree.asInstanceOf[LiftedTree[S]]
+      override def isDefinedAt(tree: LiftedTree[?]): Boolean = tree match
+        case InlinedFromArg(underlying, _, _) => isDefinedAt(underlying)
+        case InlinedFromDef(underlying, _) => isDefinedAt(underlying)
+        case _ => matcher.isDefinedAt(tree)
+    collectAllLiftedTrees(owner).collect(recursiveMatcher).filter(tree => sourceLines.forall(matchLines(tree, _)))
+
+  protected def collectAllLiftedTrees(owner: Symbol): Seq[LiftedTree[?]] =
+    LiftedTreeCollector.collect(owner)
 
   private def matchLines(liftedFun: LiftedTree[?], sourceLines: binary.SourceLines): Boolean =
     // we use endsWith instead of == because of tasty-query#434

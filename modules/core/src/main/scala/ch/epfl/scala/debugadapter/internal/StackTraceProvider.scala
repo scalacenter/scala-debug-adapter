@@ -60,7 +60,9 @@ object StackTraceProvider {
     if (config.stepFilters.skipClassLoading) list = ClassLoadingFilter +: list
     if (config.stepFilters.skipRuntimeClasses) list = RuntimeStepFilter(debuggee.scalaVersion) +: list
     if (config.stepFilters.skipForwardersAndAccessors)
-      list = ScalaDecoder(debuggee, tools, logger, config.testMode) +: list
+      list = TimeUtils.logTime(logger, "Initialized Scala 3 decoder") {
+        ScalaDecoder(debuggee, tools, logger, config.testMode)
+      } +: list
     list
   }
 
