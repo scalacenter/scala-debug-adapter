@@ -22,9 +22,9 @@ private[sbtplugin] object InternalTasks {
     val observables = for {
       (proj, configs) <- Keys.bspInternalDependencyConfigurations.value
       config <- configs
-    } yield (proj / config / debugAdapterClassUpdates)
+    } yield (proj / config / debugAdapterClassUpdates).?
     Def.setting {
-      observables.join.value.fold(Observable.empty[Seq[String]])(_ mergeWith _)
+      observables.join.value.flatten.fold(Observable.empty[Seq[String]])(_ mergeWith _)
     }
   }
 
