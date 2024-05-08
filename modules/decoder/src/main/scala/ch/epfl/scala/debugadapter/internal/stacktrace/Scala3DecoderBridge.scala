@@ -23,7 +23,7 @@ class Scala3DecoderBridge(
     warnLogger: Consumer[String],
     testMode: Boolean
 ):
-  private val decoder: BinaryDecoder = BinaryDecoder(classEntries)(
+  private val decoder: BinaryDecoder = BinaryDecoder.cached(classEntries)(
     // make it quiet, or it would be too verbose when things go wrong
     using ThrowOrWarn(_ => (), testMode)
   )

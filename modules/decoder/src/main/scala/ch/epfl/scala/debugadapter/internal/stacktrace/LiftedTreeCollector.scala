@@ -17,35 +17,27 @@ import tastyquery.Exceptions.NonMethodReferenceException
  * and compute the capture.
  */
 object LiftedTreeCollector:
-  def collect[S](sym: Symbol)(matcher: PartialFunction[LiftedTree[?], LiftedTree[S]])(using
-      Context,
-      Definitions,
-      ThrowOrWarn
-  ): Seq[LiftedTree[S]] =
-    val collector = LiftedTreeCollector[S](sym, matcher)
+  def collect(sym: Symbol)(using Context, Definitions, ThrowOrWarn): Seq[LiftedTree[?]] =
+    val collector = LiftedTreeCollector(sym)
     sym.tree.toSeq.flatMap(collector.collect)
 
-class LiftedTreeCollector[S] private (root: Symbol, matcher: PartialFunction[LiftedTree[?], LiftedTree[S]])(using
-    Context,
-    Definitions,
-    ThrowOrWarn
-):
-  private val inlinedTrees = mutable.Map.empty[TermSymbol, Seq[LiftedTree[S]]]
+class LiftedTreeCollector private (root: Symbol)(using Context, Definitions, ThrowOrWarn):
+  private val inlinedTrees = mutable.Map.empty[TermSymbol, Seq[LiftedTree[?]]]
   private var owner = root
 
-  def collect(tree: Tree): Seq[LiftedTree[S]] =
-    val buffer = mutable.Buffer.empty[LiftedTree[S]]
+  def collect(tree: Tree): Seq[LiftedTree[?]] =
+    val buffer = mutable.Buffer.empty[LiftedTree[?]]
 
     object Traverser extends TreeTraverser:
       override def traverse(tree: Tree): Unit =
         // register lifted funs
         tree match
-          case tree: DefDef if tree.symbol.isLocal => registerLiftedFun(LocalDef(tree))
+          case tree: DefDef if tree.symbol.isLocal => buffer += LocalDef(tree)
           case tree: ValDef if tree.symbol.isLocal && tree.symbol.isModuleOrLazyVal =>
-            registerLiftedFun(LocalLazyVal(tree))
-          case tree: ClassDef if tree.symbol.isLocal => registerLiftedFun(LocalClass(tree))
-          case tree: Lambda => registerLiftedFun(LambdaTree(tree))
-          case tree: Try => registerLiftedFun(LiftedTry(owner, tree))
+            buffer += LocalLazyVal(tree)
+          case tree: ClassDef if tree.symbol.isLocal => buffer += LocalClass(tree)
+          case tree: Lambda => buffer += LambdaTree(tree)
+          case tree: Try => buffer += LiftedTry(owner, tree)
           case tree: Apply =>
             for
               symbol <- tree.safeFunSymbol
@@ -53,10 +45,9 @@ class LiftedTreeCollector[S] private (root: Symbol, matcher: PartialFunction[Lif
             do
               val paramTypesAndArgs = methodType.paramTypes.zip(tree.args)
               for case (byNameTpe: ByNameType, arg) <- paramTypesAndArgs do
-                registerLiftedFun(ByNameArg(owner, arg, byNameTpe.resultType, symbol.isInline))
+                buffer += ByNameArg(owner, arg, byNameTpe.resultType, symbol.isInline)
               if owner.isClass && symbol.isConstructor then
-                for (paramTpe, arg) <- paramTypesAndArgs do
-                  registerLiftedFun(ConstructorArg(owner.asClass, arg, paramTpe))
+                for (paramTpe, arg) <- paramTypesAndArgs do buffer += ConstructorArg(owner.asClass, arg, paramTpe)
           case _ => ()
 
         // recurse
@@ -82,15 +73,13 @@ class LiftedTreeCollector[S] private (root: Symbol, matcher: PartialFunction[Lif
           case tree: (StatementTree | Template | CaseDef) => super.traverse(tree)
           case _ => ()
 
-      def registerLiftedFun(tree: LiftedTree[?]): Unit =
-        matcher.lift(tree).foreach(buffer += _)
     end Traverser
 
     Traverser.traverse(tree)
     buffer.toSeq
   end collect
 
-  private def collectInlineDef(symbol: TermSymbol): Seq[LiftedTree[S]] =
+  private def collectInlineDef(symbol: TermSymbol): Seq[LiftedTree[?]] =
     inlinedTrees(symbol) = Seq.empty // break recursion
     symbol.tree.flatMap(extractRHS).toSeq.flatMap(collect)
 
