@@ -5,7 +5,7 @@ import ch.epfl.scala.debugadapter.internal.DebugSession
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.URI
-import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -19,7 +19,7 @@ final class DebugServer private (
     config: DebugConfig
 )(implicit ec: ExecutionContext) {
   private var closedServer = false
-  private val ongoingSessions = new ConcurrentLinkedQueue[DebugSession]()
+  private val onGoingSession = new AtomicReference[DebugSession]()
   private val lock = new Object()
 
   private val serverSocket = address.serverSocket
@@ -30,10 +30,13 @@ final class DebugServer private (
    * If the session returns `DebugSession.Restarted`, wait for a new connection and start a new session
    * Until the session returns `DebugSession.Terminated` or `DebugSession.Disconnected`
    */
-  def start(): Future[Unit] = {
+  def run(): Future[Unit] = start().map(_ => this.close())
+
+  private def start(): Future[Unit] = {
     for {
       session <- Future(connect())
       exitStatus <- session.exitStatus
+      _ = session.close()
       _ <- exitStatus match {
         case DebugSession.Restarted => start()
         case _ => Future.successful(())
@@ -52,7 +55,7 @@ final class DebugServer private (
       if (closedServer) {
         session.close()
       } else {
-        ongoingSessions.add(session)
+        onGoingSession.set(session)
         session.start()
       }
       session
@@ -63,9 +66,12 @@ final class DebugServer private (
     lock.synchronized {
       if (!closedServer) {
         closedServer = true
-        ongoingSessions.forEach(_.close())
+        logger.info(s"Closing debug server $uri")
         try {
-          logger.info(s"Closing debug server $uri")
+          onGoingSession.getAndUpdate { session =>
+            if (session != null) session.close()
+            null
+          }
           serverSocket.close()
         } catch {
           case NonFatal(e) =>
@@ -91,52 +97,23 @@ object DebugServer {
     def uri: URI = URI.create(s"tcp://${address.getHostString}:${serverSocket.getLocalPort}")
   }
 
-  /**
-   * Create the server.
-   * The server must then be started manually
-   *
-   * @param runner The debuggee process
-   * @param address
-   * @param logger
-   * @param autoCloseSession If true the session closes itself after receiving terminated event from the debuggee
-   * @param gracePeriod When closed the session waits for the debuggee to terminated gracefully
-   * @param ec
-   * @return a new instance of DebugServer
-   */
   def apply(
       debuggee: Debuggee,
       resolver: DebugToolsResolver,
       logger: Logger,
       address: Address = new Address,
       config: DebugConfig = DebugConfig.default
-  )(implicit ec: ExecutionContext): DebugServer = {
+  )(implicit ec: ExecutionContext): DebugServer =
     new DebugServer(debuggee, resolver, logger, address, config)
-  }
 
-  /**
-   * Create a new server and start it.
-   * The server waits for a connection then starts a session
-   * If the session returns Restarted, the server will wait for a new connection
-   * If the session returns Terminated or Disconnected it stops
-   *
-   * @param runner The debuggee process
-   * @param logger
-   * @param autoCloseSession If true the session closes itself after receiving terminated event from the debuggee
-   * @param gracePeriod When closed the session waits for the debuggee to terminated gracefully
-   * @param ec
-   * @return The uri and running future of the server
-   */
-  def start(
+  def run(
       debuggee: Debuggee,
       resolver: DebugToolsResolver,
       logger: Logger,
-      autoCloseSession: Boolean = false,
       gracePeriod: Duration = 5.seconds
   )(implicit ec: ExecutionContext): Handler = {
-    val config = DebugConfig.default.copy(gracePeriod = gracePeriod, autoCloseSession = autoCloseSession)
+    val config = DebugConfig.default.copy(gracePeriod = gracePeriod)
     val server = DebugServer(debuggee, resolver, logger, config = config)
-    val running = server.start()
-    running.onComplete(_ => server.close())
-    new Handler(server.uri, running)
+    new Handler(server.uri, server.run())
   }
 }
