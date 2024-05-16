@@ -5,7 +5,7 @@ import scala.concurrent.Await
 
 class Scala212DebugTest extends ScalaDebugTests(ScalaVersion.`2.12`)
 class Scala213DebugTest extends ScalaDebugTests(ScalaVersion.`2.13`)
-class Scala33DebugTest extends ScalaDebugTests(ScalaVersion.`3.3`)
+class Scala31PlusDebugTest extends ScalaDebugTests(ScalaVersion.`3.1+`)
 
 abstract class ScalaDebugTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
   test("should not crash when sources aren't present") {

@@ -28,7 +28,7 @@ object MixedEvaluationTestsSource {
 
 class Scala212MixedEvaluationTests extends MixedEvaluationTests(ScalaVersion.`2.12`)
 class Scala213MixedEvaluationTests extends MixedEvaluationTests(ScalaVersion.`2.13`)
-class Scala3MixedEvaluationTests extends MixedEvaluationTests(ScalaVersion.`3.3`)
+class Scala3MixedEvaluationTests extends MixedEvaluationTests(ScalaVersion.`3.1+`)
 
 abstract class MixedEvaluationTests(val scalaVersion: ScalaVersion) extends DebugTestSuite {
   lazy val localVar =

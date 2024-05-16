@@ -122,7 +122,7 @@ class MetalsClassBreakpointSuite extends FunSuite {
          |}
          |""".stripMargin,
       "a.b.Main$package$",
-      scalaVersion = ScalaVersion.`3.3`
+      scalaVersion = ScalaVersion.`3.1+`
     )
   }
 
@@ -138,7 +138,7 @@ class MetalsClassBreakpointSuite extends FunSuite {
          |}
          |""".stripMargin,
       "a.Main$package$Even$2$",
-      scalaVersion = ScalaVersion.`3.3`
+      scalaVersion = ScalaVersion.`3.1+`
     )
   }
 
@@ -158,7 +158,7 @@ class MetalsClassBreakpointSuite extends FunSuite {
          |
          |""".stripMargin,
       "a.Main$package$",
-      scalaVersion = ScalaVersion.`3.3`
+      scalaVersion = ScalaVersion.`3.1+`
     )
   }
 

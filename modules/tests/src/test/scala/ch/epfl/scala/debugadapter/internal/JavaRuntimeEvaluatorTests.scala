@@ -5,7 +5,7 @@ import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.testfmk.*
 
 class JavaRuntimeEvaluatorTests extends DebugTestSuite {
-  val scalaVersion = ScalaVersion.`3.3`
+  val scalaVersion = ScalaVersion.`3.1+`
   val nestedSource =
     """|package example;
        |

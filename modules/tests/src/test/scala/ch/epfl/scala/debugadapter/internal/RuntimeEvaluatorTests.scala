@@ -329,6 +329,10 @@ abstract class Scala3RuntimeEvaluatorTests(scalaVersion: ScalaVersion) extends R
     check(Breakpoint(8), Evaluation.success("m", 1))
   }
 }
+class Scala212RuntimeEvaluatorTests extends ScalaRuntimeEvaluatorTests(ScalaVersion.`2.12`)
+class Scala213RuntimeEvaluatorTests extends ScalaRuntimeEvaluatorTests(ScalaVersion.`2.13`)
+class Scala31PlusRuntimeEvaluatorTests extends ScalaRuntimeEvaluatorTests(ScalaVersion.`3.1+`)
+class Scala34PlusRuntimeEvaluatorTests extends ScalaRuntimeEvaluatorTests(ScalaVersion.`3.4+`)
 
 object RuntimeEvaluatorEnvironments {
   val byNameFunction0 =
@@ -1236,7 +1240,7 @@ abstract class RuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extends Deb
          |}
          """.stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    if (scalaVersion == ScalaVersion.`3.3` || scalaVersion == ScalaVersion.`3.4`)
+    if (scalaVersion == ScalaVersion.`3.1+` || scalaVersion == ScalaVersion.`3.4+`)
       check(Breakpoint(7), Evaluation.success("~~.x", 43))
 
     check(
