@@ -652,7 +652,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(Breakpoint(4), Evaluation.success("new java.util.ArrayList[String]().toString", "[]"))
   }
 
-  test("evaluate expression inside of a lambda") {
+  test("inside of a lambda") {
     val source =
       """|package example
          |
@@ -673,7 +673,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(Evaluation.success("n", 1), Evaluation.success("m1()", 9)),
-      if (isScala3) Breakpoint(9) else NoStep(),
+      if (isScala3 && scalaVersion < ScalaVersion.`3.5.0`) Breakpoint(9) else NoStep(),
       Breakpoint(9),
       DebugStepAssert.inParallel(Evaluation.success("n", 1), Evaluation.success("m1()", 9))
     )
@@ -1855,7 +1855,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(Breakpoint(6), Evaluation.success("x\nx", "Hello"))
   }
 
-  test("evaluate on for loops, generators and guards") {
+  test("on for loops, generators and guards") {
     val source =
       """|package example
          |
@@ -1884,7 +1884,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Breakpoint(8),
         DebugStepAssert.inParallel(Evaluation.success("list(0)", 1), Evaluation.success("x", 1)),
         Breakpoint(9), // calling map
-        Breakpoint(9),
+        if (scalaVersion < ScalaVersion.`3.5.0`) Breakpoint(9) else NoStep(),
         Evaluation.success("x + y", 2), // finally we are into the lifted lambda x + y
         Breakpoint(8), // still in the same lifted lambda (the line position does not make any sense)
         Breakpoint(9), // again in the lifted lambda
@@ -1892,7 +1892,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Breakpoint(8), // regression in Scala 3.2.2
         Breakpoint(9), // regression in Scala 3.2.2
         Breakpoint(13), // calling withFilter
-        Breakpoint(13),
+        if (scalaVersion < ScalaVersion.`3.5.0`) Breakpoint(13) else NoStep(),
         Evaluation.success("x", 1),
         Breakpoint(15),
         Evaluation.success("list(0)", 1),
@@ -2652,12 +2652,18 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |""".stripMargin
     implicit val debuggee: TestingDebuggee =
       TestingDebuggee.mainClass(source, "example.Main", scalaVersion, Seq("-Yexplicit-nulls"))
-    check(
+    // TODO reactive testMode after TASTy Query upgrade
+    check(defaultConfig.copy(testMode = false))(
       Breakpoint(6),
-      Evaluation.failed(
-        "classLoader.loadClass(\"java.lang.String\")",
-        "not a member of ClassLoader | Null"
-      )
+      if (scalaVersion < ScalaVersion.`3.5.0`)
+        Evaluation.failed(
+          "classLoader.loadClass(\"java.lang.String\")",
+          "not a member of ClassLoader | Null"
+        )
+      else {
+        // flexible types were added in Scala 3.5.0 (scala/scala3#18112)
+        Evaluation.success("classLoader.loadClass(\"java.lang.String\")", ObjectRef("Class (String)"))
+      }
     )
   }
 
