@@ -25,7 +25,7 @@ class Scala213SourceBreakpointTests extends SourceBreakpointTests(ScalaVersion.`
     )
   }
 }
-class Scala3SourceBreakpointTests extends SourceBreakpointTests(ScalaVersion.`3.3`) {
+class Scala31PlusSourceBreakpointTests extends SourceBreakpointTests(ScalaVersion.`3.1+`) {
   test("evaluate breakpoint in lambda --- force runtime evaluation") {
     val source =
       """|package example

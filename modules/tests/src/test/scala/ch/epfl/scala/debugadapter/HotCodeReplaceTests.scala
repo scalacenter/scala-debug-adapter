@@ -49,7 +49,7 @@ class HotCodeReplaceTests extends DebugTestSuite {
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(
       Seq("Main.scala" -> `Main.scala`, "A.scala" -> `A.scala`),
       "example.Main",
-      ScalaVersion.`3.3`
+      ScalaVersion.`3.1+`
     )
     check(
       Breakpoint(5),
@@ -99,7 +99,7 @@ class HotCodeReplaceTests extends DebugTestSuite {
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(
       Seq("Main.scala" -> `Main.scala`, "A.scala" -> `A.scala`),
       "example.Main",
-      ScalaVersion.`3.3`
+      ScalaVersion.`3.1+`
     )
     check(
       Breakpoint(debuggee.getSourceFile("A.scala"), 8, "A.m2: Unit"),

@@ -4,8 +4,8 @@ import ch.epfl.scala.debugadapter.testfmk.*
 
 class Scala212EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.12`)
 class Scala213EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.13`)
-class Scala33EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.3`)
-class Scala34EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.4`)
+class Scala31PlusEvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.1+`)
+class Scala34PlusEvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.4+`)
 
 abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTestSuite {
   protected override def defaultConfig: DebugConfig =
@@ -2168,7 +2168,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
   }
 
   test("should use tasty-reader") {
-    assume(ScalaVersion.`3.3`.isRelease)
+    assume(ScalaVersion.`3.1+`.isRelease)
     assume(scalaVersion.isScala213)
     val scala2Source =
       """|package example
@@ -2197,7 +2197,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(
       scala3Source,
       "example.Main",
-      ScalaVersion.`3.3`,
+      ScalaVersion.`3.1+`,
       Seq.empty,
       Seq(scala2Debuggee.mainModule)
     )

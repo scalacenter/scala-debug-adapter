@@ -2,7 +2,7 @@ package ch.epfl.scala.debugadapter
 
 import ch.epfl.scala.debugadapter.testfmk.*
 
-class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.3`)
+class Scala3StepFilterTests extends StepFilterTests(ScalaVersion.`3.1+`)
 class Scala212StepFilterTests extends StepFilterTests(ScalaVersion.`2.12`)
 class Scala213StepFilterTests extends StepFilterTests(ScalaVersion.`2.13`)
 

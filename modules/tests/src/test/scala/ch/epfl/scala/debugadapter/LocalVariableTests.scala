@@ -4,7 +4,7 @@ import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.testfmk.*
 
 class LocalVariableTests extends DebugTestSuite {
-  val scalaVersion = ScalaVersion.`3.3`
+  val scalaVersion = ScalaVersion.`3.1+`
 
   test("Should set the right expression for array elements") {
     val source =

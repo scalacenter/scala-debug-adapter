@@ -5,8 +5,8 @@ import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
 import scala.util.Properties
 import tastyquery.Exceptions.*
 
-class Scala33BinaryDecoderTests extends BinaryDecoderTests(ScalaVersion.`3.3`)
-class Scala34BinaryDecoderTests extends BinaryDecoderTests(ScalaVersion.`3.4`)
+class Scala31PlusBinaryDecoderTests extends BinaryDecoderTests(ScalaVersion.`3.1+`)
+class Scala34PlusBinaryDecoderTests extends BinaryDecoderTests(ScalaVersion.`3.4+`)
 
 abstract class BinaryDecoderTests(scalaVersion: ScalaVersion) extends BinaryDecoderSuite:
   def isScala33 = scalaVersion.isScala33
