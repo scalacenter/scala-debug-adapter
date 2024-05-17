@@ -87,7 +87,7 @@ object DebugTools {
         debuggee.libraries
           .find(_.artifactId.startsWith("scala3-library"))
           .map(lib => ScalaVersion(lib.version))
-          .getOrElse(ScalaVersion.`3.3`)
+          .getOrElse(ScalaVersion.`3.1+`)
 
     def resolveCompilerClassLoader(scalaVersion: ScalaVersion): Option[ClassLoader] =
       resolver

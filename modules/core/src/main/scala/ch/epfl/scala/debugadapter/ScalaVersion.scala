@@ -1,12 +1,31 @@
 package ch.epfl.scala.debugadapter
 
-case class ScalaVersion(value: String) {
+case class ScalaVersion(value: String) extends Ordered[ScalaVersion] {
+
   def isScala2: Boolean = value.startsWith("2")
   def isScala3: Boolean = value.startsWith("3")
   def isScala212: Boolean = value.startsWith("2.12")
   def isScala213: Boolean = value.startsWith("2.13")
   def isScala33: Boolean = value.startsWith("3.3")
   def isScala34: Boolean = value.startsWith("3.4")
+
+  def parts: (Int, Int, Int) = {
+    val regex = "(\\d+)\\.(\\d+)\\.(\\d+)(-.+)?".r
+    regex
+      .unapplySeq(value)
+      .collect { case major :: minor :: patch :: tail =>
+        (major.toInt, minor.toInt, patch.toInt)
+      }
+      .get
+  }
+
+  override def compare(that: ScalaVersion): Int =
+    (parts, that.parts) match {
+      case ((x, _, _), (y, _, _)) if x != y => x - y
+      case ((_, x, _), (_, y, _)) if x != y => x - y
+      case ((_, _, x), (_, _, y)) if x != y => x - y
+      case _ => 0
+    }
 
   def binaryVersion: String = if (isScala3) "3" else if (isScala213) "2.13" else "2.12"
 
@@ -20,6 +39,7 @@ object ScalaVersion {
   val `2.12` = ScalaVersion(BuildInfo.scala212)
   val `2.13` = ScalaVersion(BuildInfo.scala213)
   val `3.0` = ScalaVersion(BuildInfo.scala30)
-  val `3.3` = ScalaVersion(BuildInfo.scala33)
-  val `3.4` = ScalaVersion(BuildInfo.scala34)
+  val `3.1+` = ScalaVersion(BuildInfo.scala31Plus)
+  val `3.4+` = ScalaVersion(BuildInfo.scala34Plus)
+  val `3.5.0` = ScalaVersion("3.5.0")
 }
