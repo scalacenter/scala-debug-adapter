@@ -51,7 +51,7 @@ lazy val javaDebug = project
     autoScalaLibrary := false,
     libraryDependencies ++= Seq(
       "org.apache.commons" % "commons-lang3" % "3.14.0",
-      "com.google.code.gson" % "gson" % "2.10.1",
+      "com.google.code.gson" % "gson" % "2.11.0",
       "io.reactivex.rxjava2" % "rxjava" % "2.2.21",
       "org.reactivestreams" % "reactive-streams" % "1.0.4",
       "commons-io" % "commons-io" % "2.16.1",
