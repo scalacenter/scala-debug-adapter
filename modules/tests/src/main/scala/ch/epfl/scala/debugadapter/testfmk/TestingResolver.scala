@@ -40,7 +40,12 @@ object TestingResolver extends DebugToolsResolver {
   def fetch(dependencies: Seq[Dependency], options: FetchOptions): Seq[Library] = {
     coursier
       .Fetch()
-      .addRepositories(options.repositories :+ MavenRepository("https://repo1.maven.org/maven2/dev"): _*)
+      .addRepositories(
+        options.repositories ++ Seq(
+          MavenRepository("https://repo1.maven.org/maven2/dev"),
+          MavenRepository("https://oss.sonatype.org/content/repositories/snapshots")
+        ): _*
+      )
       .addDependencies(dependencies: _*)
       .addClassifiers(Classifier.sources)
       .withMainArtifacts()
