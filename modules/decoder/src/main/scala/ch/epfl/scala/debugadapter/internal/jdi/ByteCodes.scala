@@ -2,8 +2,7 @@ package ch.epfl.scala.debugadapter.internal.jdi
 
 import java.nio.charset.StandardCharsets
 import scala.collection.mutable.Buffer
-import ch.epfl.scala.debugadapter.internal.binary.Instruction
-import ch.epfl.scala.debugadapter.internal.jdi.ConstantPool.INTERFACE_METHODREF_TAG
+import ch.epfl.scala.decoder.binary.Instruction
 
 private class ByteReader(bytes: Array[Byte]):
   def unsignedShort(offset: Int): Int =
@@ -47,7 +46,7 @@ private class ConstantPool(offsets: IndexedSeq[Int], reader: ByteReader):
     val offset = offsets(index - 1)
     val owner = readClass(reader.unsignedShort(offset))
     val (name, descriptor) = readNameAndType(reader.unsignedShort(offset + 2))
-    val isInterface = reader.byte(offset - 1) == INTERFACE_METHODREF_TAG
+    val isInterface = reader.byte(offset - 1) == ConstantPool.INTERFACE_METHODREF_TAG
     Instruction.Method(opcode, owner, name, descriptor, isInterface)
 
 private object ConstantPool:

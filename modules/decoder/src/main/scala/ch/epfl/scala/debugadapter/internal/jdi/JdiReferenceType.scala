@@ -1,6 +1,6 @@
 package ch.epfl.scala.debugadapter.internal.jdi
 
-import ch.epfl.scala.debugadapter.internal.binary.*
+import ch.epfl.scala.decoder.binary.*
 
 import java.util as ju
 import scala.jdk.CollectionConverters.*

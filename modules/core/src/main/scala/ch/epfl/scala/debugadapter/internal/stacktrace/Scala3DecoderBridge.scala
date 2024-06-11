@@ -28,12 +28,10 @@ private class Scala3DecoderBridge(
 
 private object Scala3DecoderBridge {
   def apply(debuggee: Debuggee, classLoader: ClassLoader, logger: Logger, testMode: Boolean): Scala3DecoderBridge = {
-    val className = "ch.epfl.scala.debugadapter.internal.stacktrace.Scala3DecoderBridge"
+    val className = "ch.epfl.scala.debugadapter.internal.Scala3DecoderBridge"
     val cls = classLoader.loadClass(className)
-
     val instance = newInstance(debuggee, cls, logger, testMode)
-    val decodeMethod = cls.getMethod("decode", classOf[Any])
-
+    val decodeMethod = cls.getMethod("decode", classOf[jdi.Method])
     new Scala3DecoderBridge(instance, decodeMethod)
   }
 
