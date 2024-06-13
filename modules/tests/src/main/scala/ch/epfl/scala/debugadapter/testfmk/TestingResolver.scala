@@ -1,14 +1,16 @@
 package ch.epfl.scala.debugadapter.testfmk
 
-import scala.collection.mutable
-import coursier._
-import scala.util.Try
-import ch.epfl.scala.debugadapter.DebugToolsResolver
-import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.BuildInfo
+import ch.epfl.scala.debugadapter.DebugToolsResolver
 import ch.epfl.scala.debugadapter.Library
+import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.SourceJar
+import coursier.*
+
 import java.io.File
+import java.nio.file.Path
+import scala.collection.mutable
+import scala.util.Try
 
 case class FetchOptions(
     keepOptional: Boolean = false,
@@ -79,8 +81,8 @@ object TestingResolver extends DebugToolsResolver {
   override def resolveExpressionCompiler(scalaVersion: ScalaVersion): Try[ClassLoader] =
     Try(get(scalaVersion).expressionCompilerClassLoader)
 
-  override def resolveDecoder(scalaVersion: ScalaVersion): Try[ClassLoader] =
-    Try(get(scalaVersion).decoderClassLoader)
+  override def resolveDecoder(scalaVersion: ScalaVersion): Try[Seq[Path]] =
+    Try(get(scalaVersion).decoderJars.map(_.absolutePath))
 
   def get(scalaVersion: ScalaVersion): ScalaInstance = {
     if (!cache.contains(scalaVersion)) {

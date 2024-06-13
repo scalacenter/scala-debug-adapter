@@ -1,9 +1,12 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter._
-import ch.epfl.scala.debugadapter.internal.ScalaExtension._
+import ch.epfl.scala.debugadapter.*
+import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
 import ch.epfl.scala.debugadapter.internal.evaluator.ExpressionCompiler
 
+import java.net.URLClassLoader
+import java.nio.file.Path
+import scala.collection.concurrent.TrieMap
 import scala.reflect.io.File
 
 private[debugadapter] final class DebugTools(
@@ -13,6 +16,19 @@ private[debugadapter] final class DebugTools(
 )
 
 object DebugTools {
+  private val decoderCache: TrieMap[Seq[Path], ClassLoader] = TrieMap.empty
+  private lazy val jdiClassLoader = {
+    val debugAdapterClassLoader = getClass.getClassLoader
+    new ClassLoader(null) {
+      override def loadClass(name: String, resolve: Boolean): Class[?] = {
+        if (name.startsWith("com.sun.jdi")) {
+          val cls = debugAdapterClassLoader.loadClass(name)
+          if (resolve) resolveClass(cls)
+          cls
+        } else super.loadClass(name, resolve)
+      }
+    }
+  }
 
   def none(logger: Logger): DebugTools =
     new DebugTools(Map.empty, None, SourceLookUpProvider.empty(logger))
@@ -25,15 +41,13 @@ object DebugTools {
    */
   def apply(debuggee: Debuggee, resolver: DebugToolsResolver, logger: Logger): DebugTools = {
     val allCompilers = TimeUtils.logTime(logger, "Loaded expression compiler") {
-      loadExpressionCompiler(debuggee, resolver, logger)
+      loadExpressionCompilers(debuggee, resolver, logger)
     }
 
     val decoder =
       if (debuggee.scalaVersion.isScala3) {
         TimeUtils.logTime(logger, "Loaded step filter") {
-          resolver
-            .resolveDecoder(debuggee.scalaVersion)
-            .warnFailure(logger, s"Cannot fetch decoder of Scala ${debuggee.scalaVersion}")
+          loadDecoder(debuggee.scalaVersion, resolver, logger)
         }
       } else None
 
@@ -52,6 +66,20 @@ object DebugTools {
     new DebugTools(allCompilers, decoder, sourceLookUp)
   }
 
+  private def loadDecoder(
+      scalaVersion: ScalaVersion,
+      resolver: DebugToolsResolver,
+      logger: Logger
+  ): Option[ClassLoader] = {
+    val classpath = resolver
+      .resolveDecoder(scalaVersion)
+      .warnFailure(logger, s"Cannot fetch decoder of Scala $scalaVersion")
+    for (classpath <- classpath) yield {
+      lazy val classLoader = new URLClassLoader(classpath.map(_.toUri.toURL).toArray, jdiClassLoader)
+      decoderCache.getOrElseUpdate(classpath, classLoader)
+    }
+  }
+
   /* At most 2 expression compilers are resolved, one for Scala 2 and one for Scala 3
    * For both Scala 2 and Scala 3 we want to use the most recent known version:
    *   - the version of the main module
@@ -67,7 +95,7 @@ object DebugTools {
    *   - both compilers can unpickle Scala 2 AND Scala 3
    *   - both compilers does not fail on warnings
    */
-  private def loadExpressionCompiler(
+  private def loadExpressionCompilers(
       debuggee: Debuggee,
       resolver: DebugToolsResolver,
       logger: Logger

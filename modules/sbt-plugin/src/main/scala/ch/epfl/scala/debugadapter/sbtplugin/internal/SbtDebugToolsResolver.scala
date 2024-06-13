@@ -57,19 +57,16 @@ class SbtDebugToolsResolver(
         }
   }
 
-  override def resolveDecoder(scalaVersion: ScalaVersion): Try[ClassLoader] = {
+  override def resolveDecoder(scalaVersion: ScalaVersion): Try[Seq[java.nio.file.Path]] = {
     val org = BuildInfo.organization
     val artifact = s"${BuildInfo.decoderName}_3"
     val version = BuildInfo.version
     val tastyDep = "org.scala-lang" % "tasty-core_3" % scalaVersion.value
 
-    for (report <- fetchArtifactsOf(org % artifact % version, Seq(tastyDep))) yield {
-      val decoderJars = report
+    for (report <- fetchArtifactsOf(org % artifact % version, Seq(tastyDep)))
+      yield report
         .select(configurationFilter(Runtime.name), moduleFilter(), artifactFilter(extension = "jar", classifier = ""))
-        .map(_.toURI.toURL)
-        .toArray
-      new URLClassLoader(decoderJars, null)
-    }
+        .map(_.toPath)
   }
 
   private def fetchArtifactsOf(moduleID: ModuleID, dependencies: Seq[ModuleID]): Try[UpdateReport] = {
