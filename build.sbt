@@ -19,7 +19,7 @@ inThisBuild(
       if (isRelease) dynVer
       else "4.1.0-SNAPSHOT" // only for local publishing
     },
-    resolvers += Resolver.mavenLocal,
+    resolvers ++= Resolver.sonatypeOssRepos("snapshots"),
     compile / javacOptions ++= Seq("-source", "1.8", "-target", "1.8")
   )
 )
@@ -201,7 +201,7 @@ lazy val expressionCompiler = projectMatrix
 
 lazy val decoder3: Project = project
   .in(file("modules/decoder"))
-  .disablePlugins(SbtJdiTools)
+  .enablePlugins(SbtJdiTools)
   .dependsOn(tests3 % Test)
   .settings(
     name := "scala-debug-decoder",
@@ -209,6 +209,7 @@ lazy val decoder3: Project = project
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
       "ch.epfl.scala" %% "tasty-query" % "1.3.0",
+      "ch.epfl.scala" %% "scala3-binary-decoder" % "0.2.0",
       Dependencies.asm,
       Dependencies.asmUtil,
       Dependencies.munit % Test

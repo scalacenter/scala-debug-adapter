@@ -1,14 +1,16 @@
 package ch.epfl.scala.debugadapter.testfmk
 
-import scala.collection.mutable
-import coursier._
-import scala.util.Try
-import ch.epfl.scala.debugadapter.DebugToolsResolver
-import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.BuildInfo
+import ch.epfl.scala.debugadapter.DebugToolsResolver
 import ch.epfl.scala.debugadapter.Library
+import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.SourceJar
+import coursier.*
+
 import java.io.File
+import java.nio.file.Path
+import scala.collection.mutable
+import scala.util.Try
 
 case class FetchOptions(
     keepOptional: Boolean = false,
@@ -40,7 +42,12 @@ object TestingResolver extends DebugToolsResolver {
   def fetch(dependencies: Seq[Dependency], options: FetchOptions): Seq[Library] = {
     coursier
       .Fetch()
-      .addRepositories(options.repositories :+ MavenRepository("https://repo1.maven.org/maven2/dev"): _*)
+      .addRepositories(
+        options.repositories ++ Seq(
+          MavenRepository("https://repo1.maven.org/maven2/dev"),
+          MavenRepository("https://oss.sonatype.org/content/repositories/snapshots")
+        ): _*
+      )
       .addDependencies(dependencies: _*)
       .addClassifiers(Classifier.sources)
       .withMainArtifacts()
@@ -74,8 +81,8 @@ object TestingResolver extends DebugToolsResolver {
   override def resolveExpressionCompiler(scalaVersion: ScalaVersion): Try[ClassLoader] =
     Try(get(scalaVersion).expressionCompilerClassLoader)
 
-  override def resolveDecoder(scalaVersion: ScalaVersion): Try[ClassLoader] =
-    Try(get(scalaVersion).decoderClassLoader)
+  override def resolveDecoder(scalaVersion: ScalaVersion): Try[Seq[Path]] =
+    Try(get(scalaVersion).decoderJars.map(_.absolutePath))
 
   def get(scalaVersion: ScalaVersion): ScalaInstance = {
     if (!cache.contains(scalaVersion)) {
