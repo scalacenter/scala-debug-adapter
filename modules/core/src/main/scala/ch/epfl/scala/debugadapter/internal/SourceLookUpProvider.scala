@@ -97,11 +97,14 @@ private[debugadapter] final class SourceLookUpProvider(
   }
 
   private def loadClassesByScalaName: Map[String, Seq[String]] =
-    classPathEntries.map(_.classesByScalaName).foldLeft(Map.empty[String, Seq[String]]) { (x, y) =>
-      (x.keys ++ y.keys).map { k =>
-        k -> (x.getOrElse(k, Seq.empty) ++ y.getOrElse(k, Seq.empty))
-      }.toMap
+    //Note: This can be a hotspot as there can be a LOT of classes. Keep perf in mind when refactoring
+    classPathEntries.map(_.classesByScalaName).foldLeft(Map.empty[String, Seq[String]]){ (accum, currMap) =>
+      currMap.foldLeft(accum){ (accumInner, kv) =>{
+        val (k,v) = kv
+        accumInner.updated(k, accumInner.getOrElse(k, Seq.empty) ++v)
+      }
     }
+  }
 }
 
 private[debugadapter] object SourceLookUpProvider {
