@@ -7,8 +7,10 @@ import com.microsoft.java.debug.core.adapter.{StackTraceProvider => JavaStackTra
 import com.microsoft.java.debug.core.protocol.Requests.StepFilters
 import com.sun.jdi.Location
 import com.sun.jdi.Method
+import com.sun.jdi.LocalVariable
 import com.microsoft.java.debug.core.adapter.stacktrace.DecodedMethod
 import ch.epfl.scala.debugadapter.DebugConfig
+import com.microsoft.java.debug.core.adapter.stacktrace.DecodedVariable
 
 class StackTraceProvider(
     stepFilters: Seq[StepFilter],
@@ -22,6 +24,9 @@ class StackTraceProvider(
   override def decode(method: Method): DecodedMethod =
     decoder.map(_.decode(method)).getOrElse(JavaMethod(method, isGenerated = false))
 
+  override def decode(variable: LocalVariable): DecodedVariable =
+    decoder.map(_.decode(variable)).getOrElse(JavaVariable(variable))
+
   override def skipOver(method: Method, filters: StepFilters): Boolean = {
     try {
       val skipOver = super.skipOver(method, filters) || stepFilters.exists(_.skipOver(method))
@@ -29,7 +34,7 @@ class StackTraceProvider(
       skipOver
     } catch {
       case cause: Throwable =>
-        throwOrWarn(s"Failed to determine if $method should be skipped over: ${cause.getMessage}")
+        throwOrWarn(s"Failed to determine if $method should be skipped over", cause)
         false
     }
   }
@@ -43,7 +48,7 @@ class StackTraceProvider(
       skipOut
     } catch {
       case cause: Throwable =>
-        throwOrWarn(s"Failed to determine if $method should be skipped out: ${cause.getMessage}")
+        throwOrWarn(s"Failed to determine if $method should be skipped out", cause)
         false
     }
   }

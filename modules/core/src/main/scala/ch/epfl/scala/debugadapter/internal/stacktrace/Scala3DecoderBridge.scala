@@ -6,10 +6,12 @@ import ch.epfl.scala.debugadapter.Java9OrAbove
 import ch.epfl.scala.debugadapter.Logger
 import ch.epfl.scala.debugadapter.internal.Errors
 import com.microsoft.java.debug.core.adapter.stacktrace.DecodedMethod
+import com.microsoft.java.debug.core.adapter.stacktrace.DecodedVariable
 import com.sun.jdi
 
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
+import java.lang.reflect.Field
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.function.Consumer
@@ -17,10 +19,17 @@ import scala.jdk.CollectionConverters.*
 
 private class Scala3DecoderBridge(
     instance: Any,
-    decodeMethod: Method
+    decodeMethod: Method,
+    decodeVariable: Field
 ) {
   def decode(method: jdi.Method): DecodedMethod =
     try new DecodedMethodBridge(decodeMethod.invoke(instance, method))
+    catch {
+      case e: InvocationTargetException => throw Errors.frameDecodingFailure(e.getCause)
+    }
+
+  def decode(variable: jdi.LocalVariable): DecodedVariable =
+    try new DecodedVariableBridge(decodeMethod.invoke(instance, variable))
     catch {
       case e: InvocationTargetException => throw Errors.frameDecodingFailure(e.getCause)
     }
@@ -32,7 +41,8 @@ private object Scala3DecoderBridge {
     val cls = classLoader.loadClass(className)
     val instance = newInstance(debuggee, cls, logger, testMode)
     val decodeMethod = cls.getMethod("decode", classOf[jdi.Method])
-    new Scala3DecoderBridge(instance, decodeMethod)
+    val decodeVariable = cls.getField("decode")
+    new Scala3DecoderBridge(instance, decodeMethod, decodeVariable)
   }
 
   private def newInstance(debuggee: Debuggee, decoderClass: Class[?], logger: Logger, testMode: Boolean) = {

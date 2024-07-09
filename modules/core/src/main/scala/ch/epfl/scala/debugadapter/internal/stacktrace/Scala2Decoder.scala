@@ -9,6 +9,8 @@ import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSigPrinter
 import ch.epfl.scala.debugadapter.internal.scalasig.*
 import ch.epfl.scala.debugadapter.internal.stacktrace.JdiExtensions.*
 import com.microsoft.java.debug.core.adapter.stacktrace.DecodedMethod
+import com.microsoft.java.debug.core.adapter.stacktrace.DecodedVariable
+
 import com.sun.jdi
 
 import scala.jdk.CollectionConverters.*
@@ -75,6 +77,9 @@ class Scala2Decoder(
 
   override def decode(method: jdi.Method): DecodedMethod =
     JavaMethod(method, isGenerated = skipOver(method))
+
+  override def decode(variable: jdi.LocalVariable): DecodedVariable =
+    JavaVariable(variable)
 
   private def containsLazyField(interface: jdi.InterfaceType, fieldName: String): Boolean = {
     val fqcn = interface.name

@@ -8,9 +8,11 @@ import ch.epfl.scala.debugadapter.internal.ScalaExtension.*
 import com.sun.jdi
 import com.microsoft.java.debug.core.adapter.stacktrace.DecodedMethod
 import scala.util.Try
+import com.microsoft.java.debug.core.adapter.stacktrace.DecodedVariable
 
 trait ScalaDecoder extends StepFilter {
   def decode(method: jdi.Method): DecodedMethod
+  def decode(variable: jdi.LocalVariable): DecodedVariable
   def reload(): Unit
 }
 
