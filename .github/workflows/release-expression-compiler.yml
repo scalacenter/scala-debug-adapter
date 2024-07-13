@@ -42,13 +42,13 @@ jobs:
           jvm: 'adopt:1.8.0-292'
       - name: setup GPG secret key
         run: echo ${{ secrets.PGP_SECRET }} | base64 --decode | gpg --batch --import
-      - run: sbt 'expressionCompiler3_3/publishSigned;sonatypeBundleRelease'
+      - run: sbt 'expressionCompiler31Plus/publishSigned;sonatypeBundleRelease'
         if: startsWith(inputs.scala-version, '3.1') || startsWith(inputs.scala-version, '3.2') || startsWith(inputs.scala-version, '3.3')
-      - run: sbt 'expressionCompiler3_4/publishSigned;sonatypeBundleRelease'
-        if: startsWith(inputs.scala-version, '3.4')
-      - run: sbt 'expressionCompiler3_0/publishSigned;sonatypeBundleRelease'
+      - run: sbt 'expressionCompiler34Plus/publishSigned;sonatypeBundleRelease'
+        if: startsWith(inputs.scala-version, '3.4') || startsWith(inputs.scala-version, '3.5') || startsWith(inputs.scala-version, '3.6')
+      - run: sbt 'expressionCompiler30/publishSigned;sonatypeBundleRelease'
         if: startsWith(inputs.scala-version, '3.0')
-      - run: sbt 'expressionCompiler2_13/publishSigned;sonatypeBundleRelease'
+      - run: sbt 'expressionCompiler213/publishSigned;sonatypeBundleRelease'
         if: startsWith(inputs.scala-version, '2.13')
-      - run: sbt 'expressionCompiler2_12/publishSigned;sonatypeBundleRelease'
+      - run: sbt 'expressionCompiler212/publishSigned;sonatypeBundleRelease'
         if: startsWith(inputs.scala-version, '2.12')
