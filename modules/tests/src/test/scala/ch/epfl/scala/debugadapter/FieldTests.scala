@@ -3,7 +3,7 @@ package ch.epfl.scala.debugadapter.internal
 import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.testfmk.*
 
-class LocalVariableTests extends DebugTestSuite {
+class FieldTests extends DebugTestSuite {
   val scalaVersion = ScalaVersion.`3.1+`
 
   test("Should set the right expression for array elements") {
@@ -28,6 +28,7 @@ class LocalVariableTests extends DebugTestSuite {
   test("simple local variables") {
     val source =
       """|package example
+         |val ro = 7
          |
          |object Main {
          |  def main(args: Array[String]): Unit = {
@@ -40,10 +41,12 @@ class LocalVariableTests extends DebugTestSuite {
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(6),
+      LocalVariable()(Seq("ro", "args", "this")),
+      Breakpoint(7),
       LocalVariable()(Seq("args", "x", "this")),
-      Breakpoint(8),
+      Breakpoint(9),
       LocalVariable()(Seq("args", "x", "y", "this")),
-      LocalVariable("y", "CASE_INSENSITIVE_ORDER")(Seq("Class has no fields"))
+      LocalVariable("y", "CASE_INSENSITIVE_ORDER")(Seq("serialVersionUID"))
     )
   }
 }

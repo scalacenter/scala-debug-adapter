@@ -7,6 +7,7 @@ import ch.epfl.scala.debugadapter.internal.ThrowOrWarn
 import ch.epfl.scala.debugadapter.internal.stacktrace.JdiExtensions.*
 import com.microsoft.java.debug.core.adapter.stacktrace.DecodedMethod
 import com.microsoft.java.debug.core.adapter.stacktrace.DecodedVariable
+import com.microsoft.java.debug.core.adapter.stacktrace.DecodedField
 import com.sun.jdi
 
 import scala.util.control.NonFatal
@@ -44,12 +45,20 @@ class Scala3Decoder(
         JavaMethod(method, isGenerated = method.isBridge)
     }
 
-  override def decode(variable: jdi.LocalVariable): DecodedVariable =
-    try bridge.decode(variable)
+  override def decode(variable: jdi.LocalVariable, method: jdi.Method, sourceLine: Int): DecodedVariable =
+    try bridge.decode(variable, method, sourceLine)
     catch {
       case NonFatal(e) =>
         throwOrWarn(e)
         JavaVariable(variable)
+    }
+
+  override def decode(field: jdi.Field): DecodedField =
+    try bridge.decode(field)
+    catch {
+      case NonFatal(e) =>
+        throwOrWarn(e)
+        JavaField(field)
     }
 
   override def reload(): Unit =

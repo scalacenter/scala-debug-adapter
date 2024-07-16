@@ -23,5 +23,8 @@ class Scala3DecoderBridge(
 
   // TODO //
   // methode qui decode des variables pr l'appeler dans le Scala3DecoderBridge apply
-  def decode(obj: com.sun.jdi.LocalVariable): DecodedVariableBridge =
-    new DecodedVariableBridge(decoder.decode(JdiVariable(obj)), formatter)
+  def decode(obj: com.sun.jdi.LocalVariable, method: com.sun.jdi.Method, sourceLine: Int): DecodedVariableBridge =
+    new DecodedVariableBridge(decoder.decode(JdiVariable(obj, method), sourceLine))
+
+  def decode(obj: com.sun.jdi.Field): DecodedFieldBridge =
+    new DecodedFieldBridge(decoder.decode(JdiField(obj)))
