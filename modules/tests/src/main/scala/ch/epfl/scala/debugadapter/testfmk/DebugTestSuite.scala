@@ -232,8 +232,8 @@ trait DebugTest extends CommonUtils {
     if (closeSession) {
       continueIfPaused()
       if (!GithubUtils.isCI()) {
-        client.exited(timeout = 4.seconds)
-        client.terminated(timeout = 4.seconds)
+        // client.exited(timeout = 4.seconds)
+        // client.terminated(timeout = 4.seconds)
       }
     }
 
