@@ -27,14 +27,18 @@ jobs:
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    needs: [test]
     env:
       SCALA_VERSION: ${{ inputs.scala-version }}
+      SCALA_30: ${{ startsWith(inputs.scala-version, 3.0) }}
+      SCALA_31_PLUS: ${{ startsWith(inputs.scala-version, '3.1') || startsWith(inputs.scala-version, '3.2') || startsWith(inputs.scala-version, '3.3') }}
+      SCALA_34_PLUS: ${{ startsWith(inputs.scala-version, '3') && !env.SCALA_30 && !env.SCALA_31_PLUS }}
       PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
       SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
       SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
     steps:
       - uses: actions/checkout@v4
-        with:  
+        with:
           submodules: true
       - uses: coursier/setup-action@v1.3.5
         with:
@@ -42,13 +46,13 @@ jobs:
           jvm: 'adopt:1.8.0-292'
       - name: setup GPG secret key
         run: echo ${{ secrets.PGP_SECRET }} | base64 --decode | gpg --batch --import
-      - run: sbt 'expressionCompiler3_3/publishSigned;sonatypeBundleRelease'
-        if: startsWith(inputs.scala-version, '3.1') || startsWith(inputs.scala-version, '3.2') || startsWith(inputs.scala-version, '3.3')
-      - run: sbt 'expressionCompiler3_4/publishSigned;sonatypeBundleRelease'
-        if: startsWith(inputs.scala-version, '3.4')
-      - run: sbt 'expressionCompiler3_0/publishSigned;sonatypeBundleRelease'
-        if: startsWith(inputs.scala-version, '3.0')
-      - run: sbt 'expressionCompiler2_13/publishSigned;sonatypeBundleRelease'
+      - run: sbt 'expressionCompiler30/publishSigned;sonatypeBundleRelease'
+        if: env.SCALA_30
+      - run: sbt 'expressionCompiler31Plus/publishSigned;sonatypeBundleRelease'
+        if: env.SCALA_31_PLUS
+      - run: sbt 'expressionCompiler34Plus/publishSigned;sonatypeBundleRelease'
+        if: env.SCALA_34_PLUS
+      - run: sbt 'expressionCompiler213/publishSigned;sonatypeBundleRelease'
         if: startsWith(inputs.scala-version, '2.13')
-      - run: sbt 'expressionCompiler2_12/publishSigned;sonatypeBundleRelease'
+      - run: sbt 'expressionCompiler212/publishSigned;sonatypeBundleRelease'
         if: startsWith(inputs.scala-version, '2.12')
