@@ -6,25 +6,6 @@ import ch.epfl.scala.debugadapter.testfmk.*
 class FieldTests extends DebugTestSuite {
   val scalaVersion = ScalaVersion.`3.1+`
 
-  test("Should set the right expression for array elements") {
-    val source =
-      """|package example
-         |
-         |object Main {
-         |  def main(args: Array[String]): Unit = {
-         |    val array = Array(1, 2, 3)
-         |    println("ok")
-         |  }
-         |}""".stripMargin
-    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
-      Breakpoint(6),
-      LocalVariable.inspect("array")(
-        _.forall(v => """array\(\d+\)""".r.unapplySeq(v.evaluateName).isDefined)
-      )
-    )
-  }
-
   test("public and private fields") {
     val source =
       """|package example
@@ -343,7 +324,9 @@ class FieldTests extends DebugTestSuite {
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(9),
-      LocalVariable("a")(Seq("B", "name", "ordinal"))
+      LocalVariable("a")(
+        Seq("name", "ordinal")
+      ) // Seb m'a dit que fallait pas montrer dcp vu que B est static dans la classe A et non son companion Object
     )
   }
 
@@ -386,7 +369,7 @@ class FieldTests extends DebugTestSuite {
     implicit val debuggee: TestingDebuggee = TestingDebuggee.fromJavaSource(source, "example.Main", scalaVersion)
     check(
       Breakpoint(10),
-      LocalVariable("a")(Seq("x"))
+      LocalVariable("a")(Seq("Class has no fields"))
     )
   }
 

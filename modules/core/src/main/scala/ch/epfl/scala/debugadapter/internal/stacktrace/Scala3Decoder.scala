@@ -46,7 +46,14 @@ class Scala3Decoder(
     }
 
   override def decode(variable: jdi.LocalVariable, method: jdi.Method, sourceLine: Int): DecodedVariable =
-    try bridge.decode(variable, method, sourceLine)
+    try
+      if (method.declaringType().isDynamicClass) {
+        JavaVariable(variable)
+      } else if (method.isJava) {
+        JavaVariable(variable)
+      } else if (method.isStaticMain || method.isStaticConstructor) {
+        JavaVariable(variable)
+      } else bridge.decode(variable, method, sourceLine)
     catch {
       case NonFatal(e) =>
         throwOrWarn(e)

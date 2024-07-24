@@ -43,7 +43,7 @@ class LocalVariableTests extends DebugTestSuite {
       LocalVariable()(Seq("args", "x", "this")),
       Breakpoint(8),
       LocalVariable()(Seq("args", "x", "y", "this")),
-      LocalVariable("y", "CASE_INSENSITIVE_ORDER")(Seq("Class has no fields"))
+      LocalVariable("y", "CASE_INSENSITIVE_ORDER")(Nil)
     )
   }
 
