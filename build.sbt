@@ -209,13 +209,19 @@ lazy val decoder3: Project = project
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
       "ch.epfl.scala" %% "tasty-query" % "1.3.0",
-      "ch.epfl.scala" %% "scala3-binary-decoder" % "0.2.0",
+      "com.github.SaadAissa.scala3-binary-decoder" %% "scala3-binary-decoder" % "main-SNAPSHOT",
       Dependencies.asm,
       Dependencies.asmUtil,
       Dependencies.munit % Test
     ),
     testOptionsSettings
   )
+
+resolvers ++= Seq(
+  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
+  "Sonatype OSS Releases" at "https://oss.sonatype.org/content/repositories/releases",
+  "jitpack" at "https://jitpack.io"
+)
 
 lazy val testOptionsSettings = Def.settings(
   Test / fork := true,
