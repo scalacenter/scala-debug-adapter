@@ -30,7 +30,7 @@ jobs:
     needs: [test]
     env:
       SCALA_VERSION: ${{ inputs.scala-version }}
-      SCALA_30: ${{ startsWith(inputs.scala-version, 3.0) }}
+      SCALA_30: ${{ startsWith(inputs.scala-version, '3.0') }}
       SCALA_31_PLUS: ${{ startsWith(inputs.scala-version, '3.1') || startsWith(inputs.scala-version, '3.2') || startsWith(inputs.scala-version, '3.3') }}
       PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
       SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
