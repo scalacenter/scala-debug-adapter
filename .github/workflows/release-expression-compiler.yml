@@ -32,7 +32,6 @@ jobs:
       SCALA_VERSION: ${{ inputs.scala-version }}
       SCALA_30: ${{ startsWith(inputs.scala-version, 3.0) }}
       SCALA_31_PLUS: ${{ startsWith(inputs.scala-version, '3.1') || startsWith(inputs.scala-version, '3.2') || startsWith(inputs.scala-version, '3.3') }}
-      SCALA_34_PLUS: ${{ startsWith(inputs.scala-version, '3') && !env.SCALA_30 && !env.SCALA_31_PLUS }}
       PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
       SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
       SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
@@ -51,7 +50,7 @@ jobs:
       - run: sbt 'expressionCompiler31Plus/publishSigned;sonatypeBundleRelease'
         if: env.SCALA_31_PLUS
       - run: sbt 'expressionCompiler34Plus/publishSigned;sonatypeBundleRelease'
-        if: env.SCALA_34_PLUS
+        if: startsWith(inputs.scala-version, '3') && !env.SCALA_30 && !env.SCALA_31_PLUS
       - run: sbt 'expressionCompiler213/publishSigned;sonatypeBundleRelease'
         if: startsWith(inputs.scala-version, '2.13')
       - run: sbt 'expressionCompiler212/publishSigned;sonatypeBundleRelease'
