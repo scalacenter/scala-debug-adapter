@@ -30,8 +30,6 @@ jobs:
     needs: [test]
     env:
       SCALA_VERSION: ${{ inputs.scala-version }}
-      SCALA_30: ${{ startsWith(inputs.scala-version, '3.0') }}
-      SCALA_31_PLUS: ${{ startsWith(inputs.scala-version, '3.1') || startsWith(inputs.scala-version, '3.2') || startsWith(inputs.scala-version, '3.3') }}
       PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
       SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
       SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
@@ -45,13 +43,28 @@ jobs:
           jvm: 'adopt:1.8.0-292'
       - name: setup GPG secret key
         run: echo ${{ secrets.PGP_SECRET }} | base64 --decode | gpg --batch --import
-      - run: sbt 'expressionCompiler30/publishSigned;sonatypeBundleRelease'
-        if: env.SCALA_30
-      - run: sbt 'expressionCompiler31Plus/publishSigned;sonatypeBundleRelease'
-        if: env.SCALA_31_PLUS
-      - run: sbt 'expressionCompiler34Plus/publishSigned;sonatypeBundleRelease'
-        if: startsWith(inputs.scala-version, '3') && !env.SCALA_30 && !env.SCALA_31_PLUS
-      - run: sbt 'expressionCompiler213/publishSigned;sonatypeBundleRelease'
-        if: startsWith(inputs.scala-version, '2.13')
-      - run: sbt 'expressionCompiler212/publishSigned;sonatypeBundleRelease'
-        if: startsWith(inputs.scala-version, '2.12')
+      - name: publish task
+        run: |
+          set -e
+
+          VERSION='${{ inputs.scala-version }}'
+          if [[ $VERSION == 2.12.* ]]; then
+            echo "Using 2.12 publish task"
+            sbt 'expressionCompiler212/publishSigned;sonatypeBundleRelease'
+
+          elif [[ $VERSION == 2.13.* ]]; then
+            echo "Using 2.13 publish task"
+            sbt 'expressionCompiler213/publishSigned;sonatypeBundleRelease'
+
+          elif [[ $VERSION == 3.0.* ]]; then
+            echo "Using 3.0 publish task"
+            sbt 'expressionCompiler30/publishSigned;sonatypeBundleRelease'
+
+          elif [[ $VERSION == 3.1.* || $VERSION == 3.2.* || $VERSION == 3.3.* ]]; then
+            echo "Using 3.1+ publish task"
+            sbt 'expressionCompiler31Plus/publishSigned;sonatypeBundleRelease'
+
+          elif [[ $VERSION == 3.* ]]; then
+            echo "Using 3.4+ publish task"
+            sbt 'expressionCompiler34Plus/publishSigned;sonatypeBundleRelease'
+          fi

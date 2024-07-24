@@ -165,6 +165,7 @@ lazy val expressionCompiler = projectMatrix
     crossScalaVersions ++= CrossVersion
       .partialVersion(scalaVersion.value)
       .collect {
+        // NOTE: Adding new handle for Scala version requires updating ./.github/workflows/release-expression-compiler.yml
         // format: off
         case (2, 12) => Seq("2.12.19", "2.12.18", "2.12.17", "2.12.16", "2.12.15", "2.12.14", "2.12.13")
         case (2, 13) => Seq("2.13.14", "2.13.13", "2.13.12", "2.13.11", "2.13.10", "2.13.9", "2.13.8", "2.13.7", "2.13.6", "2.13.5", "2.13.4")
