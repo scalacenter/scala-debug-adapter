@@ -20,6 +20,8 @@ sealed abstract class Validation[+A] {
   def get: A
   def getOrElse[B >: A](f: => B): B
   def orElse[B >: A](f: => Validation[B], resetError: Boolean = false): Validation[B]
+  def orElseIf[B >: A](p: => Boolean)(f: => Validation[B], resetError: Boolean = false): Validation[B] =
+    if (isValid) this else if (p) orElse(f, resetError) else this
 
   def toOption: Option[A]
 }

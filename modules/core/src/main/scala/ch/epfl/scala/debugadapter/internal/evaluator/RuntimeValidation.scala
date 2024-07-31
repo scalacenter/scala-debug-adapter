@@ -53,6 +53,8 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
           .orElse(findTopLevelModule(name))
       case _: Term.This => thisTree
       case sup: Term.Super => Recoverable("Super not (yet) supported at runtime")
+      case Term.Apply.After_4_6_0(Term.Name(fun), args) => 
+        args.map(validateAsValue).traverse.flatMap(args => findClass("Predef").flatMap(x => findStaticMethodBySignedName(x.`type`, fun, args)))
       case _: Term.Apply | _: Term.ApplyInfix | _: Term.ApplyUnary => validateMethod(standardize(expression))
       case select: Term.Select =>
         validateAsValueOrClass(select.qual)
@@ -90,7 +92,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       var tpe = value.extract(_.value.`type`)
       Validation.fromTry(tpe).map(Value(value, _)).getOrElse(tree)
     }
-
+   
     if (preEvaluation) {
       tree match {
         case CallBinaryOp(_: Value, _: Value, _) => eval
@@ -351,7 +353,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       args <- argClauses.flatMap(_.map(validateAsValue)).traverse
       cls <- findClass(tpe)
       allArgs = extractCapture(cls).toSeq ++ args
-      init <- findMethodBySignedName(cls.`type`, "<init>", allArgs.map(_.`type`))
+      init <- findBestMethodBySignedName(cls.`type`, "<init>", allArgs.map(_.`type`))
     } yield NewInstance(CallStaticMethod(init, allArgs, cls.`type`))
   }
 
@@ -479,7 +481,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
    * @param args the arguments types of the method
    * @return the method, wrapped in a [[Validation]]
    */
-  private def findMethodBySignedName(
+  private def findBestMethodBySignedName(
       ref: jdi.ReferenceType,
       name: String,
       args: Seq[jdi.Type]
@@ -551,7 +553,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
   ): Validation[RuntimeEvaluationTree] = {
     if (!args.isEmpty) {
       asReference(qualifier.`type`)
-        .flatMap(tpe => findMethodBySignedName(tpe, name, args.map(_.`type`)))
+        .flatMap(tpe => findBestMethodBySignedName(tpe, name, args.map(_.`type`)))
         .flatMap(asInstanceMethod(_, args, qualifier))
     } else findZeroArgMethod(qualifier, name)
   }
@@ -562,7 +564,7 @@ private[evaluator] class RuntimeValidation(frame: JdiFrame, sourceLookUp: Source
       args: Seq[RuntimeEvaluationTree]
   ): Validation[CallMethod] =
     if (!args.isEmpty)
-      findMethodBySignedName(qualifier, name, args.map(_.`type`)).flatMap(asStaticMethod(_, args, qualifier))
+      findBestMethodBySignedName(qualifier, name, args.map(_.`type`)).flatMap(asStaticMethod(_, args, qualifier))
     else findZeroArgStaticMethod(qualifier, name)
 
   private def extractCapture(cls: RuntimeClass): Option[RuntimeEvaluationTree] =

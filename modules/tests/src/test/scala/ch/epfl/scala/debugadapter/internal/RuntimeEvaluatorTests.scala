@@ -1459,4 +1459,19 @@ abstract class ScalaRuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extend
     // a pure expression does nothing in statement position
     check(Breakpoint(8), Evaluation.success("m", 1))
   }
+  
+  test("evaluate methods of Predef") {
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    println("foo")
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
+    // a pure expression does nothing in statement position
+    check(Breakpoint(5), Evaluation.success("""println("foo")""", ()), Evaluation.success("require(true)", ()))
+  }
 }
