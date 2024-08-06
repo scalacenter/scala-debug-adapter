@@ -123,6 +123,7 @@ private[debugadapter] object SourceLookUpProvider {
     val allLookUps = parallelEntries
       .map(entry => ClassEntryLookUp(entry, entry.sourceEntries.flatMap(sourceLookUps.apply), logger))
       .seq
+      .reverse
     val sourceUriToClassPathEntry = allLookUps
       .flatMap(lookup => lookup.sources.map(uri => (uri, lookup)))
       .toMap
