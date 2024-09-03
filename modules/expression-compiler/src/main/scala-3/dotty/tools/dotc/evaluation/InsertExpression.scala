@@ -30,7 +30,7 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
   override def isCheckable: Boolean = false
 
   private val evaluationClassSource =
-    s"""|class ${exprCtx.expressionClassName}(thisObject: Any, names: Array[String], values: Array[Any]):
+    s"""|class ${exprCtx.expressionClassName}(thisObject: Any, names: Array[String], values: Array[Any]) {
         |  import java.lang.reflect.InvocationTargetException
         |  val classLoader = getClass.getClassLoader.nn
         |
@@ -39,17 +39,19 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
         |
         |  def getThisObject(): Any = thisObject
         |
-        |  def getLocalValue(name: String): Any =
+        |  def getLocalValue(name: String): Any = {
         |    val idx = names.indexOf(name)
         |    if idx == -1 then throw new NoSuchElementException(name)
         |    else values(idx)
+        |  }
         |
-        |  def setLocalValue(name: String, value: Any): Any =
+        |  def setLocalValue(name: String, value: Any): Any = {
         |    val idx = names.indexOf(name)
         |    if idx == -1 then throw new NoSuchElementException(name)
         |    else values(idx) = value
+        |  }
         |
-        |  def callMethod(obj: Any, className: String, methodName: String, paramTypesNames: Array[String], returnTypeName: String, args: Array[Object]): Any =
+        |  def callMethod(obj: Any, className: String, methodName: String, paramTypesNames: Array[String], returnTypeName: String, args: Array[Object]): Any = {
         |    val clazz = classLoader.loadClass(className).nn
         |    val method = clazz.getDeclaredMethods.nn
         |      .map(_.nn)
@@ -62,29 +64,32 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
         |    method.setAccessible(true)
         |    val res = unwrapException(method.invoke(obj, args*))
         |    if returnTypeName == "void" then () else res
+        |  }
         |
-        |  def callConstructor(className: String, paramTypesNames: Array[String], args: Array[Object]): Any =
+        |  def callConstructor(className: String, paramTypesNames: Array[String], args: Array[Object]): Any = {
         |    val clazz = classLoader.loadClass(className).nn
         |    val constructor = clazz.getConstructors.nn
-        |      .map(_.nn)
         |      .find { c => c.getParameterTypes.nn.map(_.nn.getName).toSeq == paramTypesNames.toSeq }
         |      .getOrElse(throw new NoSuchMethodException(s"new $$className"))
         |    constructor.setAccessible(true)
         |    unwrapException(constructor.newInstance(args*))
+        |  }
         |
-        |  def getField(obj: Any, className: String, fieldName: String): Any =
+        |  def getField(obj: Any, className: String, fieldName: String): Any = {
         |    val clazz = classLoader.loadClass(className).nn
         |    val field = clazz.getDeclaredField(fieldName).nn
         |    field.setAccessible(true)
         |    field.get(obj)
+        |  }
         |
-        |  def setField(obj: Any, className: String, fieldName: String, value: Any): Any =
+        |  def setField(obj: Any, className: String, fieldName: String, value: Any): Any = {
         |    val clazz = classLoader.loadClass(className).nn
         |    val field = clazz.getDeclaredField(fieldName).nn
         |    field.setAccessible(true)
         |    field.set(obj, value)
+        |  }
         |
-        |  def getOuter(obj: Any, outerTypeName: String): Any =
+        |  def getOuter(obj: Any, outerTypeName: String): Any = {
         |    val clazz = obj.getClass
         |    val field = getSuperclassIterator(clazz)
         |      .flatMap(_.getDeclaredFields.nn.toSeq)
@@ -93,12 +98,14 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
         |      .getOrElse(throw new NoSuchFieldException("$$outer"))
         |    field.setAccessible(true)
         |    field.get(obj)
+        |  }
         |
-        |  def getStaticObject(className: String): Any =
+        |  def getStaticObject(className: String): Any = {
         |    val clazz = classLoader.loadClass(className).nn
         |    val field = clazz.getDeclaredField("MODULE$$").nn
         |    field.setAccessible(true)
         |    field.get(null)
+        |  }
         |
         |  def getSuperclassIterator(clazz: Class[?] | Null): Iterator[Class[?]] =
         |    Iterator.iterate(clazz)(_.nn.getSuperclass).takeWhile(_ != null).map(_.nn)
@@ -108,12 +115,14 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
         |  def reflectEval(qualifier: Object, term: String, args: Array[Object]): Any = ???
         |
         |  private def unwrapException(f: => Any): Any =
-        |    try f
-        |    catch
+        |    try f catch {
         |      case e: InvocationTargetException => throw e.getCause.nn
+        |    }
         |
-        |  extension [T] (x: T | Null)
+        |  extension [T] (x: T | Null) {
         |    private def nn: T = x.asInstanceOf[T]
+        |  }
+        |}
         |""".stripMargin
 
   override def run(using Context): Unit =
