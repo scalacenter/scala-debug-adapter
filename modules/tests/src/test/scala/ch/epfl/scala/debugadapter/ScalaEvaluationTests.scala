@@ -2748,4 +2748,24 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Evaluation.success("c.x", "x")
     )
   }
+
+  test("evaluation with -no-indent") {
+    assume(scalaVersion.isScala3)
+    val source =
+      """|package example
+         |
+         |object Main {
+         |  def main(args: Array[String]): Unit =
+         |    println(1 + 2)
+         |    val x = 1
+         |  x + 1
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClass(source, "example.Main", scalaVersion, Seq("-no-indent"))
+    check(
+      Breakpoint(5),
+      Evaluation.success("1 + 2", 3)
+    )
+  }
 }

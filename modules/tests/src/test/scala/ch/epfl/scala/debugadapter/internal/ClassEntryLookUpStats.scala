@@ -12,12 +12,16 @@ import ch.epfl.scala.debugadapter.Library
 import java.nio.file.Paths
 import ch.epfl.scala.debugadapter.SourceJar
 import munit.Location
+import scala.util.Properties
 
 /**
  * This is a test class that also
  * prints some stats about loading the look-up of some libraries
  */
 class ClassEntryLookUpStats extends FunSuite {
+  // not working on Mac anymore because of JVM index
+  override def munitIgnore: Boolean = Properties.isMac
+
   override def munitTimeout: Duration = 120.seconds
   private val jvmCache = JvmCache().withDefaultIndex
 

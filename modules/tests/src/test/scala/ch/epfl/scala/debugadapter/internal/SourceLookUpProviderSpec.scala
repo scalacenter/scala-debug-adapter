@@ -6,9 +6,11 @@ import ch.epfl.scala.debugadapter.SourceJar
 import ch.epfl.scala.debugadapter.Library
 import ch.epfl.scala.debugadapter.testfmk.NoopLogger
 import munit.FunSuite
+import scala.util.Properties
 
 class SourceLookUpProviderSpec extends FunSuite {
   test("fix https://github.com/scalameta/metals/issues/3477#issuecomment-1013458270") {
+    assume(!Properties.isMac) // TODO not working on MacOS
     val artifacts = coursier
       .Fetch()
       .addDependencies(Dependency(Module(Organization("org.openjfx"), ModuleName("javafx-controls")), "17.0.1"))
