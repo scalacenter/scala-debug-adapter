@@ -2,7 +2,7 @@ import ch.epfl.scala.debugadapter.testfmk._
 import ch.epfl.scala.debugadapter.DebugConfig
 
 val scalaCollectionCompat = inputKey[Unit]("Check the presence of scala-collection-compat")
-val scalaV = "2.12.19"
+val scalaV = "2.12.20"
 
 def checkScalaCollectionCompat = Def.inputTask {
   val uri = (Compile / startMainClassDebugSession).evaluated
