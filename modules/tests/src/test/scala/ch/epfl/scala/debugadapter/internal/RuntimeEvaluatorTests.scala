@@ -1151,11 +1151,7 @@ abstract class ScalaRuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extend
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
-      Breakpoint(6),
-      if (scalaVersion < ScalaVersion.`3.5.0`) Breakpoint(6) else NoStep(),
-      Evaluation.success("n", 1)
-    )
+    check(Breakpoint(6), Evaluation.success("n", 1))
   }
 
   test("evaluate captured local variable shadowing captured variable") {
@@ -1222,7 +1218,7 @@ abstract class ScalaRuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extend
     )
   }
 
-  test("evaluate on for loops, generators and guards") {
+  test("loops, generators and guards") {
     assume(scalaVersion.isScala3)
     val source =
       """|package example
@@ -1247,7 +1243,6 @@ abstract class ScalaRuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extend
       Breakpoint(8),
       Evaluation.success("x", 1),
       Breakpoint(9), // calling map
-      if (scalaVersion < ScalaVersion.`3.5.0`) Breakpoint(9) else NoStep(),
       Evaluation.success("y", 1), // finally we are into the lifted lambda x + y
       Breakpoint(8), // still in the same lifted lambda (the line position does not make any sense)
       Breakpoint(9), // again in the lifted lambda
@@ -1255,7 +1250,6 @@ abstract class ScalaRuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extend
       Breakpoint(8), // regression in Scala 3.2.2
       Breakpoint(9), // regression in Scala 3.2.2
       Breakpoint(13), // calling withFilter
-      if (scalaVersion < ScalaVersion.`3.5.0`) Breakpoint(13) else NoStep(),
       Evaluation.success("x", 1)
     )
   }
