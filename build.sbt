@@ -162,20 +162,19 @@ lazy val expressionCompiler = projectMatrix
   .customRow(true, Seq(scala34PlusAxis, VirtualAxis.jvm), p => p.dependsOn(tests3 % Test))
   .settings(
     name := "scala-expression-compiler",
-    crossScalaVersions ++= CrossVersion
-      .partialVersion(scalaVersion.value)
-      .collect {
+    crossScalaVersions ++= {
+      SemVer(scalaVersion.value) match {
         // NOTE: Adding new handle for Scala version requires updating ./.github/workflows/release-expression-compiler.yml
         // format: off
-        case (2, 12) => Seq("2.12.20", "2.12.19", "2.12.18", "2.12.17", "2.12.16", "2.12.15", "2.12.14", "2.12.13")
-        case (2, 13) => Seq("2.13.14", "2.13.13", "2.13.12", "2.13.11", "2.13.10", "2.13.9", "2.13.8", "2.13.7", "2.13.6", "2.13.5", "2.13.4")
-        case (3, 0) => Seq("3.0.2", "3.0.1", "3.0.0")
-        case (3, 1 | 2 | 3) => Seq("3.3.4-RC1", "3.3.3", "3.3.2", "3.3.1", "3.3.0", "3.2.2", "3.2.1", "3.2.0", "3.1.3", "3.1.2", "3.1.1", "3.1.0")
-        case (3, _) => Seq("3.5.1-RC2", "3.5.0", "3.4.3", "3.4.2", "3.4.1", "3.4.0")
+        case (2, 12, _) => Seq("2.12.20", "2.12.19", "2.12.18", "2.12.17", "2.12.16", "2.12.15", "2.12.14", "2.12.13")
+        case (2, 13, _) => Seq("2.13.14", "2.13.13", "2.13.12", "2.13.11", "2.13.10", "2.13.9", "2.13.8", "2.13.7", "2.13.6", "2.13.5", "2.13.4")
+        case (3, 0, _) => Seq("3.0.2", "3.0.1", "3.0.0")
+        case (3, 1 | 2 | 3, _) => Seq("3.3.4-RC1", "3.3.3", "3.3.2", "3.3.1", "3.3.0", "3.2.2", "3.2.1", "3.2.0", "3.1.3", "3.1.2", "3.1.1", "3.1.0")
+        case (3, _, _) => Seq("3.5.1-RC2", "3.5.0", "3.4.3", "3.4.2", "3.4.1", "3.4.0")
+        case _ => Seq.empty
         // format: on
       }
-      .toSeq
-      .flatten,
+    },
     crossScalaVersions := crossScalaVersions.value.distinct,
     libraryDependencies ++= Seq(Dependencies.munit % Test) ++
       onScalaVersion(scala212 = Some(Dependencies.scalaCollectionCompat), scala213 = None, scala3 = None).value,
@@ -183,11 +182,14 @@ lazy val expressionCompiler = projectMatrix
     crossVersion := CrossVersion.full,
     Compile / unmanagedSourceDirectories ++= {
       val sourceDir = (Compile / sourceDirectory).value
-      CrossVersion.partialVersion(scalaVersion.value).collect {
-        case (3, 0) => sourceDir / s"scala-3.0"
-        case (3, 1 | 2 | 3) => sourceDir / s"scala-3.1+"
-        case (3, _) => sourceDir / s"scala-3.4+"
+      val fileNames = SemVer(scalaVersion.value) match {
+        case (3, 0, _) => Seq("scala-3.0")
+        case (3, 1 | 2 | 3, patch) if patch <= 3 => Seq("scala-3.1+", "scala-3.1.0-3.3.3")
+        case (3, 1 | 2 | 3, _) => Seq("scala-3.1+", "scala-3.3.4+")
+        case (3, _, _) => Seq("scala-3.4+", "scala-3.3.4+")
+        case _ => Seq.empty
       }
+      fileNames.map(sourceDir / _)
     },
     Test / unmanagedSourceDirectories ++= {
       val sourceDir = (Test / sourceDirectory).value
@@ -250,10 +252,10 @@ lazy val scala31PlusAxis = VirtualAxis.ScalaVersionAxis(Dependencies.scala31Plus
 lazy val scala34PlusAxis = VirtualAxis.ScalaVersionAxis(Dependencies.scala34Plus, "34Plus")
 
 def onScalaVersion[T](scala212: T, scala213: T, scala3: T) = Def.setting {
-  CrossVersion.partialVersion(scalaVersion.value) match {
-    case Some((2, 12)) => scala212
-    case Some((2, 13)) => scala213
-    case Some((3, _)) => scala3
+  SemVer(scalaVersion.value) match {
+    case (2, 12, _) => scala212
+    case (2, 13, _) => scala213
+    case (3, _, _) => scala3
     case _ => ???
   }
 }
