@@ -673,7 +673,6 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(
       Breakpoint(6),
       DebugStepAssert.inParallel(Evaluation.success("n", 1), Evaluation.success("m1()", 9)),
-      if (isScala3 && scalaVersion < ScalaVersion.`3.5.0`) Breakpoint(9) else NoStep(),
       Breakpoint(9),
       DebugStepAssert.inParallel(Evaluation.success("n", 1), Evaluation.success("m1()", 9))
     )
@@ -1855,7 +1854,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(Breakpoint(6), Evaluation.success("x\nx", "Hello"))
   }
 
-  test("on for loops, generators and guards") {
+  test("loops, generators and guards") {
     val source =
       """|package example
          |
@@ -1884,7 +1883,6 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Breakpoint(8),
         DebugStepAssert.inParallel(Evaluation.success("list(0)", 1), Evaluation.success("x", 1)),
         Breakpoint(9), // calling map
-        if (scalaVersion < ScalaVersion.`3.5.0`) Breakpoint(9) else NoStep(),
         Evaluation.success("x + y", 2), // finally we are into the lifted lambda x + y
         Breakpoint(8), // still in the same lifted lambda (the line position does not make any sense)
         Breakpoint(9), // again in the lifted lambda
@@ -1892,7 +1890,6 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
         Breakpoint(8), // regression in Scala 3.2.2
         Breakpoint(9), // regression in Scala 3.2.2
         Breakpoint(13), // calling withFilter
-        if (scalaVersion < ScalaVersion.`3.5.0`) Breakpoint(13) else NoStep(),
         Evaluation.success("x", 1),
         Breakpoint(15),
         Evaluation.success("list(0)", 1),
@@ -2314,11 +2311,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |    b.m1()
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(
-      if (isScala33) Breakpoint(8) else NoStep(), // Stops once in the constructor of B
-      Breakpoint(8),
-      Evaluation.success("x1 + x2 + x3", "x1x2x3")
-    )
+    check(Breakpoint(8), Evaluation.success("x1 + x2 + x3", "x1x2x3"))
   }
 
   test("brace-less syntax: evaluate in package") {
@@ -2574,8 +2567,6 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
     check(
       Breakpoint(12),
-      if (isScala33) Breakpoint(12) else NoStep(),
-      if (isScala33) Breakpoint(15) else NoStep(),
       Breakpoint(20),
       DebugStepAssert.inParallel(Evaluation.success("A.A1.a", 1), Evaluation.success("A.A2.a", 2)),
       Breakpoint(15),
