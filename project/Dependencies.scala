@@ -31,7 +31,7 @@ object Dependencies {
       case _ => "org.scala-lang" % "scala-reflect" % scalaVersion
     }
 
-  val scalaParallelCollection = "org.scala-lang.modules" %% "scala-parallel-collections" % "1.1.0"
+  val scalaParallelCollection = "org.scala-lang.modules" %% "scala-parallel-collections" % "1.2.0"
   val scalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.12.0"
   val sbtTestAgent = "org.scala-sbt" % "test-agent" % "1.10.7"
   val scalaMeta = ("org.scalameta" %% "parsers" % "4.12.3").cross(CrossVersion.for3Use2_13)
