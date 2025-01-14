@@ -377,9 +377,9 @@ class ScalaSigPrinter(builder: StringBuilder) {
 
       // Print result type
       mt.resultType.get match {
-        case mt: MethodType => printMethodType(mt, printResult, pe)({})
+        case mt: MethodType => printMethodType(mt, printResult, pe) {}
         case imt: ImplicitMethodType =>
-          printMethodType(imt, printResult, pe)({})
+          printMethodType(imt, printResult, pe) {}
         case x =>
           if (printResult) {
             print(" : ")
@@ -396,7 +396,7 @@ class ScalaSigPrinter(builder: StringBuilder) {
         for (param <- typeParams) addTypeParameter(param)
         print(typeParamString(typeParams))
         try
-          printMethodType(pt.typeRef.get, printResult)({})
+          printMethodType(pt.typeRef.get, printResult) {}
         finally
           for (param <- typeParams) removeTypeParameter(param)
       // todo consider another method types
@@ -460,12 +460,10 @@ class ScalaSigPrinter(builder: StringBuilder) {
               case _ => true
             })
             printMethodType(m.infoType, printResult = true)(
-              {
-                if (printBody)
-                  print(
-                    compiledCodeBody /* Print body only for non-abstract methods */
-                  )
-              }
+              if (printBody)
+                print(
+                  compiledCodeBody /* Print body only for non-abstract methods */
+                )
             )
         }
     }
