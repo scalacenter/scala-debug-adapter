@@ -25,7 +25,7 @@ While it is always the case with Java 9, you probably want to use the `sbt-jdi-t
 
 ```scala
 // project/plugins.sbt
-addSbtPlugin("org.scala-debugger" % "sbt-jdi-tools" % "1.1.1")
+addSbtPlugin("com.github.sbt" % "sbt-jdi-tools" % "1.2.0")
 ```
 
 You can start a debug server by providing your own intance of `Debuggee`, `DebugToolsResolver` and `Logger`.
@@ -102,7 +102,7 @@ To do so you can use the `sbt-jdi-tools` plugin in the meta project (it goes to 
 
 ```scala
 // project/project/plugins.sbt
-addSbtPlugin("org.scala-debugger" % "sbt-jdi-tools" % "1.1.1")
+addSbtPlugin("com.github.sbt" % "sbt-jdi-tools" % "1.2.0")
 ```
 
 # Development
