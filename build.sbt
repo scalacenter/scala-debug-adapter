@@ -17,7 +17,7 @@ inThisBuild(
     developers := Developers.list,
     version ~= { dynVer =>
       if (isRelease) dynVer
-      else "4.1.0-SNAPSHOT" // only for local publishing
+      else "4.3.0-SNAPSHOT" // only for local publishing
     },
     resolvers ++= Resolver.sonatypeOssRepos("snapshots"),
     compile / javacOptions ++= Seq("-source", "1.8", "-target", "1.8")
