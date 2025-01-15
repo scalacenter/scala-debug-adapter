@@ -212,7 +212,7 @@ lazy val decoder3: Project = project
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= Seq(
       "ch.epfl.scala" %% "tasty-query" % "1.4.0",
-      "ch.epfl.scala" %% "scala3-binary-decoder" % "0.2.0",
+      "ch.epfl.scala" %% "scala3-binary-decoder" % "0.2.1",
       Dependencies.asm,
       Dependencies.asmUtil,
       Dependencies.munit % Test
