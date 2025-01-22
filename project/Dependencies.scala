@@ -37,7 +37,7 @@ object Dependencies {
   val scalaMeta = ("org.scalameta" %% "parsers" % "4.12.6").cross(CrossVersion.for3Use2_13)
 
   // test dependencies
-  val munit = "org.scalameta" %% "munit" % "1.0.4"
+  val munit = "org.scalameta" %% "munit" % "1.1.0"
   val coursier = "io.get-coursier" %% "coursier" % coursierVersion
   val coursierJvm = "io.get-coursier" %% "coursier-jvm" % coursierVersion
 }
