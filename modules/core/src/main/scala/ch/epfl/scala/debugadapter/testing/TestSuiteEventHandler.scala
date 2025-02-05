@@ -42,7 +42,7 @@ object TestSuiteEventHandler {
               failedMsg,
               indentSize = 0
             )
-          SingleTestResult.Failed(name, e.duration, formatted, stackTrace)
+          SingleTestResult.Failed(name, e.duration, formatted, stackTrace, location = null)
         case _ =>
           SingleTestResult.Skipped(name)
       }
