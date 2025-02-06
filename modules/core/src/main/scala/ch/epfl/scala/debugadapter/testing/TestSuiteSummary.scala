@@ -10,6 +10,11 @@ final case class TestSuiteSummary(
     tests: java.util.List[SingleTestSummary]
 )
 
+final class TestLocation(
+    val file: String,
+    val line: Int
+)
+
 /**
  * Sealed hierarchy that models 3 possible outcomes of single test case.
  * I wanted to model this a discriminated union type and due to gson serialization,
@@ -40,10 +45,18 @@ object SingleTestResult {
       val kind: String,
       val testName: String,
       val duration: Long,
-      val error: String
+      val error: String,
+      val stackTrace: String,
+      val location: TestLocation
   ) extends SingleTestSummary
   object Failed {
-    def apply(testName: String, duration: Long, error: String): Failed =
-      new Failed("failed", testName, duration, error)
+    def apply(
+        testName: String,
+        duration: Long,
+        error: String,
+        stackTrace: String,
+        location: TestLocation
+    ): Failed =
+      new Failed("failed", testName, duration, error, stackTrace, location)
   }
 }
