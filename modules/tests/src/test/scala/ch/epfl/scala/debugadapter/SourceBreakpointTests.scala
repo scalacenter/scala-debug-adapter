@@ -8,7 +8,7 @@ class Scala213SourceBreakpointTests extends SourceBreakpointTests(ScalaVersion.`
       """|package example
          |object Main {
          |  def main(args: Array[String]): Unit = {
-         |    List(new java.lang.Integer(1), new java.lang.Integer(2), new java.lang.Integer(3)).map { i => 
+         |    List(new java.lang.Integer(1), new java.lang.Integer(2), new java.lang.Integer(3)).map { i =>
          |      val msg = i + 2
          |      println(msg)
          |    }
@@ -31,7 +31,7 @@ class Scala31PlusSourceBreakpointTests extends SourceBreakpointTests(ScalaVersio
       """|package example
          |object Main {
          |  def main(args: Array[String]): Unit = {
-         |    List(new java.lang.Integer(1), new java.lang.Integer(2), new java.lang.Integer(3)).map { i => 
+         |    List(new java.lang.Integer(1), new java.lang.Integer(2), new java.lang.Integer(3)).map { i =>
          |      val msg = i + 2
          |      println(msg)
          |      println(s"$msg bis")
@@ -69,7 +69,7 @@ abstract class SourceBreakpointTests(val scalaVersion: ScalaVersion) extends Deb
       """|package example
          |object Main {
          |  def main(args: Array[String]): Unit = {
-         |    List(1, 2, 3).map { i => 
+         |    List(1, 2, 3).map { i =>
          |      val msg = i.toString
          |      println(msg)
          |    }
@@ -86,7 +86,7 @@ abstract class SourceBreakpointTests(val scalaVersion: ScalaVersion) extends Deb
       """|package example
          |object Main {
          |  def main(args: Array[String]): Unit = {
-         |    val list = List(1, 2, 3).map { i => 
+         |    val list = List(1, 2, 3).map { i =>
          |      val msg = i.toString
          |      msg
          |    }
@@ -115,7 +115,7 @@ abstract class SourceBreakpointTests(val scalaVersion: ScalaVersion) extends Deb
          |object Main {
          |  def main(args: Array[String]): Unit = {
          |    val i: Int = 3
-         |    
+         |
          |    print(i)
          |    ()
          |

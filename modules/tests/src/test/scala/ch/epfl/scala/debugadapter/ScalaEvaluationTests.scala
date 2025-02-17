@@ -1952,7 +1952,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |
          |object Rewrites {
          |  private class Patch(var span: Span)
-         |  
+         |
          |  def main(args: Array[String]): Unit = {
          |    val patch = new Patch(new Span(0))
          |    println("ok")
@@ -1987,7 +1987,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
          |
          |object Main {
          |  private class B extends A
-         |  
+         |
          |  def main(args: Array[String]): Unit = {
          |    val b = new B
          |    println("foo")

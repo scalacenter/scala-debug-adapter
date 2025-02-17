@@ -41,7 +41,7 @@ object RuntimeEvaluatorEnvironments {
        |
        |trait FooTrait { val foo1: String = "hello there" }
        |
-       |class SuperFoo { 
+       |class SuperFoo {
        |  private val superfoo: String = "hello super"
        |  def keepSuperfoo: String = superfoo
        |}
@@ -80,8 +80,8 @@ object RuntimeEvaluatorEnvironments {
        |  object InnerFoo { def hello: String = "hello main inner foo" }
        |}
        |
-       |trait FooTrait { 
-       |  val x = 3  
+       |trait FooTrait {
+       |  val x = 3
        |  def bar1: Int = 42
        |}
        |
@@ -130,7 +130,7 @@ object RuntimeEvaluatorEnvironments {
        |    val subCool = new SubCool()
        |    println("ok")
        |  }
-       |  
+       |
        |  def test(foo: Foo): String = "foo"
        |  def test(bar: Bar): String = "bar"
        |  def test(baz: Baz): String = "baz"
@@ -171,11 +171,11 @@ object RuntimeEvaluatorEnvironments {
        |  case class Inner(x: Int) {
        |    val y = x + 1
        |    def helloInner = s"hello inner $x"
-       |    case class InnerInner() { 
+       |    case class InnerInner() {
        |      val str = {
        |        println("ok")
        |        s"inner inner $y"
-       |      } 
+       |      }
        |    }
        |    object InnerInner {
        |      val str = {
@@ -184,7 +184,7 @@ object RuntimeEvaluatorEnvironments {
        |      }
        |    }
        |  }
-       |  object Inner { 
+       |  object Inner {
        |    val z = 42
        |    def helloInner = "hello inner"
        |    case class DoubleInner(zz: Int) { val str = s"double inner $zz"}
@@ -237,7 +237,7 @@ object RuntimeEvaluatorEnvironments {
        |  def main(args: Array[String]): Unit = {
        |    println("ok")
        |  }
-       |  
+       |
        |  def test(i: Int): String = "primitive int"
        |  def test(i: java.lang.Integer): String = "boxed int"
        |}
@@ -254,7 +254,7 @@ object RuntimeEvaluatorEnvironments {
        |    val seq = Seq(1, 2, 3)
        |    val vector = Vector(1, 2, 3)
        |    println("ok")
-       |  } 
+       |  }
        |}
        |""".stripMargin
 
@@ -1038,7 +1038,7 @@ abstract class ScalaRuntimeEvaluatorTests(val scalaVersion: ScalaVersion) extend
          |
          |object Main {
          |  var b = 0
-         |  var c = 0 
+         |  var c = 0
          |  def main(args: Array[String]): Unit = {
          |    val a = new A
          |    var b = 0

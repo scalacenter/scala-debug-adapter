@@ -18,7 +18,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |  def m1(xs: String*) = println(xs.mkString)
          |  def m2(xs: Int*) = println(xs.mkString)
          |  def m3(xs: Unit*) = println(xs.mkString)
-         | 
+         |
          |  def main(args: Array[String]): Unit = {
          |    m1("a", "b")
          |    m2(1, 2)
@@ -313,11 +313,11 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |object Main {
          |  var x1 = "x1"
          |  private var x2 = "x2"
-         |  
+         |
          |  def main(args: Array[String]): Unit = {
          |    x1 = "x1"
          |    x2 = "x2"
-         |    
+         |
          |    val c = new C("c1", "c2")
          |    c.m()
          |  }
@@ -335,7 +335,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |class C(var c1: String, private var c2: String) extends B with A {
          |  /* override */ var a1: String = "a1"
          |  private var c3: String = "c3"
-         |  
+         |
          |  def m(): Unit = {
          |    a1 = "a1"
          |    b1 = "b1"
@@ -509,7 +509,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |  def main(args: Array[String]): Unit = {
          |    val a = new A("a")
          |    val b = new A("b")
-         |    
+         |
          |    a.toString
          |    a.copy("b")
          |    a.hashCode()
@@ -518,7 +518,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |    a.productPrefix
          |    a.productElement(0)
          |    a.productIterator
-         |    
+         |
          |    val f = A
          |    f("a")
          |
@@ -733,7 +733,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
            |
            |object Main {
            |  def m(x: "a"): 1 = 1
-           |  
+           |
            |  def main(args: Array[String]): Unit = {
            |    m("a")
            |  }
@@ -755,7 +755,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |  type Foo = A
          |  type Bar = String
          |  def m(x: Foo): Bar  = x.toString
-         |  
+         |
          |  def main(args: Array[String]): Unit = {
          |    val foo = new A
          |    m(foo)
@@ -777,11 +777,11 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |  def m1(): A with B { def foo: String }  = {
          |    new A with B { def foo: String = toString }
          |  }
-         |  
+         |
          |  def m2(): { def foo: String } = {
          |    new { def foo: String = toString }
          |  }
-         |  
+         |
          |  def main(args: Array[String]): Unit = {
          |    m1()
          |    m2()
@@ -800,9 +800,9 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |
          |trait B {
          |  type X <: A
-         |  
+         |
          |  def m1(x: X): X = x
-         |  def m2[T <: X](x: T) = x  
+         |  def m2[T <: X](x: T) = x
          |}
          |
          |class C extends B {
@@ -1051,7 +1051,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |    x.m
          |    &(x)
          |  }
-         |  
+         |
          |  def &(x: <>): String = x.toString
          |}
          |
@@ -1079,7 +1079,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |  def main(xs: Array[String]): Unit = {
          |    fac(2)
          |  }
-         |  
+         |
          |  def fac(x: Int): Int = {
          |    def rec(x: Int, acc: Int): Int = {
          |      if (x <= 0) acc
@@ -1259,7 +1259,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |  def m1(xs: String*) = println(xs.mkString)
          |  def m2(xs: Int*) = println(xs.mkString)
          |  def m3(xs: Unit*) = println(xs.mkString)
-         | 
+         |
          |  def main(args: Array[String]): Unit = {
          |    m1("a", "b")
          |    m2(1, 2)
@@ -1324,7 +1324,7 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |case class B(a: A):
          |  export a.*
          |
-         |@main def Main = 
+         |@main def Main =
          |  val b = B(A())
          |  b.aa
          |""".stripMargin
