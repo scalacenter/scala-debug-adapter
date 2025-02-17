@@ -79,7 +79,7 @@ class ScalaStackTraceTests extends DebugTestSuite {
          |}
          |
          |def m2(t : Int ) : Int = {
-         |  t*2  
+         |  t*2
          |}
          |
          |object Main {
@@ -136,13 +136,13 @@ class ScalaStackTraceTests extends DebugTestSuite {
     val source =
       """|package example
          |object Main :
-         |  def main(args: Array[String]): Unit = 
+         |  def main(args: Array[String]): Unit =
          |    class B :
          |      def m() = {
          |        println("hello")
          |      }
          |
-         |    class C  extends B 
+         |    class C  extends B
          |    C().m()
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)

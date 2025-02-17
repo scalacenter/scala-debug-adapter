@@ -52,14 +52,14 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
        |  public Foo() {
        |    this.friendFoo = new FriendFoo(this);
        |  }
-       |  
+       |
        |  public FriendFoo friendFoo(Foo f) { return new FriendFoo(f); }
        |  class FriendFoo {
        |    public Foo f;
        |    public int y = 42;
        |    public static final int z = 43;
        |    public static final String greet = "Friendly";
-       |    
+       |
        |    public FriendFoo(Foo f) { this.f = f; }
        |    public String greet() { return "Friend"; }
        |    public int add(int x, int y) { return x + y; }
@@ -121,7 +121,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
          |  }
          |}
          |
-         |class SuperFoo { 
+         |class SuperFoo {
          |  private String superfoo = "hello super";
          |  public static String foofoo = "superfoofoo";
          |}
@@ -175,7 +175,7 @@ class JavaRuntimeEvaluatorTests extends DebugTestSuite {
          |  public static String staticMethod() { return "i am static"; }
          |}
          |
-         |class SuperFoo { 
+         |class SuperFoo {
          |  public static String staticMethod() { return "i am static superfoo"; }
          |}
          |

@@ -83,7 +83,7 @@ abstract class RuntimePreEvaluationTests(val scalaVersion: ScalaVersion) extends
          |  case object Baz extends InnerFoo {
          |    val baz: Int = 2
          |  }
-         |  
+         |
          |  val innerBar: InnerFoo = Bar
          |  val innerBaz: InnerFoo = Baz
          |}
