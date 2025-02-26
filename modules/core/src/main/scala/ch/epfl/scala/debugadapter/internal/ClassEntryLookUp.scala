@@ -42,6 +42,7 @@ private class ClassEntryLookUp(
     logger: Logger
 ) {
   private val sourceLineCache = mutable.Map.empty[SourceLine, Seq[ClassFile]]
+  private val scalaSigCache = mutable.Map.empty[String, Option[ScalaSig]]
 
   def sources: Iterable[SanitizedUri] = sourceUriToSourceFile.keys
   def fullyQualifiedNames: Iterable[String] = {
@@ -145,7 +146,7 @@ private class ClassEntryLookUp(
       else scalaSigs.headOption
     }
 
-    fromClass.orElse(fromSource)
+    scalaSigCache.getOrElseUpdate(fqcn, fromClass.orElse(fromSource))
   }
 }
 
