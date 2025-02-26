@@ -171,8 +171,8 @@ class MetalsClassBreakpointSuite extends FunSuite {
     val lineNumber = original.linesIterator.toSeq.indexWhere(_.contains(">>")) + 1
     val debuggee = TestingDebuggee.mainClass(source, "Main", scalaVersion)
     val lookUp = ClassEntryLookUp(debuggee.mainModule, NoopLogger)
-    val sourceFileKey = SourceFileKey(debuggee.sourceFiles.head.toUri)
-    val className = lookUp.getFullyQualifiedClassName(sourceFileKey, lineNumber)
+    val sourceUri = SanitizedUri(debuggee.sourceFiles.head.toUri)
+    val className = lookUp.getFullyQualifiedClassName(sourceUri, lineNumber)
     assert(className.contains(expectedClassName))
   }
 }

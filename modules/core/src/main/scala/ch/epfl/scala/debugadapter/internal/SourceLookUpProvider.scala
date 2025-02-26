@@ -9,11 +9,11 @@ import scala.collection.parallel.immutable.ParVector
 
 private[debugadapter] final class SourceLookUpProvider(
     private[internal] var classPathEntries: Seq[ClassEntryLookUp],
-    private var sourceUriToClassPathEntry: Map[SourceFileKey, ClassEntryLookUp],
+    private var sourceUriToClassPathEntry: Map[SanitizedUri, ClassEntryLookUp],
     private var fqcnToClassPathEntry: Map[String, ClassEntryLookUp],
     logger: Logger
 ) extends ISourceLookUpProvider {
-  var classesByScalaNameMap: Map[String, Seq[String]] = loadClassesByScalaName
+  private var classesByScalaNameMap: Map[String, Seq[String]] = loadClassesByScalaName
 
   override def supportsRealtimeBreakpointVerification(): Boolean = true
 
@@ -24,7 +24,7 @@ private[debugadapter] final class SourceLookUpProvider(
   override def getSourceContents(uri: String): String = {
     val sourceUri = URI.create(uri)
     sourceUriToClassPathEntry
-      .get(SourceFileKey(sourceUri))
+      .get(SanitizedUri(sourceUri))
       .flatMap(_.getSourceContent(sourceUri))
       .orNull
   }
@@ -41,7 +41,7 @@ private[debugadapter] final class SourceLookUpProvider(
         val resolvedName = uri.getSchemeSpecificPart
         lines.map(_ => resolvedName)
       case _ =>
-        val key = SourceFileKey(uri);
+        val key = SanitizedUri(uri);
         sourceUriToClassPathEntry.get(key) match {
           case None => lines.map(_ => null)
           case Some(entry) =>

@@ -23,7 +23,7 @@ class ClassEntryLookUpSpec extends FunSuite {
       "example.Main$Hello$InnerHello$1"
 
     val className =
-      lookUp.getFullyQualifiedClassName(SourceFileKey(expectedSourceFile), 14)
+      lookUp.getFullyQualifiedClassName(SanitizedUri(expectedSourceFile), 14)
     assert(className.contains(expectedClassName))
 
     val sourceFile = lookUp.getSourceFileURI(expectedClassName)
@@ -42,7 +42,7 @@ class ClassEntryLookUpSpec extends FunSuite {
     val expectedClassName = "cats.instances.ListInstances$$anon$1"
 
     val className =
-      lookUp.getFullyQualifiedClassName(SourceFileKey(expectedSourceFile), 28)
+      lookUp.getFullyQualifiedClassName(SanitizedUri(expectedSourceFile), 28)
     assert(className.contains(expectedClassName))
 
     val sourceFile = lookUp.getSourceFileURI(expectedClassName)
@@ -99,8 +99,8 @@ class ClassEntryLookUpSpec extends FunSuite {
     assert(sourceFile.contains("scala-debug-adapter"))
 
     val moddedSourceFile = sourceFile.replace("scala-debug-adapter", "SCALA-deBug-Adapter")
-    val sourceFileKey = SourceFileKey(toUri(moddedSourceFile))
-    val className = lookUp.getFullyQualifiedClassName(sourceFileKey, 14)
+    val sourceUri = SanitizedUri(toUri(moddedSourceFile))
+    val className = lookUp.getFullyQualifiedClassName(sourceUri, 14)
 
     val expectedClassName = if (isFilesystemCaseInsensitive) Some("example.Main$Hello$InnerHello$1") else None
     assertEquals(className, expectedClassName)
@@ -116,11 +116,11 @@ class ClassEntryLookUpSpec extends FunSuite {
     val moddedSourceJar = sourceJar.replace("cats-core", "Cats-CoRe")
     val moddedsourceFile = URI.create(s"jar:${toUri(moddedSourceJar)}!/cats/instances/list.scala")
     val expectedClassName = if (isFilesystemCaseInsensitive) Some("cats.instances.ListInstances$$anon$1") else None
-    val obtainedClassName = lookUp.getFullyQualifiedClassName(SourceFileKey(moddedsourceFile), 28)
+    val obtainedClassName = lookUp.getFullyQualifiedClassName(SanitizedUri(moddedsourceFile), 28)
     assertEquals(obtainedClassName, expectedClassName)
 
     val invalidSourceFile = URI.create(s"jar:file:${toUri(sourceJar)}!/caTs/Instances/list.scala")
-    val notFound = lookUp.getFullyQualifiedClassName(SourceFileKey(invalidSourceFile), 28)
+    val notFound = lookUp.getFullyQualifiedClassName(SanitizedUri(invalidSourceFile), 28)
     assert(notFound.isEmpty)
   }
 

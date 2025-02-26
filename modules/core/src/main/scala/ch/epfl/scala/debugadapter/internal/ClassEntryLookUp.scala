@@ -34,16 +34,16 @@ private[internal] case class ClassFile(
 private class ClassEntryLookUp(
     val entry: ClassEntry,
     fqcnToClassFile: Map[String, ClassFile],
-    sourceUriToSourceFile: Map[SourceFileKey, SourceFile],
-    sourceUriToClassFiles: Map[SourceFileKey, Seq[ClassFile]],
+    sourceUriToSourceFile: Map[SanitizedUri, SourceFile],
+    sourceUriToClassFiles: Map[SanitizedUri, Seq[ClassFile]],
     classNameToSourceFile: Map[String, SourceFile],
     missingSourceFileClassFiles: Seq[ClassFile],
     val orphanClassFiles: Seq[ClassFile],
     logger: Logger
 ) {
-  private val cachedSourceLines = mutable.Map[SourceLineKey, Seq[ClassFile]]()
+  private val sourceLineCache = mutable.Map.empty[SourceLine, Seq[ClassFile]]
 
-  def sources: Iterable[SourceFileKey] = sourceUriToSourceFile.keys
+  def sources: Iterable[SanitizedUri] = sourceUriToSourceFile.keys
   def fullyQualifiedNames: Iterable[String] = {
     classNameToSourceFile.keys ++
       orphanClassFiles.map(_.fullyQualifiedName) ++
@@ -54,25 +54,25 @@ private class ClassEntryLookUp(
     fullyQualifiedNames.groupBy[String](NameTransformer.scalaClassName)
 
   def getFullyQualifiedClassName(
-      sourceKey: SourceFileKey,
+      sourceUri: SanitizedUri,
       lineNumber: Int
   ): Option[String] = {
-    val line = SourceLineKey(sourceKey, lineNumber)
+    val sourceLine = SourceLine(sourceUri, lineNumber)
 
-    if (!cachedSourceLines.contains(line)) {
+    if (!sourceLineCache.contains(sourceLine)) {
       // read and cache line numbers from class files
       sourceUriToClassFiles
-        .getOrElse(sourceKey, Nil)
+        .getOrElse(sourceUri, Nil)
         .groupBy(_.classSystem)
         .foreach { case (classSystem, classFiles) =>
           classSystem
-            .within((_, root) => loadLineNumbers(root, classFiles, sourceKey))
+            .within((_, root) => classFiles.foreach(loadLines(root, _, sourceUri)))
             .warnFailure(logger, s"Cannot load line numbers in ${classSystem.name}")
         }
     }
 
-    cachedSourceLines
-      .get(line)
+    sourceLineCache
+      .get(sourceLine)
       .map { classFiles =>
         // The same breakpoint can stop in different classes
         // We choose the one with the smallest name
@@ -80,49 +80,38 @@ private class ClassEntryLookUp(
       }
   }
 
-  private def loadLineNumbers(
-      root: Path,
-      classFiles: Seq[ClassFile],
-      sourceKey: SourceFileKey
-  ): Unit = {
-    for (classFile <- classFiles) {
-      val path = root.resolve(classFile.relativePath)
-      val inputStream = Files.newInputStream(path)
-      try {
-        val reader = new ClassReader(inputStream)
-
-        val lineNumbers = mutable.Buffer[Int]()
-
-        val visitor = new ClassVisitor(Opcodes.ASM9) {
-          override def visitMethod(
-              access: Int,
-              name: String,
-              desc: String,
-              signature: String,
-              exceptions: Array[String]
-          ): MethodVisitor = {
-            new MethodVisitor(Opcodes.ASM9) {
-              override def visitLineNumber(line: Int, start: Label): Unit = {
-                lineNumbers.append(line)
-              }
-            }
+  private def loadLines(root: Path, classFile: ClassFile, sourceUri: SanitizedUri): Unit = {
+    val lines = mutable.Set[Int]()
+    val path = root.resolve(classFile.relativePath)
+    val inputStream = Files.newInputStream(path)
+    try {
+      val reader = new ClassReader(inputStream)
+      val visitor = new ClassVisitor(Opcodes.ASM9) {
+        override def visitMethod(
+            access: Int,
+            name: String,
+            desc: String,
+            signature: String,
+            exceptions: Array[String]
+        ): MethodVisitor =
+          new MethodVisitor(Opcodes.ASM9) {
+            override def visitLineNumber(line: Int, start: Label): Unit =
+              lines += line
           }
-        }
-        reader.accept(visitor, 0)
-
-        for (n <- lineNumbers) {
-          val line = SourceLineKey(sourceKey, n)
-          cachedSourceLines.update(
-            line,
-            cachedSourceLines.getOrElse(line, Seq.empty) :+ classFile
-          )
-        }
-      } finally inputStream.close()
+      }
+      reader.accept(visitor, 0)
+    } finally inputStream.close()
+    for (line <- lines) {
+      val sourceLine = SourceLine(sourceUri, line)
+      sourceLineCache.update(
+        sourceLine,
+        sourceLineCache.getOrElse(sourceLine, Seq.empty) :+ classFile
+      )
     }
   }
 
   def getSourceContent(sourceUri: URI): Option[String] =
-    sourceUriToSourceFile.get(SourceFileKey(sourceUri)).flatMap(readSourceContent(_, logger))
+    sourceUriToSourceFile.get(SanitizedUri(sourceUri)).flatMap(readSourceContent(_, logger))
 
   def getSourceFileURI(fqcn: String): Option[URI] =
     classNameToSourceFile.get(fqcn).map(_.uri)
@@ -131,7 +120,7 @@ private class ClassEntryLookUp(
     getSourceFileURI(fqcn).flatMap(getSourceContent)
 
   def getClassFiles(sourceUri: URI): Seq[ClassFile] =
-    sourceUriToClassFiles.get(SourceFileKey(sourceUri)).getOrElse(Seq.empty)
+    sourceUriToClassFiles.get(SanitizedUri(sourceUri)).getOrElse(Seq.empty)
 
   def getClassFile(fqcn: String): Option[ClassFile] =
     fqcnToClassFile.get(fqcn)
@@ -182,11 +171,11 @@ private object ClassEntryLookUp {
       classFiles.map(c => (c.fullyQualifiedName, c)).toMap
 
     val sourceFileToRoot = sourceLookUps.flatMap(l => l.sourceFiles.map(f => (f -> l.root))).toMap
-    val sourceUriToSourceFile = sourceLookUps.flatMap(_.sourceFiles).map(f => (SourceFileKey(f.uri), f)).toMap
+    val sourceUriToSourceFile = sourceLookUps.flatMap(_.sourceFiles).map(f => (SanitizedUri(f.uri), f)).toMap
     val sourceNameToSourceFile = sourceLookUps.flatMap(_.sourceFiles).groupBy(f => f.fileName)
 
     val classNameToSourceFile = mutable.Map[String, SourceFile]()
-    val sourceUriToClassFiles = mutable.Map[SourceFileKey, Seq[ClassFile]]()
+    val sourceUriToClassFiles = mutable.Map[SanitizedUri, Seq[ClassFile]]()
     val orphanClassFiles = mutable.Buffer[ClassFile]()
     val missingSourceFileClassFiles = mutable.Buffer[ClassFile]()
 
@@ -194,9 +183,9 @@ private object ClassEntryLookUp {
       def recordSourceFile(sourceFile: SourceFile): Unit = {
         classNameToSourceFile.put(classFile.fullyQualifiedName, sourceFile)
         sourceUriToClassFiles.update(
-          SourceFileKey(sourceFile.uri),
+          SanitizedUri(sourceFile.uri),
           sourceUriToClassFiles.getOrElse(
-            SourceFileKey(sourceFile.uri),
+            SanitizedUri(sourceFile.uri),
             Seq.empty
           ) :+ classFile
         )
@@ -360,12 +349,12 @@ private object ClassEntryLookUp {
 /**
  * On a case-insensitive system we need to sanitize all URIs to use them as Map keys.
  */
-private case class SourceFileKey(sanitizeUri: URI)
+private class SanitizedUri(val uri: URI) extends AnyVal
 
-private object SourceFileKey {
+private object SanitizedUri {
   private val isCaseSensitiveFileSystem = Properties.isWin || Properties.isMac
 
-  def apply(uri: URI): SourceFileKey = {
+  def apply(uri: URI): SanitizedUri = {
     val sanitizeUri: URI =
       if (isCaseSensitiveFileSystem) {
         uri.getScheme match {
@@ -379,8 +368,8 @@ private object SourceFileKey {
           case _ => uri
         }
       } else uri
-    new SourceFileKey(sanitizeUri)
+    new SanitizedUri(sanitizeUri)
   }
 }
 
-private case class SourceLineKey(sourceFile: SourceFileKey, lineNumber: Int)
+private case class SourceLine(sourceFile: SanitizedUri, lineNumber: Int)
