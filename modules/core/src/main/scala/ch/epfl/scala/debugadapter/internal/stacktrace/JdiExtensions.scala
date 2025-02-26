@@ -31,7 +31,7 @@ object JdiExtensions {
       method.name == "<clinit>"
 
     def isAnonFunction: Boolean =
-      method.name.matches(".+\\$anonfun\\$\\d+")
+      method.name.matches(".+\\$anonfun(\\$.+)?\\$\\d+")
 
     def isLiftedMethod: Boolean =
       method.name.matches(".+\\$\\d+")
