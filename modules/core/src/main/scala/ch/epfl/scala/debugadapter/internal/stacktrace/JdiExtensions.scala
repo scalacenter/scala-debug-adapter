@@ -31,7 +31,7 @@ object JdiExtensions {
       method.name == "<clinit>"
 
     def isAnonFunction: Boolean =
-      method.name.matches(".+\\$anonfun\\$\\d+")
+      method.name.matches(".+\\$anonfun(\\$.+)?\\$\\d+")
 
     def isLiftedMethod: Boolean =
       method.name.matches(".+\\$\\d+")
@@ -43,8 +43,8 @@ object JdiExtensions {
       method.name.contains("$lzyINIT") || method.name.contains("$lzycompute")
 
     def isLazyGetter: Boolean =
-      method.argumentTypes.asScala.toSeq match {
-        case Seq(argType) => lazyTypes.contains(argType.name)
+      method.argumentTypeNames.asScala.toSeq match {
+        case Seq(argTypeName) => lazyTypes.contains(argTypeName)
         case _ => false
       }
 

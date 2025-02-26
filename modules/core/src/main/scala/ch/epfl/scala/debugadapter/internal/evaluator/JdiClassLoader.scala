@@ -90,7 +90,6 @@ private[internal] class JdiClassLoader(
         case c: CharValue => Safe(value)
         case _ => mirrorOf(value.value.toString)
       }
-      _ = getClass
       (className, sig) = value.value match {
         case _: BooleanValue => ("java.lang.Boolean", "(Ljava/lang/String;)Ljava/lang/Boolean;")
         case _: ByteValue => ("java.lang.Byte", "(Ljava/lang/String;)Ljava/lang/Byte;")
