@@ -7,7 +7,7 @@ object Dependencies {
   val scala30 = scalaEnvVersion.filter(isScala30).getOrElse("3.0.2")
   val scala31Plus = scalaEnvVersion.filter(isScala31Plus).getOrElse("3.3.5")
   val scala34Plus = scalaEnvVersion.filter(isScala34Plus).getOrElse("3.6.3")
-  val asmVersion = "9.7.1"
+  val asmVersion = "9.8"
   val coursierVersion = "2.1.24"
 
   def isScala212(version: String): Boolean = version.startsWith("2.12")
