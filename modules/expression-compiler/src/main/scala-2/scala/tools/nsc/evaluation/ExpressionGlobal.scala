@@ -52,7 +52,7 @@ private[nsc] class ExpressionGlobal(
 
   // definitions
   lazy val expressionClass: ClassSymbol =
-    if (pckg.isEmpty) rootMirror.getRequiredClass(expressionClassName.toString)
+    if (pckg.isEmpty) rootMirror.staticClass(expressionClassName.toString())
     else rootMirror.getRequiredClass(s"$pckg.$expressionClassName")
   lazy val evaluate: TermSymbol = expressionDecl("evaluate")
   lazy val reflectEval: TermSymbol = expressionDecl("reflectEval")

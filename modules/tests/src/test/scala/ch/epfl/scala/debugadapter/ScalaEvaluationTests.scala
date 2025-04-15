@@ -2759,4 +2759,20 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
       Evaluation.success("1 + 2", 3)
     )
   }
+
+  test("empty package") {
+    val source =
+      """|object Main {
+         |  def main(args: Array[String]): Unit = {
+         |    println(1 + 2)
+         |  }
+         |}
+         |""".stripMargin
+    implicit val debuggee: TestingDebuggee =
+      TestingDebuggee.mainClass(source, "Main", scalaVersion)
+    check(
+      Breakpoint(3),
+      Evaluation.success("List(1,2,3).head", 1)
+    )
+  }
 }
