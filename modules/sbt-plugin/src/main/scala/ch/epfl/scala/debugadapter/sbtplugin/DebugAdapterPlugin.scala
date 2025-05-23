@@ -423,7 +423,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
 
     val additionalEnv = environmentVariables
       .foldLeft(Map.empty[String, String]) { case (env, line) =>
-        line.split('=') match {
+        line.split("=", 2) match {
           case Array(key, value) => env + (key -> value)
           case _ => env
         }
