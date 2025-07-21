@@ -25,9 +25,12 @@ class SbtDebugToolsResolver(
 ) extends DebugToolsResolver {
 
   override def resolveExpressionCompiler(scalaVersion: ScalaVersion): Try[ClassLoader] = {
-    val org = BuildInfo.organization
-    val artifact = s"${BuildInfo.expressionCompilerName}_$scalaVersion"
-    val version = BuildInfo.version
+    val (org, artifact, version) =
+      if (scalaVersion.isScala3 && scalaVersion.minor >= 7) {
+        ("org.scala-lang", s"scala3-compiler_3", scalaVersion.value)
+      } else {
+        (BuildInfo.organization, s"${BuildInfo.expressionCompilerName}_$scalaVersion", BuildInfo.version)
+      }
 
     for (report <- fetchArtifactsOf(org % artifact % version, Seq.empty))
       yield

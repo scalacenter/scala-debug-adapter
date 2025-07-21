@@ -14,7 +14,13 @@ sealed abstract class ScalaInstance(
 ) {
   val libraryClassLoader = new URLClassLoader(libraryJars.map(_.toURL).toArray, null)
   val compilerClassLoader = new URLClassLoader(compilerJars.map(_.toURL).toArray, libraryClassLoader)
-  val expressionCompilerClassLoader = new URLClassLoader(Array(expressionCompilerJar.toURL), compilerClassLoader)
+  val expressionCompilerClassLoader =
+    if (compilerJars.contains(expressionCompilerJar)) {
+      // If expression compiler is already part of compiler jars, reuse compiler classloader
+      compilerClassLoader
+    } else {
+      new URLClassLoader(Array(expressionCompilerJar.toURL), compilerClassLoader)
+    }
 
   def compile(
       classDir: Path,

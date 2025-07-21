@@ -19,6 +19,10 @@ case class ScalaVersion(value: String) extends Ordered[ScalaVersion] {
       .get
   }
 
+  def minor: Int = parts match {
+    case (_, minor, _) => minor
+  }
+
   override def compare(that: ScalaVersion): Int =
     (parts, that.parts) match {
       case ((x, _, _), (y, _, _)) if x != y => x - y
