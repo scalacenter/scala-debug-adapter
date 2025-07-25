@@ -71,14 +71,37 @@ private[debugadapter] class ExpressionCompilerPre37(
 private[debugadapter] class ExpressionCompilerPost37(
     instance: Any,
     compileMethod: Method,
-    config: (
-        /*packageName:*/ String, /*outputClassName:*/ String, /*breakpointLine:*/ Int, /*expression:*/ String,
-        /*localVariables:*/ java.util.Set[String], /*errorReporter:*/ Consumer[String], /*testMode:*/ Boolean
-    ) => Object,
+    classLoader: ClassLoader,
     val scalaVersion: ScalaVersion,
     scalacOptions: Seq[String],
     classPath: String
 ) extends ExpressionCompiler {
+
+  private def expressionCompilerConfig(
+      packageName: String,
+      outputClassName: String,
+      breakpointLine: Int,
+      expression: String,
+      localVariables: java.util.Set[String],
+      errorReporter: Consumer[String],
+      testMode: Boolean
+  ): Object = {
+    val clazz = Class.forName("dotty.tools.debug.ExpressionCompilerConfig", true, classLoader)
+    val instance = clazz.getDeclaredConstructor().newInstance()
+    val withPackageName = clazz.getMethod("withPackageName", classOf[String]).invoke(instance, packageName)
+    val withOutputClassName =
+      clazz.getMethod("withOutputClassName", classOf[String]).invoke(withPackageName, outputClassName)
+    val withBreakpointLine = clazz
+      .getMethod("withBreakpointLine", classOf[Int])
+      .invoke(withOutputClassName, Integer.valueOf(breakpointLine))
+    val withExpression = clazz.getMethod("withExpression", classOf[String]).invoke(withBreakpointLine, expression)
+    val withLocalVariables =
+      clazz.getMethod("withLocalVariables", classOf[java.util.Set[String]]).invoke(withExpression, localVariables)
+    val withErrorReporter =
+      clazz.getMethod("withErrorReporter", classOf[Consumer[String]]).invoke(withLocalVariables, errorReporter)
+    withErrorReporter.asInstanceOf[Object]
+  }
+
   def compile(
       outDir: Path,
       expressionClassName: String,
@@ -91,7 +114,7 @@ private[debugadapter] class ExpressionCompilerPost37(
   ): Try[Unit] = {
     try {
       val errors = Buffer.empty[String]
-      val configInstance = config(
+      val configInstance = expressionCompilerConfig(
         pckg,
         expressionClassName,
         line,
@@ -141,7 +164,7 @@ private[debugadapter] object ExpressionCompiler {
           new ExpressionCompilerPost37(
             instance,
             method,
-            expressionCompilerConfig(classLoader),
+            classLoader,
             scalaVersion,
             scalacOptions,
             classPath
@@ -153,30 +176,5 @@ private[debugadapter] object ExpressionCompiler {
     } catch {
       case cause: Throwable => Failure(cause)
     }
-  }
-
-  private def expressionCompilerConfig(classLoader: ClassLoader)(
-      packageName: String,
-      outputClassName: String,
-      breakpointLine: Int,
-      expression: String,
-      localVariables: java.util.Set[String],
-      errorReporter: Consumer[String],
-      testMode: Boolean
-  ): Object = {
-    val clazz = Class.forName("dotty.tools.debug.ExpressionCompilerConfig", true, classLoader)
-    val instance = clazz.getDeclaredConstructor().newInstance()
-    val withPackageName = clazz.getMethod("withPackageName", classOf[String]).invoke(instance, packageName)
-    val withOutputClassName =
-      clazz.getMethod("withOutputClassName", classOf[String]).invoke(withPackageName, outputClassName)
-    val withBreakpointLine = clazz
-      .getMethod("withBreakpointLine", classOf[Int])
-      .invoke(withOutputClassName, Integer.valueOf(breakpointLine))
-    val withExpression = clazz.getMethod("withExpression", classOf[String]).invoke(withBreakpointLine, expression)
-    val withLocalVariables =
-      clazz.getMethod("withLocalVariables", classOf[java.util.Set[String]]).invoke(withExpression, localVariables)
-    val withErrorReporter =
-      clazz.getMethod("withErrorReporter", classOf[Consumer[String]]).invoke(withLocalVariables, errorReporter)
-    withErrorReporter.asInstanceOf[Object]
   }
 }
