@@ -110,8 +110,9 @@ object TestingResolver extends DebugToolsResolver {
   }
 
   private def fetchScala3(scalaVersion: ScalaVersion): Scala3Instance = {
+    val builtInExpressionCompiler = scalaVersion.isScala3 && scalaVersion.minor >= 7
     val (expressionCompilerOrg, expressionCompilerArtifact, expressionCompilerVersion) =
-      if (scalaVersion.isScala3 && scalaVersion.minor >= 7) {
+      if (builtInExpressionCompiler) {
         ("org.scala-lang", s"scala3-compiler_3", scalaVersion.value)
       } else {
         (BuildInfo.organization, s"${BuildInfo.expressionCompilerName}_${scalaVersion.value}", BuildInfo.version)
@@ -135,9 +136,11 @@ object TestingResolver extends DebugToolsResolver {
     val decoderJars = fetch(decoderDep, tastyDep)
     val libraryJars =
       jars.filter(jar => jar.name.startsWith("scala-library") || jar.name.startsWith("scala3-library_3"))
-    val expressionCompilerJar = jars.find(jar => jar.name.startsWith(expressionCompilerArtifact)).get
+    val expressionCompilerJar =
+      if (builtInExpressionCompiler) None
+      else Some(jars.find(jar => jar.name.startsWith(expressionCompilerArtifact)).get)
     val compilerJars =
-      jars.filter(jar => !libraryJars.contains(jar) && (scalaVersion.minor >= 7 || jar != expressionCompilerJar))
+      jars.filter(jar => !libraryJars.contains(jar) && !expressionCompilerJar.exists(_ == jar))
 
     new Scala3Instance(libraryJars, compilerJars, expressionCompilerJar, decoderJars)
   }

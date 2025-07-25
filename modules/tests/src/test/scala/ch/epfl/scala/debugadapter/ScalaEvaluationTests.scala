@@ -6,6 +6,7 @@ class Scala212EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.12`)
 class Scala213EvaluationTests extends ScalaEvaluationTests(ScalaVersion.`2.13`)
 class Scala31PlusEvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.1+`)
 class Scala34PlusEvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.4+`)
+class Scala372PlusEvaluationTests extends ScalaEvaluationTests(ScalaVersion.`3.7.2+`)
 
 abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTestSuite {
   protected override def defaultConfig: DebugConfig =

@@ -6,7 +6,8 @@ object Dependencies {
   val scala213 = scalaEnvVersion.filter(isScala213).getOrElse("2.13.16")
   val scala30 = scalaEnvVersion.filter(isScala30).getOrElse("3.0.2")
   val scala31Plus = scalaEnvVersion.filter(isScala31Plus).getOrElse("3.3.6")
-  val scala34Plus = scalaEnvVersion.filter(isScala34Plus).getOrElse("3.7.2")
+  val scala34Plus = scalaEnvVersion.filter(isScala34Plus).getOrElse("3.7.1")
+  val scala372Plus = scalaEnvVersion.filter(isScala372Plus).getOrElse("3.7.2")
   val asmVersion = "9.8"
   val coursierVersion = "2.1.24"
 
@@ -15,6 +16,9 @@ object Dependencies {
   def isScala30(version: String): Boolean = version.startsWith("3.0")
   def isScala31Plus(version: String): Boolean = SemVer.matches(version) { case (3, 1 | 2 | 3, _) => true }
   def isScala34Plus(version: String): Boolean = SemVer.matches(version) { case (3, min, _) => min >= 4 }
+  def isScala372Plus(version: String): Boolean = SemVer.matches(version) { case (3, min, patch) =>
+    min == 7 && patch >= 2 || min > 7
+  }
 
   val asm = "org.ow2.asm" % "asm" % asmVersion
   val asmUtil = "org.ow2.asm" % "asm-util" % asmVersion
