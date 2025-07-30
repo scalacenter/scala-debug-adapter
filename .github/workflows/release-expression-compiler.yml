@@ -49,21 +49,21 @@ jobs:
           VERSION='${{ inputs.scala-version }}'
           if [[ $VERSION == 2.12.* ]]; then
             echo "Using 2.12 publish task"
-            sbt 'expressionCompiler212/publishSigned;sonatypeBundleRelease'
+            sbt 'expressionCompiler212/publishSigned;sonaBundle'
 
           elif [[ $VERSION == 2.13.* ]]; then
             echo "Using 2.13 publish task"
-            sbt 'expressionCompiler213/publishSigned;sonatypeBundleRelease'
+            sbt 'expressionCompiler213/publishSigned;sonaBundle'
 
           elif [[ $VERSION == 3.0.* ]]; then
             echo "Using 3.0 publish task"
-            sbt 'expressionCompiler30/publishSigned;sonatypeBundleRelease'
+            sbt 'expressionCompiler30/publishSigned;sonaBundle'
 
           elif [[ $VERSION == 3.1.* || $VERSION == 3.2.* || $VERSION == 3.3.* ]]; then
             echo "Using 3.1+ publish task"
-            sbt 'expressionCompiler31Plus/publishSigned;sonatypeBundleRelease'
+            sbt 'expressionCompiler31Plus/publishSigned;sonaBundle'
 
           elif [[ $VERSION == 3.* ]]; then
             echo "Using 3.4+ publish task"
-            sbt 'expressionCompiler34Plus/publishSigned;sonatypeBundleRelease'
+            sbt 'expressionCompiler34Plus/publishSigned;sonaBundle'
           fi
