@@ -139,7 +139,11 @@ object DebugTools {
       }
       for {
         classLoader <- if (entry.isScala2) scala2Loader else if (entry.isScala3) scala3Loader else None
-        scalaVersion <- entry.scalaVersion
+        scalaVersion <- entry.scalaVersion.orElse {
+          if (entry.isScala2) Some(scala2Version)
+          else if (entry.isScala3) Some(scala3Version)
+          else None
+        }
         compiler <- ExpressionCompiler(scalaVersion, scalacOptions, classPath, classLoader)
           .warnFailure(logger, s"Cannot load expression compiler of Scala $scalaVersion")
       } yield entry -> compiler

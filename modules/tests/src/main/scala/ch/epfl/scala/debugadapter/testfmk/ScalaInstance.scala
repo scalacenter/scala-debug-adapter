@@ -9,12 +9,17 @@ import java.io.File
 sealed abstract class ScalaInstance(
     val libraryJars: Seq[Library],
     compilerJars: Seq[Library],
-    expressionCompilerJar: Library,
+    expressionCompilerJar: Option[Library],
     val decoderJars: Seq[Library]
 ) {
   val libraryClassLoader = new URLClassLoader(libraryJars.map(_.toURL).toArray, null)
   val compilerClassLoader = new URLClassLoader(compilerJars.map(_.toURL).toArray, libraryClassLoader)
-  val expressionCompilerClassLoader = new URLClassLoader(Array(expressionCompilerJar.toURL), compilerClassLoader)
+  val expressionCompilerClassLoader = expressionCompilerJar match {
+    case Some(jar) =>
+      new URLClassLoader(Array(jar.toURL), compilerClassLoader)
+    case None =>
+      compilerClassLoader
+  }
 
   def compile(
       classDir: Path,
@@ -40,7 +45,7 @@ final class Scala2Instance(
     libraryJars: Seq[Library],
     compilerJars: Seq[Library],
     expressionCompilerJar: Library
-) extends ScalaInstance(libraryJars, compilerJars, expressionCompilerJar, Seq.empty) {
+) extends ScalaInstance(libraryJars, compilerJars, Some(expressionCompilerJar), Seq.empty) {
   override protected def compileInternal(args: Array[String]): Unit = {
     val main = compilerClassLoader.loadClass("scala.tools.nsc.Main")
     val process = main.getMethod("process", classOf[Array[String]])
@@ -52,7 +57,7 @@ final class Scala2Instance(
 final class Scala3Instance(
     libraryJars: Seq[Library],
     compilerJars: Seq[Library],
-    expressionCompilerJar: Library,
+    expressionCompilerJar: Option[Library],
     stepFilterJars: Seq[Library]
 ) extends ScalaInstance(libraryJars, compilerJars, expressionCompilerJar, stepFilterJars) {
   override protected def compileInternal(args: Array[String]): Unit = {

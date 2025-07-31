@@ -1,6 +1,5 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter.BuildInfo
 import ch.epfl.scala.debugadapter.ClassEntry
 import ch.epfl.scala.debugadapter.DebugConfig
 import ch.epfl.scala.debugadapter.Debuggee
@@ -143,15 +142,16 @@ private[internal] class EvaluationProvider(
       case m: ManagedEntry =>
         m.scalaVersion match {
           case None =>
-            s"Failed resolving scala-expression-compiler:${BuildInfo.version} for ${entry.name} (Missing Scala Version)"
+            s"Failed resolving expression compiler for ${entry.name} (Missing Scala Version)"
           case Some(sv) =>
-            s"""|Failed resolving scala-expression-compiler:${BuildInfo.version} for Scala $sv.
+            val compilerSource = if (sv.isScala3 && sv.minor >= 7) "scala3-compiler" else "scala-expression-compiler"
+            s"""|Failed resolving $compilerSource for Scala $sv.
                 |Please open an issue at https://github.com/scalacenter/scala-debug-adapter.""".stripMargin
         }
       case _: JavaRuntime =>
-        s"Failed resolving scala-expression-compiler:${BuildInfo.version} for ${entry.name} (Missing Scala Version)"
+        s"Failed resolving expression compiler for ${entry.name} (Missing Scala Version)"
       case _ =>
-        s"Failed resolving scala-expression-compiler:${BuildInfo.version} for ${entry.name} (Unknown Scala Version)"
+        s"Failed resolving expression compiler for ${entry.name} (Unknown Scala Version)"
     }
 
   private def containsMethodCall(tree: RuntimeEvaluationTree): Boolean = {

@@ -25,36 +25,38 @@ class SbtDebugToolsResolver(
 ) extends DebugToolsResolver {
 
   override def resolveExpressionCompiler(scalaVersion: ScalaVersion): Try[ClassLoader] = {
-    val org = BuildInfo.organization
-    val artifact = s"${BuildInfo.expressionCompilerName}_$scalaVersion"
-    val version = BuildInfo.version
-
-    for (report <- fetchArtifactsOf(org % artifact % version, Seq.empty))
-      yield
-        if (scalaInstance.version == scalaVersion.value) {
-          val expressionCompilerJars = report
-            .select(
-              configurationFilter(Runtime.name),
-              moduleFilter(org, artifact, version) | moduleFilter(
-                "org.scala-lang.modules",
-                "scala-collection-compat_2.12"
-              ),
-              artifactFilter(extension = "jar", classifier = "")
-            )
-            .map(_.toURI.toURL)
-            .toArray
-          new URLClassLoader(expressionCompilerJars, scalaInstance.loader)
-        } else {
-          val expressionCompilerJars = report
-            .select(
-              configurationFilter(Runtime.name),
-              moduleFilter(),
-              artifactFilter(extension = "jar", classifier = "")
-            )
-            .map(_.toURI.toURL)
-            .toArray
-          new URLClassLoader(expressionCompilerJars, null)
-        }
+    if (scalaVersion.isScala3 && scalaVersion.minor >= 7) {
+      Success(scalaInstance.loader)
+    } else {
+      val (org, artifact, version) =
+        (BuildInfo.organization, s"${BuildInfo.expressionCompilerName}_$scalaVersion", BuildInfo.version)
+      for (report <- fetchArtifactsOf(org % artifact % version, Seq.empty))
+        yield
+          if (scalaInstance.version == scalaVersion.value) {
+            val expressionCompilerJars = report
+              .select(
+                configurationFilter(Runtime.name),
+                moduleFilter(org, artifact, version) | moduleFilter(
+                  "org.scala-lang.modules",
+                  "scala-collection-compat_2.12"
+                ),
+                artifactFilter(extension = "jar", classifier = "")
+              )
+              .map(_.toURI.toURL)
+              .toArray
+            new URLClassLoader(expressionCompilerJars, scalaInstance.loader)
+          } else {
+            val expressionCompilerJars = report
+              .select(
+                configurationFilter(Runtime.name),
+                moduleFilter(),
+                artifactFilter(extension = "jar", classifier = "")
+              )
+              .map(_.toURI.toURL)
+              .toArray
+            new URLClassLoader(expressionCompilerJars, null)
+          }
+    }
   }
 
   override def resolveDecoder(scalaVersion: ScalaVersion): Try[Seq[java.nio.file.Path]] = {

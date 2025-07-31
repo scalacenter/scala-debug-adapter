@@ -98,7 +98,8 @@ lazy val core = projectMatrix
       BuildInfoKey.action("scala213")(Dependencies.scala213),
       BuildInfoKey.action("scala30")(Dependencies.scala30),
       BuildInfoKey.action("scala31Plus")(Dependencies.scala31Plus),
-      BuildInfoKey.action("scala34Plus")(Dependencies.scala34Plus)
+      BuildInfoKey.action("scala34Plus")(Dependencies.scala34Plus),
+      BuildInfoKey.action("scala372Plus")(Dependencies.scala372Plus)
     ),
     buildInfoPackage := "ch.epfl.scala.debugadapter"
   )
