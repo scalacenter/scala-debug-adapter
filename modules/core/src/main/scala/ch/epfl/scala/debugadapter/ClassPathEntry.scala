@@ -38,14 +38,22 @@ final case class Module(
 final case class Library(artifactId: String, version: String, absolutePath: Path, sourceEntries: Seq[SourceEntry])
     extends ManagedEntry {
   override def name: String = artifactId
+
+  private def versionSuffix = artifactId.split('_').lastOption
+
+  override def isScala2: Boolean =
+    scalaVersion.exists(_.isScala2) || versionSuffix.exists(_.startsWith("2."))
+  override def isScala3: Boolean =
+    scalaVersion.exists(_.isScala3) || versionSuffix.exists(_.startsWith("3"))
+  override def isJava: Boolean =
+    scalaVersion.isEmpty && !versionSuffix.exists(suffix => suffix.startsWith("2.") || suffix.startsWith("3."))
+
   def scalaVersion: Option[ScalaVersion] = {
-    if (artifactId == "scala-library") Some(ScalaVersion(version))
-    else {
-      artifactId
-        .split('_')
-        .lastOption
-        .filter(bv => bv.startsWith("2.12") || bv.startsWith("2.13") || bv.startsWith("3"))
-        .map(ScalaVersion.apply)
-    }
+    if (
+      artifactId == "scala-library" || artifactId.startsWith("scala3-library_3") ||
+      artifactId.startsWith("scala-compiler") || artifactId.startsWith("scala-compiler_3")
+    )
+      Some(ScalaVersion(version))
+    else None
   }
 }
