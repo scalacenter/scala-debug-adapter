@@ -8,6 +8,10 @@ case class ScalaVersion(value: String) extends Ordered[ScalaVersion] {
   def isScala213: Boolean = value.startsWith("2.13")
   def isScala33: Boolean = value.startsWith("3.3")
   def isScala34: Boolean = value.startsWith("3.4")
+  def isAfter21317: Boolean = parts match {
+    case (2, 13, patch) => patch >= 17
+    case _ => false
+  }
 
   def parts: (Int, Int, Int) = {
     val regex = "(\\d+)\\.(\\d+)\\.(\\d+)(-.+)?".r
