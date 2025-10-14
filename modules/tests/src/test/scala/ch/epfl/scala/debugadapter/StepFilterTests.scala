@@ -538,7 +538,10 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       StepOut.line(11),
       Breakpoint(12),
       StepIn.method(
-        if (isScala3) "ScalaRunTime._hashCode(x: Product): Int" else "ScalaRunTime$._hashCode(Product): int"
+        if (isScala3) "ScalaRunTime._hashCode(x: Product): Int"
+        // changed in https://github.com/scala/scala/commit/ab634a0e965e0526073ff161552dcfafbfc077b4
+        else if (scalaVersion.isAfter21317) "MurmurHash3.productHash(Product,int,boolean): int"
+        else "ScalaRunTime$._hashCode(Product): int"
       ),
       StepOut.line(12),
       Breakpoint(13),
