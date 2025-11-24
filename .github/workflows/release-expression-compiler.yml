@@ -14,7 +14,7 @@ jobs:
     env:
       SCALA_VERSION: ${{ inputs.scala-version }}
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - uses: coursier/setup-action@v1.3.9
@@ -33,7 +33,7 @@ jobs:
       SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
       SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - uses: coursier/setup-action@v1.3.9
