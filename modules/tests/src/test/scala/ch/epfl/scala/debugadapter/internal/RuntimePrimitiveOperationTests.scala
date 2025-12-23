@@ -325,7 +325,8 @@ class RuntimePrimitiveOperationTests extends DebugTestSuite {
       DebugStepAssert.inParallel(
         Evaluation.failed("1 + new java.lang.Object()", "not defined on int and java.lang.Object"),
         Evaluation.failed("new java.lang.Object() + 1", "Cannot find method +"),
-        Evaluation.failed("!1", "not defined on int"),
+        Evaluation
+          .failed("!1", "Cannot evaluate because of java.lang.IllegalArgumentException: Unsupported literal (!,1)."),
         Evaluation.failed("1 && true", "not defined on int and boolean"),
         Evaluation.failed("true && 1", "not defined on boolean and int"),
         Evaluation.failed("1 + true", "not defined on int and boolean"),
