@@ -134,7 +134,7 @@ object DebugTools {
     def loadExpressionCompiler(entry: ManagedEntry): Option[(ClassEntry, ExpressionCompiler)] = {
       val optionsToAdd = if (entry.isScala2) defaultScala2Options else Seq.empty
       val scalacOptions = entry match {
-        case module: Module => prepareOptions(module.scalacOptions, optionsToAdd)
+        case module: ModuleEntry => prepareOptions(module.scalacOptions, optionsToAdd)
         case lib: Library => optionsToAdd
       }
       for {

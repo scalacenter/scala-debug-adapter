@@ -14,9 +14,13 @@ trait Debuggee {
   def javaRuntime: Option[JavaRuntime]
   def observeClassUpdates(onClassUpdate: Seq[String] => Unit): Closeable
 
-  def managedEntries: Seq[ManagedEntry] = modules ++ libraries
+  def moduleEntries: Seq[ModuleEntry] = modules
+  def managedEntries: Seq[ManagedEntry] = moduleEntries ++ libraries
   def classPathEntries: Seq[ClassPathEntry] = managedEntries ++ unmanagedEntries
-  def classPath: Seq[Path] = classPathEntries.map(_.absolutePath)
+  def classPath: Seq[Path] = classPathEntries.flatMap {
+    case module: MultiOutputModule => module.fullClassPath
+    case entry => Seq(entry.absolutePath)
+  }
   def classEntries: Seq[ClassEntry] = classPathEntries ++ javaRuntime
   def classPathString: String = classPath.mkString(File.pathSeparator)
 }

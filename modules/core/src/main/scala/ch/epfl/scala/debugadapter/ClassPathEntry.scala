@@ -2,6 +2,7 @@ package ch.epfl.scala.debugadapter
 
 import java.nio.file.Path
 import java.net.URL
+import scala.util.Try
 
 sealed trait ClassPathEntry extends ClassEntry {
   def absolutePath: Path
@@ -27,13 +28,45 @@ sealed trait ManagedEntry extends ClassPathEntry {
   def isJava: Boolean = scalaVersion.isEmpty
 }
 
+sealed trait ModuleEntry extends ManagedEntry {
+  def scalacOptions: Seq[String]
+}
+
 final case class Module(
     name: String,
     scalaVersion: Option[ScalaVersion],
     scalacOptions: Seq[String],
     absolutePath: Path,
     sourceEntries: Seq[SourceEntry]
-) extends ManagedEntry
+) extends ModuleEntry
+
+final case class MultiOutputModule(
+    name: String,
+    scalaVersion: Option[ScalaVersion],
+    scalacOptions: Seq[String],
+    absolutePath: Path,
+    classPath: Seq[Path],
+    sourceEntries: Seq[SourceEntry]
+) extends ModuleEntry {
+  def fullClassPath: Seq[Path] = (absolutePath +: classPath).distinct
+
+  override def classSystems: Seq[ClassSystem] =
+    fullClassPath.map(classSystem)
+
+  private def classSystem(path: Path): ClassSystem =
+    if (path.toString.endsWith(".jar")) ClassJar(path)
+    else ClassDirectory(path)
+
+  override def readBytes(classFile: String): Array[Byte] = {
+    val attempts =
+      classSystems.map(classSystem => Try(classSystem.readBytes(classFile)))
+    attempts
+      .collectFirst { case scala.util.Success(bytes) => bytes }
+      .getOrElse {
+        attempts.last.get
+      }
+  }
+}
 
 final case class Library(artifactId: String, version: String, absolutePath: Path, sourceEntries: Seq[SourceEntry])
     extends ManagedEntry {
