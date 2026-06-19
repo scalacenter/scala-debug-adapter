@@ -2,6 +2,7 @@ package ch.epfl.scala.debugadapter.internal
 
 import ch.epfl.scala.debugadapter.testfmk.TestingResolver
 import ch.epfl.scala.debugadapter.testfmk.TestingDebuggee
+import ch.epfl.scala.debugadapter.MultiOutputModule
 import ch.epfl.scala.debugadapter.ScalaVersion
 import ch.epfl.scala.debugadapter.SourceJar
 
@@ -10,6 +11,7 @@ import ch.epfl.scala.debugadapter.testfmk.NoopLogger
 import munit.FunSuite
 import scala.util.Properties
 import java.nio.file.Paths
+import java.nio.file.Files
 
 class ClassEntryLookUpSpec extends FunSuite {
   val isFilesystemCaseInsensitive = Properties.isWin || Properties.isMac
@@ -28,6 +30,29 @@ class ClassEntryLookUpSpec extends FunSuite {
 
     val sourceFile = lookUp.getSourceFileURI(expectedClassName)
     assert(sourceFile.contains(expectedSourceFile))
+  }
+
+  test("additional-module-class-path") {
+    val debuggee = TestingDebuggee.scalaBreakpointTest(ScalaVersion.`2.12`)
+    val emptyClassDirectory = Files.createTempDirectory("empty-classes")
+    val module = MultiOutputModule(
+      name = debuggee.mainModule.name,
+      scalaVersion = debuggee.mainModule.scalaVersion,
+      scalacOptions = debuggee.mainModule.scalacOptions,
+      absolutePath = emptyClassDirectory,
+      classPath = Seq(emptyClassDirectory, debuggee.mainModule.absolutePath),
+      sourceEntries = debuggee.mainModule.sourceEntries
+    )
+    val lookUp = ClassEntryLookUp(module, NoopLogger)
+
+    val expectedSourceFile = debuggee.sourceFiles.head.toUri
+    val expectedClassName =
+      "example.Main$Hello$InnerHello$1"
+
+    val className =
+      lookUp.getFullyQualifiedClassName(SanitizedUri(expectedSourceFile), 14)
+    assert(className.contains(expectedClassName))
+    assert(module.classPath.contains(debuggee.mainModule.absolutePath))
   }
 
   test("should map source files to class names and backward, in dependency jars") {
