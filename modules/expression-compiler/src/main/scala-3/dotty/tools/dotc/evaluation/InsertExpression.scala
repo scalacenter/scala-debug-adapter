@@ -182,7 +182,7 @@ class InsertExpression(using exprCtx: ExpressionContext) extends Phase:
     val expressionFile = SourceFile.virtual("<expression>", exprCtx.expression)
     val contentBytes = wrappedExpression.getBytes(StandardCharsets.UTF_8)
     val wrappedExpressionFile =
-      new VirtualFile("<wrapped-expression>", contentBytes)
+      new VirtualFile(ctx.compilationUnit.source.path, contentBytes)
     val sourceFile =
       new SourceFile(wrappedExpressionFile, wrappedExpression.toArray):
         override def start: Int =

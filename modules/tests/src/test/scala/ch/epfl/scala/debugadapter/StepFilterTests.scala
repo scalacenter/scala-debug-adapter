@@ -548,7 +548,10 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
       ),
       StepOut.line(12),
       Breakpoint(13),
-      StepIn.method("String.equals(Object): boolean"),
+      StepIn.method(
+        if (scalaVersion.isAfter338) "Objects.equals(Object,Object): boolean"
+        else "String.equals(Object): boolean"
+      ),
       StepOut.line(13),
       Breakpoint(14),
       StepIn.line(15),
@@ -1254,7 +1257,13 @@ abstract class StepFilterTests(protected val scalaVersion: ScalaVersion) extends
          |}
          |""".stripMargin
     implicit val debuggee: TestingDebuggee = TestingDebuggee.mainClass(source, "example.Main", scalaVersion)
-    check(Breakpoint(9), StepIn.method("String.equals(Object): boolean"))
+    check(
+      Breakpoint(9),
+      StepIn.method(
+        if (scalaVersion.isAfter338) "Objects.equals(Object,Object): boolean"
+        else "String.equals(Object): boolean"
+      )
+    )
   }
 
   test("skip wrapRefArray") {

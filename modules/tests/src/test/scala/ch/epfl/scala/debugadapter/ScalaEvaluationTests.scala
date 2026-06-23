@@ -1716,7 +1716,7 @@ abstract class ScalaEvaluationTests(scalaVersion: ScalaVersion) extends DebugTes
     check(Breakpoint(6), Evaluation.success("1+1", 2))
   }
 
-  test("evaluate class def") {
+  test("evaluate-class-def") {
     val source =
       """|package example
          |
