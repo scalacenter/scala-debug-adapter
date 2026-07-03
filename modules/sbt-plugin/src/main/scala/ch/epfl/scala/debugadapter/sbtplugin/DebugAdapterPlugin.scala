@@ -144,11 +144,14 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         newHash.isPresent && (!oldHash.isPresent || newHash.get != oldHash.get)
       }
 
+    // Derive the class name from the product's virtual id relative to the class directory's
+    // id (both live in the converter's namespace). On sbt 2 the product's physical path is
+    // content-addressed, so relativizing physical paths against classDir does not work.
+    val classDirPrefix = converter.toVirtualFile(classDir).id.stripSuffix("/") + "/"
     val oldStamps = previousStamps.getAllProductStamps
     currentStamps.getAllProductStamps.asScala.iterator.collect {
       case (file, stamp) if file.id.endsWith(".class") && isNewer(stamp, oldStamps.get(file)) =>
-        val path = converter.toPath(file)
-        classDir.relativize(path).toString.replace(File.separator, ".").stripSuffix(".class")
+        file.id.stripPrefix(classDirPrefix).replace("/", ".").stripSuffix(".class")
     }.toSeq
   }
 
