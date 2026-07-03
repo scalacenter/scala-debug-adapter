@@ -91,9 +91,9 @@ jobs:
     - name: Scripted tests (sbt 1.x)
       run: sbt sbtPlugin2_12/scripted
       shell: bash
-    # Runs only where the JDK supports sbt 2 (17+). Non-blocking for now: the sbt 2
-    # debug session still fails at runtime (NullPointerException resolving sources),
-    # which is tracked separately from the cross-build wiring.
+    # Runs only where the JDK supports sbt 2 (17+). Non-blocking for now: all fixtures
+    # pass except hot-code-reload, which needs a core change to read fresh class bytes
+    # under sbt 2's cached/jar output (tracked separately).
     - name: Scripted tests (sbt 2.x)
       if: ${{ matrix.sbt2 }}
       continue-on-error: true
