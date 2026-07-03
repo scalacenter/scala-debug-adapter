@@ -11,5 +11,9 @@ val pluginVersion = sys.props
 addSbtPlugin("ch.epfl.scala" % "sbt-debug-adapter" % pluginVersion)
 libraryDependencies += "ch.epfl.scala" %% "scala-debug-adapter-test" % pluginVersion
 
-// this plugin add the tools.jar from the JDK into the classpath as an unmanaged jar.
-addSbtPlugin("com.github.sbt" % "sbt-jdi-tools" % "1.2.0")
+// this plugin adds the tools.jar from the JDK as an unmanaged jar; sbt-jdi-tools is sbt 1 only
+libraryDependencies ++= {
+  if (sbtBinaryVersion.value == "1.0")
+    Seq(Defaults.sbtPluginExtra("com.github.sbt" % "sbt-jdi-tools" % "1.2.0", sbtBinaryVersion.value, scalaBinaryVersion.value))
+  else Nil
+}

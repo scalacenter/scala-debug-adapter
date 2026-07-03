@@ -146,7 +146,7 @@ lazy val sbtPlugin = projectMatrix
     scalaVersions = Seq(Dependencies.scala212),
     axisValues = Seq(VirtualAxis.jvm),
     _.dependsOn(core212).settings(
-      scriptedSbt := "1.5.5",
+      scriptedSbt := "1.9.0",
       scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
       scriptedBufferLog := false,
       Compile / unmanagedSourceDirectories += (Compile / sourceDirectory).value / "scala-sbt1",
@@ -166,7 +166,22 @@ lazy val sbtPlugin = projectMatrix
     scalaVersions = Seq(Dependencies.scalaSbt2),
     axisValues = Seq(VirtualAxis.jvm),
     _.dependsOn(core3).settings(
-      Compile / unmanagedSourceDirectories += (Compile / sourceDirectory).value / "scala-sbt2"
+      scriptedSbt := "2.0.1",
+      scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
+      scriptedBufferLog := false,
+      Compile / unmanagedSourceDirectories += (Compile / sourceDirectory).value / "scala-sbt2",
+      // The fixtures' meta-build runs on the inner sbt's Scala version (Scala 3 for sbt 2),
+      // so the test framework and core must be the Scala 3 builds; the debuggee-side
+      // expression compiler / decoder are the same as for sbt 1.
+      scriptedDependencies := scriptedDependencies
+        .dependsOn(
+          publishLocal,
+          core3 / publishLocal,
+          tests3 / publishLocal,
+          expressionCompiler212 / publishLocal,
+          decoder3 / publishLocal
+        )
+        .value
     )
   )
 
