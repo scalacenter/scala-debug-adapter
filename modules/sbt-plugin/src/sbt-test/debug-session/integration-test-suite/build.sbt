@@ -4,6 +4,10 @@ import ch.epfl.scala.debugadapter.testfmk._
 val checkDebugSession =
   inputKey[Unit]("Check the integration test suite debug session")
 
+// sbt 2 removed the built-in IntegrationTest config and Defaults.itSettings;
+// define an `it` config that works on both sbt 1 and sbt 2.
+val IntegrationTest = config("it").extend(Test)
+
 val root = project
   .in(file("."))
   .configs(IntegrationTest)
@@ -11,8 +15,7 @@ val root = project
     scalaVersion := "2.12.14",
     libraryDependencies += "com.lihaoyi" %% "utest" % "0.7.10" % IntegrationTest,
     testFrameworks += new TestFramework("utest.runner.Framework"),
-    Defaults.itSettings,
-    inConfig(IntegrationTest)(DebugAdapterPlugin.testSettings),
+    inConfig(IntegrationTest)(Defaults.testSettings ++ DebugAdapterPlugin.testSettings),
     checkDebugSession := checkDebugSessionTask.evaluated
   )
 

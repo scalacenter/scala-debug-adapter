@@ -1,4 +1,6 @@
 import ch.epfl.scala.debugadapter.testfmk._
+// Def.uncached is native on sbt 2 and provided by sbt2-compat on sbt 1
+import sbtcompat.PluginCompat._
 
 import java.nio.file.Path
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -37,8 +39,8 @@ lazy val a: Project =
     .settings(
       scalaVersion := scalaV,
       checkBreakpoint := checkBreakpointTask.evaluated,
-      checkHotCodeReplace := checkHotCodeReplaceTask.value,
-      sourceToDebug := (Compile / sources).value.find(_.getName == "A.scala").get.toPath
+      checkHotCodeReplace := Def.uncached(checkHotCodeReplaceTask.value),
+      sourceToDebug := Def.uncached((Compile / sources).value.find(_.getName == "A.scala").get.toPath)
     )
 
 lazy val b =
@@ -47,8 +49,8 @@ lazy val b =
     .settings(
       scalaVersion := scalaV,
       checkBreakpoint := checkBreakpointTask.evaluated,
-      checkHotCodeReplace := checkHotCodeReplaceTask.value,
-      sourceToDebug := (a / sourceToDebug).value
+      checkHotCodeReplace := Def.uncached(checkHotCodeReplaceTask.value),
+      sourceToDebug := Def.uncached((a / sourceToDebug).value)
     )
     .dependsOn(a)
 
@@ -58,7 +60,7 @@ lazy val c =
     .settings(
       scalaVersion := scalaV,
       checkBreakpoint := checkBreakpointTask.evaluated,
-      checkHotCodeReplace := checkNoHotCodeReplaceTask.value,
-      sourceToDebug := (a / sourceToDebug).value
+      checkHotCodeReplace := Def.uncached(checkNoHotCodeReplaceTask.value),
+      sourceToDebug := Def.uncached((a / sourceToDebug).value)
     )
     .dependsOn(a)
