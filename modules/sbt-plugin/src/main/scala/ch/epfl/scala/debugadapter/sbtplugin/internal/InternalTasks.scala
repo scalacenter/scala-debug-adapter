@@ -2,6 +2,7 @@ package ch.epfl.scala.debugadapter.sbtplugin.internal
 
 import ch.epfl.scala.debugadapter._
 import sbt.{ScalaVersion => _, _}
+import sbtcompat.PluginCompat.toNioPath
 
 import scala.util.Properties
 import _root_.io.reactivex.Observable
@@ -57,11 +58,12 @@ private[sbtplugin] object InternalTasks {
   }
 
   lazy val unmanagedEntries: Def.Initialize[Task[Seq[UnmanagedEntry]]] = Def.task {
+    implicit val converter: xsbti.FileConverter = Keys.fileConverter.value
     val fullClasspath = Keys.fullClasspath.value
     val managedEntries = libraries.value ++ modules.value
     val managedClasspath = managedEntries.map(_.absolutePath).toSet
     fullClasspath
-      .map(_.data.getAbsoluteFile.toPath)
+      .map(entry => toNioPath(entry).toAbsolutePath)
       .filter(path => !managedClasspath.contains(path))
       .map(UnmanagedEntry.apply)
   }

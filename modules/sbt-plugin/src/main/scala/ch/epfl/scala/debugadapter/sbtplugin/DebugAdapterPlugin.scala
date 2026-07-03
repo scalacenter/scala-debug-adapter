@@ -3,7 +3,7 @@ package ch.epfl.scala.debugadapter.sbtplugin
 import _root_.io.reactivex.subjects.PublishSubject
 import scala.jdk.CollectionConverters._
 import ch.epfl.scala.debugadapter._
-import ch.epfl.scala.debugadapter.sbtplugin.internal.JsonProtocol._
+import ch.epfl.scala.debugadapter.sbtplugin.internal.JsonProtocolCompat._
 import ch.epfl.scala.debugadapter.sbtplugin.internal._
 import sbt.Tests._
 import sbt.internal.bsp.BuildTargetIdentifier
@@ -15,6 +15,7 @@ import sbt.internal.util.complete.Parsers
 import sbt.testing.Selector
 import sbt.testing.TestSelector
 import sbt.{ScalaVersion => _, _}
+import sbtcompat.PluginCompat._
 import sjsonnew.shaded.scalajson.ast.unsafe.JValue
 import sjsonnew.support.scalajson.unsafe.CompactPrinter
 import sjsonnew.support.scalajson.unsafe.Converter
@@ -113,7 +114,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       if (jo.exists(_.startsWith("-g"))) jo
       else jo :+ "-g"
     },
-    Keys.compile := {
+    Keys.compile := Def.uncached {
       val currentAnalysis: CompileAnalysis = Keys.compile.value
       val previousAnalysis = Keys.previousCompile.value.analysis
       val classesToUpdate = debugAdapterClassUpdates.value
@@ -356,8 +357,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           testSuites.environmentVariables
         )
 
-        val setups = testExec.options.collect { case setup @ Setup(_) => setup }
-        val cleanups = testExec.options.collect { case cleanup @ Cleanup(_) => cleanup }
+        val setups = testExec.options.collect { case setup: Setup => setup }
+        val cleanups = testExec.options.collect { case cleanup: Cleanup => cleanup }
         val arguments = testExec.options.collect { case argument @ Argument(_, _) => argument }
         val parallel = testExec.parallel && parallelExec
 

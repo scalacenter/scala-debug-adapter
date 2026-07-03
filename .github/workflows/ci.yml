@@ -85,5 +85,5 @@ jobs:
         jvm: ${{ matrix.jvm }}
         apps: sbt
     - name: Scripted tests
-      run: sbt sbtPlugin/scripted
+      run: sbt sbtPlugin2_12/scripted
       shell: bash

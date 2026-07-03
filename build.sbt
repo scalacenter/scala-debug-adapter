@@ -31,7 +31,6 @@ lazy val root = project
     core212,
     core213,
     tests212,
-    sbtPlugin,
     expressionCompiler212,
     expressionCompiler213,
     expressionCompiler30,
@@ -39,6 +38,7 @@ lazy val root = project
     expressionCompiler34,
     decoder3
   )
+  .aggregate(sbtPlugin.projectRefs: _*)
   .settings(
     publish / skip := true
   )
@@ -66,6 +66,7 @@ lazy val javaDebug = project
 
 lazy val core212 = core.jvm(Dependencies.scala212)
 lazy val core213 = core.jvm(Dependencies.scala213)
+lazy val core3 = core.jvm(Dependencies.scala31Plus)
 lazy val core = projectMatrix
   .in(file("modules/core"))
   .jvmPlatform(
@@ -125,29 +126,49 @@ lazy val tests = projectMatrix
   )
   .dependsOn(core)
 
-lazy val sbtPlugin = project
+lazy val sbtPlugin = projectMatrix
   .in(file("modules/sbt-plugin"))
   .enablePlugins(SbtPlugin, ContrabandPlugin, JsonCodecPlugin)
   .settings(
     name := "sbt-debug-adapter",
-    scalaVersion := Dependencies.scala212,
     scalacOptionsSettings,
-    sbtVersion := "1.4.9",
-    scriptedSbt := "1.5.5",
     Compile / generateContrabands / contrabandFormatsForType := ContrabandConfig.getFormats,
-    scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
-    scriptedBufferLog := false,
-    scriptedDependencies := scriptedDependencies
-      .dependsOn(
-        publishLocal,
-        core212 / publishLocal,
-        tests212 / publishLocal,
-        expressionCompiler212 / publishLocal,
-        decoder3 / publishLocal
-      )
-      .value
+    addSbtPlugin("com.github.sbt" % "sbt2-compat" % "0.1.0"),
+    pluginCrossBuild / sbtVersion := {
+      scalaBinaryVersion.value match {
+        case "2.12" => "1.4.9"
+        case _ => "2.0.1"
+      }
+    }
   )
-  .dependsOn(core212)
+  // sbt 1.x row (Scala 2.12) — depends on the Scala 2.12 build of core
+  .customRow(
+    scalaVersions = Seq(Dependencies.scala212),
+    axisValues = Seq(VirtualAxis.jvm),
+    _.dependsOn(core212).settings(
+      scriptedSbt := "1.5.5",
+      scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
+      scriptedBufferLog := false,
+      Compile / unmanagedSourceDirectories += (Compile / sourceDirectory).value / "scala-sbt1",
+      scriptedDependencies := scriptedDependencies
+        .dependsOn(
+          publishLocal,
+          core212 / publishLocal,
+          tests212 / publishLocal,
+          expressionCompiler212 / publishLocal,
+          decoder3 / publishLocal
+        )
+        .value
+    )
+  )
+  // sbt 2.x row (Scala 3) — depends on the Scala 3 build of core
+  .customRow(
+    scalaVersions = Seq(Dependencies.scalaSbt2),
+    axisValues = Seq(VirtualAxis.jvm),
+    _.dependsOn(core3).settings(
+      Compile / unmanagedSourceDirectories += (Compile / sourceDirectory).value / "scala-sbt2"
+    )
+  )
 
 lazy val expressionCompiler212 = expressionCompiler.finder(scala212Axis)(true)
 lazy val expressionCompiler213 = expressionCompiler.finder(scala213Axis)(true)
