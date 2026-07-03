@@ -2,8 +2,8 @@ package ch.epfl.scala.debugadapter.sbtplugin
 
 import _root_.io.reactivex.subjects.PublishSubject
 import scala.jdk.CollectionConverters._
+
 import ch.epfl.scala.debugadapter._
-import ch.epfl.scala.debugadapter.sbtplugin.internal.JsonProtocolCompat._
 import ch.epfl.scala.debugadapter.sbtplugin.internal._
 import sbt.Tests._
 import sbt.internal.bsp.BuildTargetIdentifier
@@ -24,8 +24,8 @@ import xsbti.FileConverter
 import xsbti.compile.CompileAnalysis
 import xsbti.compile.analysis.ReadStamps
 import xsbti.compile.analysis.Stamp
-
 import java.io.File
+
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
@@ -35,9 +35,21 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
 
+import sjsonnew.JsonFormat
+
 object DebugAdapterPlugin extends sbt.AutoPlugin {
   private final val DebugSessionStart: String = "debugSession/start"
   private type Result[A] = Either[Error, A]
+
+  // Redefine as implicit val for cross-compilation, sbt 2 uses Scala 3 where those are givens
+  implicit val scalaMainClassFormat: JsonFormat[ScalaMainClass] = JsonProtocol.ScalaMainClassFormat
+  implicit val scalaTestSuitesFormat: JsonFormat[ScalaTestSuites] = JsonProtocol.ScalaTestSuitesFormat
+  implicit val debugSessionParamsFormat: JsonFormat[DebugSessionParams] = JsonProtocol.DebugSessionParamsFormat
+  implicit val debugSessionAddressFormat: JsonFormat[DebugSessionAddress] = JsonProtocol.DebugSessionAddressFormat
+  implicit val arrayStringFormat: JsonFormat[Array[String]] = {
+    import JsonProtocol.StringJsonFormat
+    JsonProtocol.arrayFormat[String]
+  }
 
   private object DataKind {
     final val ScalaMainClass: String = "scala-main-class"

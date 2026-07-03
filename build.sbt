@@ -149,7 +149,6 @@ lazy val sbtPlugin = projectMatrix
       scriptedSbt := "1.9.0",
       scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
       scriptedBufferLog := false,
-      Compile / unmanagedSourceDirectories += (Compile / sourceDirectory).value / "scala-sbt1",
       scriptedDependencies := scriptedDependencies
         .dependsOn(
           publishLocal,
@@ -169,7 +168,6 @@ lazy val sbtPlugin = projectMatrix
       scriptedSbt := "2.0.1",
       scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
       scriptedBufferLog := false,
-      Compile / unmanagedSourceDirectories += (Compile / sourceDirectory).value / "scala-sbt2",
       // The fixtures' meta-build runs on the inner sbt's Scala version (Scala 3 for sbt 2),
       // so the test framework and core must be the Scala 3 builds; the debuggee-side
       // expression compiler / decoder are the same as for sbt 1.
