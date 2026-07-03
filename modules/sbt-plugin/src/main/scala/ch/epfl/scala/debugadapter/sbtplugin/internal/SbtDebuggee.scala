@@ -20,6 +20,10 @@ private[debugadapter] sealed trait SbtDebuggee extends Debuggee {
   val logger: LoggerAdapter
   val classesToUpdate: Observable[Seq[String]]
 
+  // The debuggee output is provided through moduleEntries as MultiOutputModules; `modules`
+  // (which only accepts plain Module) is unused since nothing reads it directly.
+  override def modules: Seq[Module] = Nil
+
   override def observeClassUpdates(onClassUpdate: Seq[String] => Unit): Closeable = {
     val subscription = classesToUpdate.subscribe(onClassUpdate(_))
     () => if (!subscription.isDisposed) subscription.dispose
@@ -30,7 +34,7 @@ private[debugadapter] final class MainClassDebuggee(
     target: BuildTargetIdentifier,
     val scalaVersion: ScalaVersion,
     forkOptions: ForkOptions,
-    val modules: Seq[Module],
+    override val moduleEntries: Seq[MultiOutputModule],
     val libraries: Seq[Library],
     val unmanagedEntries: Seq[UnmanagedEntry],
     val javaRuntime: Option[JavaRuntime],
@@ -51,7 +55,7 @@ private[debugadapter] final class TestSuitesDebuggee(
     target: BuildTargetIdentifier,
     val scalaVersion: ScalaVersion,
     forkOptions: ForkOptions,
-    val modules: Seq[Module],
+    override val moduleEntries: Seq[MultiOutputModule],
     val libraries: Seq[Library],
     val unmanagedEntries: Seq[UnmanagedEntry],
     val javaRuntime: Option[JavaRuntime],
@@ -185,7 +189,7 @@ private[debugadapter] final class TestSuitesDebuggee(
 private[debugadapter] final class AttachRemoteDebuggee(
     target: BuildTargetIdentifier,
     val scalaVersion: ScalaVersion,
-    val modules: Seq[Module],
+    override val moduleEntries: Seq[MultiOutputModule],
     val libraries: Seq[Library],
     val unmanagedEntries: Seq[UnmanagedEntry],
     val javaRuntime: Option[JavaRuntime],

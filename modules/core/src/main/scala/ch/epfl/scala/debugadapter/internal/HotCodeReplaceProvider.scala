@@ -60,9 +60,12 @@ class HotCodeReplaceProvider(
       _ <- initialized
       _ <- replacer.canRedefineClassesAndPopFrames
       classNames = classesAccumulator.getAndUpdate(_ => Set.empty).toSeq
+      // Refresh the source lookup before reading class bytes: after a recompile the fresh classes
+      // may live in a different class-path entry than at session start (e.g. the class directory
+      // on sbt 2, whereas the initial lookup found them in the exported jar), which reload rescans.
+      _ = if (classNames.nonEmpty) sourceLookUp.reload(classNames)
       replacedClasses <- if (classNames.isEmpty) Success(Seq.empty) else replacer.replace(classNames)
     } yield {
-      sourceLookUp.reload(classNames)
       stackTraceProvider.reload()
       replacedClasses.asJava
     }
