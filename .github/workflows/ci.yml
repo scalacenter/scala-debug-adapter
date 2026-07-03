@@ -35,6 +35,8 @@ jobs:
         with:
           apps: sbt
       - run: sbt +Test/compile
+      # Verify the sbt 2.x cross-build of the plugin packages and its POM resolves
+      - run: sbt sbtPlugin3/publishLocal
   test:
     if: ${{(github.event_name == 'pull_request' && !contains(github.event.pull_request.body, '[skip ci]'))}}
     strategy:
