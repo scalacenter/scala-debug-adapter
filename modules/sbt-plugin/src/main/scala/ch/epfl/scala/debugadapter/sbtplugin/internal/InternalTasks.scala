@@ -86,7 +86,13 @@ private[sbtplugin] object InternalTasks {
   }
 
   private def module(proj: ProjectRef, config: ConfigKey): Def.Initialize[Task[Module]] = Def.task {
-    val classDirectory = (proj / config / Keys.classDirectory).value.toPath
+    implicit val converter: xsbti.FileConverter = Keys.fileConverter.value
+    // Use the exported product rather than classDirectory: on sbt 2 the compiled output is a jar
+    // and, on a compile-cache hit, .class files are not materialized into classDirectory.
+    val output = (proj / config / Keys.exportedProducts).value
+      .map(entry => toNioPath(entry).toAbsolutePath)
+      .headOption
+      .getOrElse((proj / config / Keys.classDirectory).value.toPath)
     val sourceDirectories = (proj / config / Keys.sourceDirectories).value.map(_.toPath)
     val sourceFiles = (proj / config / Keys.sources).value.map(_.toPath)
     val standaloneSourceFiles = sourceFiles.filter { file =>
@@ -98,6 +104,6 @@ private[sbtplugin] object InternalTasks {
     val sourceEntries =
       sourceDirectories.map(SourceDirectory.apply) ++
         standaloneSourceFiles.map(f => StandaloneSourceFile(f, f.getFileName.toString))
-    Module(name, scalaVersion, scalacOptions, classDirectory, sourceEntries)
+    Module(name, scalaVersion, scalacOptions, output, sourceEntries)
   }
 }
