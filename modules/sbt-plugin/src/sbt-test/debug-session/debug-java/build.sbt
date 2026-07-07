@@ -23,6 +23,7 @@ lazy val debugJavaWithG =
   project
     .in(file("./withG"))
     .settings(
+      scalaVersion := "3.3.0",
       javacOptions += "-g",
       checkDebugJava := checkDebugJavaTask.evaluated
     )
@@ -30,12 +31,16 @@ lazy val debugJavaWithG =
 lazy val debugJavaWithoutG =
   project
     .in(file("./withoutG"))
-    .settings(checkDebugJava := checkDebugJavaTask.evaluated)
+    .settings(
+      scalaVersion := "3.3.0",
+      checkDebugJava := checkDebugJavaTask.evaluated
+    )
 
 lazy val debugJavaWithGSpecialized =
   project
     .in(file("./withGSpecialized"))
     .settings(
+      scalaVersion := "3.3.0",
       javacOptions += "-g:lines,source",
       checkDebugJava := checkDebugJavaWithGSpecializedTask.evaluated
     )

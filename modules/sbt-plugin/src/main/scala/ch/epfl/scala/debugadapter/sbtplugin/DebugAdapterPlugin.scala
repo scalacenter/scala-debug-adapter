@@ -2,8 +2,8 @@ package ch.epfl.scala.debugadapter.sbtplugin
 
 import _root_.io.reactivex.subjects.PublishSubject
 import scala.jdk.CollectionConverters._
+
 import ch.epfl.scala.debugadapter._
-import ch.epfl.scala.debugadapter.sbtplugin.internal.JsonProtocol._
 import ch.epfl.scala.debugadapter.sbtplugin.internal._
 import sbt.Tests._
 import sbt.internal.bsp.BuildTargetIdentifier
@@ -15,6 +15,7 @@ import sbt.internal.util.complete.Parsers
 import sbt.testing.Selector
 import sbt.testing.TestSelector
 import sbt.{ScalaVersion => _, _}
+import sbtcompat.PluginCompat._
 import sjsonnew.shaded.scalajson.ast.unsafe.JValue
 import sjsonnew.support.scalajson.unsafe.CompactPrinter
 import sjsonnew.support.scalajson.unsafe.Converter
@@ -23,8 +24,8 @@ import xsbti.FileConverter
 import xsbti.compile.CompileAnalysis
 import xsbti.compile.analysis.ReadStamps
 import xsbti.compile.analysis.Stamp
-
 import java.io.File
+
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
@@ -34,9 +35,21 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
 
+import sjsonnew.JsonFormat
+
 object DebugAdapterPlugin extends sbt.AutoPlugin {
   private final val DebugSessionStart: String = "debugSession/start"
   private type Result[A] = Either[Error, A]
+
+  // Redefine as implicit val for cross-compilation, sbt 2 uses Scala 3 where those are givens
+  implicit val scalaMainClassFormat: JsonFormat[ScalaMainClass] = JsonProtocol.ScalaMainClassFormat
+  implicit val scalaTestSuitesFormat: JsonFormat[ScalaTestSuites] = JsonProtocol.ScalaTestSuitesFormat
+  implicit val debugSessionParamsFormat: JsonFormat[DebugSessionParams] = JsonProtocol.DebugSessionParamsFormat
+  implicit val debugSessionAddressFormat: JsonFormat[DebugSessionAddress] = JsonProtocol.DebugSessionAddressFormat
+  implicit val arrayStringFormat: JsonFormat[Array[String]] = {
+    import JsonProtocol.StringJsonFormat
+    JsonProtocol.arrayFormat[String]
+  }
 
   private object DataKind {
     final val ScalaMainClass: String = "scala-main-class"
@@ -113,7 +126,7 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
       if (jo.exists(_.startsWith("-g"))) jo
       else jo :+ "-g"
     },
-    Keys.compile := {
+    Keys.compile := Def.uncached {
       val currentAnalysis: CompileAnalysis = Keys.compile.value
       val previousAnalysis = Keys.previousCompile.value.analysis
       val classesToUpdate = debugAdapterClassUpdates.value
@@ -143,11 +156,14 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
         newHash.isPresent && (!oldHash.isPresent || newHash.get != oldHash.get)
       }
 
+    // Derive the class name from the product's virtual id relative to the class directory's
+    // id (both live in the converter's namespace). On sbt 2 the product's physical path is
+    // content-addressed, so relativizing physical paths against classDir does not work.
+    val classDirPrefix = converter.toVirtualFile(classDir).id.stripSuffix("/") + "/"
     val oldStamps = previousStamps.getAllProductStamps
     currentStamps.getAllProductStamps.asScala.iterator.collect {
       case (file, stamp) if file.id.endsWith(".class") && isNewer(stamp, oldStamps.get(file)) =>
-        val path = converter.toPath(file)
-        classDir.relativize(path).toString.replace(File.separator, ".").stripSuffix(".class")
+        file.id.stripPrefix(classDirPrefix).replace("/", ".").stripSuffix(".class")
     }.toSeq
   }
 
@@ -356,8 +372,8 @@ object DebugAdapterPlugin extends sbt.AutoPlugin {
           testSuites.environmentVariables
         )
 
-        val setups = testExec.options.collect { case setup @ Setup(_) => setup }
-        val cleanups = testExec.options.collect { case cleanup @ Cleanup(_) => cleanup }
+        val setups = testExec.options.collect { case setup: Setup => setup }
+        val cleanups = testExec.options.collect { case cleanup: Cleanup => cleanup }
         val arguments = testExec.options.collect { case argument @ Argument(_, _) => argument }
         val parallel = testExec.parallel && parallelExec
 

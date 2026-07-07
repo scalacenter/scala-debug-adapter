@@ -8,6 +8,14 @@ def isRelease() =
 
 def isCI = System.getenv("CI") != null
 
+// sbt 2.x runs on Scala 3, whose compiler bridge is compiled for Java 17.
+// Only materialize the sbt 2.x plugin row where the running JDK can load it.
+def jdkVersion: Int = {
+  val v = sys.props("java.specification.version")
+  (if (v.startsWith("1.")) v.drop(2) else v).takeWhile(_.isDigit).toInt
+}
+def supportsSbt2 = jdkVersion >= 17
+
 inThisBuild(
   Seq(
     organization := "ch.epfl.scala",
@@ -31,7 +39,6 @@ lazy val root = project
     core212,
     core213,
     tests212,
-    sbtPlugin,
     expressionCompiler212,
     expressionCompiler213,
     expressionCompiler30,
@@ -39,6 +46,7 @@ lazy val root = project
     expressionCompiler34,
     decoder3
   )
+  .aggregate(sbtPlugin.projectRefs: _*)
   .settings(
     publish / skip := true
   )
@@ -66,6 +74,7 @@ lazy val javaDebug = project
 
 lazy val core212 = core.jvm(Dependencies.scala212)
 lazy val core213 = core.jvm(Dependencies.scala213)
+lazy val core3 = core.jvm(Dependencies.scala31Plus)
 lazy val core = projectMatrix
   .in(file("modules/core"))
   .jvmPlatform(
@@ -125,29 +134,71 @@ lazy val tests = projectMatrix
   )
   .dependsOn(core)
 
-lazy val sbtPlugin = project
-  .in(file("modules/sbt-plugin"))
-  .enablePlugins(SbtPlugin, ContrabandPlugin, JsonCodecPlugin)
-  .settings(
-    name := "sbt-debug-adapter",
-    scalaVersion := Dependencies.scala212,
-    scalacOptionsSettings,
-    sbtVersion := "1.4.9",
-    scriptedSbt := "1.5.5",
-    Compile / generateContrabands / contrabandFormatsForType := ContrabandConfig.getFormats,
-    scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
-    scriptedBufferLog := false,
-    scriptedDependencies := scriptedDependencies
-      .dependsOn(
-        publishLocal,
-        core212 / publishLocal,
-        tests212 / publishLocal,
-        expressionCompiler212 / publishLocal,
-        decoder3 / publishLocal
+lazy val sbtPlugin = {
+  // Explicit id: this matrix is built via a local val (to conditionally add the
+  // sbt 2.x row), so the projectMatrix macro can't infer "sbtPlugin" from the name.
+  val base = projectMatrix
+    .withId("sbtPlugin")
+    .in(file("modules/sbt-plugin"))
+    .enablePlugins(SbtPlugin, ContrabandPlugin, JsonCodecPlugin)
+    .settings(
+      name := "sbt-debug-adapter",
+      scalacOptionsSettings,
+      Compile / generateContrabands / contrabandFormatsForType := ContrabandConfig.getFormats,
+      addSbtPlugin("com.github.sbt" % "sbt2-compat" % "0.1.0"),
+      pluginCrossBuild / sbtVersion := {
+        scalaBinaryVersion.value match {
+          case "2.12" => "1.4.9"
+          case _ => "2.0.1"
+        }
+      }
+    )
+    // sbt 1.x row (Scala 2.12) — depends on the Scala 2.12 build of core
+    .customRow(
+      scalaVersions = Seq(Dependencies.scala212),
+      axisValues = Seq(VirtualAxis.jvm),
+      _.dependsOn(core212).settings(
+        scriptedSbt := "1.9.0",
+        scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
+        scriptedBufferLog := false,
+        scriptedDependencies := scriptedDependencies
+          .dependsOn(
+            publishLocal,
+            core212 / publishLocal,
+            tests212 / publishLocal,
+            expressionCompiler212 / publishLocal,
+            decoder3 / publishLocal
+          )
+          .value
       )
-      .value
-  )
-  .dependsOn(core212)
+    )
+  // sbt 2.x row (Scala 3) — depends on the Scala 3 build of core. sbt 2's Scala 3
+  // compiler bridge is compiled for Java 17, so this row is only added on JDK 17+;
+  // on older JDKs it would fail to compile and break `sbt test` aggregation.
+  if (supportsSbt2)
+    base.customRow(
+      scalaVersions = Seq(Dependencies.scalaSbt2),
+      axisValues = Seq(VirtualAxis.jvm),
+      _.dependsOn(core3).settings(
+        scriptedSbt := "2.0.1",
+        scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
+        scriptedBufferLog := false,
+        // The fixtures' meta-build runs on the inner sbt's Scala version (Scala 3 for sbt 2),
+        // so the test framework and core must be the Scala 3 builds; the debuggee-side
+        // expression compiler / decoder are the same as for sbt 1.
+        scriptedDependencies := scriptedDependencies
+          .dependsOn(
+            publishLocal,
+            core3 / publishLocal,
+            tests3 / publishLocal,
+            expressionCompiler212 / publishLocal,
+            decoder3 / publishLocal
+          )
+          .value
+      )
+    )
+  else base
+}
 
 lazy val expressionCompiler212 = expressionCompiler.finder(scala212Axis)(true)
 lazy val expressionCompiler213 = expressionCompiler.finder(scala213Axis)(true)

@@ -35,6 +35,8 @@ jobs:
         with:
           apps: sbt
       - run: sbt +Test/compile
+      # Verify the sbt 2.x cross-build of the plugin packages and its POM resolves
+      - run: sbt sbtPlugin3/publishLocal
   test:
     if: ${{(github.event_name == 'pull_request' && !contains(github.event.pull_request.body, '[skip ci]'))}}
     strategy:
@@ -74,6 +76,8 @@ jobs:
             jvm: 'adoptium:1.11.0.19'
           - os: macOS-latest
             jvm: 'adoptium:1.17.0.7'
+            # sbt 2 requires JDK 17+, so only run its scripted tests where the JDK supports it
+            sbt2: true
     name: Scripted Tests on ${{ matrix.os }} -- ${{ matrix.jvm }}
     runs-on: ${{ matrix.os }}
     steps:
@@ -84,6 +88,11 @@ jobs:
       with:
         jvm: ${{ matrix.jvm }}
         apps: sbt
-    - name: Scripted tests
-      run: sbt sbtPlugin/scripted
+    - name: Scripted tests (sbt 1.x)
+      run: sbt sbtPlugin2_12/scripted
+      shell: bash
+    # Runs only where the JDK supports sbt 2 (17+).
+    - name: Scripted tests (sbt 2.x)
+      if: ${{ matrix.sbt2 }}
+      run: sbt sbtPlugin3/scripted
       shell: bash

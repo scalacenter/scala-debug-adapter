@@ -1,6 +1,6 @@
 package ch.epfl.scala.debugadapter.internal
 
-import ch.epfl.scala.debugadapter.{ClassEntry, Logger, Module}
+import ch.epfl.scala.debugadapter.{ClassEntry, Logger, ModuleEntry}
 import ch.epfl.scala.debugadapter.internal.scalasig.ScalaSig
 import com.microsoft.java.debug.core.adapter.ISourceLookUpProvider
 
@@ -85,7 +85,7 @@ private[debugadapter] final class SourceLookUpProvider(
   def reload(classesToReplace: Seq[String]): Unit = {
     classPathEntries = classPathEntries.map { lookUp =>
       lookUp.entry match {
-        case m: Module => ClassEntryLookUp(m, logger)
+        case m: ModuleEntry => ClassEntryLookUp(m, logger)
         case _ => lookUp
       }
     }
