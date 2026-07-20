@@ -290,7 +290,7 @@ lazy val testOptionsSettings = Def.settings(
 
 lazy val scalacOptionsSettings = Def.settings(
   scalacOptions ++= onScalaVersion(
-    scala212 = Seq("-Xsource:3", "-Ywarn-unused-import", "-deprecation"),
+    scala212 = Seq("-Xsource:3", "-Ywarn-unused-import", "-deprecation", "-release:8"),
     scala213 = Seq("-Xsource:3", "-Wunused:imports", "-deprecation"),
     scala3 = Seq("-deprecation")
   ).value
