@@ -15,7 +15,7 @@ jobs:
       - uses: coursier/setup-action@v3.0.0
         with:
           apps: sbt
-          jvm: 'adopt:1.8.0-292'
+          jvm: 'adoptium:1.17.0.7'
       - run: sbt ci-release
         env:
           JAVA_DEBUG_VERSION: ${{ inputs.java-debug-version }}
