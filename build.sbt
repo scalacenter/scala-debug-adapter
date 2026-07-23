@@ -38,6 +38,7 @@ lazy val root = project
     javaDebug,
     core212,
     core213,
+    core3,
     tests212,
     expressionCompiler212,
     expressionCompiler213,
