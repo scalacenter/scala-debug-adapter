@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: true
-      - uses: coursier/setup-action@v3.0.0
+      - uses: coursier/setup-action@v3.0.2
         with:
           apps: sbt
       - run: sbt +Test/compile
@@ -57,7 +57,7 @@ jobs:
     - uses: actions/checkout@v7
       with:
         submodules: true
-    - uses: coursier/setup-action@v3.0.0
+    - uses: coursier/setup-action@v3.0.2
       with:
         jvm: ${{ matrix.jvm }}
         apps: sbt
@@ -84,7 +84,7 @@ jobs:
     - uses: actions/checkout@v7
       with:
         submodules: true
-    - uses: coursier/setup-action@v3.0.0
+    - uses: coursier/setup-action@v3.0.2
       with:
         jvm: ${{ matrix.jvm }}
         apps: sbt
