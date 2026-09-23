@@ -5,5 +5,5 @@ addSbtPlugin("org.scala-sbt" % "sbt-contraband" % "0.9.0")
 addSbtPlugin("com.github.sbt" % "sbt-ci-release" % "1.12.1")
 // force version to fix https://github.com/sbt/sbt-pgp/issues/199
 addSbtPlugin("com.github.sbt" % "sbt-pgp" % "2.3.2")
-addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.13.1")
+addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.13.2")
 addSbtPlugin("com.eed3si9n" % "sbt-projectmatrix" % "0.11.0")
