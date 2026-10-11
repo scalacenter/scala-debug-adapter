@@ -10,7 +10,7 @@ object Dependencies {
   val scala372Plus = scalaEnvVersion.filter(isScala372Plus).getOrElse("3.7.3")
   // Scala version used by sbt 2, for the sbt 2.x cross-build of the sbt plugin
   val scalaSbt2 = "3.8.4"
-  val asmVersion = "9.10.1"
+  val asmVersion = "9.11"
   val coursierVersion = "2.1.24"
 
   def isScala212(version: String): Boolean = version.startsWith("2.12")
