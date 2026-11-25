@@ -44,13 +44,7 @@ object DebugTools {
       loadExpressionCompilers(debuggee, resolver, logger)
     }
 
-    val decoder =
-      if (debuggee.scalaVersion.isScala3) {
-        TimeUtils.logTime(logger, "Loaded step filter") {
-          loadDecoder(debuggee.scalaVersion, resolver, logger)
-        }
-      } else None
-
+    // Load sourceLookUp first - this reads all class files from the classpath
     val sourceLookUp = TimeUtils.logTime(logger, "Loaded all sources and classes") {
       val classEntries = debuggee.classEntries
       val distinctEntries = classEntries
@@ -62,6 +56,14 @@ object DebugTools {
         .toSeq
       SourceLookUpProvider(distinctEntries, logger)
     }
+
+    // Load decoder after sourceLookUp - the decoder can reuse cached class data
+    val decoder =
+      if (debuggee.scalaVersion.isScala3) {
+        TimeUtils.logTime(logger, "Loaded step filter") {
+          loadDecoder(debuggee.scalaVersion, resolver, logger)
+        }
+      } else None
 
     new DebugTools(allCompilers, decoder, sourceLookUp)
   }
